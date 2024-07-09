@@ -1,0 +1,624 @@
+09/07/2024
+-restricted internal DND to left-click (makes more sense and prevent non-intuitive interactions)
+-left-click/DND specific and right-click action have been splitted to specific context menu to add a bit more clarity to the interface
+-added 'Y spacing' spinner for main window
+-allow spacing to be 0px (3px by default)
+-Y spacing (along with other GUI settings is now serializable)
+-added a delay before saving to avoid saving too many Y spacing changes
+-if only ignore is available do not even show the menu...
+-added a context menu entry to change lettering parameters so that everything can be done from right click for efficiency
+-fixed the row creation order so that is more logical from the DND logic (group is created with drop target as first entry)
+-fixed a text row error preventing spacing from being respected
+-added edit image from the context menu to be consistent
+-I now block edition of letters as they are automatically overwritten (maybe change this in the future and reapply to new text the changes made by the user...)
+-fixed reloading of .pyf files upon DND (can also be used to merge several figures)
+-added the possibility to dissociate selected images from a group
+-fixed a dissociation bug that dissociated objects that were already in the main list
+-removed all unused classes
+-prevented useless ops when the user just edits the name without really changing it in the annotation editor
+
+08/07/2024
+-finalized 'Force same AR as first'
+-added 'Force same crop and rotation as first' (can be used to manually set the rotation and crop of the first image then apply it to the rest)
+-added 'Reset crop'
+-added 'Reset rotation'
+-added 'Reset crop and rotation'
+-fixed a bug not updating bg color when the latter is removed
+-added a context menu to set and reset background
+-changed the behaviour of the text editor so that if there is no selection then all becomes selected
+-fixed numerous errors in texteditor and replaced setCharFormat by mergeCharFormat
+-fixed a bug in image normalization per channel if image has no channel
+-added 'Remove all annotations'
+-added 'Remove all ROIs'
+-added 'Remove all insets'
+-added 'Remove all scale bars'
+-the 4 above have been added to the annotations main menu entry and to the context menu
+-added 'Set text font all but letter'
+-added 'Set all text background but letter'
+-fixed a bug preventing texts from being moved when outside of groups
+
+05/07/2024
+-fixed a selection error, clicking with ctrl over a selected object will unselect it
+-added support for meta modifier on osX (allows for selection control, rest of the shortcuts were already fixed)
+-added support for range selection as in spreadsheet apps (shift must be used when clicking)
+-set default color for drawing to white (I guess this is what most users would like to have)
+-allowed dissociation for list of objects not only for a single group
+-fixed a bug making the font dialog appear behind the lettering window
+-added the possibility to move the scale bar (it is no longer restricted to bottom right corner)
+-fixed a bug that annotation with a negative width/height (due to shapes drawn from right to left)
+-removed useless warnings 'Nothing to align...' when there is nothing to align (e.g. a single object is provided)
+-fixed erroneous shortcut names for macOSX
+-fixed zoom in zoom out shortcuts for macOSX
+-added the possibility to copy/paste/duplicate annotations
+-fixed a bug in panel not taking into account crop and rotation of previous images
+-added code for same AR as first and code for same width and height (allows for very regular figures that was easier to do with competing tools)
+
+04/07/2024
+-fixed error in reading tif files with wrongly encoded tags
+-changed code so that bounds page rect is always visible and not cropped if enabled
+-changed default value of px to unit conversion factor to 0 (to identify better when the parameter is set by the user and when determined automatically)
+-fixed scalebar size incorrect
+-fixed a bug preventing scale update upon image change
+-fixed a bug opening file change editor upon enter press (default button selection error)
+-fixed a bug resetting file name upon cancel
+-fixed a bug preventing DND assignment to selection
+-override def contextMenuEvent(self, event): to allow right click to reach the mouse release without being intercepted by the context menu (allowing my options to be valid)
+-removed mouse wheel support for combo and spinners in font settings it is way too painful
+-fixed yet another qcolordialog appearing behind the main frame
+
+03/07/2024
+-fixed style sheet error for scale bar if background is applied to an image in annotation editor
+-added a display for current AR, taking into account the rotation and the crop (allows to homogenize stuff in a row by cropping)
+-partially fixed pixel to unit conversion factor not being handled properly
+
+02/07/2024
+-modified the behaviour of row and column creation to avoid unnecessary complexity (some of the grouping methods may be redundant)
+-renamed all row creating features to 'to row' and all col creating one to 'to column'
+-added group to single images (simpler than dragging content one by one out)
+-added the possibility to make panels out of selected images
+
+01/07/2024
+-removed 'DEFAULT' from Luts as this is not very intuitive in this case
+-reordered LUTs so that red green blue are top entries in the list
+
+30/06/2024
+-added inducible debug prints for normalization and LUTs
+-created a Lut test so that I can debug the per channel max and so on
+-fixed a bug that prevented max spinbox in custom to be activated
+-fixed a bug preventing normalization when custom spinner min max values were changed
+-fixed a bug preventing images from having their size updated when the user rotates them
+-restored annotations tab (reversion due trying to fix erroneous display in annotation editor)
+-fixed a bug that was displaying colordialog behind the annotation editor
+
+28/06/2024
+-fixed a per channel normalization error for images having no channel
+
+25/06/2024
+-added select all (Ctrl+A)
+-added a label to indicate if size change will affect all or just selection
+-changed shortcuts so that they also work on MacOS X
+
+24/06/2024
+-added ignore hot pixels
+-tool is complete, entering heavy debug/test phase
+
+21/06/2024
+-added support for per channel normalization
+-added a tool to assist color-blind people (Help>Show color-blind assistant)
+-fixed numerous normalization errors
+-fixed a bug preventing applying LUT in some cases
+-simplified normalization by removing non-sense options
+-fixed numerous LUT channel shifts
+
+20/06/2024
+-fixed a weird bug moving issue because selection initial position was not reset because set_cur_sel was not called because sel was not changed, but there is more to it than just that
+-finished moving code to specialized folders
+-prevented text elements of text rows from being moved within as this would violate the range rule
+-added size fit to single images when image was not part of a group
+-fixed a normalization error for LUTs
+-fixed a size error when images where opened as single image after DND
+-added support for bio-formats (efficient Java/IJ image loader) and hence .zvi files
+
+19/06/2024
+-added channel split (gray mode)
+-added color-blind channel split
+-successfully externalized pzf (pzf will no longer be a part of epyseg, to make install easier)
+-successfully externalization of misc tools I use with all of my softs (common tools will no longer be part of epyseg)
+-fixed a weird bug drawing image at different scales in the annotation editor
+-fixed a bug preventing panel are change when image was changed in annotation_editor
+-removed a lot of useless objects from annotation_editor
+-removed most developer print-outs
+-removed debug only space shortcut (kept only Ctrl+T as it cannot be accidentally pressed)
+
+12-18/06/2024
+-added the possibility to create rows/cols from dropped images
+-added the possibility to add dropped images as single images
+-added the possibility to add one or more dropped files to a template image (makes template mode useful at last)
+-added the possibility to convert images or groups to templates instead of the whole image
+-added a button to force layout update
+-added the possibility to add label rows from the GUI context menu
+-added the possibility to add text rows above or below groups
+-added the possibility to edit texts and text rows using right click
+-fixed erroneous scale bar centering caused by addition of scale
+-fixed (more a hack than a fix) the erroneous drawing of insets and scalebars
+-added separators to context menus to increase readability
+-fixed a scalebar issue when text is removed
+-fixed a group size error when moving internal objects
+-fixed a reversion due to multifile support that blocked script execution
+-fixed a bug preventing proper loading of script generated images
+-created a fake dataset to check for scalebar correctness
+-fixed numerous errors in scalebar size and positioning
+-fixed erroneous labeling of images with script error
+-checked scale bar size with an embedded scale and it seems to work fine
+-changed text editor behaviour so that if there is no selection the whole text gets selected
+-added an about dialog
+-added tips at startup to learn how to use the software rapidly
+-added a list of shortcuts to the help menu
+-fixed a size error in extrude
+-added the possibility to add an empty image when clicking on the background
+-added the possibility to add an empty image to a group
+-added pixel to cm or inches conversion to better help the user achieve the desired size
+-added page bounds to the software (if size is > bounds then a transparent red rect is drawn over the image otherwise the rect remains green)
+-added support for n dimensional images
+-added a drag min distance filter to avoid erroneous clicks
+-fixed a position bug in duplicate selection
+-added channel selection
+-added basic LUT support (can be greatly improved with custom LUTs)
+-fixed several reversions due to addition of channels and LUTs
+-fixed serialization issue due to addition of LUTs
+-fixed another serialization error caused by channels
+-fixed a bug causing channel shift for channels having no associated lut
+-added adding support for image normalization
+-added adding support for projection (min max avg)
+-added serialization of normalization and projection
+-fixed a bug preventing using max projection if image was browsed in the depth dimension
+-support for projection and normalization had a moderate impact on speed though, maybe there is room for speed improvement?
+-added the possibility to project in t or any dimension if there is no d (by definition max proj will project anything before h)
+-added 'add as new row/col' to add multi selection as a row
+-fixed a size error when things are duplicated
+-now remove one dimension if projection is selected
+-added a delay for dim slider change to avoid overloading the system and refreshing too many time
+-added a delay for custom min max connection to avoid changing values while the user is still typing
+-fixed dual display error (trying to draw twice the same thing)
+-improved clarity of context menu layout
+-added the possibility to add dropped images as a panel directly
+-software is almost in its final shape (I will just most likely focus on doc/demo and error fixing from now on)
+
+11/06/2024
+-fixed minor display update when inner group shape is changed
+-fixed numerous duplicate entries in context menu
+-fixed size errors when changing parent object orientation
+-fixed undesired and blocking context menu error
+-fixed numerous context menu errors
+-ignored changes for group layout if they are identical to the current settings
+-fixed ignored right clicks for image
+-fixed a bug generating negative values when cycling between vertical and horizontal orientations of shapes
+-fixed several erroneous size behaviours when shapes orientations were changed
+-fixed shape becoming out of focus when arrows were pressed and cleaned associated code
+-fixed a reversion preventing the objects from being dropped onto one another without losing newly added features
+-fixed a bug that converted text and empty images to templates in template mode
+-added the code to create templates from a figure so that it can always return the same display over and over again
+-fixed templates with erroneous images not displaying properly
+-fixed a bug that prevented empty images to be cropped and rotated (each transformation was applied to shape until it vanished, the bug is the same as for template images)
+-added ctrl+V (it just duplicates the image)
+-if there no selection and Ctrl+V or D is pressed then show a warning
+-fixed the bug that prevented usage of Ctrl+S for saving
+
+10/06/2024
+-improved consolidation (gathering of files associated with images in a single folder)
+-added support for multiple file inputs in consolidation
+-first functional version of consolidation (warnings still missing)
+-ignore loading error for template files
+-fixed size error for images with Z dimension
+-centralized recovery of raw image dimensions to avoid code dupes and increase flexibility
+-fixed a bug preventing shape reset position when escape is pressed
+-fixed various bugs preventing shape reset position
+
+08/06/2024
+-added multi file support for DND (is useful for scripts)
+-added log for executed scripts to help the user debug their plots
+
+07/06/2024
+-moved all demo/test images to a dedicated class to simplify code interaction and debug
+-started removing all the developer prints
+-fixed rotation and crop of svgs/plots (latest big error, was not mandatory to fix because this is an image drawn by the user so he can build as desired, but may for example be useful to crop extra space of graphs???)
+-warning for 'could not load image' is logged only if there is no script associated to the image
+
+06/06/2024
+-finally managed to fix translation error (will now try to integrate it within the software)
+-the fix may be messed up with scale which would be yet another problem
+-finally fixed and integrated the translation error so that rotated and cropped images are now handled correctly (last required major change before submission)
+-tool is almost final all the biggest issues have been fixed and only minor errors and changes remain
+-version change (back to 1.0.0a as this will be the first public release of the tool)
+-major code clean up around the drawing of cropped and rotated shape will be required later (but code is functional so I'll keep it as it is for now)
+-cleaned most of the useless commented code in Image2D
+-cleaned useless commented code in the annotation editor
+
+05/06/2024
+-changed code so that the default color of the bg of rotated images is transparent
+-working again on fixing the translation error for rotated and asymmetrically cropped images (made an entire new class dedicated to that)
+
+04/06/2024
+-made my own transform2D to be used as a replacement of the PyQt one (to avoid rounding and keep native shapes)
+-added dpi selection when exporting as raster
+-added direct support for np.ndarray for creating an Image2D but proper way is to load it via a script because this is the only way to serialize and save it
+-working the template mode
+
+03/06/2024
+-the translation error can now be fixed manually and stored (as it is constant for a given transform, still awaits for a better fix!!!)
+-fixed a coding error in drawing of annotations, that led to a descent speed increase
+-I am currently working on an auto-registration algorithm to align image drawing and shapes as I relly don't manage to align the two independent drawing and can't figure out where the error is
+-added a warning for custom scripts so that the user is aware of the danger
+-highlighted that the order of placed annotations can be changed by dragging and dropping of elements!!!
+-added a reset button for crops
+-added a reset button for rotation
+-embedded all the objects of the texteditor into a QGroupBox for better visibility
+-added an editor for scale bars
+-added a button to add scale bar to an image
+-added the possibility to edit a scale bar by double-clicking it in the annotation editor
+-(Some) scale bar parameters are reloaded upon edit
+-added controls to determine whether an image should be auto-registered or not
+
+02/06/2024
+-probably fixed translation error for rotated shapes (maybe still minor rounding errors, to be checked --> NO IT'S STILL NOT FIXED)
+-still not ok for some angles (e.g. 90 degrees)
+
+31/05/2024
+-getting closer to fix the translation error, now translation is fixed if crop is equal left and right (or top and bottom)
+
+30/05/2024
+-Big bug in translation of rotated images --> the shapes are off with respect to the image below (and somehow I don't manage to fix it), this bug is really a very tough one to solve
+-fixed bug of scale bar not adjusting to image scale
+-added a dirty hack to handle cropped and rotated shapes (--> draw them directly on the rendered image instead of using vector graphics), this hopefully should be fixed in the future
+-fixed a bug that disordered annotations upon cloning (due to pooling of objects of the same type in a dict)
+
+29/05/2024
+-fixed translation error for annotations of rotated images (translation error remains for crop and rotated shapes)
+-fixed translation error for annotations of cropped images (translation error remains for crop and rotated shapes)
+-fixed rotation error for images with scripts
+-fixed label position error in rotated svg
+
+28/05/2024
+-added a GUI to edit inset size (fraction of parent width), border size and border_color
+-added code to auto increment letters
+-added auto lettering (there can be only one letter per image, it is edited automatically by the software)
+-letters are automatically updated upon every change
+-added a GUI to edit lettering settings such as fg and bg color, font including size, style and position of the letter
+-added lettering settings to the font parameters
+-fixed a bug preventing image crop and rotation parameters from being reloaded
+
+27/05/2024
+-comments and scripts are now automatically reloaded to the GUI when an image is edited
+-added the possibility to edit rotation and crop of an image from the GUI
+-scale, crops and rotation are reloaded automatically when an image is loaded
+-fixed crop spinner blocked at 99 max value
+-fixed erroneous cropping of images to be edited
+-finally fixed the inset extraction for the new way of handling rotation and crop sequentially (roi to inset has been finalized)
+-allowed negative rotation to allow shapes to be rotated left too
+-apply crop parameters to the original image upon acceptance of annotation
+-implemented ROI to crop (all the crops are appended as a new row to the main image)
+-added the possibility to change file for an image also paves the way for template figures
+-added border for insets the border with the same color as the user drawn rect
+-added shortcut for undo (Ctrl+Z) and redo (Ctrl+Shift+Z)
+
+26/05/2024
+-added the possibility to change input file from GUI
+-added the possibility to change scale from the GUI
+
+24/05/2024
+-finally fixed the crop and rotation of images for raster images (was really difficult)
+-fixed a bug that prevented fixed shape from being drawn properly if the user zoomed (due to a total reset in global scaling, when only the rotation should be reset)
+-finally I rotate the image first then crop it, I think this is what makes the most sense
+-adding crop and rotation for images broke numerous features, but this is really useful so it is worth it --> lots of changes needed
+-fixed inset disappearing with rotated images
+-regression drawn shapes not rotated when image is rotated
+-restored rotation of shapes even though either the shapes or the image are not aligned -−> need a fix
+-restored svg/matplotlib fig rotation
+-restored positioning of rotated images (erroneous positioning was due to an error in cropping images)
+
+23/05/2024
+-fixed undesired rotation of placed objects such as insets and texts and legend if the parent image was rotated
+
+22/05/2024
+-fixed the major regression causing misplacement of vectorial images
+-fixed a bug that made vector graphics selection appear much smaller than it really is
+-major regression of free text positioning and inset positioning
+-fixed major regression in text positionning (I had to revert some of the changes even though they made sense)
+-fixed bg not aligned with text when text was in Y orientation
+-major regression that made insets disappear was reverted
+-finalized the first working version of ROI --> inset (version that is finally compatible with) serialization (crop is converted to a rotation and a crop --> should always work now)
+-KNOWN ISSUES: insets are not drawn properly when they have an angle (check why)
+
+21/05/2024
+-fixed a scale bug (it was shrinking during image zoom out)
+-fixed a size of panel error that prevented the figure panel from being properly adjusted
+-started adding ROI->crop (the crop is correct but the image way to handle crop and rotation needs a full revamp -−> very tough change!!!)
+-revamping size is half way already there is hope I will manage (rotation is applied first then crop is applied and this is always how it should be done, because that is fairly simple)
+-major regression: new size code changes the size of vector graphics and matplotlib figures
+
+18/05/2024
+-added a scaling factor to images to be used with scale bars
+
+17/05/2024
+-script setting/edit is now directly possible within user interface
+-fixed a bug prevent annotated image from being updated if it was further subcloned (e.g. when a script was applied to it), only the parent clone was then returned
+-added a dirty hack to have the inset be positioned properly without needing it to be painted twice (somehow some positioning must be done in draw which is probably not a good idea)
+-added the possibility for script to load basic raster images
+-fixed a bug preventing text from adjusting to groups that contained svg images
+-fixed a nasty bug that prevented empty text TAText2D to be cloned (this was also causing trouble for the text rows)
+-version change 1.65 because it contains many fixes and additions
+-added user comments (just for the user to write tips about the image for example)
+-made the annotation editor to reload scripts and user comments so that they can be seen and or further edited
+-fixed a bug that displaced text labels upon double click
+-fixed a bug that deleted current undo redo stack even upon aborted loading due to presence of script in the image
+-fixed a bug that made the display size to be dependent on Zoom (scale)
+-removed useless resizable parameter as we anyway definitely want the display to always be resizable
+-added an undo and redo if a row has stopped moving for at least 800 ms (to avoid overloading the stack with useless saves for something that can easily be changed or reverted)
+-removed the old vector graphics handler (now replaced by Image2D)
+-added version to each vectorial object (may facilitate deserialization upon major change of Classes in the future)
+-started adding support for export as pdf (still work in progress)
+-added the consolidation code (GUI activation still missing)
+
+16/05/2024
+-fixed dual save error on change size
+-created a function dedicated to handle text/label rows as it needs be executed once all the packing has been made
+-added the possibility to edit text labels directly upon double click
+-added a signal to force update text rows (will need be called in many cases)
+-fixed the text editor not reloading properly text position
+-added the possibility to edit text orientation from the user interface
+-fixed text rows not updating on delete of elements
+-started adding the possibility for text to span several elements (they are not necessarily assigned to a single image)
+-added deletion of elements to be stored in the undo/redo stacks so that it can be udone
+-added interface to set begin and end for text labels
+-added a GUI to edit existing text/label row
+-first working version of text/label rows that auto adjust in size to the group above or below
+
+15/05/2024
+-complete revamping of the sizing of elements in groups to handle texts and their incompressible content (massive speed up compared to previous hacking)
+-speed of resizing with group containing texts came back to speed without texts
+-successfully removed all remains of old element size changing code
+-vertical pure text rows cause trouble (the width is somehow never reached), they will be inactivated for now, they are anyway useless for now
+-text rows matching size of row below or above is work in progress (definitely getting closer)
+-removed object bounds and labels for export as raster and svg (in order to return a clean image), they remain in the main GUI to help the users visualize their objects
+-removed padding (50,50) of drawing in export mode (both for svg and raster)
+-made figure padding a parameter
+-changed label position to make it better
+-version change (1.6) due to many changes and tool almost ready
+-fixed erroneous positioning of -X and X oriented texts
+-fixed extra unwanted undo (due to a None in the undo stack)
+-fixed a size saving bug preventing correct size on deserialization
+-created a bug (no clue how) where I save twice the images to stacks upon changing their size
+
+14/05/2024
+-added some code to make label rows to adapt to the size another group
+-added code to handle text labels with auto resize within groups
+-added a label fate for images only containing text (these stuff add as self adjustable labels and only their text shall be edited)
+-modified Group to really make use of the size parameter that is now its main parameter
+-to simplify things I only allow width to be set, so height can only be set passively (I may change this in the future, but that makes current development simpler)
+
+13/05/2024
+-fixed a bug in free floating text positioning after duplication
+-fixed a popup menu bug due to erroneous selection update after double click to edit image annotations (upon acceptance the sel need be changed)
+-fixed a bug changing the color of empty text
+-fixed a bug on applying text color when user canceled
+-fixed a bug preventing text to be added to the texts list when added directly as a shape
+-adding the possibility for text to be vertical
+-fixed text stacking with vertical text
+-fixed major layout error in the annotation editor (was causing a pyQT crash when texts were deleted)
+-improved text sync for image annotator
+-fixed a color error preventing any shape from being drawn if previously selected shape had no color (e.g. is a text)
+-fixed a bug preventing extra/useless list buttons from being deleted when image annotation had a parent (was linked to delete later waiting for parent deletion before being deleted)
+-version change 1.5 (due to many fixes and new additions)
+-text outside the images is now work in progress (most likely this will be empty images with a single text at a specific position)
+-extra text labels get adjusted to their text content
+
+07/05/2024
+-cleaned imports
+-moved classes
+-connected the script execution tool for images (allows to have plots easily), due to the danger of such custom code exec tool user warnings are required yet missing
+-added 'Save As...'
+-added a save icon
+-started adding auto saving when they are required (e.g. just after a change)
+-added new and open button to toolbar and menu along with the corresponding code
+-added separators to better organize the icons
+-added a custom QFileDialog that allows extra widgets to be added to the dialog (useful options for saving)
+-added a check to determine if an xml file contains custom scripts or not
+-added a 'scary' red warning on file loading to warns that the file contains custom script and that it can be dangerous
+
+06/05/2024
+-created an object cloner (just a smart assembly of serialization and deserializarion)
+-added duplicate to the GUI
+-added a popup label to inform the user about important actions (e.g. can be used for success or failure) and created a signal for it
+-removed useless elements in status bar (such as progressbar and stop button)
+-fixed 'Duplicate' option not appearing in the context menu for internal selection
+-version change to 1.4 (many changes and tool is almost ready for user testing)
+-updated email address
+-added a save function (xml serialization of the figure elements list)
+-Undo/Redo seems functional but is not called often enough yet
+-added undo/redo buttons
+-fixed a bug in serialization (lost image rotation)
+
+05/05/2024
+-allowed Group to be serialized and deserialized (also paves the way to object copy/paste)
+
+04/05/2024
+-fixed deserialization errors when several objects of the same type were existing
+
+03/05/2024
+-finalized xml serialization of any object (was tough, but paves the way to saving/reopening figures and infinite undo/redo while edit)
+-finalized the image annotation edit, it is now possible to cancel the edit and if this is done then the original image is kept otherwise it is replaced by its clone in the parent (this fixes some weird placement issues)
+-initiated deserialization (still work in progress for nested objects)
+-all individual objects are now serializable and deserializable (many errors still persist in deserialization, many changes heavy testing is required)
+-fixed Rectangle2D, Circle2D, Ellipse2D, Point2D, Line2D, Polygon2D so that they can be properly serialized and deserialized (and therefore cloned)
+
+02/05/2024
+-simplified Image2D so that there is no self.figure object (I kept the rendered as matplotlib figure may need to be changed unlike an svg output)
+-added the possibility to load images through custom code (paves the way for supporting custom graphs and/or image edits, e.g. contrast, LUTs, ...)
+-added an extra security popup for custom code
+-added the possibility to create images labeled as error when the format is not supported (the user can then enter custom code to handle this, this will prove very useful for graphs, let the user do the hard work/unpredictable part and display the output)
+-changed the position of the text in the empty/erroneous images so that text can always be read even when a bigger group is selected
+
+30/04/2024
+-added predominance to main list for finding top parent of object (fixes a lot of erroneous detections)
+-started adding support for swapping of objects
+
+19/04/2024
+-fixed a huge design error in handling selection detection at mouseReleased, the selection was updated only after trying to do combinations with it, this was causing erroneous detections and really a lot of errors
+-added a function to detect all inner elements contained in an object (useful to find a progeny in a shape and to find the parent of a shape)
+-added a function to detect immediate parent of an object
+-added mouse click detection on the parent scroll area of the paint widget, this allows for more natural handling of mouse reset of selection
+-finished object moving with arrow keyboard keys (groups can be moved directly not only their content can be moved)
+-improved the logic of the handling of drop and combinations
+-fixed erroneous drop behaviours
+-started adding code to execute all the possible combinations (good progress, almost done)
+-selections of all images are drawn on top when the user is dragging an object to ease the visualization of the drop
+
+18/04/2024
+-added selection dependent contextMenus (allows to have a different menu depending on the selection)
+-fixed size update error when dragging inner elements outside image bounds
+-many fixes --> version change to 1.2
+-internal DNDs are now handled through a context menu popping up at drop position (makes combinations simpler I find)
+-removed reset of initial position because it caused shape not to be reset when moved twice to the same position (position is now only reset on new shape selection)
+-fixed yet a major bug in contains (it was identifying things that should not have been identified)
+-finished the implementation of delete for shapes and images
+-implemented code to move images within groups left or right using keyboard arrow keys
+
+17/04/2024
+-added extend to group
+-added support for floating text on images (useful for asterisks and alike)
+-fixed,for several other shapes besides rect, the erroneous bg color error when parent had a bg color set
+-added support for multi selection to allow for grouping in rows of columns some of the constructions
+-added a selectionChanged listener to allow for option of the Qdockwidget to change according to the selection
+
+16/04/2024
+-optimized layout so that the figure takes most of the page size
+-added a button to add empty images
+-added add, __contains__, __setitem__ to group to have it behave like a list
+-working on the DND dynamics (a tough one)
+-a shape can be added to another simply by dropping
+-do a simple dynamic tutorial
+-fixed a major selection error
+-fixed a major bug in the custom contains
+-fixed bg/fill color of images (was reset by calling super)
+-fixed a bug that made every rect inherit from the fill color of the bg image (due to absence of reset of the pen and brush of the painter)
+-added the possibility to remove a fill color
+-added the possibility to set the image bg color when no shape is drawn or selected
+
+15/04/2024
+-fixed import of single channel 16bits png images and their drawing in a pyqt element
+-added DND support without a list (I think a list is a useless complexity)
+-hacked image annotation editor to make it ignore rotation (this allows for a simpler design of shapes while rotation of all inner components in sync)
+-finalized support for SVG images, empty images and matplotlib figures
+-fixed erroneous behaviour of the filter for unintended drawings (it was not applying properly to many shapes)
+-added set_to_width and set_to_height for groups (easier than expected), both are required for the 'auto' mode
+-started adding the logic for the auto mode with predefined size
+-added enter/return key detection for spinbox (upon enter press the size is changed)
+
+12/04/2024
+-added the possibility to edit texts by double click (gain of time/simpler)
+-fixed some bg update issues for text edits (much harder to do that I thought)
+-converted the annotation editor from qmainwindow to qwidget so that it can be called from another qmainwindow
+-signals now allow every text feature in the different widgets to remain in sync
+-added filters for unintended drawings (if distance between first and last click is too small assumes the drawing is accidental and ignores the drawn object)
+-a double click on an any image opens it with the new annotations editor (allows for easy and rapid image annotation edit)
+-added empty images (can be useful when data is missing but the rest of the figur is available)
+-changed version to 1.1b because the tool has improved a lot since I started recoding it
+-started adding matplotlib graphs to Image2D (gathering separate obejcts to simplify future coding)
+
+11/04/2024
+-added the possibility to add new texts annotations to an existing image
+-updated text list when texts are deleted
+-finalized arrows objects (head of arrows is still a bit buggy)
+-added possibility to change text annotation position from the user interface
+-renamed lines with arrowhead as Arrow2D in __repr__ even if they are technically lines
+-added background for texts
+-fixed selection of rotated objects
+
+10/04/2024
+-finalized list order change for annotations associated to images, shapes can now be ordered manually
+-added getRect width and height to all shapes (rectangles, lines, ...) so that all objects can be handled in the same way
+-fixed shortcuts for zoom and alike
+-massively increased file deletion speed from the list (will speed up pyTA file deletion too) by preventing useless selection update while deleting files
+-started adding several signals to transmit inner objects behaviour to parent (I finally understand the power of signals, much more elegant than what I used to do)
+-synchronized objects between the image annotation GUI and its associated list
+-added shapes are now synchronized between the list and the drawing panel thanks to a signal
+-fixed a huge bug caused by overriding __repr__ (this is useful and dangerous at the same time to override it)
+-fixed selection errors in the image annotation GUI and optimized selection implementation
+-shape parameters get automatically reloaded when a shape is selected to ease further edit
+-further homogenized shapes so that they all have the same base interface that simplifies their use through the interface
+-added arrows
+
+09/04/2024
+-added __repr__ for each object for easier authentification
+-added a list to select/order/delete objects associated to an image
+-automatic paint update when text is changed and when text format is changed (was a tough one to implement...)
+-added support for stroke size for drawn objects
+-added support for list order change (a very tough one too), object order (can be used to order objects, can do the same as send to back or bring to front)
+
+08/04/2024
+-added a scrollbar to the qdockwidget for image annotation
+-finalized a dialog to create custom text to annotate the images (text can be saved in a portable via html conversion)
+-added support for greek letters because they are often used in science
+-tabified qdockwidgets (more elegant I find)
+
+05/04/2024
+-added insets/pip (images within images/pictures in picture) and the possibility to add a border around it
+-made insets objects that can be stacked --> I may need to change the order
+-started designing the tool to annotate images
+-updated the icon set (using qtawesome)
+-added missing code for several shapes (could not be drawn or edited before that)
+
+04/04/2024
+-added reverse packing (particularly useful for texts associated to images)
+-improved image annotation placement using a position Class (infinite nb of annotation possible and alignment will always be preserved)
+-finalized annotation of images with shapes and free floating texts (rects, polyline, free drawing, asteriks, ...)
+-hacked the text object so that it can be placed freely and using the position class if a position was set
+-added scale bar and fixed text position with respect to the bar (text position relative to the bar is automatically adjusted), scale bar position can be pretty much everywhere now
+
+03/04/2024
+-fixed mispositioned painter.save() that added a problematic cliprect in the drawing pipeline (preventing sel and ruler to be drawn properly)
+-fixed positioning of images in the default mode
+-added the possibility to remove objects form groups
+-added isEmpty to check if group is empty and can be removed
+-added shortcuts for various actions
+-started to implement the drag and drop options
+-started adding support to represent figure as a tree for easier interaction/selection of complex objects and maybe even simpler serialization (I need to see if I integrate it or not)
+-added a list to store the images to be added, wouldn't it be simpler to add them directly and have no list ???? and ask the user if he wants to create a col or a row from the DND
+-added button to convert selection to row or to column
+
+02/04/2024
+-fixed size bug (image could be truncated)
+-added extra size around the image so that there is always a place outside the image where one can click to remove selection
+-fixed misalignment at the end of a successful drop
+-fixed erroneous selection upon double click and drag
+
+29/03/2024
+-improved object selection and object interaction (object dropping)
+-made the selection always visible and appear first even when present in a lower layer than other objects)
+-fixed selection of objects and going deeper so that it feels more natural
+
+28/03/2024
+-implemented dual click to directly access to editable objects to modify them
+-implementing object selection and combinations
+-implementing scrollable interface
+-added some rulers to give the user an idea about the size of the figure
+-added a GUI to execute arbitrary code (can be used so that the user generates his own code his way, and then I place it automatically with my tool)
+-fixed several export errors (export as svg or export as jpg or png)
+
+27/03/2024
+-fixed several scaling issues when image contains groups of groups (the incompressible part of objects makes the exact computation impossible, need an approximation approach and all obejcts need to have a size)
+-removed immutable objects because they are too complex to handle programmatically
+-further simplified the alignment code
+-some improvements with text objects may be needed in the future
+-added primary support for matplotlib figures
+-added support for svg files
+-added background for svg and plots
+-first draft of selection implemented
+
+26/03/2024
+-first functional version of group (it can implement rows and columns)
+-creating figures with images is almost fully functional already
+-created a positionable interface that will deal with position
+-set the first attempt to serialize the image as XML (fully portable and safe format)
+-started working on a text object that can be rotated like images
+-changed setP1 and getP1 to setTopLeft and topLeft, to be more consistent with the QT nomenclature
