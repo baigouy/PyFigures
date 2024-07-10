@@ -1,5 +1,13 @@
+10/07/2024
+-started designing the website
+-wrote the conda install instructions
+-added the possibility to 'Dissociate' a single image if it is part of a group
+-renamed 'Dissociate' to 'Extrude'
+-fixed a small bug preventing the loading of channels and dimensions in the annotation editor
+-fixed a major scalebar size issue
+
 09/07/2024
--restricted internal DND to left-click (makes more sense and prevent non-intuitive interactions)
+-restricted internal DND to left-click (makes more sense and prevents non-intuitive interactions with the software)
 -left-click/DND specific and right-click action have been splitted to specific context menu to add a bit more clarity to the interface
 -added 'Y spacing' spinner for main window
 -allow spacing to be 0px (3px by default)
@@ -16,6 +24,9 @@
 -fixed a dissociation bug that dissociated objects that were already in the main list
 -removed all unused classes
 -prevented useless ops when the user just edits the name without really changing it in the annotation editor
+-built the first figure of the PyFigures manuscript
+-pushed BAtools to github (private repo)
+-pushed PyFigures to github (private repo)
 
 08/07/2024
 -finalized 'Force same AR as first'

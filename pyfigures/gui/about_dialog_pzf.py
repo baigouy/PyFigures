@@ -55,6 +55,8 @@ class AboutDialog(QDialog):
         close_button.clicked.connect(self.close)
         layout.addWidget(close_button)
 
+        self.adjustSize()
+
 def main():
     app = QApplication([])
 

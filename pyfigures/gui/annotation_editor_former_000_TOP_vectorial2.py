@@ -1631,6 +1631,8 @@ class MainWindow(QWidget):
 
         # we reload all the parameters of the image
         self.load_background_parameters()
+        self.update_dimension_sliders()
+        self.update_channel_layout()
 
         if self.qt_viewer.background:
             self.qt_viewer.background.setTopLeft(0, 0)
@@ -2645,7 +2647,7 @@ if __name__ == '__main__':
     print('#'*20)
     # svg_file2 = Image2D('/E/Sample_images/EZF_SF_scientifig_EZFig/sample_images_svg/epithelium.svg', fill_color=0xFF00FF) # not good it appears sheared
     # svg_file2.set_rotation(45)
-    # svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series001.tif') # not good it appears sheared
+    svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series001.tif') # not good it appears sheared
     # svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series003.tif') # not good it appears sheared
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/confocal-series.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/epithelia_examples/image_soichi_folding_wing/model_tests/first.tif') # really a cool one!!!
@@ -2654,7 +2656,7 @@ if __name__ == '__main__':
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/confocal-series.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/first-instar-brain.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/MAX_organ-of-corti.tif') # really a cool one!!!
-    svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/graffiti.tif') # really a cool one!!! -−> the normalization is in rollback mode !! I need to be able to set the LUT of that --> even thuugh there is only one channel
+    # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/graffiti.tif') # really a cool one!!! -−> the normalization is in rollback mode !! I need to be able to set the LUT of that --> even thuugh there is only one channel
     # svg_file2 = Image2D('/E/Sample_images/epithelia_examples/xenope/macroconfocal/MAX_crb3-1-82ng.tif') # really a cool one!!! # is there a LUT saved in there because if this is the case I do not read it...
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/mri-stack.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_PA/mini_vide/focused_Series012.png') # --> pb --> that shifts the channels

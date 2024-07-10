@@ -1007,7 +1007,8 @@ class EZFIG_GUI(QMainWindow):
             add_to_new_col.triggered.connect(lambda: self.add_images_to_new_col(lst=lst))
 
             self.paint.EZFIG_panel.contextMenu.addSeparator()
-            add_as_panel = self.paint.EZFIG_panel.contextMenu.addAction("Add as grid panel (Rows + Cols)")
+            # add_as_panel = self.paint.EZFIG_panel.contextMenu.addAction("Add as grid panel (Rows + Cols)")
+            add_as_panel = self.paint.EZFIG_panel.contextMenu.addAction("To panel")
             add_as_panel.triggered.connect(lambda: self.create_panel(lst=lst))
         # else:
         #     if isinstance(lst[0], str) and lst[0].lower().endswith('.pyf'):

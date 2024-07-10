@@ -12,12 +12,13 @@ class TextEditWatcher(QObject):
 
     def __init__(self, text_edits, callback=None):
         super().__init__()
+        if not text_edits:
+            text_edits = []
         if not isinstance(text_edits, list):
             text_edits = [text_edits]
         self.text_edits = text_edits
         self.active_text_edit = None
         self.callback = callback
-        self.text_edits = text_edits
         for text_edit in self.text_edits:
             text_edit.installEventFilter(self)
             text_edit.formatChanged.connect(self.onFormatChanged)  # Connect to the formatChanged signal
@@ -28,6 +29,7 @@ class TextEditWatcher(QObject):
         return self.text_edits
 
     def eventFilter(self, obj, event):
+
         if obj in self.text_edits:
             if event.type() == QEvent.FocusIn:
                 self.active_text_edit = obj

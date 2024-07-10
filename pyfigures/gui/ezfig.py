@@ -1642,7 +1642,7 @@ class MyWidget(QWidget):
             if isinstance(self.selected_shape, list):
                 if not find_first_object_of_type(self.selected_shape, Group):
                     can_dissociate = False
-            if not can_dissociate and isinstance(self.selected_shape, list ) and len(self.selected_shape)>1:
+            if not can_dissociate and isinstance(self.selected_shape, list) and len(self.selected_shape)>=1:
                 # can_dissociate =True
                 for elm in self.selected_shape:
                     top_parent = self.get_top_parent_of_shape(elm)
@@ -1650,10 +1650,20 @@ class MyWidget(QWidget):
                         can_dissociate=True
                         break
 
+            # print('can dissociate', can_dissociate)
+
             if can_dissociate and not is_left_click:
                 self.contextMenu.addSeparator()
-                all_as_single = self.contextMenu.addAction("Dissociate")
+                all_as_single = self.contextMenu.addAction("Extrude")
                 all_as_single.triggered.connect(self.all_as_single)
+
+        elif not is_left_click and isinstance(self.selected_shape, Image2D):
+                if not self.selected_shape.isText:
+                    top_parent = self.get_top_parent_of_shape(self.selected_shape)
+                    if top_parent is not None and top_parent!=self.selected_shape:
+                        self.contextMenu.addSeparator()
+                        all_as_single = self.contextMenu.addAction("Extrude")
+                        all_as_single.triggered.connect(self.all_as_single)
 
             # if isinstance(self.selected_shape, Group) or not can_dissociate:
             #     self.contextMenu.addSeparator()
@@ -1674,7 +1684,7 @@ class MyWidget(QWidget):
             if top_parent_of_sel and not self.selected_shape==top_parent_of_sel and is_left_click:
                 # Add a separator
                 self.contextMenu.addSeparator()
-                add_as_new_row = self.contextMenu.addAction("Add as new Row/Extrude from group")
+                add_as_new_row = self.contextMenu.addAction("Extrude")
                 add_as_new_row.triggered.connect(partial(self.extrude, self.selected_shape, top_parent_of_sel))
 
             # print('self.dragging inside dabu', self.dragging)
@@ -2455,6 +2465,8 @@ class MyWidget(QWidget):
                         top_parent = self.get_top_parent_of_shape(elm)
                         if top_parent is not None and top_parent != elm:
                             stuff_to_split.append(elm)
+            else:
+                stuff_to_split = [self.selected_shape]
 
 
         # print('@'*20)
