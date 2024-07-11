@@ -2,7 +2,7 @@
 
 Effortless creation of high-quality scientific figures in Python. As a video is better than a thousand words:
 
-[![Watch the video](../images/PyFigures.png)](https://youtu.be/iqknxBF6BtE)
+[![Watch the video](./images/PyFigures.png)](https://youtu.be/iqknxBF6BtE)
 
 # Install
 
