@@ -231,6 +231,8 @@ class MyWidget(QWidget):
         self.selected_shape = None
         self.bounds = None
 
+        self.update_size()
+        self.update()
 
 
         # if True:
@@ -633,6 +635,7 @@ class MyWidget(QWidget):
         #     return
         bounds = self.updateBounds()
 
+
         # if there is a selected shape I also need to further extend the drawing to outside of the selection or at least to the mouse position
         # print(bounds)
         extra_size = 100 # 2
@@ -658,10 +661,6 @@ class MyWidget(QWidget):
             if mouse_pos.y()>size.height():
                 size.setHeight(int(mouse_pos.y()+self._EXTRA_PADDING))
 
-
-
-
-        # print("-->",size)
         self.resize(size)
 
     # in fact upon
@@ -3116,7 +3115,7 @@ class MyWidget(QWidget):
             custom_dialog = CustomDialog(title="Annotate the image",
                                          message="Done with your edits? Press 'Ok' to apply the changes or 'Cancel' to ignore all changes.",
                                          # main_widget=main, options=['Ok', 'Cancel'], parent=self)
-                                         main_widget=main, options=['Ok','Cancel'], parent=self)
+                                         main_widget=main, options=['Ok','Cancel'], parent=self, auto_adjust=False)
 
             if custom_dialog.exec_() == QDialog.Accepted:
                 # print("Yes clicked")

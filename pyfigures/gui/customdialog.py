@@ -75,8 +75,13 @@ class CustomDialog(QDialog):
         if not auto_adjust:
             try:
                 try:
-                    screen_geometry = QtWidgets.QDesktopWidget().availableGeometry()
-                    # geometry.setHeight(geometry.height() - (titleBarHeight * 2))
+                    # Get the screen where the application is currently displayed
+                    screen = self.screen()
+                    if screen is not None:
+                        screen_geometry = screen.geometry()
+                    else:
+                        # If the application is not displayed on any screen, use the primary screen
+                        screen_geometry = QtWidgets.QApplication.primaryScreen().geometry()
                 except:
                     try:
                         from qtpy.QtGui import QGuiApplication
@@ -84,8 +89,8 @@ class CustomDialog(QDialog):
                     except:
                         pass  # no big deal if all fails...
                 # Set width and height to 75% of the screen size
-                width = int(screen_geometry.width() * 0.75)
-                height = int(screen_geometry.height() * 0.75)
+                width = int(screen_geometry.width() * 0.85)
+                height = int(screen_geometry.height() * 0.85)
                 self.resize(width, height)
             except:
                 pass  # no big deal if it fails...

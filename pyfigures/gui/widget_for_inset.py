@@ -100,18 +100,7 @@ class InsetWidget(QWidget):
     def get_color(self):
         return self.color
 
-    def pick_color(self):
-        # Create the color dialog
-        color_dialog = QColorDialog()
-
-        # Set the initial color
-        color_dialog.setCurrentColor(self.color)
-
-        # Show the color dialog and get the selected color
-        if color_dialog.exec_():
-            self.set_color(color_dialog.currentColor())
-
-            print(color_dialog.currentColor())
+    #
 
     def set_color(self, color):
         self.color = color

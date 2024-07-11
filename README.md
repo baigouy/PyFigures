@@ -1,6 +1,12 @@
 # PyFigures
 
-Effortless creation of high-quality scientific figures in Python
+Effortless creation of high-quality scientific figures in Python. As a video is better than a thousand words:
+
+![](../videos_pyfigures/video_demo_pyfigures.mp4)
+
+<video width="1024" height="768" controls>
+  <source src="../videos_pyfigures/video_demo_pyfigures.mp4" type="video/mp4">
+</video>
 
 # Install
 

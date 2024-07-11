@@ -5,6 +5,10 @@ from batools.img import start_JVM
 import sys
 from pyfigures.gui.pfgui import EZFIG_GUI
 
+
+
+
+
 def run_pyfigures():
     """
     Runs the PyFigures GUI.
@@ -23,6 +27,18 @@ def run_pyfigures():
 
     # Initialize the QApplication
     app = QApplication(sys.argv)
+
+    if False:
+        # just a trick to override the default cursor...
+        from qtpy.QtGui import QCursor, QPixmap
+        # Load a custom cursor image
+        cursor_image = QPixmap("/home/aigouy/Téléchargements/cursor-mini.png")
+
+        # Create a custom cursor object with the cursor image
+        custom_cursor = QCursor(cursor_image)
+
+        # Set the custom cursor globally for the application
+        QApplication.setOverrideCursor(custom_cursor)
 
     # Create and show the PyFigures GUI window
     w = EZFIG_GUI()

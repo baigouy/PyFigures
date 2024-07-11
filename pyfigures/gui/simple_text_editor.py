@@ -850,7 +850,10 @@ class TextEditor(QWidget):
 
     def int_color_to_html_color(self,color_int):
         # Make sure the color_int is a valid 32-bit integer
-        color_int = color_int & 0xFFFFFF
+        if color_int is not None:
+            color_int = color_int & 0xFFFFFF
+        else:
+            color_int = 0xFFFFFF
 
         # Convert the integer to a hexadecimal string with leading zeros
         hex_color = "{:06x}".format(color_int)
@@ -878,7 +881,8 @@ class TextEditor(QWidget):
                 self.textEdit.setStyleSheet("background-color: {}".format(self.int_color_to_html_color(color)))
         else:
             # print('inside 7')
-            self.textEdit.setStyleSheet("background-color: none;")
+            # self.textEdit.setStyleSheet("background-color: none;")
+            self.textEdit.setStyleSheet("background-color: #d0d0d0;")
             # self.textEdit.setStyleSheet("background-color: transparent;")
         # print('inside 8')
         self.update()
@@ -1131,7 +1135,8 @@ if __name__ == '__main__':
     '''
 
     # tst = TAText2D(html, placement='top-left', fill_color=0xAAAAAA)
-    tst = TAText2D(html, placement='top-left', fill_color=0xAAAAAA)
+    # tst = TAText2D(html, placement='top-left', fill_color=0xAAAAAA)
+    tst = TAText2D(html, placement='top-left')
     print(tst.fill_color)
 
 

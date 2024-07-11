@@ -89,6 +89,8 @@ class scrollable_EZFIG(QWidget):
         self.popup_label.hide() # we hide the label by default; we'll show it when show_popup is called
 
 
+        self.resize(512,512)
+
     def show_popup(self, text=None):
         # maybe if one is visible --> skip new one
         if not text:
@@ -521,10 +523,10 @@ if __name__ == '__main__':
 
         # grp3 = group(img3, fig, space=42, orientation=random.choice(['X','Y']), fill_color=0xFF00FF)
         # grp3 = group(img3,fig, img1,svg, space=3, orientation=random.choice(['X','Y']), fill_color=0xFF00FF)
-        row1 = Group(img3, fig, img1, svg, space=3, orientation=random.choice(['X', 'Y']), fill_color=0xFF00FF)
+        # row1 = Group(img3, fig, img1, svg, space=3, orientation=random.choice(['X', 'Y']), fill_color=0xFF00FF)
 
         # grp3.set_to_size(512)
-        set_to_size(row1, 1024)
+        # set_to_size(row1, 1024)
 
     # print(row1.boundingRect())
     w.EZFIG_panel.shapes_to_draw = [row1]

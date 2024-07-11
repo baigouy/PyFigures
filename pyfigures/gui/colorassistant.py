@@ -1,3 +1,5 @@
+import traceback
+
 from batools.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import sys
@@ -5,7 +7,7 @@ from qtpy.QtCore import QPoint, QRect, Qt, QTimer,QSize
 from qtpy.QtGui import QColor, QPainter, QPixmap,QImage
 from qtpy.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout
 from PIL import Image, ImageGrab, ImageQt
-import pyautogui
+
 
 class ColorAssistant(QWidget):
     def __init__(self, parent=None, capture_width=128, capture_height=96):
@@ -26,13 +28,27 @@ class ColorAssistant(QWidget):
         layout.addWidget(self._label_blue)
         self.setLayout(layout)
 
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self.update_pixel_color)
-        self._timer.start(100)  # Update every 100ms
+        # import os
+        # os.environ['DISPLAY']=':0'
+        success = False
+        try:
+            import pyautogui
+            success=True
 
-        self.original_size = self.capture_size
+            # this can be fixed using "xhost +SI:localuser:$(whoami)" but the pb is that it is very slow and painful so forget about in on ubuntu wayland, that just does not work
 
-        self.show()
+        except:
+            traceback.print_exc()
+            print('Error, color assistant will not work on this system')
+
+        if success:
+            self._timer = QTimer(self)
+            self._timer.timeout.connect(self.update_pixel_color)
+            self._timer.start(100)  # Update every 100ms
+
+            self.original_size = self.capture_size
+
+            self.show()
 
     def sizeHint(self):
         return QSize(self.capture_size.width(), self.capture_size.height() * 3)
@@ -42,29 +58,34 @@ class ColorAssistant(QWidget):
         self.update_pixel_color()
 
     def update_pixel_color(self):
-        x, y = pyautogui.position()
-        half_width = self.capture_size.width() // 2
-        half_height = self.capture_size.height() // 2
-        rect = QRect(x - half_width, y - half_height, self.capture_size.width(), self.capture_size.height())
+        try:
+            import pyautogui
+            x, y = pyautogui.position()
+            half_width = self.capture_size.width() // 2
+            half_height = self.capture_size.height() // 2
+            rect = QRect(x - half_width, y - half_height, self.capture_size.width(), self.capture_size.height())
 
-        image = ImageGrab.grab(bbox=(rect.x(), rect.y(), rect.x() + rect.width(), rect.y() + rect.height()))
-        rgb_image = image.convert('RGB')
+            image = ImageGrab.grab(bbox=(rect.x(), rect.y(), rect.x() + rect.width(), rect.y() + rect.height()))
+            rgb_image = image.convert('RGB')
 
-        r, g, b = rgb_image.split()
+            r, g, b = rgb_image.split()
 
-        widget_width = self.width()
-        label_height = self.height() // 3
+            widget_width = self.width()
+            label_height = self.height() // 3
 
-        for channel, label in zip((r, g, b), (self._label_red, self._label_green, self._label_blue)):
-            qimage = QImage(channel.tobytes(), channel.width, channel.height, QImage.Format_Grayscale8)
-            pixmap = QPixmap.fromImage(qimage)
+            for channel, label in zip((r, g, b), (self._label_red, self._label_green, self._label_blue)):
+                qimage = QImage(channel.tobytes(), channel.width, channel.height, QImage.Format_Grayscale8)
+                pixmap = QPixmap.fromImage(qimage)
 
-            scaled_pixmap = pixmap.scaled(widget_width, label_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(widget_width, label_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
-            label.setPixmap(scaled_pixmap)
-            label.setAlignment(Qt.AlignCenter)
+                label.setPixmap(scaled_pixmap)
+                label.setAlignment(Qt.AlignCenter)
 
-        self.adjustSize()
+            self.adjustSize()
+        except:
+            # traceback.print_exc()
+            pass
 
     def resizeEvent(self, event):
         widget_width = self.width()

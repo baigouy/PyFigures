@@ -1,10 +1,18 @@
 10/07/2024
 -started designing the website
 -wrote the conda install instructions
--added the possibility to 'Dissociate' a single image if it is part of a group
+-added 'Dissociate' even for a single image if it is part of a group
 -renamed 'Dissociate' to 'Extrude'
 -fixed a small bug preventing the loading of channels and dimensions in the annotation editor
 -fixed a major scalebar size issue
+-fixed yet another color dialog appearing behind the annotation editor and removed a duplicated function
+-fixed annotation editor window extending beyond current screen size
+-forced dimensions without any object to be at least 512x512 so that right click is still possible even when there is no fig drawn
+-changed default bg color for TextEditor to medium gray so that white and black are visible over it
+-changed default text color of scalebar to white
+-fixed a size error for the annotation editor at startup
+-fixed a coding error in DND
+-fixed an error preventing GUI from launching of color assistant fails due to erroneous config (pyautoGUI works in ubuntu but not in ubuntu wayland)
 
 09/07/2024
 -restricted internal DND to left-click (makes more sense and prevents non-intuitive interactions with the software)

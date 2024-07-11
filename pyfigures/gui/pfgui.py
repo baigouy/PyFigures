@@ -41,7 +41,7 @@ from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTran
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit
-from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject
+from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF
 import qtawesome as qta
 import logging
 import numpy as np
@@ -856,7 +856,7 @@ class EZFIG_GUI(QMainWindow):
             logger.warning('Drag and drop not supported in "Preview" mode, please select another tab.')
             event.ignore()
             return
-        if event.mimeData().hasUrls:
+        if event.mimeData().hasUrls():
             event.accept()
         else:
             event.ignore()
@@ -866,7 +866,7 @@ class EZFIG_GUI(QMainWindow):
             logger.warning('Drag and drop not supported in "Preview" mode, please select another tab.')
             event.ignore()
             return
-        if event.mimeData().hasUrls:
+        if event.mimeData().hasUrls():
             event.setDropAction(Qt.CopyAction)
             event.accept()
         else:
@@ -880,10 +880,16 @@ class EZFIG_GUI(QMainWindow):
             event.ignore()
             return
 
-        if event.mimeData().hasUrls:
+        # print('inside DND, event',  event.mimeData().hasUrls())
+        # #
+        # for url in event.mimeData().urls():
+        #     print(url)
+
+
+        if event.mimeData().hasUrls():
             self.list = []
             event.setDropAction(Qt.CopyAction)
-            event.accept()
+
 
             urls = []
             for url in event.mimeData().urls():
@@ -899,11 +905,15 @@ class EZFIG_GUI(QMainWindow):
             # try to do things here --> TODO --> ask if should be added as a row or as a col and what should be set (height or width --> TODO)
             # self.add_image()
             # event.ignore()
-
+            event.accept()
 
             event_pos_in_current_widget = event.pos()
             event_pos_global = self.mapToGlobal(event_pos_in_current_widget)
             event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
+
+            # event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
+            event_pos_global2 = self.mapToGlobal(self.paint.EZFIG_panel.mapFromGlobal(event.pos()))
+
             # event_pos_in_target_widget_scaled = event_pos_in_target_widget/ self.paint.EZFIG_panel.scale
             event_pos_in_target_widget_scaled = event_pos_in_target_widget / self.paint.EZFIG_panel.scale
 
@@ -941,7 +951,21 @@ class EZFIG_GUI(QMainWindow):
             try:
                 # Open the context menu at the position of the drop event
                 self.add_image_from_an_external_source_context_menu(self.list, all_encounters_in_shape_below_mouse if all_encounters_in_shape_below_mouse is not None else all_encounters_of_sel_shape_below_mouse)
+                start_time = time.time()
                 self.paint.EZFIG_panel.contextMenu.exec_(global_pos)
+                end_time = time.time()
+                time_spent = end_time - start_time
+
+                if time_spent<0.1:  # DEV NOTE −−> KEEP THAT
+                    # assume the popup didn't show and try an ultimate rescue
+                    # DEV NOTE KEEP NB MEGA TODO -−> THIS IS A VERY HACKY SOLUTION TO GET THE MENU TO SHOW IN UBUNTU WAYLAND
+                    # ON UBUNTU WAYLAND THE MAPPING IS NOT POSSIBLE TO THE MAIN WINDOW AND SO THE CONTEXT MENU DOES NOT SHOW SO WE CREATE A PARENTLESS MENU THAT WILL ALWAYS SHOW ALTHOUGH AT AN ERRONEOUS POSITION BUT THAT IS BETTER THAN NOTHING
+
+                    # Create a context menu
+                    context_menu = QMenu() # NB KEEP NOT PUTTING SELF IS THE ONLY WAY TO GET IT RIGHT --> that is really a pb
+                    for action in self.paint.EZFIG_panel.contextMenu.actions():
+                        context_menu.addAction(action)
+                    context_menu.exec_(QPoint(0,0))
             except:
                 traceback.print_exc()
                 event.ignore()

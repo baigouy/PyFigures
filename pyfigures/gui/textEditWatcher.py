@@ -29,19 +29,21 @@ class TextEditWatcher(QObject):
         return self.text_edits
 
     def eventFilter(self, obj, event):
-
-        if obj in self.text_edits:
-            if event.type() == QEvent.FocusIn:
-                self.active_text_edit = obj
-                self.focusChanged.emit(True)  # Emit True when a QTextEdit gains focus
-            elif event.type() == QEvent.FocusOut:
-                self.active_text_edit = None
-                self.focusChanged.emit(False)  # Emit False when a QTextEdit loses focus
-            # el
-            elif event.type() in [QEvent.KeyPress, QEvent.KeyRelease]:
-                self.active_text_edit = obj
-                self.textChanged.emit()
-            # print(event.type())
+        try:
+            if obj in self.text_edits:
+                if event.type() == QEvent.FocusIn:
+                    self.active_text_edit = obj
+                    self.focusChanged.emit(True)  # Emit True when a QTextEdit gains focus
+                elif event.type() == QEvent.FocusOut:
+                    self.active_text_edit = None
+                    self.focusChanged.emit(False)  # Emit False when a QTextEdit loses focus
+                # el
+                elif event.type() in [QEvent.KeyPress, QEvent.KeyRelease]:
+                    self.active_text_edit = obj
+                    self.textChanged.emit()
+                # print(event.type())
+        except:
+            pass
         return False
 
     def get_active_editor(self):

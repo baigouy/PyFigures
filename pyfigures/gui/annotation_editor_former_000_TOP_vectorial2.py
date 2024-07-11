@@ -105,6 +105,9 @@ class VectorialDrawPane2(QWidget):
           from pyfigures.gui.keep_tst_images_for_pzf import demo_img
           self.background = demo_img()
 
+        # self.update_size()
+        # self.update()
+
 
     def set_scale(self, scale):
         # same scale nothing to do
@@ -216,7 +219,7 @@ class VectorialDrawPane2(QWidget):
         elif 'oating' in sender:
             self.shape_to_draw = partial(TAText2D, text='<font color=#66FF66>Your text here</font>', placement=None)
         elif 'cale' in sender:
-            self.shape_to_draw = partial(ScaleBar, bar_width_in_units=100, legend=TAText2D('<font color=#FF0000>Double click scale bar to edit</font>'), placement='bottom-right')
+            self.shape_to_draw = partial(ScaleBar, bar_width_in_units=100, legend=TAText2D('<font color=#FFFFFF>Double click scale bar to edit</font>'), placement='bottom-right')
         else:
             print(sender, 'Shape not supported yet!!!')
             self.shape_to_draw = None
@@ -249,17 +252,18 @@ class VectorialDrawPane2(QWidget):
         # very dirty hack to always draw shapes correctly --> some day understand why
 
         # below is the code that makes the drawing twice -−> why is that !!!
-        try:
-            image = QImage(100, 100, QImage.Format_RGB32)
-            painter2 = QPainter(image)
-            self.background.draw(painter2)
-            painter2.end()
-            del painter2
-            del image
-        except Exception as e:
-            traceback.print_exc()
-            print('drawing error can be ignored:', str(e))
-            pass
+        if self.background:
+            try:
+                image = QImage(100, 100, QImage.Format_RGB32)
+                painter2 = QPainter(image)
+                self.background.draw(painter2)
+                painter2.end()
+                del painter2
+                del image
+            except Exception as e:
+                traceback.print_exc()
+                print('drawing error can be ignored:', str(e))
+                pass
 
         painter.save()
         if self.scale != 1.0:
@@ -715,6 +719,8 @@ class VectorialDrawPane2(QWidget):
             # print('bds3', bounds)
             self.setMinimumSize(int((bounds.width() + bounds.x()) * self.scale),
                                 int((bounds.height() + bounds.y()) * self.scale))  # marche
+        else:
+            self.setMinimumSize(512,512)  # marche
 
     def mouseDoubleClickEvent(self, event):
         # print(event)
@@ -908,8 +914,6 @@ class MainWindow(QWidget):
 
         self.dimsliders = [] # will contain all the dimensions that can be edited
         self.channel_boxes = [] # will contain all the channels to be displayed
-
-        self.setMinimumSize(1000, 800)
 
         if True:
             # Create actions
@@ -1644,6 +1648,12 @@ class MainWindow(QWidget):
             self.qt_viewer.background.crop_top = 0
             self.qt_viewer.background.crop_bottom = 0
 
+        self.setMinimumSize(800, 600)
+        # self.resize(800, 700)
+        # self.setFixedSize(900, 760)
+        self.qt_viewer.update_size()
+        self.qt_viewer.update()
+
 
     def slider_dimension_value_changed_delayed(self):
         self.timer_dim_slider.start()
@@ -1652,7 +1662,7 @@ class MainWindow(QWidget):
         clear_layout(self.channel_layout)
         self.channel_boxes = []
         # Iterate over the channels in the image
-        if isinstance(self.qt_viewer.background.img, np.ndarray) and 'c' in guess_dimensions(self.qt_viewer.background.img): # if no c we must not do anything with the last channel as this is not a 'c'
+        if self.qt_viewer.background and isinstance(self.qt_viewer.background.img, np.ndarray) and 'c' in guess_dimensions(self.qt_viewer.background.img): # if no c we must not do anything with the last channel as this is not a 'c'
             for i in range(self.qt_viewer.background.img.shape[-1]):
                 # Create a new QCheckBox for this channel
                 check_box = QCheckBox(f"{i}")
@@ -1803,7 +1813,10 @@ class MainWindow(QWidget):
         # self.channel_boxes = []
         # empty_widget_layout(self.image_dimension_browser_toolbox)
         clear_layout(self.image_dimension_browser_toolbox_layout)
-        guessed_dims = guess_dimensions(self.qt_viewer.background.img)
+        if self.qt_viewer.background:
+            guessed_dims = guess_dimensions(self.qt_viewer.background.img)
+        else:
+            guessed_dims = None
 
         # print('dimensions found0', guessed_dims)
 
@@ -2450,13 +2463,13 @@ class MainWindow(QWidget):
 
     # allow DND
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls:
+        if event.mimeData().hasUrls():
             event.accept()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls:
+        if event.mimeData().hasUrls():
             event.setDropAction(Qt.CopyAction)
             event.accept()
         else:
@@ -2477,6 +2490,7 @@ class MainWindow(QWidget):
         pass
 
     def compute_rotation_n_crop_polygon(self):
+        if self.qt_viewer.background:
             AR,self.qt_viewer.rotate_n_crop_polygon =  get_shape_after_rotation_and_crop(self.qt_viewer.background.getRect(raw=True),self.rotate_image_spinbox.value(), self.crop_left_spinbox.value(),self.crop_right_spinbox.value(), self.crop_top_spinbox.value(),self.crop_bottom_spinbox.value(), return_AR=True)
             #  Nb I shall be able to get the AR from that --> TODO --> think of that probably one of the bounding rects!!!!- -> TODO
 
@@ -2647,7 +2661,7 @@ if __name__ == '__main__':
     print('#'*20)
     # svg_file2 = Image2D('/E/Sample_images/EZF_SF_scientifig_EZFig/sample_images_svg/epithelium.svg', fill_color=0xFF00FF) # not good it appears sheared
     # svg_file2.set_rotation(45)
-    svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series001.tif') # not good it appears sheared
+    # svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series001.tif') # not good it appears sheared
     # svg_file2 = Image2D('/E/Sample_images/sample_images_denoise_manue/29-1_lif/ON 290119.lif - Series003.tif') # not good it appears sheared
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/confocal-series.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/epithelia_examples/image_soichi_folding_wing/model_tests/first.tif') # really a cool one!!!
@@ -2656,10 +2670,11 @@ if __name__ == '__main__':
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/confocal-series.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/first-instar-brain.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/MAX_organ-of-corti.tif') # really a cool one!!!
-    # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/graffiti.tif') # really a cool one!!! -−> the normalization is in rollback mode !! I need to be able to set the LUT of that --> even thuugh there is only one channel
+    svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/graffiti.tif') # really a cool one!!! -−> the normalization is in rollback mode !! I need to be able to set the LUT of that --> even thuugh there is only one channel
     # svg_file2 = Image2D('/E/Sample_images/epithelia_examples/xenope/macroconfocal/MAX_crb3-1-82ng.tif') # really a cool one!!! # is there a LUT saved in there because if this is the case I do not read it...
     # svg_file2 = Image2D('/E/Sample_images/sample_images_FIJI/mri-stack.tif') # really a cool one!!!
     # svg_file2 = Image2D('/E/Sample_images/sample_images_PA/mini_vide/focused_Series012.png') # --> pb --> that shifts the channels
+    # svg_file2 = None
 
     try:
         print('starting', svg_file2.img.shape) # target −> 'dhwc'
