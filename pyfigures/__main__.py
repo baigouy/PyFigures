@@ -5,10 +5,6 @@ from batoolset.img import start_JVM
 import sys
 from pyfigures.gui.pfgui import EZFIG_GUI
 
-
-
-
-
 def run_pyfigures():
     """
     Runs the PyFigures GUI.

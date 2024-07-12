@@ -1,3 +1,9 @@
+12/07/2024
+-finalized all demo videos
+-added a missing library
+-force numpy<2.0.0 for compatibility with javabridge
+-made an additional change to image2D to further prevent image loading errors (make sure that dimensions are not a tuple)
+
 11/07/2024
 -recorded and mounted a demo video https://youtu.be/iqknxBF6BtE
 -prevented an error if the user drops a folder (folder is ignored for now)

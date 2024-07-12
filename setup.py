@@ -35,7 +35,7 @@ setuptools.setup(
         "czifile",
         "Markdown",
         "matplotlib>=3.5.2",
-        "numpy",
+        "numpy<1.26.4", # <1.26.4 for compat with javabridge
         "Pillow>=8.1.2",
         "PyQt6",
         "read-lif",
@@ -61,6 +61,7 @@ setuptools.setup(
         "python-bioformats",
         "python-javabridge",
         "pyautogui",
+        "imagecodecs",
     ],
     python_requires='>=3.7, <3.11' # from 04/05/23 colab is using python 3.10.11
 )
