@@ -4,7 +4,7 @@ Effortless creation of high-quality scientific figures in Python.
 
 [![Watch the video](./images/PyFigures.png)](https://youtu.be/HSdCu-CW8eI)
 
-As a video is better than a thousand words click on the image above.
+Since a video is better than a thousand (click on the image above to view the demo).
 
 # Install
 
