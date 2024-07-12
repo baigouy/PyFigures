@@ -1,4 +1,4 @@
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QLabel, QPushButton, QWidget, QHBoxLayout,QColorDialog,QDialog

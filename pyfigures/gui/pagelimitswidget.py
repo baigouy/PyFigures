@@ -1,7 +1,7 @@
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from qtpy.QtWidgets import QApplication, QWidget, QVBoxLayout, QFormLayout, QDoubleSpinBox, QComboBox, QPushButton, QLabel
-from batools.dims.tools import cm_to_inch, inch_to_cm, inch_to_pixels, cm_to_pixels
+from batoolset.dims.tools import cm_to_inch, inch_to_cm, inch_to_pixels, cm_to_pixels
 
 class PageLimitsWidget(QWidget):
     def __init__(self):

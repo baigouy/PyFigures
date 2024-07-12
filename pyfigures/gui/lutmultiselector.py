@@ -1,9 +1,9 @@
 # in fact there will just be two possibiolities --> either default/acquisition or a chosen LUT
 
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batools.luts.lut_minimal_test import list_available_luts, PaletteCreator
-from batools.pyqt.tools import get_items_of_combo
+from batoolset.luts.lut_minimal_test import list_available_luts, PaletteCreator
+from batoolset.pyqt.tools import get_items_of_combo
 import numpy as np
 from qtpy.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QComboBox, QLabel
 from qtpy.QtGui import QPixmap, QImage

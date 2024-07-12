@@ -106,28 +106,28 @@
 # should I allow a table like stuff ??? I think it's not useful as they can be
 # do a ROI stuff --> allow to draw annotations on the image
 # allow lettering outside --> see how ?
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from builtins import Exception
 from pyfigures.gui.fontselectorgui import FontSelector
-from batools.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
 from pyfigures.gui.bg_color_selection import BackgroundColorPicker
 from pyfigures.gui.panelcreationwidget import PanelCreator
-from batools.dims.tools import scaling_factor_to_achieve_DPI
-from batools.img import guess_dimensions
-from batools.pyqt.tools import distance, getCtrlModifier
+from batoolset.dims.tools import scaling_factor_to_achieve_DPI
+from batoolset.img import guess_dimensions
+from batoolset.pyqt.tools import distance, getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
-from batools.xml.tools import _replace_filename_tags
+from batoolset.xml.tools import _replace_filename_tags
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.simple_text_editor import TextEditor
-from batools.serialization.tools import deserialize_to_dict
-from batools.serialization.tools import object_to_xml, create_object, clone_object
+from batoolset.serialization.tools import deserialize_to_dict
+from batoolset.serialization.tools import object_to_xml, create_object, clone_object
 import os
 from functools import partial
-from batools.lists.tools import is_iterable, move_right, move_left, swap_items, flatten_iterable, \
+from batoolset.lists.tools import is_iterable, move_right, move_left, swap_items, flatten_iterable, \
     find_first_object_of_type, find_all_objects_of_type, divide_list_into_sublists
 from pyfigures.gui.customdialog import CustomDialog
-from batools.draw.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
+from batoolset.draw.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
 import sys
 import traceback
 import copy # used to clone class instances
@@ -135,25 +135,25 @@ from qtpy.QtCore import QSize, QRect, QRectF, QPoint, QPointF, Qt, QSizeF, Signa
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QMenu, QDialog,QWidget,QApplication, QVBoxLayout, QPushButton,QScrollArea,QLabel,QInputDialog, QMessageBox,QSpinBox
 from qtpy.QtGui import QBrush, QPen, QColor, QTransform,QPainter, QColor,QFontMetrics,QImage,QPdfWriter,QPageSize,QTextCursor, QFont, QTextCharFormat
-from batools.draw.shapes.freehand2d import Freehand2D
-from batools.draw.shapes.scalebar import ScaleBar
-from batools.draw.shapes.polygon2d import Polygon2D
-from batools.draw.shapes.line2d import Line2D
-from batools.draw.shapes.rect2d import Rect2D
-from batools.draw.shapes.square2d import Square2D
-from batools.draw.shapes.ellipse2d import Ellipse2D
-from batools.draw.shapes.circle2d import Circle2D
-from batools.draw.shapes.point2d import Point2D
-from batools.draw.shapes.polyline2d import PolyLine2D
-from batools.draw.shapes.image2d import Image2D
-from batools.figure.alignment import packX, pack2, align2, align_positions
-# from batools.figure.column import Column
-from batools.draw.shapes.txt2d import TAText2D
-from batools.figure.fig_tools import  get_master_bounds2 #get_master_bounds,
-# from batools.figure.row import Row
+from batoolset.draw.shapes.freehand2d import Freehand2D
+from batoolset.draw.shapes.scalebar import ScaleBar
+from batoolset.draw.shapes.polygon2d import Polygon2D
+from batoolset.draw.shapes.line2d import Line2D
+from batoolset.draw.shapes.rect2d import Rect2D
+from batoolset.draw.shapes.square2d import Square2D
+from batoolset.draw.shapes.ellipse2d import Ellipse2D
+from batoolset.draw.shapes.circle2d import Circle2D
+from batoolset.draw.shapes.point2d import Point2D
+from batoolset.draw.shapes.polyline2d import PolyLine2D
+from batoolset.draw.shapes.image2d import Image2D
+from batoolset.figure.alignment import packX, pack2, align2, align_positions
+# from batoolset.figure.column import Column
+from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.figure.fig_tools import  get_master_bounds2 #get_master_bounds,
+# from batoolset.figure.row import Row
 import os.path
 from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
-from batools.tools.logger import TA_logger  # logging
+from batoolset.tools.logger import TA_logger  # logging
 
 # en fait pas mal et faire autour un GUI avec un menu qui contient ça
 # voir dans TA comment j'ai fait ça...
@@ -4873,7 +4873,7 @@ if __name__ == '__main__':
         # ça a l'air de marcher...
 
         # it now seems ok
-        # from batools.figure.alignment import alignRight, alignLeft, alignTop, alignBottom, alignCenterH, alignCenterV
+        # from batoolset.figure.alignment import alignRight, alignLeft, alignTop, alignBottom, alignCenterH, alignCenterV
 
         # alignLeft(row1, col1)
         # alignRight(row1, col1)

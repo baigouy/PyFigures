@@ -1,7 +1,7 @@
-from batools.settings.global_settings import set_UI
+from batoolset.settings.global_settings import set_UI
 set_UI()
 from qtpy.QtWidgets import QApplication
-from batools.img import start_JVM
+from batoolset.img import start_JVM
 import sys
 from pyfigures.gui.pfgui import EZFIG_GUI
 

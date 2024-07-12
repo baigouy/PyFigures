@@ -1,13 +1,13 @@
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batools.draw.shapes.Position import Position
-from batools.pyqt.tools import get_html_text_with_font, get_shape_after_rotation_and_crop
+from batoolset.draw.shapes.Position import Position
+from batoolset.pyqt.tools import get_html_text_with_font, get_shape_after_rotation_and_crop
 import random
-from batools.serialization.tools import clone_object, object_to_xml, create_object
-from batools.draw.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
+from batoolset.serialization.tools import clone_object, object_to_xml, create_object
+from batoolset.draw.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
     set_to_height_im2d, areIndicesOverlapping
-from batools.draw.shapes.rectangle2d import Rectangle2D
-from batools.img import Img, guess_dimensions
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.img import Img, guess_dimensions
 import traceback
 from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat,QKeySequence,QTransform
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
@@ -15,18 +15,18 @@ from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QS
 from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF,QTimer
 import numpy as np
 import matplotlib.pyplot as plt
-from batools.draw.shapes.circle2d import Circle2D
-from batools.draw.shapes.ellipse2d import Ellipse2D
-from batools.draw.shapes.freehand2d import Freehand2D
-from batools.draw.shapes.image2d import Image2D
-from batools.draw.shapes.line2d import Line2D
-from batools.draw.shapes.point2d import Point2D
-from batools.draw.shapes.polygon2d import Polygon2D
-from batools.draw.shapes.polyline2d import PolyLine2D
-from batools.draw.shapes.scalebar import ScaleBar
-from batools.draw.shapes.square2d import Square2D
-from batools.draw.shapes.txt2d import TAText2D
-from batools.tools.logger import TA_logger # logging
+from batoolset.draw.shapes.circle2d import Circle2D
+from batoolset.draw.shapes.ellipse2d import Ellipse2D
+from batoolset.draw.shapes.freehand2d import Freehand2D
+from batoolset.draw.shapes.image2d import Image2D
+from batoolset.draw.shapes.line2d import Line2D
+from batoolset.draw.shapes.point2d import Point2D
+from batoolset.draw.shapes.polygon2d import Polygon2D
+from batoolset.draw.shapes.polyline2d import PolyLine2D
+from batoolset.draw.shapes.scalebar import ScaleBar
+from batoolset.draw.shapes.square2d import Square2D
+from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.tools.logger import TA_logger # logging
 
 logger = TA_logger()
 

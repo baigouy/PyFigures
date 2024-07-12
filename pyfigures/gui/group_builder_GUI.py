@@ -1,6 +1,6 @@
 import sys
 from qtpy import QtWidgets, QtCore
-from batools.draw.shapes.group import Group
+from batoolset.draw.shapes.group import Group
 
 class PanelOrRow(QtWidgets.QWidget):
     def __init__(self, group=None, hide_size=False):

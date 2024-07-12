@@ -57,7 +57,7 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batools",
+        "batoolset",
         "python-bioformats",
         "python-javabridge",
         "pyautogui",

@@ -2,10 +2,10 @@ from qtpy import QtWidgets, QtCore
 from qtpy.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton, QApplication, QWidget,QFrame)
 from qtpy.QtCore import Qt,Signal
 
-from batools.pyqt.tools import disable_wheel_for_combo_and_spin
+from batoolset.pyqt.tools import disable_wheel_for_combo_and_spin
 
 
-# from batools.pyqt.tools import disable_wheel_for_widget_and_children
+# from batoolset.pyqt.tools import disable_wheel_for_widget_and_children
 
 
 class CustomDialog(QDialog):

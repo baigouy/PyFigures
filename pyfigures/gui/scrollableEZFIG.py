@@ -1,22 +1,22 @@
 # add support for DND along with a list --> copy my other tools
 # can a tree make the difference for selecting shapes ???
 # TODO add also more menus around it --> TODO in order to handle better the stuff
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import traceback
 from pyfigures.gui.ezfig import MyWidget
 import matplotlib.pyplot as plt
-# from batools.draw.shapes.vectorgraphics2d import VectorGraphics2D
-from batools.img import Img
-from batools.draw.shapes.group import Group, set_to_size
+# from batoolset.draw.shapes.vectorgraphics2d import VectorGraphics2D
+from batoolset.img import Img
+from batoolset.draw.shapes.group import Group, set_to_size
 import numpy as np
 import random
 from qtpy.QtCore import QSize, Qt, Signal
 from qtpy.QtGui import QPalette,QKeySequence
 from qtpy.QtWidgets import QScrollArea, QVBoxLayout, QWidget, QToolBar, QStatusBar, QHBoxLayout, QAction,QShortcut
 import qtawesome as qta
-from batools.draw.shapes.image2d import Image2D
-# from batools.figure.ezfig import MyWidget
+from batoolset.draw.shapes.image2d import Image2D
+# from batoolset.figure.ezfig import MyWidget
 from qtpy.QtWidgets import QApplication, QWidget, QLabel
 from qtpy.QtCore import QTimer, QRect
 from qtpy.QtGui import QFont, QFontMetrics, QColor

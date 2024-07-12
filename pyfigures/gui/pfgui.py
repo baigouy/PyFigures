@@ -1,41 +1,41 @@
-from batools.settings.global_settings import set_UI  # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 set_UI()
 import time
-from batools.draw.shapes.serializableguiparams import SerializableGUIparameters
+from batoolset.draw.shapes.serializableguiparams import SerializableGUIparameters
 # import filecmp # TODO use that to avoid duplicating a save in undo/redo --> future dev, not urgent
 from pyfigures.gui.colorassistant import ColorAssistant
 from pyfigures.gui.panelcreationwidget import PanelCreator
-from batools.dims.tools import pixels_to_cm, pixels_to_inch
+from batoolset.dims.tools import pixels_to_cm, pixels_to_inch
 from pyfigures.gui.pagelimitswidget import PageLimitsWidget
 from pyfigures.gui.tipdialog import TipDialog
 from datetime import datetime
 from pyfigures.gui.about_dialog_pzf import AboutDialog
-from batools.dicts.tools import dict_diff
-from batools.files.tools import smart_name_parser
+from batoolset.dicts.tools import dict_diff
+from batoolset.files.tools import smart_name_parser
 from pyfigures.gui.keep_tst_images_for_pzf import mega_image_tst, mini_test, mini_tst_svg_rotation, \
     mini_figure, tst_stacks_n_sizes, tst_empties_and_templates, tst_scale_bar, channel_n_lut_test
 # import pzfconfig  # path to the consolidated file and variables shared throughout the software
-from batools.xml.tools import _replace_filename_tags, _update_filename_of_consolidated_files  # , _remove_insets
+from batoolset.xml.tools import _replace_filename_tags, _update_filename_of_consolidated_files  # , _remove_insets
 from pyfigures.gui.user_extra_translation import ExtraTranslationWidget
-from batools.strings.tools import increment_letter
+from batoolset.strings.tools import increment_letter
 from pyfigures.gui.autolettering_widget import AutoLetteringOptions
-from batools.draw.shapes.Position import Position
-from batools.draw.shapes.serializablefont import SerializableQFont
-from batools.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
+from batoolset.draw.shapes.Position import Position
+from batoolset.draw.shapes.serializablefont import SerializableQFont
+from batoolset.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
     divide_list_into_sublists, compare_lists_sets
-from batools.pyqt.tools import get_html_text_with_font, get_shape_after_rotation_and_crop, getCtrlModifierAsString
+from batoolset.pyqt.tools import get_html_text_with_font, get_shape_after_rotation_and_crop, getCtrlModifierAsString
 import os
-from batools.files.tools import write_string_to_file, read_string_from_file, consolidate_files, \
+from batoolset.files.tools import write_string_to_file, read_string_from_file, consolidate_files, \
     smartly_consolidate_files_to_reduce_dupes, consolidate_files2
-from batools.serialization.tools import deserialize_to_dict, has_custom_script, clone_object
-from batools.serialization.tools import clone_object, object_to_xml, create_object
+from batoolset.serialization.tools import deserialize_to_dict, has_custom_script, clone_object
+from batoolset.serialization.tools import clone_object, object_to_xml, create_object
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.customdialog import CustomDialog
-from batools.draw.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
+from batoolset.draw.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
     set_to_height_im2d, areIndicesOverlapping
 from pyfigures.gui.group_builder_GUI import PanelOrRow
-from batools.draw.shapes.rectangle2d import Rectangle2D
-from batools.img import Img, guess_dimensions, start_JVM, stop_JVM
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.img import Img, guess_dimensions, start_JVM, stop_JVM
 import traceback
 from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTransform
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
@@ -46,25 +46,25 @@ import qtawesome as qta
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from batools.dialogs.opensave import saveFileDialog, openFileNameDialog
-from batools.draw.shapes.circle2d import Circle2D
-from batools.draw.shapes.ellipse2d import Ellipse2D
-from batools.draw.shapes.freehand2d import Freehand2D
-from batools.draw.shapes.image2d import Image2D
-from batools.draw.shapes.line2d import Line2D
-from batools.draw.shapes.point2d import Point2D
-from batools.draw.shapes.polygon2d import Polygon2D
-from batools.draw.shapes.polyline2d import PolyLine2D
-from batools.draw.shapes.scalebar import ScaleBar
-from batools.draw.shapes.square2d import Square2D
-from batools.draw.shapes.txt2d import TAText2D
+from batoolset.dialogs.opensave import saveFileDialog, openFileNameDialog
+from batoolset.draw.shapes.circle2d import Circle2D
+from batoolset.draw.shapes.ellipse2d import Ellipse2D
+from batoolset.draw.shapes.freehand2d import Freehand2D
+from batoolset.draw.shapes.image2d import Image2D
+from batoolset.draw.shapes.line2d import Line2D
+from batoolset.draw.shapes.point2d import Point2D
+from batoolset.draw.shapes.polygon2d import Polygon2D
+from batoolset.draw.shapes.polyline2d import PolyLine2D
+from batoolset.draw.shapes.scalebar import ScaleBar
+from batoolset.draw.shapes.square2d import Square2D
+from batoolset.draw.shapes.txt2d import TAText2D
 from pyfigures.gui.scrollableEZFIG import scrollable_EZFIG
-from batools.tools.qthandler import XStream, QtHandler
-from batools.uitools.blinker import Blinker
-from batools.GUI.overlay_hints import Overlay
+from batoolset.tools.qthandler import XStream, QtHandler
+from batoolset.uitools.blinker import Blinker
+from batoolset.GUI.overlay_hints import Overlay
 import atexit
 import tempfile
-from batools.tools.logger import TA_logger  # logging
+from batoolset.tools.logger import TA_logger  # logging
 
 logger = TA_logger()
 
@@ -871,7 +871,6 @@ class EZFIG_GUI(QMainWindow):
             event.accept()
         else:
             event.ignore()
-
         # handle DND on drop
 
     def dropEvent(self, event):
@@ -901,73 +900,83 @@ class EZFIG_GUI(QMainWindow):
                 # item.setToolTip(url)
                 # self.list.addItem(item)
                 # self.add_file_to_list_if_supported(url)
-                self.list.append(url)
+                if os.path.isfile(url):
+                    self.list.append(url)
+
+
+
+
+
             # try to do things here --> TODO --> ask if should be added as a row or as a col and what should be set (height or width --> TODO)
             # self.add_image()
             # event.ignore()
             event.accept()
 
-            event_pos_in_current_widget = event.pos()
-            event_pos_global = self.mapToGlobal(event_pos_in_current_widget)
-            event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
+            if self.list:
 
-            # event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
-            event_pos_global2 = self.mapToGlobal(self.paint.EZFIG_panel.mapFromGlobal(event.pos()))
+                event_pos_in_current_widget = event.pos()
+                event_pos_global = self.mapToGlobal(event_pos_in_current_widget)
+                event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
 
-            # event_pos_in_target_widget_scaled = event_pos_in_target_widget/ self.paint.EZFIG_panel.scale
-            event_pos_in_target_widget_scaled = event_pos_in_target_widget / self.paint.EZFIG_panel.scale
+                # event_pos_in_target_widget = self.paint.EZFIG_panel.mapFromGlobal(event_pos_global)
+                event_pos_global2 = self.mapToGlobal(self.paint.EZFIG_panel.mapFromGlobal(event.pos()))
 
-            # event_pos_in_target_widget = self.paint.EZFIG_panel.scrollArea.mapFromGlobal(event_pos_global)
-            event_pos_in_target_widget = self.paint.scrollArea.mapFromGlobal(event_pos_global)
+                # event_pos_in_target_widget_scaled = event_pos_in_target_widget/ self.paint.EZFIG_panel.scale
+                event_pos_in_target_widget_scaled = event_pos_in_target_widget / self.paint.EZFIG_panel.scale
 
-            # event_pos_in_target_widget_scaled = event_pos_in_current_widget/ self.paint.EZFIG_panel.scale
+                # event_pos_in_target_widget = self.paint.EZFIG_panel.scrollArea.mapFromGlobal(event_pos_global)
+                event_pos_in_target_widget = self.paint.scrollArea.mapFromGlobal(event_pos_global)
 
-            # can I get the shape below that
-            all_shapes_below, first_encounter_below, drop_target, all_encounters_in_shape_below_mouse, all_encounters_of_sel_shape_below_mouse, top_parent_of_sel, immediate_parentof_sel, top_parent_of_drop_target = self.paint.EZFIG_panel.get_all_shapes_involved_in_DND_process_by_mouse_position(
-                event, event_pos_in_target_widget_scaled)
+                # event_pos_in_target_widget_scaled = event_pos_in_current_widget/ self.paint.EZFIG_panel.scale
 
-            # print('grabouilla', all_shapes_below)
-            # print('grabouilla2', all_encounters_in_shape_below_mouse)
+                # can I get the shape below that
+                all_shapes_below, first_encounter_below, drop_target, all_encounters_in_shape_below_mouse, all_encounters_of_sel_shape_below_mouse, top_parent_of_sel, immediate_parentof_sel, top_parent_of_drop_target = self.paint.EZFIG_panel.get_all_shapes_involved_in_DND_process_by_mouse_position(
+                    event, event_pos_in_target_widget_scaled)
 
-            # there is a bug --> it does not seem to detect the position properly --> is that due to scaling or alike errors???
+                # print('grabouilla', all_shapes_below)
+                # print('grabouilla2', all_encounters_in_shape_below_mouse)
 
-            # print('is_contained in first',self.paint.EZFIG_panel.shapes_to_draw[0].content[0].getRect(all=True).contains(event_pos_in_target_widget_scaled))
+                # there is a bug --> it does not seem to detect the position properly --> is that due to scaling or alike errors???
 
-            # I can make use of the shapes below the mouse to decide the options -−> such as to add the stuff below the mouse and for example replace template
-            # TODO --> à faire !!!
+                # print('is_contained in first',self.paint.EZFIG_panel.shapes_to_draw[0].content[0].getRect(all=True).contains(event_pos_in_target_widget_scaled))
 
-            # Map the position of the drop event to global coordinates
-            global_pos = self.mapToGlobal(event.pos())
+                # I can make use of the shapes below the mouse to decide the options -−> such as to add the stuff below the mouse and for example replace template
+                # TODO --> à faire !!!
 
-            # global_pos = event_pos_in_current_widget
-            # global_pos = event_pos_in_current_widget
+                # Map the position of the drop event to global coordinates
+                global_pos = self.mapToGlobal(event.pos())
 
-            # try:
-            #     event.ignore()
-            # except:
-            #     traceback.print_exc()
-            # print('comparison of pos', event_pos_in_current_widget, event_pos_global, event_pos_in_target_widget, event_pos_in_target_widget_scaled)
-            # Open the context menu at the mapped position
-            try:
-                # Open the context menu at the position of the drop event
-                self.add_image_from_an_external_source_context_menu(self.list, all_encounters_in_shape_below_mouse if all_encounters_in_shape_below_mouse is not None else all_encounters_of_sel_shape_below_mouse)
-                start_time = time.time()
-                self.paint.EZFIG_panel.contextMenu.exec_(global_pos)
-                end_time = time.time()
-                time_spent = end_time - start_time
+                # global_pos = event_pos_in_current_widget
+                # global_pos = event_pos_in_current_widget
 
-                if time_spent<0.1:  # DEV NOTE −−> KEEP THAT
-                    # assume the popup didn't show and try an ultimate rescue
-                    # DEV NOTE KEEP NB MEGA TODO -−> THIS IS A VERY HACKY SOLUTION TO GET THE MENU TO SHOW IN UBUNTU WAYLAND
-                    # ON UBUNTU WAYLAND THE MAPPING IS NOT POSSIBLE TO THE MAIN WINDOW AND SO THE CONTEXT MENU DOES NOT SHOW SO WE CREATE A PARENTLESS MENU THAT WILL ALWAYS SHOW ALTHOUGH AT AN ERRONEOUS POSITION BUT THAT IS BETTER THAN NOTHING
+                # try:
+                #     event.ignore()
+                # except:
+                #     traceback.print_exc()
+                # print('comparison of pos', event_pos_in_current_widget, event_pos_global, event_pos_in_target_widget, event_pos_in_target_widget_scaled)
+                # Open the context menu at the mapped position
+                try:
+                    # Open the context menu at the position of the drop event
+                    self.add_image_from_an_external_source_context_menu(self.list, all_encounters_in_shape_below_mouse if all_encounters_in_shape_below_mouse is not None else all_encounters_of_sel_shape_below_mouse)
+                    start_time = time.time()
+                    self.paint.EZFIG_panel.contextMenu.exec_(global_pos)
+                    end_time = time.time()
+                    time_spent = end_time - start_time
 
-                    # Create a context menu
-                    context_menu = QMenu() # NB KEEP NOT PUTTING SELF IS THE ONLY WAY TO GET IT RIGHT --> that is really a pb
-                    for action in self.paint.EZFIG_panel.contextMenu.actions():
-                        context_menu.addAction(action)
-                    context_menu.exec_(QPoint(0,0))
-            except:
-                traceback.print_exc()
+                    if time_spent<0.1:  # DEV NOTE −−> KEEP THAT
+                        # assume the popup didn't show and try an ultimate rescue
+                        # DEV NOTE KEEP NB MEGA TODO -−> THIS IS A VERY HACKY SOLUTION TO GET THE MENU TO SHOW IN UBUNTU WAYLAND
+                        # ON UBUNTU WAYLAND THE MAPPING IS NOT POSSIBLE TO THE MAIN WINDOW AND SO THE CONTEXT MENU DOES NOT SHOW SO WE CREATE A PARENTLESS MENU THAT WILL ALWAYS SHOW ALTHOUGH AT AN ERRONEOUS POSITION BUT THAT IS BETTER THAN NOTHING
+
+                        # Create a context menu
+                        context_menu = QMenu() # NB KEEP NOT PUTTING SELF IS THE ONLY WAY TO GET IT RIGHT --> that is really a pb
+                        for action in self.paint.EZFIG_panel.contextMenu.actions():
+                            context_menu.addAction(action)
+                        context_menu.exec_(QPoint(0,0))
+                except:
+                    traceback.print_exc()
+                    event.ignore()
+            else:
                 event.ignore()
         else:
             event.ignore()

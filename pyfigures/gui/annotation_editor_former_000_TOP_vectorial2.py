@@ -1,20 +1,20 @@
-from batools.settings.global_settings import set_UI # set the UI to qtpy
+from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from pyfigures.gui.lutmultiselector import LutWidget
 import matplotlib.pyplot as plt
 import numpy as np
-from batools.img import guess_dimensions
-from batools.strings.tools import reload_string_list, find_letter_before_h
+from batoolset.img import guess_dimensions
+from batoolset.strings.tools import reload_string_list, find_letter_before_h
 # import pzfconfig # this is to store the path to be used for the consolidated files
 from pyfigures.gui.scalebareditor import ScaleBarEditor
 from pyfigures.gui.widget_for_inset import InsetWidget
 import traceback
-from batools.draw.shapes.rectangle2d import Rectangle2D
-from batools.GUI.open import OpenFileOrFolderWidget
-from batools.pyqt.tools import check_antialiasing, get_shape_after_rotation_and_crop, \
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.GUI.open import OpenFileOrFolderWidget
+from batoolset.pyqt.tools import check_antialiasing, get_shape_after_rotation_and_crop, \
     get_original_shape_from_rect_and_angle, get_centroid, create_dim_slider, clear_layout, select_in_combobox, \
     getCtrlModifier, getCtrlModifierAsString
-from batools.serialization.tools import clone_object
+from batoolset.serialization.tools import clone_object
 from pyfigures.gui.customdialog import CustomDialog
 import sys
 import os
@@ -25,26 +25,26 @@ from qtpy.QtGui import QPalette, QPainter, QColor, QIcon, QPen,QKeySequence, QMo
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QMenu, QApplication, QMainWindow, QPushButton, QWidget, QLabel,QCheckBox, QScrollArea,QWidget, \
     QAction, QProgressBar, QDockWidget, QSpinBox, QComboBox, QGridLayout, QDialog, QGroupBox, QDoubleSpinBox, QColorDialog, QVBoxLayout,QFormLayout,QHBoxLayout,QToolButton,QTabWidget,QTextEdit,QShortcut,QLineEdit, QSizePolicy, QMessageBox, QSlider
-from batools.draw.shapes.Position import Position
+from batoolset.draw.shapes.Position import Position
 from pyfigures.gui.textEditWatcher import TextEditWatcher
-from batools.draw.shapes.group import Group, set_to_size
-from batools.GUI.list_gui import ListGUI
-from batools.draw.shapes.polygon2d import Polygon2D
-from batools.draw.shapes.line2d import Line2D
-from batools.draw.shapes.scalebar import ScaleBar
-from batools.draw.shapes.square2d import Square2D
-from batools.draw.shapes.ellipse2d import Ellipse2D
-from batools.draw.shapes.circle2d import Circle2D
-from batools.draw.shapes.freehand2d import Freehand2D
-from batools.draw.shapes.rectangle2d import Rectangle2D
-from batools.draw.shapes.point2d import Point2D
-from batools.draw.shapes.polyline2d import PolyLine2D
-from batools.draw.shapes.image2d import Image2D
+from batoolset.draw.shapes.group import Group, set_to_size
+from batoolset.GUI.list_gui import ListGUI
+from batoolset.draw.shapes.polygon2d import Polygon2D
+from batoolset.draw.shapes.line2d import Line2D
+from batoolset.draw.shapes.scalebar import ScaleBar
+from batoolset.draw.shapes.square2d import Square2D
+from batoolset.draw.shapes.ellipse2d import Ellipse2D
+from batoolset.draw.shapes.circle2d import Circle2D
+from batoolset.draw.shapes.freehand2d import Freehand2D
+from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.draw.shapes.point2d import Point2D
+from batoolset.draw.shapes.polyline2d import PolyLine2D
+from batoolset.draw.shapes.image2d import Image2D
 from qtpy.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, QPointF, QTimer,Signal
-from batools.draw.shapes.txt2d import TAText2D
-from batools.figure.alignment import updateBoudingRect, setToHeight, setToWidth2
+from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.figure.alignment import updateBoudingRect, setToHeight, setToWidth2
 from pyfigures.gui.simple_text_editor import TextEditor
-from batools.tools.logger import TA_logger # logging
+from batoolset.tools.logger import TA_logger # logging
 
 logger = TA_logger()
 
@@ -2029,7 +2029,7 @@ class MainWindow(QWidget):
         #
         # print('all_the_dims', all_the_dims)
         #
-        # from batools.img import toQimage
+        # from batoolset.img import toQimage
         #
         # # plt.close('all')
         # # plt.imshow(image_to_display)
