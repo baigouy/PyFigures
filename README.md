@@ -65,3 +65,10 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **numba**               | GPU acceleration of numpy ops                               | https://pypi.org/project/numba/               | BSD                |
 | **roifile**               | A library to read ImageJ ROIs                               | https://pypi.org/project/roifile/               | BSD 3-Clause                |
 
+# Other Figure-Making Software
+
+[FigureJ](https://imagej.net/plugins/figurej)
+[ScientiFig](https://imagej.github.io/list-of-update-sites/)
+[omero.figure](https://www.openmicroscopy.org/omero/figure/)
+[EzFig](https://imagej.github.io/list-of-update-sites/)
+[QuickFigures](https://github.com/grishkam/QuickFigures)
