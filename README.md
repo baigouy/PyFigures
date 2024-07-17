@@ -8,7 +8,11 @@ Since a video is better than a thousand (click on the image above to view the de
 
 NB: most demo images are from the [cellimagelibrary](http://www.cellimagelibrary.org/).
 
-# Install
+# Installation
+
+## 1. Conda Installation (Advanced Users)
+
+For advanced users, we recommend installing the software using Conda. This will offer unlimited scripting capabilities.
 
 1. Install [Miniconda](https://docs.anaconda.com/miniconda/) (if not already present on your system)
 
@@ -22,12 +26,12 @@ pip install -U pyfigures
 python -m pyfigures
 ```
 
-**NB**:
+**Note**
 - To open a **command prompt** on **Windows** press **Windows+R** then type **cmd**
 - To open a **command prompt** on **MacOS** press **Command+Space** then type **Terminal**
 - To open a **command prompt** on **Ubuntu** press **Ctrl+Alt+T**
 
-# Run
+### Run
 
 To open the graphical user interface, type the following in a command:
 
@@ -35,6 +39,14 @@ To open the graphical user interface, type the following in a command:
 conda activate PyFigures
 python -m pyfigures
  ```
+
+## 2. Standalone Executable Installation (Easy)
+
+Alternatively, you can install the software as a standalone executable. This does not require Conda and can be run on any system without the need for additional dependencies, but scripting capabilities will be limited to the bundled dependencies. 
+
+- Windows <font color='red'>coming soon!</font> 
+- MacOS <font color='red'>coming soon!</font>
+- Linux <font color='red'>coming soon!</font>
    
 # Third party libraries
 
