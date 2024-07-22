@@ -1,6 +1,6 @@
 import setuptools
 import os
-from pyfigures.version import __VERSION__,__EMAIL__,__AUTHOR__,__DESCRIPTION__, __URL__
+from pyfigures.version import __VERSION__, __EMAIL__, __AUTHOR__, __DESCRIPTION__, __URL__
 
 # def read_requirements(filename):
 #     with open(filename, 'r') as f:
@@ -62,6 +62,7 @@ setuptools.setup(
         "python-javabridge",
         "pyautogui",
         "imagecodecs",
+        "zarr",
     ],
     python_requires='>=3.7, <3.11' # from 04/05/23 colab is using python 3.10.11
 )

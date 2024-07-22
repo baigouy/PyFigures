@@ -1841,8 +1841,6 @@ class MainWindow(QWidget):
                 except:
                     traceback.print_exc()
 
-
-
             # print('try_update',try_update)
 
             letter_before_h = find_letter_before_h(guessed_dims)

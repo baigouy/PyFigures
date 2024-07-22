@@ -18,8 +18,6 @@
 # --> think about it can I fake it ? so that I don't have to really reload the image --> probably not
 # think of How I can do the preview --> the colored rects are cool --> they could behave the same as images 2D but just have a color --> in a way i could also use them with empty sutff
 # try get a simple version of the image with rects --> TODO --> just need the rects of the shape and not the intermediate ones --> could make sense
-
-
 # TODO --> start to add the various options
 
 # TODO --> faire des cloneurs
@@ -108,6 +106,9 @@
 # allow lettering outside --> see how ?
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
+from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
+from pyfigures.gui.dimchooser import DimensionChooser
+from batoolset.pyqt.pleasewaitdialog import PleaseWaitDialog
 from builtins import Exception
 from pyfigures.gui.fontselectorgui import FontSelector
 from batoolset.draw.shapes.rectangle2d import Rectangle2D
@@ -129,6 +130,7 @@ from batoolset.lists.tools import is_iterable, move_right, move_left, swap_items
 from pyfigures.gui.customdialog import CustomDialog
 from batoolset.draw.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
 import sys
+import numpy as np
 import traceback
 import copy # used to clone class instances
 from qtpy.QtCore import QSize, QRect, QRectF, QPoint, QPointF, Qt, QSizeF, Signal, QTimer,QObject,QEvent
@@ -180,10 +182,14 @@ class MyWidget(QWidget):
     force_update_size_of_parent = Signal(object) #  should be called every time the parent must be set to the desired GUI size # the object here is the parent that should be draw at desired width --> TODO
     open_lettering_parameters = Signal() #  should be called when the user requests to change the parameters
     # templatify_figure = Signal(object) # send back to parents stuff that needs to be converted to templates
+    force_update_store = Signal()#this forces the store to update its content by removing useless files
 
     modes = ['auto','custom'] # auto positioning or custom positioning # TODO ideally automaticamlly set at 50 50 to avoid overlap with rulers if they are there in auto mode
     def __init__(self, parent=None):
         QWidget.__init__(self, parent)
+
+        self._please_wait_dialog = PleaseWaitDialog(self)
+
         self.shapes_to_draw = []
         self.lastPoint = None
         self.firstPoint = None
@@ -1173,6 +1179,7 @@ class MyWidget(QWidget):
                 edit_image.triggered.connect(lambda: self.update_image_annotations(image2d=self.selected_shape))
 
         if not is_left_click:
+            bool_has_parent = False
             guessed_dims = guess_dimensions(self.selected_shape.img)
             if guessed_dims and 'c' in guessed_dims and self.selected_shape.img.shape[-1] > 1:
                 self.contextMenu.addSeparator()
@@ -1181,11 +1188,145 @@ class MyWidget(QWidget):
                 # not very useful for two channel ones except that it does create a magenta green image
                 channel_split_mg = self.contextMenu.addAction("Channel split (Magenta/Green mode)")
                 channel_split_mg.triggered.connect(lambda: self.split_channels(mode='magenta'))
+                bool_has_parent = True
+
+            extra_dims = self.selected_shape.get_extra_dimensions(handle_proj=True)
+            if isinstance(self.selected_shape, Image2D) and isinstance(
+                self.selected_shape.img, np.ndarray) and extra_dims:
+                if not bool_has_parent:
+                    self.contextMenu.addSeparator()
+                dim_split = self.contextMenu.addAction("Split by a dimension")
+                dim_split.triggered.connect(self.run_split)
 
 
         # self.add_reset_menu()
 
         # self.contextMenu.addSeparator()
+    def run_split(self):
+        self._please_wait_dialog.show()
+        QTimer.singleShot(100, lambda:self.run_slow_process(self.slow_process)) # very dirty but functional way of making the slow process dialog appear
+
+    def slow_process(self):
+        # split the image selected by the first dimension
+        # print('dabu',isinstance(self.paint.EZFIG_panel.selected_shape.img, np.ndarray))
+
+        # extra_dims = self.paint.EZFIG_panel.selected_shape.get_extra_dimensions(handle_proj=True)
+
+        # print('bobjsdnfsndb')
+
+        extra_dims = self.selected_shape.get_extra_dimensions(handle_proj=True)
+        if extra_dims:
+            guessed_dimensions = guess_dimensions(self.selected_shape.img)
+            # target_dims = str(guessed_dimensions)
+            if len(extra_dims) > 1:
+                dim_chooser = DimensionChooser(extra_dims)
+
+                custom_dialog = CustomDialog(title="Choose a split dimension",
+                                             message=None,
+                                             # main_widget=main, options=['Ok', 'Cancel'], parent=self)
+                                             main_widget=dim_chooser, options=['Ok', 'Cancel'], parent=self,
+                                             auto_adjust=True)
+                if custom_dialog.exec_() == QDialog.Accepted:
+
+                    letter = dim_chooser.get_current_dimension()
+
+                    # self.paint.EZFIG_panel.shapes_to_draw.extend(split_images)
+                    # self.paint.EZFIG_panel.update_letters_required.emit()
+
+                else:
+                    # nothing to do --> break
+                    return
+            else:
+                letter = extra_dims[0]
+
+            # letter = guessed_dimensions[0]
+
+            size_of_dimension = self.selected_shape.img.shape[
+                extra_dims.index(letter)]
+            asop = AsSingleOrPanel(self, num_widgets=size_of_dimension)
+
+            custom_dialog = CustomDialog(title="Select output layout",
+                                         message=None,
+                                         # main_widget=main, options=['Ok', 'Cancel'], parent=self)
+                                         main_widget=asop, options=['Ok', 'Cancel'], parent=self,
+                                         auto_adjust=True)
+
+            if custom_dialog.exec_() != QDialog.Accepted:
+                return
+
+            split_images = []
+
+            # can offer a split by all of these dims
+
+            # print('size_of_dimension', size_of_dimension)
+
+            for ddd in range(size_of_dimension):
+                # clone the image and just change the parameter of the position all the rest can be kept as is
+                clone = clone_object(self.selected_shape)
+
+                hacked_dims = clone.dimensions
+
+                # print('initial hacked_dims', hacked_dims)
+
+                if isinstance(hacked_dims, dict):
+                    idx = hacked_dims['order'].index(letter)
+                    hacked_dims['values'][idx] = ddd
+                else:
+                    hacked_dims = {}
+                    hacked_dims['order'] = guessed_dimensions
+                    idx = hacked_dims['order'].index(letter)
+                    values = [0 for _ in extra_dims]
+                    values[idx] = ddd
+                    hacked_dims['values'] = values
+
+                # print('hacked_dims', hacked_dims)
+
+                clone.dimensions = hacked_dims
+                clone.update_qimage()
+
+                split_images.append(clone)
+
+            if asop.is_checkbox_selected():
+                # print('(inside)', self)
+                # this crashes the soft but no clue why though
+                # self.shapes_to_draw.extend(split_images)
+
+
+                for elm in split_images:
+                    self.shapes_to_draw.append(elm)
+                    self.force_update_size_of_parent.emit(elm)
+
+                # offer the creation of a panel
+
+                try:
+                    self.set_current_selection(split_images[-1])
+                    self.focus_required.emit()
+                except:
+                    traceback.print_exc()
+                    pass
+                self.update_size()
+                self.update()
+
+            else:
+                # print('need build a panel')
+                values = asop.panel_creator.get_values()
+                self._create_panel_directly(split_images, values['num_rows'], values['num_cols'],
+                                                              values['add_empty_images'], values['order'])
+                # try:
+                #     self.set_current_selection(split_images[-1])
+                #     self.focus_required.emit()
+                # except:
+                #     traceback.print_exc()
+                #     pass
+
+            del split_images
+            self.undo_redo_save_required.emit()
+
+    def run_slow_process(self, func):
+        try:
+            func()
+        finally:
+            self._please_wait_dialog.hide()
 
     def split_channels(self, mode='gray'):
         if isinstance(self.selected_shape,
@@ -2544,80 +2685,78 @@ class MyWidget(QWidget):
                                      # main_widget=main, options=['Ok', 'Cancel'], parent=self)
                                      main_widget=panel_dialog, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if custom_dialog.exec_() == QDialog.Accepted:
-            self.remove_all(lst) # if this is text this will be ignored but if these are real images it will work!!!
-            values = panel_dialog.get_values()
-            # print('values for generation', values) #{'num_rows': 2, 'num_cols': 3, 'add_empty_checkbox_visible': False, 'missing_elements': 0, 'order': 'X'}
-            rows = values['num_rows']
-            cols = values['num_cols']
-            add_empty_images = values['add_empty_images']
-            # missing_elements = values['missing_elements']
-            # print('add_empty_images',add_empty_images)
-            if values['order'] == 'X':
-                sublists = divide_list_into_sublists(lst, rows, cols)
 
-                # print('sublists',sublists)
-                # print(len(sublists))
-
-
-                for sublist in sublists:
-                    tmp = Group(*sublist, size=512, orientation=values['order'],
-                                add_empty_images_instead_of_None=add_empty_images)
-                    if tmp.isEmpty(): # if only empty it cannot find the size --> so better skip it
-                        continue
-                    self.shapes_to_draw.append(tmp)
-                    self.force_update_size_of_parent.emit(tmp)
-
-                self.set_current_selection(tmp)
-            else:
-                sublists = divide_list_into_sublists(lst, cols, rows)
-                groups = []
-                for sublist in sublists:
-                    tmp = Group(*sublist, orientation=values['order'],
-                                add_empty_images_instead_of_None=add_empty_images)
-                    # self.paint.EZFIG_panel.shapes_to_draw.append(tmp)
-                    groups.append(tmp)
-
-                # I need hack that maybe or post fix it !!!
-
-                # for ggg,elm in enumerate(groups):
-                #     print('elm.isEmpty()',elm.isEmpty())
-                #     if elm.isEmpty():
-                #         previous = groups[ggg-1]
-                #         w,h = previous.content[-1].get_raw_size()
-                #         size = len(previous)
-                #
-                #         print(size)
-                #         for i in range(size):
-                #             print('adding an image',w,h)
-                #             elm.content.append(Image2D(width=w, height=h))
-                #             elm.update()
-
-                groups = [grp for grp in groups if not grp.isEmpty()]
-
-                # print(groups)
-
-                final_grp = Group(*groups, size=512, orientation='X')
-                self.shapes_to_draw.append(final_grp)
-                self.set_current_selection(final_grp)
-                self.force_update_size_of_parent.emit(final_grp)
-
-
-
-            self.update()
-            self.update_size()
-            self.update_letters_required.emit()
-            self.update_text_rows.emit()
-            self.focus_required.emit()
-
-            # print('resetting sel')
-
-            self.set_current_selection(None)
-            # print('effectcive sel reset', self.selected_shape)
-            self.update()
-            self.update_size()
-
-            self.undo_redo_save_required.emit()
             # print('effectcive sel reset2', self.selected_shape)
+            values = panel_dialog.get_values()
+            self._create_panel_directly(lst,values['num_rows'], values['num_cols'],values['add_empty_images'], values['order'])
+
+    def _create_panel_directly(self, lst, rows, cols,add_empty_images, order):
+        self.remove_all(lst)  # if this is text this will be ignored but if these are real images it will work!!!
+        # print('values for generation', values) #{'num_rows': 2, 'num_cols': 3, 'add_empty_checkbox_visible': False, 'missing_elements': 0, 'order': 'X'}
+        # missing_elements = values['missing_elements']
+        # print('add_empty_images',add_empty_images)
+        if order == 'X':
+            sublists = divide_list_into_sublists(lst, rows, cols)
+
+            # print('sublists',sublists)
+            # print(len(sublists))
+
+            for sublist in sublists:
+                tmp = Group(*sublist, size=512, orientation=order,
+                            add_empty_images_instead_of_None=add_empty_images)
+                if tmp.isEmpty():  # if only empty it cannot find the size --> so better skip it
+                    continue
+                self.shapes_to_draw.append(tmp)
+                self.force_update_size_of_parent.emit(tmp)
+
+            self.set_current_selection(tmp)
+        else:
+            sublists = divide_list_into_sublists(lst, cols, rows)
+            groups = []
+            for sublist in sublists:
+                tmp = Group(*sublist, orientation=order,
+                            add_empty_images_instead_of_None=add_empty_images)
+                # self.paint.EZFIG_panel.shapes_to_draw.append(tmp)
+                groups.append(tmp)
+
+            # I need hack that maybe or post fix it !!!
+
+            # for ggg,elm in enumerate(groups):
+            #     print('elm.isEmpty()',elm.isEmpty())
+            #     if elm.isEmpty():
+            #         previous = groups[ggg-1]
+            #         w,h = previous.content[-1].get_raw_size()
+            #         size = len(previous)
+            #
+            #         print(size)
+            #         for i in range(size):
+            #             print('adding an image',w,h)
+            #             elm.content.append(Image2D(width=w, height=h))
+            #             elm.update()
+
+            groups = [grp for grp in groups if not grp.isEmpty()]
+
+            # print(groups)
+
+            final_grp = Group(*groups, size=512, orientation='X')
+            self.shapes_to_draw.append(final_grp)
+            self.set_current_selection(final_grp)
+            self.force_update_size_of_parent.emit(final_grp)
+
+        self.update()
+        self.update_size()
+        self.update_letters_required.emit()
+        self.update_text_rows.emit()
+        self.focus_required.emit()
+
+        # print('resetting sel')
+
+        self.set_current_selection(None)
+        # print('effectcive sel reset', self.selected_shape)
+        self.update()
+        self.update_size()
+
+        self.undo_redo_save_required.emit()
 
     def _run_context_menu_at_click(self, event=None):
         if event is not None:
@@ -3626,6 +3765,7 @@ class MyWidget(QWidget):
                self.update_size()
            self.update_text_rows.emit()
            self.undo_redo_save_required.emit() # something was changed so it needs to be rebuilt
+           self.force_update_store.emit()
 
     # def space_bar_pressed(self):
     #     print('TODO --> IMPLEMENT space bar press')  # -−> need update the drawing

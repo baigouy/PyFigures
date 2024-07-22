@@ -341,6 +341,8 @@ def mega_image_tst():
         img0.annotation.append(Freehand2D(10, 10, 20, 10, 20, 30, 288, 30, color=0xFFFF00, stroke=3))
         img0.annotation.append(Point2D(128, 128, color=0xFFFF00, stroke=6))
 
+
+
     img1 = Image2D('/E/Sample_images/counter/01.png', user_comments='comments added by the user test')
 
     test_text = '''

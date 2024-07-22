@@ -1,5 +1,9 @@
 from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 set_UI()
+from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
+from pyfigures.gui.dimchooser import DimensionChooser
+from batoolset.pyqt.pleasewaitdialog import PleaseWaitDialog
+from batoolset.images.centralstore import ImageCentralStore
 import time
 from batoolset.draw.shapes.serializableguiparams import SerializableGUIparameters
 # import filecmp # TODO use that to avoid duplicating a save in undo/redo --> future dev, not urgent
@@ -41,7 +45,7 @@ from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTran
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit
-from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF
+from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool
 import qtawesome as qta
 import logging
 import numpy as np
@@ -65,24 +69,52 @@ from batoolset.GUI.overlay_hints import Overlay
 import atexit
 import tempfile
 from batoolset.tools.logger import TA_logger  # logging
+from pyfigures.version import __VERSION__,__EMAIL__,__AUTHOR__, __URL__, __DESCRIPTION__, __NAME__, __SHORT__NAME__
 
 logger = TA_logger()
 
-__MAJOR__ = 1
-__MINOR__ = 0
-__MICRO__ = 0
-__RELEASE__ = 'a'  # https://www.python.org/dev/peps/pep-0440/#public-version-identifiers --> alpha beta, ...
-__VERSION__ = ''.join(
-    [str(__MAJOR__), '.', str(__MINOR__), '.'.join([str(__MICRO__)]) if __MICRO__ != 0 else '', __RELEASE__])
-__AUTHOR__ = 'Benoit Aigouy'
-# __NAME__ = 'Py-Fig: Scientific Figure Creation' # TODO think about a name and how to handle that # PyFigures --> other possible name
-__SHORT__NAME__ = 'PyFigures'
-__NAME__ = f'{__SHORT__NAME__}: Effortless Creation of High-Quality Scientific Figures'  # TODO think about a name and how to handle that # PyFigures --> other possible name
-__EMAIL__ = 'benoit.aigouy@gmail.com'
-__DESCRIPTION__ = """PyFigures will assist you assemble publication ready scientific figures in no time."""
-
 # DEBUG = False
-DEBUG = True
+DEBUG = True # keep it like this because otherwise this redirects output --> in fact I need to edit my code to avoid redirections !!!
+
+# class WorkerSignals(QObject):
+#     finished = Signal()
+#     result = Signal(object)
+#
+#
+# class Worker(QRunnable):
+#     finished = Signal()
+#     result_ready = Signal(object)  # Signal to send the result back to the main thread
+#
+#     def __init__(self, func, *args, **kwargs):
+#         super(Worker, self).__init__()
+#         # super().__init__()
+#         self.func = func
+#         self.args = args
+#         self.kwargs = kwargs
+#         self.signals = WorkerSignals()
+#
+#     @Slot()
+#     def run(self):
+#
+#         result=None
+#         try:
+#             if self.args and self.kwargs:
+#                 result = self.func(*self.args, **self.kwargs)
+#             elif self.args:
+#                 print('self.args passed', self.args)
+#                 result = self.func(*self.args)
+#             else:
+#                 result = self.func()
+#             # self.result_ready.emit(result)
+#         finally:
+#             # self.finished.emit()
+#             self.signals.result.emit(result)
+#             self.signals.finished.emit()
+#
+#     # def on_task_finished(self, result):
+#     #     self.label.setText(f"Status: {result}")
+#     #     self.worker_thread.quit()
+#     #     self.worker_thread.wait()
 
 def cleanup_temp_dir(temp_dir):
     try:
@@ -97,6 +129,9 @@ class EZFIG_GUI(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+
+        # self.threadpool = QThreadPool()
 
         # if sys.platform == "darwin":
         #     self.ctrl_key = "Meta"  # Command key on macOS
@@ -115,6 +150,7 @@ class EZFIG_GUI(QMainWindow):
         # TODO --> add a single tip with all at the beginning and then randomly change tip with a timer maybe add a check both for auto next or alike
         self.tips = [
             # key tips
+            "Video demos available at https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7",
             "To load images, drag and drop them onto the software.",
             "Combine two images or groups by selecting one and dragging it onto the other.",
             "In this tool, clicking on an object selects the top parent, and each subsequent click selects a more nested element.",
@@ -133,7 +169,7 @@ class EZFIG_GUI(QMainWindow):
             "It is possible to draw Regions of Interest (ROIs) on an image. You can add text at predefined and floating positions to an image. Just double click on an image to access its annotations.",
             "Shapes associated with an image can be reordered. Drag and drop items in the layers list.",
             "Pressing Delete can remove the selected annotation from an image.",
-            "Pressing Delete can remove the selection from the current figure image.",
+            "Pressing Delete can remove the selection from the current figure.",
             "Did you know that there is a list of shortcuts available in the help menu?",
             "To add labels above or below an image group, select it, right-click to open the menu, and then choose the appropriate entry in the context menu.",
             "To add text labels to your group, right click on it and select the appropriate entry.",
@@ -148,10 +184,10 @@ class EZFIG_GUI(QMainWindow):
             "To begin automated lettering from a specific letter, change the letter in the menu bar.",
             "To use capital letters for automated lettering, enter 'A' in the menu bar.",
             "Select a group then press shift on another group, all the groups in between will be selected.",
-            "Select a group then press " + self.ctrl_key + " to add another groups to the current selection.",
+            "Select a group then press " + self.ctrl_key + " to add (an)other group(s) to the current selection.",
         ]
 
-        first_tip = "\n<br><br>-".join(self.tips[:11])
+        first_tip = "\n<br><br>-".join(self.tips[:12])
         first_tip = '-' + first_tip
         self.tips = [f'<b>Tip {iii}: </b>{tip}' for iii, tip in enumerate(self.tips, start=1)]
         self.tips.insert(0, first_tip)
@@ -161,6 +197,10 @@ class EZFIG_GUI(QMainWindow):
         # Show the TipDialog at launch (using a QTimer to avoid recursion)
         # QTimer.singleShot(0, lambda: self.show_tips())
         QTimer.singleShot(0, self.show_tips)
+
+        # We create an image store to spare resources
+        if True: # this takes even more memory as of now but I should be able to improve that in the future
+            ImageCentralStore.init() # force in mem store to speed up the process
 
         # Install the event filter on the central widget
         # self.event_filter = WheelEventFilter()
@@ -218,6 +258,7 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.update_letters_required.connect(self.update_letters)
         self.paint.EZFIG_panel.force_update_size_of_parent.connect(self.update_size_of_object)
         self.paint.EZFIG_panel.open_lettering_parameters.connect(self.change_lettering_parameters)
+        self.paint.EZFIG_panel.force_update_store.connect(self.force_update_store)
         # self.paint.EZFIG_panel.templatify_figure.connect(self.templatify_figure)
 
         self.serializable_font = SerializableQFont()
@@ -736,7 +777,7 @@ class EZFIG_GUI(QMainWindow):
         else:
             year_string = ""
         about_dialog = AboutDialog(self, title=__NAME__, name=__SHORT__NAME__,
-                                   version=f"Version {__MAJOR__}.{__MINOR__}.{__MICRO__} {__RELEASE__}",
+                                   version=f"Version {__VERSION__}",
                                    description=__DESCRIPTION__, copyright=f"© 2024{year_string} {__AUTHOR__}",
                                    email=__EMAIL__, ok_or_close="Ok")
         about_dialog.exec_()
@@ -1670,12 +1711,15 @@ class EZFIG_GUI(QMainWindow):
         reply = QMessageBox.warning(self, 'Warning',
                                     'All unsaved changes will be lost. Are you sure you want to create a new file?',
                                     QMessageBox.Yes | QMessageBox.No)
+
         if reply == QMessageBox.Yes:
             self.activate_or_reset_undo_redo()
             self.paint.EZFIG_panel.shapes_to_draw = []
             self.paint.EZFIG_panel.set_current_selection(None)
             self.paint.EZFIG_panel.update_size()
             self.paint.EZFIG_panel.update()
+            self.paint.EZFIG_panel.undo_redo_save_required.emit()
+            self.paint.EZFIG_panel.force_update_store.emit()
 
     def update_letters(self):
         letter = self.letter_line_edit.text()
@@ -1705,6 +1749,12 @@ class EZFIG_GUI(QMainWindow):
     # def remove_all_annotations(self):
     #     print('remove all annotations called')
     #     self.paint.EZFIG_panel.remove_all_annotations()
+
+    def force_update_store(self):
+        print('STORE CONTENT NEEDS BE UPDATED -> ACTION REQUIRED')
+        # TODO --> do the list of all images and delete all the ones that are no longer in the store after that
+        full_list_of_filenames_to_consolidate, _ = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(stuff_to_consolidate=None)
+        ImageCentralStore.clean(full_list_of_filenames_to_consolidate)
 
 
     def change_lettering_parameters(self):
@@ -1842,6 +1892,94 @@ class EZFIG_GUI(QMainWindow):
             # print('end debugging same AR')
         # try to force all images to that now
 
+
+    # I need ask all as single or panel
+
+
+
+
+    # @Slot(object)
+    # def update_gui(self, split_images):
+    #
+    #     if split_images is not None:
+    #         # print('split_images passed',split_images)
+    #         # This method runs in the main thread and safely updates the GUI
+    #
+    #         # print('testing',self.paint.EZFIG_panel.shapes_to_draw)
+    #         self.paint.EZFIG_panel.shapes_to_draw.extend(split_images)
+    #         # self.paint.EZFIG_panel.update_size()
+    #         # self.paint.EZFIG_panel.update()
+
+    # @Slot(object)
+    # def update_gui(self, split_images):
+    #     print('Current thread2:', QThread.currentThread())
+    #     # Additional debugging information
+    #     print('update_gui called')
+    #
+    #     if split_images is not None:
+    #         print('split_images passed:', split_images)
+    #
+    #         # Check if paint.EZFIG_panel is valid and initialized
+    #         if hasattr(self, 'paint') and hasattr(self.paint, 'EZFIG_panel'):
+    #             panel = self.paint.EZFIG_panel
+    #
+    #             if hasattr(panel, 'shapes_to_draw'):
+    #                 print('Current shapes_to_draw:', panel.shapes_to_draw)
+    #                 # Check if shapes_to_draw is a list
+    #                 if isinstance(panel.shapes_to_draw, list):
+    #                     # Add debug prints to ensure safe manipulation
+    #                     print('Extending shapes_to_draw with split_images')
+    #                     panel.shapes_to_draw.extend(split_images)
+    #                     print('Updated shapes_to_draw:', panel.shapes_to_draw)
+    #                     # this worked --> so where is the pb ???
+    #
+    #                     # Uncomment to perform GUI updates
+    #                     # panel.update_size()
+    #                     # panel.update()
+    #                 else:
+    #                     print('Error: shapes_to_draw is not a list')
+    #             else:
+    #                 print('Error: EZFIG_panel has no attribute shapes_to_draw')
+    #         else:
+    #             print('Error: paint or EZFIG_panel not properly initialized')
+    #     else:
+    #         print('Error: split_images is None')
+
+        # Any additional error handling or cleanup
+
+
+    # def process_finished(self):
+    #     self._please_wait_dialog.hide()
+    #     self.worker.deleteLater()
+    #     self._thread.quit()
+    #     self._thread.wait()
+    #     self._thread.deleteLater()
+    #     self._thread = None
+    #     self.worker = None
+    # def process_finished(self):
+    #     self._please_wait_dialog.hide()
+    #     self.worker.deleteLater()
+    #     self.worker = None
+    #     self._thread = None
+
+    # def process_finished(self):
+    #     self._please_wait_dialog.hide()
+    #     if self.worker:
+    #         self.worker.deleteLater()
+    #         self.worker = None
+    #
+    #
+    # def cleanup_thread(self):
+    #     if self._thread:
+    #         self._thread.wait()  # Wait for the thread to fully finish
+    #         self._thread.deleteLater()
+    #         self._thread = None
+
+    # def process_finished(self):
+    #     self._please_wait_dialog.hide()
+
+
+
     def tst_function(self):
 
         # if True:
@@ -1849,15 +1987,70 @@ class EZFIG_GUI(QMainWindow):
         #     print('last consolidated path', pzfconfig.path_to_last_consolidated_file)
         #     return
 
+        # do a split of the image by dimensions
+        # --> read the first dimension (I could also use that for series)
+
+
+        # self.force_update_store()
+
+
+
+
+        # self.slow_process()
+
+        # self._please_wait_dialog.hide()
+
+
+
+
+        # Create a QEventLoop
+        # Example custom function to run
+
+
+        # self.worker = Worker(self.slow_process)
+        # worker = Worker(self.slow_process)
+        # self._thread = QThread()
+        # self.worker.moveToThread(self._thread)
+        #
+        # self._thread.started.connect(self.worker.run)
+        # self.worker.result_ready.connect(self.update_gui)
+        # # self.worker.finished.connect(self._please_wait_dialog.hide)
+        # # self.worker.finished.connect(self._thread.quit)
+        # # self.worker.finished.connect(self.worker.deleteLater)
+        # # self._thread.finished.connect(self._thread.deleteLater)
+        # self.worker.finished.connect(self.process_finished)
+
+        # Connect signals
+        # self._thread.started.connect(self.worker.run)
+        # self.worker.result_ready.connect(self.update_gui)
+        # self.worker.finished.connect(self.process_finished)
+        # self.worker.finished.connect(self._thread.quit)
+        # self._thread.finished.connect(self._thread.deleteLater)
+
+        # Connect signals
+        # self._thread.started.connect(self.worker.run)
+        # self.worker.result_ready.connect(self.update_gui)
+        # self.worker.finished.connect(self.process_finished)
+        # self.worker.finished.connect(self._thread.quit)
+        #
+        # # Ensure thread is deleted after it has fully finished
+        # self._thread.finished.connect(self.cleanup_thread)
+        #
+        # self._thread.start()
+        # worker.signals.result.connect(self.update_gui)
+        # worker.signals.finished.connect(self.process_finished)
+        #
+        # self.threadpool.start(worker)
+
+
+        # print('Current thread:', QThread.currentThread())
+
+
+
+
+
+
         self._debug_check_of_shapes()
-
-        if False:
-            self.same_width_and_height()
-            return
-
-        if True:
-            self.same_AR_as_first()
-            return
 
         if False:  # this should not be useful again -−> so maybe I can remove that at some point
             # manual correction of translation error until autoreg is up and running
@@ -1892,6 +2085,8 @@ class EZFIG_GUI(QMainWindow):
             # now I need to clone all and then change names in all the clones and set this as the new image
 
             # the last thing I need to do is reinject all of these in the clones
+
+
 
     def _debug_check_of_shapes(self):
 
@@ -1930,6 +2125,10 @@ class EZFIG_GUI(QMainWindow):
                     print('shape size', shape.size)
                 except:
                     pass
+        try:
+            print('ImageCentralStore.keys()', ImageCentralStore.keys())
+        except:
+            pass
 
     def save_pyfigures(self, file='auto'):
         # print('SAVING AS PZF CALLED')

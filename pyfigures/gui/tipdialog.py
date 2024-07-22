@@ -42,7 +42,7 @@ class TipDialog(QDialog):
         self.auto_show_timer.timeout.connect(self.show_random_tip)
         self.auto_show_timer.start(16000)  # Show a random tip every 10 seconds
 
-        self.setMinimumSize(700, 520)
+        self.setMinimumSize(750, 570)
 
     def show_next_tip(self):
         self.current_tip_index = (self.current_tip_index + 1) % len(self.tips)

@@ -1,8 +1,33 @@
+22/07/2024
+-removed the zarr based image central store (was really slow and overloading memory, probably due to compression/decompression cycles and/or internal duplications ?)
+-added a custom-made image central store (basically just a dict), this works well and avoids memory overload
+-added a please wait dialog for lengthy process (but still does not work well...)
+-added split by user-selected dimension (the addition of the image store was mandatory before doing that)
+-added a signal to force central store update to avoid keeping in memory stuff that is no longer used (maybe not fully functional yet)
+
+18/07/2024
+-added an image central store that is called by default when loading an image, this would greatly speed up the process of image loading with duplicate images and also for cloning objects and reduce the memory requirements, this should easily allow to do some t or z splits without having a crazy increase of resource requirements (not yet available for end users)
+-the central store could also be used to strongly reduce memory requirements for images by storing compressed images on disk
+-the storage mode for central store could be an option set by the user
+
+17/07/2024
+-fixed typos
+-updated readme.md
+
+15/07/2024
+-slowed down Youtube videos by 25%
+-fixed an error in the 'About' dialog
+-disabled useless error logging
+
 12/07/2024
 -finalized all demo videos
 -added a missing library
 -force numpy<2.0.0 for compatibility with javabridge
 -made an additional change to image2D to further prevent image loading errors (make sure that dimensions are not a tuple)
+-validated the installation through conda, everything seems fine
+-Youtube demo videos are now public https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7
+-PyFigures website is public
+-PyFigures and batoolset have been uploaded to github
 
 11/07/2024
 -recorded and mounted a demo video https://youtu.be/iqknxBF6BtE
