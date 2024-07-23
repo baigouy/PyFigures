@@ -87,9 +87,9 @@ Perform the following steps **only once** to set up your environment:
 
 Alternatively, you can install the software as a standalone executable. This does not require Conda and can be run on any system without the need for additional dependencies, but scripting capabilities will be limited to the bundled dependencies. 
 
-- Windows <font color='red'>coming soon!</font> 
-- MacOS <font color='red'>coming soon!</font>
-- Linux <font color='red'>coming soon!</font>
+- Windows **coming soon!** 
+- MacOS **coming soon!**
+- Linux **coming soon!**
 
 ## Troubleshooting Installation Issues
 
