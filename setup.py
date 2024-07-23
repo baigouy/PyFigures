@@ -60,7 +60,6 @@ setuptools.setup(
         "batoolset",
         "pyautogui",
         "imagecodecs",
-        # "zarr", # no longer needed
     ],
     extras_require={'all':[
                         "python-javabridge",
