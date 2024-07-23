@@ -30,12 +30,12 @@ class PanelCreator(QWidget):
         self.col_radio.toggled.connect(self.update_other_value)
 
         self.num_rows = QSpinBox(self)
-        self.num_rows.setRange(1, 100)
+        self.num_rows.setRange(1, 1000) # this is probably crazy oto have so many but...
         self.num_rows.setValue(2)
         self.num_rows.valueChanged.connect(self.update_other_value)
 
         self.num_cols = QSpinBox(self)
-        self.num_cols.setRange(1, 100)
+        self.num_cols.setRange(1, 1000)
         self.num_cols.setValue(5)
         self.num_cols.valueChanged.connect(self.update_other_value)
 

@@ -1,3 +1,8 @@
+23/07/2024
+-made installation of javabridge and bio-formats optional, as it made the installation on windows difficult if the system was not properly set
+-greatly enhanced the installation instructions
+-removed zarr support as this led to slow image opening and increased memory requirements (probably due to decompression)
+
 22/07/2024
 -removed the zarr based image central store (was really slow and overloading memory, probably due to compression/decompression cycles and/or internal duplications ?)
 -added a custom-made image central store (basically just a dict), this works well and avoids memory overload

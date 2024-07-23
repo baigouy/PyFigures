@@ -1751,7 +1751,7 @@ class EZFIG_GUI(QMainWindow):
     #     self.paint.EZFIG_panel.remove_all_annotations()
 
     def force_update_store(self):
-        print('STORE CONTENT NEEDS BE UPDATED -> ACTION REQUIRED')
+        # print('STORE CONTENT NEEDS BE UPDATED -> ACTION REQUIRED')
         # TODO --> do the list of all images and delete all the ones that are no longer in the store after that
         full_list_of_filenames_to_consolidate, _ = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(stuff_to_consolidate=None)
         ImageCentralStore.clean(full_list_of_filenames_to_consolidate)

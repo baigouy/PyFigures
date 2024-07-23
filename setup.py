@@ -58,11 +58,14 @@ setuptools.setup(
         "Deprecated",
         "Requests",
         "batoolset",
-        "python-bioformats",
-        "python-javabridge",
         "pyautogui",
         "imagecodecs",
-        "zarr",
+        # "zarr", # no longer needed
     ],
+    extras_require={'all':[
+                        "python-javabridge",
+                        "python-bioformats",
+                       ],
+    },
     python_requires='>=3.7, <3.11' # from 04/05/23 colab is using python 3.10.11
 )
