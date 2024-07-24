@@ -105,10 +105,9 @@
 # do a ROI stuff --> allow to draw annotations on the image
 # allow lettering outside --> see how ?
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
+set_UI()
 from pyfigures.gui.lutmultiselector import LutWidget
 from pyfigures.gui.spaceselector import SpaceSelectorWidget
-
-set_UI()
 from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
 from pyfigures.gui.dimchooser import DimensionChooser
 from batoolset.pyqt.pleasewaitdialog import PleaseWaitDialog
