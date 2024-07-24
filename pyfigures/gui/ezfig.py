@@ -105,6 +105,9 @@
 # do a ROI stuff --> allow to draw annotations on the image
 # allow lettering outside --> see how ?
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
+from pyfigures.gui.lutmultiselector import LutWidget
+from pyfigures.gui.spaceselector import SpaceSelectorWidget
+
 set_UI()
 from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
 from pyfigures.gui.dimchooser import DimensionChooser
@@ -183,6 +186,7 @@ class MyWidget(QWidget):
     open_lettering_parameters = Signal() #  should be called when the user requests to change the parameters
     # templatify_figure = Signal(object) # send back to parents stuff that needs to be converted to templates
     force_update_store = Signal()#this forces the store to update its content by removing useless files
+    force_silent_spinner_update_in_parent = Signal(int)#this forces the store to update its content by removing useless files
 
     modes = ['auto','custom'] # auto positioning or custom positioning # TODO ideally automaticamlly set at 50 50 to avoid overlap with rulers if they are there in auto mode
     def __init__(self, parent=None):
@@ -1198,7 +1202,6 @@ class MyWidget(QWidget):
                 dim_split = self.contextMenu.addAction("Split by a dimension")
                 dim_split.triggered.connect(self.run_split)
 
-
         # self.add_reset_menu()
 
         # self.contextMenu.addSeparator()
@@ -1306,6 +1309,7 @@ class MyWidget(QWidget):
                     pass
                 self.update_size()
                 self.update()
+                self.undo_redo_save_required.emit()
 
             else:
                 # print('need build a panel')
@@ -1320,7 +1324,7 @@ class MyWidget(QWidget):
                 #     pass
 
             del split_images
-            self.undo_redo_save_required.emit()
+
 
     def run_slow_process(self, func):
         try:
@@ -1651,7 +1655,7 @@ class MyWidget(QWidget):
                 convert_to_template = self.contextMenu.addAction("Convert to template")
                 convert_to_template.triggered.connect(lambda: self.templatify(self.selected_shape))
 
-
+            has_panel = False
             if isinstance(self.selected_shape, list) and not is_left_click:
 
                 self.contextMenu.addSeparator()
@@ -1664,6 +1668,13 @@ class MyWidget(QWidget):
                 self.contextMenu.addSeparator()
                 convert_sel_to_panel = self.contextMenu.addAction("To panel")
                 convert_sel_to_panel.triggered.connect(lambda: self._create_panel_real(self.selected_shape))
+                has_panel =True
+
+            if not has_panel:
+                self.contextMenu.addSeparator()
+            reorganize_sel_as_panel = self.contextMenu.addAction("Reshape to panel (if possible)")
+            reorganize_sel_as_panel.triggered.connect(self.reorganize_as_panel)
+
 
         if self.shapes_to_draw and not is_left_click:
             self.contextMenu.addSeparator()
@@ -1712,6 +1723,13 @@ class MyWidget(QWidget):
 
             reset_bg_action = self.contextMenu.addAction("Reset background")
             reset_bg_action.triggered.connect(lambda: self.set_bg(bg=None))
+
+            self.contextMenu.addSeparator()
+            set_luts_action =self.contextMenu.addAction("Set Look Up Table(s)")
+            set_luts_action.triggered.connect(lambda: self.set_luts(force_reset=False))
+
+            reset_luts_action = self.contextMenu.addAction("Reset Look Up Table(s)")
+            reset_luts_action.triggered.connect(lambda: self.set_luts(force_reset=True))
 
             self.contextMenu.addSeparator()
             set_font_all_text_but_letter = self.contextMenu.addAction("Change font for all non-Letter text")
@@ -1772,6 +1790,13 @@ class MyWidget(QWidget):
             self.image_context_menu(self.contextMenu, event)
         # else:
         #     if drop_target == top_parent_of_sel:
+
+
+        if not isinstance(self.selected_shape, Image2D):
+            self.contextMenu.addSeparator()
+            change_space_action =self.contextMenu.addAction("Change space between elements")
+            change_space_action.triggered.connect(self.set_space)
+
 
 
         if isinstance(self.selected_shape, Group) or isinstance(self.selected_shape, list):
@@ -2486,6 +2511,177 @@ class MyWidget(QWidget):
         self.update()
         self.undo_redo_save_required.emit()
 
+
+    def set_space(self):
+        
+        # i need to get all the groups and their progeny from the selection
+
+        selected_groups = self.get_groups_from_sel(ignore_text_grps=True)
+
+        if selected_groups:
+
+            # print('list of selected groups', selected_groups)
+
+            space_selector = SpaceSelectorWidget()
+            custom_dialog = CustomDialog(title="Change space", message="Do you want to proceed?",
+                                         main_widget=space_selector,
+                                         parent=self, options=['Ok', 'Cancel'],
+                                         auto_adjust=True)  # that is really very good --> I can do it like that
+
+            if custom_dialog.exec_() != QDialog.Accepted:
+                return
+
+            # get the state of the checkbox
+            apply_to_page = space_selector.is_apply_to_page_checked()
+            # get the value of the spin box
+            space = space_selector.get_space_value()
+
+            grps_to_update = []
+
+            for grp in selected_groups:
+                grp.space = space
+                grp.update()
+
+                # if grp in self.shapes_to_draw:
+                #     self.force_update_size_of_parent.emit(grp)
+                top_parent = self.get_top_parent_of_shape(grp)
+                if top_parent is not None:
+                    grps_to_update.append(top_parent)
+
+            if grps_to_update:
+                grps_to_update = list(set(grps_to_update))
+                for elm in grps_to_update:
+                    self.force_update_size_of_parent.emit(elm)
+
+            # print('apply_to_page,value',apply_to_page,space)
+
+
+            # I need force update the main page spinner without updating it --> TODO -−> I need a change emitter
+            if apply_to_page:
+                self.space = space
+                self.force_silent_spinner_update_in_parent.emit(space)
+
+            self.finalize_and_update()
+
+
+    def get_groups_from_sel(self, ignore_text_grps=True):
+        tmp = self.selected_shape
+
+        if tmp is None:
+            tmp = list(self.shapes_to_draw)
+
+        if isinstance(tmp, Group):
+            tmp = tmp.get_nested_groups()
+        elif isinstance(tmp, list):
+            all_groups = []
+            for elm in tmp:
+                if isinstance(elm, Group):
+                    all_groups.extend(elm.get_nested_groups())
+            tmp = all_groups
+        else:
+            return []
+
+        if ignore_text_grps:
+            tmp = [elm for elm in tmp if not elm.isText]
+
+
+        return tmp
+
+
+        
+
+    def get_images_from_sel(self):
+        tmp = self.selected_shape
+
+        if isinstance(tmp, Image2D):
+            tmp = [tmp]
+        else:
+            _, tmp = self.get_full_list_ofimages2D_for_consolidation(
+                stuff_to_consolidate=self.selected_shape,
+                include_insets=False, exclude_images_without_filename=False)
+        return tmp
+
+    def set_luts(self, force_reset=False):
+        # MEGA TODO --> THIS CAN BE VERY SLOW SO TRY TO ADD A PROGRESSBAR THERE
+
+        tmp = self.get_images_from_sel()
+
+        # if isinstance(tmp, Group):
+        #     tmp = list(self.selected_shape.content)
+        # elif isinstance(tmp, Image2D):
+        #     tmp = [tmp]
+
+
+
+        if isinstance(tmp, list) and tmp:
+            # open a window to set the bg --> TODO
+
+            max_channels = 0
+            for elm in tmp:
+                cur_nb_channels = elm.get_nb_channels()
+                max_channels = max(max_channels, cur_nb_channels)
+                # print('channels', cur_nb_channels, max_channels)
+
+            # then for each image I can select the stuff to have
+
+            # now I need to open a Lut window then to
+            if not max_channels:
+                # print('no channels --> quitting immediately')
+
+                return
+
+            luts = None
+            if not force_reset:
+                # images have channels --> so we are going to apply a LUT to them
+                lut_widget = LutWidget(nb_channels=max_channels)
+                custom_dialog = CustomDialog(title="Edit Look Up Tables (LUTs)", message="Do you want to proceed?",
+                                             main_widget=lut_widget,
+                                             parent=self, options=['Ok', 'Cancel'],
+                                             auto_adjust=True)  # that is really very good --> I can do it like that
+
+                if custom_dialog.exec_() == QDialog.Accepted:
+                    # print now we need to apply the Luts to all or to reset the luts for all!!!
+                    luts = lut_widget.getAllLuts()
+
+                else:
+                    return
+
+            # print('finally_in_there', luts)
+
+            for elm in tmp:
+                # if cur_nb_channels or force_reset:
+                    if force_reset:
+                        if elm.LUTs is not None:
+                            elm.LUTs = luts
+                            elm.update_qimage()  # we force the qimage to change and display the right LUT --> TODO
+                    else:
+                        # print('applying lut')
+                        cur_nb_channels = elm.get_nb_channels()
+                        if cur_nb_channels:
+                            elm.LUTs = luts[:cur_nb_channels]
+                            elm.update_qimage()  # we force the qimage to change and display the right LUT --> TODO
+
+            self.finalize_and_update()
+
+            # if bg is not None:
+            #     bg_dialog = BackgroundColorPicker(self)
+            #     custom_dialog = CustomDialog(title="Select a background color",
+            #                                  message=None,
+            #                                  # main_widget=main, options=['Ok', 'Cancel'], parent=self)
+            #                                  main_widget=bg_dialog, options=['Ok', 'Cancel'], parent=self,
+            #                                  auto_adjust=True)
+            #     # if pass --> ignore
+            #     if custom_dialog.exec_() == QDialog.Accepted:
+            #         bg = bg_dialog.get_color()
+            #     else:
+            #         return
+            #
+            # for elm in tmp:
+            #     if not elm.isText:
+            #         elm.fill_color = bg
+            #
+            # self.finalize_and_update()
+
     def set_bg(self, bg=None):
         tmp = self.selected_shape
 
@@ -2584,17 +2780,15 @@ class MyWidget(QWidget):
             self.finalize_and_update()
 
 
-    def all_as_single(self):
-        # if stuff_to_split is None:
-        #     return
-
+    def get_stuff(self):
         if isinstance(self.selected_shape, Group) and not self.selected_shape.isText:
-            stuff_to_split = list(self.selected_shape.content) # this is mandatory otherwise the list evolves with time --> really need to copy it
+            stuff_to_split = list(
+                self.selected_shape.content)  # this is mandatory otherwise the list evolves with time --> really need to copy it
             # print('success')
         else:
             # print('failure')
             # return
-            stuff_to_split =[]
+            stuff_to_split = []
             if isinstance(self.selected_shape, list):
                 # loop over the list and ignore all the Image2D
                 for elm in self.selected_shape:
@@ -2608,11 +2802,18 @@ class MyWidget(QWidget):
             else:
                 stuff_to_split = [self.selected_shape]
 
-
-        # print('@'*20)
+            # print('@'*20)
         if not isinstance(stuff_to_split, list):
             stuff_to_split = [stuff_to_split]
 
+        return stuff_to_split
+
+
+    def all_as_single(self):
+        # if stuff_to_split is None:
+        #     return
+
+        stuff_to_split = self.get_stuff()
         # stuff_to_split = [stuff for stuff in stuff_to_split if not stuff.isText]
 
 
@@ -2659,6 +2860,84 @@ class MyWidget(QWidget):
         self.focus_required.emit()
         self.set_current_selection(None)
         self.undo_redo_save_required.emit()
+
+
+    def reorganize_as_panel(self):
+        stuff_to_split = self.get_stuff()
+
+        # here I will have the stuff
+
+        # now I need to get the list of these things
+
+        # print('stuff_to_split', stuff_to_split)
+        if not stuff_to_split and isinstance(self.selected_shape, list):
+            stuff_to_split = self.selected_shape
+        # print('stuff_to_split2', stuff_to_split)
+
+        if stuff_to_split is not None and len(stuff_to_split)>1:
+            panel_creator = PanelCreator(self, len(stuff_to_split))
+            custom_dialog = CustomDialog(title="Reorganize as a panel",
+                                         message=None,
+                                         # main_widget=main, options=['Ok', 'Cancel'], parent=self)
+                                         main_widget=panel_creator, options=['Ok', 'Cancel'], parent=self,
+                                         auto_adjust=True)
+
+            if custom_dialog.exec_() != QDialog.Accepted:
+                return
+        else:
+            return
+
+        values = panel_creator.get_values()
+
+
+
+        # stuff_to_split = [stuff for stuff in stuff_to_split if not stuff.isText]
+
+        # we clean to remove all texts from that
+
+        # print('checking', self.selected_shape == self.shapes_to_draw[0], self.shapes_to_draw[0].content)
+        # print('stuff_to_split before', stuff_to_split)
+        # loop over that and
+        self.remove_all(stuff_to_split)
+
+        # print('stuff_to_split after',stuff_to_split)
+        # print('checking before self.shapes_to_draw',self.shapes_to_draw)
+
+        self.remove_all_empty_groups()
+
+        # print('checking after self.shapes_to_draw', self.shapes_to_draw)
+
+        # print('stuff_to_split',stuff_to_split)
+
+        # for elm in stuff_to_split:
+        #     # do not allow split of texts maybe ???
+        #     self.shapes_to_draw.append(elm)
+        #     self.force_update_size_of_parent.emit(elm)
+
+        self._create_panel_directly(stuff_to_split, values['num_rows'], values['num_cols'],
+                                    values['add_empty_images'], values['order'])
+
+
+        # print('checking after2 self.shapes_to_draw', self.shapes_to_draw)
+        self.remove_all_empty_groups()
+
+        # print('checking after3 self.shapes_to_draw', self.shapes_to_draw)
+
+        # try:
+        #     print('content in there',self.shapes_to_draw[0].content)
+        # except:
+        #     pass
+
+        # self.update()
+        # self.update_size()
+        # # print('@' * 20)
+        # self.update_letters_required.emit()
+        # self.update_text_rows.emit()
+        # self.focus_required.emit()
+        # self.set_current_selection(None)
+        # self.undo_redo_save_required.emit()
+
+        # self.undo_redo_save_required.emit()
 
     def _create_panel_real(self, lst):
         # nb if not a string then I need to remove it from all the parents --> TODO
@@ -2855,7 +3134,6 @@ class MyWidget(QWidget):
             # we have reached a non iterable object --> this is therefore the last level object --> ignore
             return False
         return False
-
 
     def get_full_list_ofimages2D_for_consolidation(self, stuff_to_consolidate=None,exclude_images_without_filename=True, include_insets=True):
         # maybe I need a further filtering to only keep the non text images --> TODO

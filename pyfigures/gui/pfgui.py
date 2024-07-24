@@ -259,6 +259,7 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.force_update_size_of_parent.connect(self.update_size_of_object)
         self.paint.EZFIG_panel.open_lettering_parameters.connect(self.change_lettering_parameters)
         self.paint.EZFIG_panel.force_update_store.connect(self.force_update_store)
+        self.paint.EZFIG_panel.force_silent_spinner_update_in_parent.connect(self.force_silent_spinner_update_in_parent)
         # self.paint.EZFIG_panel.templatify_figure.connect(self.templatify_figure)
 
         self.serializable_font = SerializableQFont()
@@ -1750,6 +1751,14 @@ class EZFIG_GUI(QMainWindow):
     #     print('remove all annotations called')
     #     self.paint.EZFIG_panel.remove_all_annotations()
 
+    def force_silent_spinner_update_in_parent(self, value):
+        try:
+            self.main_space_spinner.blockSignals(True)
+            self.main_space_spinner.setValue(value)
+            self.main_space_spinner.blockSignals(False)
+        except:
+            pass
+
     def force_update_store(self):
         # print('STORE CONTENT NEEDS BE UPDATED -> ACTION REQUIRED')
         # TODO --> do the list of all images and delete all the ones that are no longer in the store after that
@@ -1978,9 +1987,14 @@ class EZFIG_GUI(QMainWindow):
     # def process_finished(self):
     #     self._please_wait_dialog.hide()
 
-
-
     def tst_function(self):
+        #
+        # if True:
+        #     self.paint.EZFIG_panel.set_space()
+        #     return
+
+        # if True:
+        #     self.paint.EZFIG_panel.set_luts()
 
         # if True:
         #     pzfconfig.path_to_last_consolidated_file = random.random()
@@ -2045,10 +2059,10 @@ class EZFIG_GUI(QMainWindow):
 
         # print('Current thread:', QThread.currentThread())
 
-
-
-
-
+        if False:
+            # get all images and get the max nb of channels of all images and then ask for channels
+            self.paint.EZFIG_panel.reorganize_as_panel()
+            pass
 
         self._debug_check_of_shapes()
 
@@ -2212,8 +2226,8 @@ if __name__ == '__main__':
 
         if demo:
             # w.paint.EZFIG_panel.shapes_to_draw = tst_stacks_n_sizes()
-            w.paint.EZFIG_panel.shapes_to_draw = channel_n_lut_test()
-            # w.paint.EZFIG_panel.shapes_to_draw = mega_image_tst()
+            # w.paint.EZFIG_panel.shapes_to_draw = channel_n_lut_test()
+            w.paint.EZFIG_panel.shapes_to_draw = mega_image_tst()
             # w.paint.EZFIG_panel.shapes_to_draw = tst_scale_bar()
             # w.paint.EZFIG_panel.shapes_to_draw = tst_empties_and_templates()
             # w.paint.EZFIG_panel.shapes_to_draw = mini_figure()

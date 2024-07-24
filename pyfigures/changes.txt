@@ -1,3 +1,8 @@
+24/07/2024
+-added an 'Reshape to panel' to revamp an existing panel and give it a new shape without having to split it beforehand
+-added set and reset look up tables from the context menu (group apply or remove of lut)
+-added an option to change spacing of selected elements in the figure from the context menu and to batch it
+
 23/07/2024
 -made installation of javabridge and bio-formats optional, as it made the installation on windows difficult if the system was not properly set
 -greatly enhanced the installation instructions
