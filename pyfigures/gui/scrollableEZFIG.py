@@ -6,16 +6,16 @@ set_UI()
 import traceback
 from pyfigures.gui.ezfig import MyWidget
 import matplotlib.pyplot as plt
-# from batoolset.draw.shapes.vectorgraphics2d import VectorGraphics2D
+# from batoolset.drawings.shapes.vectorgraphics2d import VectorGraphics2D
 from batoolset.img import Img
-from batoolset.draw.shapes.group import Group, set_to_size
+from batoolset.drawings.shapes.group import Group, set_to_size
 import numpy as np
 import random
 from qtpy.QtCore import QSize, Qt, Signal
 from qtpy.QtGui import QPalette,QKeySequence
 from qtpy.QtWidgets import QScrollArea, QVBoxLayout, QWidget, QToolBar, QStatusBar, QHBoxLayout, QAction,QShortcut
 import qtawesome as qta
-from batoolset.draw.shapes.image2d import Image2D
+from batoolset.drawings.shapes.image2d import Image2D
 # from batoolset.figure.ezfig import MyWidget
 from qtpy.QtWidgets import QApplication, QWidget, QLabel
 from qtpy.QtCore import QTimer, QRect

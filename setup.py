@@ -57,9 +57,10 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batoolset",
+        f"batoolset>={__VERSION__}",
         "pyautogui",
         "imagecodecs",
+        "psutil",
     ],
     extras_require={'all':[
                         "python-javabridge",

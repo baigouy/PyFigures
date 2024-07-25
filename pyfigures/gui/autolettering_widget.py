@@ -1,9 +1,9 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import sys
-from batoolset.draw.shapes.Position import Position
-from batoolset.draw.shapes.serializablefont import SerializableQFont
-from batoolset.pyqt.tools import get_html_text_with_font, get_items_of_combo
+from batoolset.drawings.shapes.Position import Position
+from batoolset.drawings.shapes.serializablefont import SerializableQFont
+from batoolset.pyqts.tools import get_html_text_with_font, get_items_of_combo
 from qtpy.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QCheckBox, QPushButton, QFontDialog, QLineEdit,QColorDialog,QApplication,QComboBox)
 from qtpy.QtGui import QColor, QFont

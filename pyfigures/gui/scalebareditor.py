@@ -1,9 +1,9 @@
-from batoolset.draw.shapes.Position import Position
-from batoolset.pyqt.tools import get_items_of_combo
+from batoolset.drawings.shapes.Position import Position
+from batoolset.pyqts.tools import get_items_of_combo
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
-from batoolset.draw.shapes.scalebar import ScaleBar
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.scalebar import ScaleBar
+from batoolset.drawings.shapes.txt2d import TAText2D
 from qtpy.QtWidgets import QApplication, QWidget, QVBoxLayout, QDoubleSpinBox, QCheckBox,QLabel,QHBoxLayout,QGroupBox,QComboBox
 # from qtpy.QtCore import Qt, QSizeF
 from pyfigures.gui.simple_text_editor import TextEditor

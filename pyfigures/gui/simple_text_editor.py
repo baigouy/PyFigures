@@ -4,13 +4,13 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 import traceback
-from batoolset.pyqt.tools import get_items_of_combo, disable_wheel_for_combo_and_spin
+from batoolset.pyqts.tools import get_items_of_combo, disable_wheel_for_combo_and_spin
 # another way of doing greek
 # https://www.htmlhelp.com/reference/html40/entities/symbols.html
 import sys
 import os
-from batoolset.draw.shapes.Position import Position
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.Position import Position
+from batoolset.drawings.shapes.txt2d import TAText2D
 from qtpy.QtWidgets import QApplication, QMainWindow, QAction, QTextEdit, QColorDialog, QFontDialog, QFileDialog, QMenu, QToolButton, QLabel, QSpinBox, QPushButton,QWidget, QVBoxLayout, QSizePolicy,QToolBar,QComboBox,QGroupBox
 # from qtpy.QtCore import QObject, QEvent
 from qtpy.QtGui import QTextCursor, QFont, QTextCharFormat, QColor, QIcon, QPalette,QTextDocument, QTextOption,QBrush

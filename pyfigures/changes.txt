@@ -1,3 +1,8 @@
+25/07/2024
+-fixed a weird bug caused by a folder being named xml with an init in it while I was using an xml.etree somehwere
+-simplified a lot the java install process using the great install-jdk library to ease the use of the bio-formats library
+-fixed an illogic behavior of rows when they contain only one image (created from a panel)
+
 24/07/2024
 -added an 'Reshape to panel' to revamp an existing panel and give it a new shape without having to split it beforehand
 -added set and reset look up tables from the context menu (group apply or remove of lut)

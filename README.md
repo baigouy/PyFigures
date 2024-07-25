@@ -47,24 +47,21 @@ Perform the following steps **only once** to set up your environment:
     ```sh
     pip install -U pyfigures
     ```
+
+5. **Optional: Install openjdk8 if you plan to use bioformats**
+
+    ```sh
+    pip install install-jdk
+    python -c "import os; import jdk; jdk_path = os.path.join(os.path.expanduser('~'), '.jdk/jdk8'); jre_path = os.path.join(os.path.expanduser('~'), '.jre/jdk8'); os.makedirs(jdk_path, exist_ok=True); os.makedirs(jre_path, exist_ok=True); jdk.install('8', path=jdk_path); jdk.install('8', path=jre_path, jre=True)"
+    ```
    
-5. **Optional: Install additional dependencies for bioformats support:**
+6. **Optional: Install additional dependencies for bioformats support:**
     
     ```sh
     pip install -U pyfigures[all]
     ```
-
-6. **Run `pyfigures`:**
     
-    ```sh
-    python -m pyfigures
-    ```
-   
-7. **Deactivate the Conda environment when you're done:**
-
-    ```sh
-    conda deactivate
-    ```
+    **Note:** if you received errors, you may not have a compiler installed (see the Troubleshooting section after)
 
 ### Run
    
@@ -98,13 +95,10 @@ If you encounter **issues** related to installing the **python-javabridge** pack
 1. Prerequisites for All Systems
    Before installing python-javabridge, ensure the following:
 
-   - **Install OpenJDK 8**:
-
-      - You need [OpenJDK 8](https://adoptium.net/temurin/releases/?version=8) installed on your system. Make sure it is added to your system's PATH environment variables (**JAVA_HOME** and **JDK_HOME**) so that it can be found by the installation process.
-
    - **Ensure a C Compiler is Available**:
 
       - The package requires a C compiler to build C extensions. Depending on your operating system, this will be different.
+
 
 2. **Windows**-Specific Instructions
 

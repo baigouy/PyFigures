@@ -1,11 +1,8 @@
 from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 set_UI()
-from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
-from pyfigures.gui.dimchooser import DimensionChooser
-from batoolset.pyqt.pleasewaitdialog import PleaseWaitDialog
 from batoolset.images.centralstore import ImageCentralStore
 import time
-from batoolset.draw.shapes.serializableguiparams import SerializableGUIparameters
+from batoolset.drawings.shapes.serializableguiparams import SerializableGUIparameters
 # import filecmp # TODO use that to avoid duplicating a save in undo/redo --> future dev, not urgent
 from pyfigures.gui.colorassistant import ColorAssistant
 from pyfigures.gui.panelcreationwidget import PanelCreator
@@ -19,26 +16,26 @@ from batoolset.files.tools import smart_name_parser
 from pyfigures.gui.keep_tst_images_for_pzf import mega_image_tst, mini_test, mini_tst_svg_rotation, \
     mini_figure, tst_stacks_n_sizes, tst_empties_and_templates, tst_scale_bar, channel_n_lut_test
 # import pzfconfig  # path to the consolidated file and variables shared throughout the software
-from batoolset.xml.tools import _replace_filename_tags, _update_filename_of_consolidated_files  # , _remove_insets
+from batoolset.xmls.tools import _replace_filename_tags, _update_filename_of_consolidated_files  # , _remove_insets
 from pyfigures.gui.user_extra_translation import ExtraTranslationWidget
 from batoolset.strings.tools import increment_letter
 from pyfigures.gui.autolettering_widget import AutoLetteringOptions
-from batoolset.draw.shapes.Position import Position
-from batoolset.draw.shapes.serializablefont import SerializableQFont
+from batoolset.drawings.shapes.Position import Position
+from batoolset.drawings.shapes.serializablefont import SerializableQFont
 from batoolset.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
     divide_list_into_sublists, compare_lists_sets
-from batoolset.pyqt.tools import get_html_text_with_font, get_shape_after_rotation_and_crop, getCtrlModifierAsString
+from batoolset.pyqts.tools import get_html_text_with_font, get_shape_after_rotation_and_crop, getCtrlModifierAsString
 import os
 from batoolset.files.tools import write_string_to_file, read_string_from_file, consolidate_files, \
     smartly_consolidate_files_to_reduce_dupes, consolidate_files2
-from batoolset.serialization.tools import deserialize_to_dict, has_custom_script, clone_object
-from batoolset.serialization.tools import clone_object, object_to_xml, create_object
+from batoolset.serializations.tools import deserialize_to_dict, has_custom_script, clone_object
+from batoolset.serializations.tools import clone_object, object_to_xml, create_object
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.customdialog import CustomDialog
-from batoolset.draw.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
+from batoolset.drawings.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
     set_to_height_im2d, areIndicesOverlapping
 from pyfigures.gui.group_builder_GUI import PanelOrRow
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 from batoolset.img import Img, guess_dimensions, start_JVM, stop_JVM
 import traceback
 from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTransform
@@ -51,20 +48,20 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from batoolset.dialogs.opensave import saveFileDialog, openFileNameDialog
-from batoolset.draw.shapes.circle2d import Circle2D
-from batoolset.draw.shapes.ellipse2d import Ellipse2D
-from batoolset.draw.shapes.freehand2d import Freehand2D
-from batoolset.draw.shapes.image2d import Image2D
-from batoolset.draw.shapes.line2d import Line2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.polygon2d import Polygon2D
-from batoolset.draw.shapes.polyline2d import PolyLine2D
-from batoolset.draw.shapes.scalebar import ScaleBar
-from batoolset.draw.shapes.square2d import Square2D
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.circle2d import Circle2D
+from batoolset.drawings.shapes.ellipse2d import Ellipse2D
+from batoolset.drawings.shapes.freehand2d import Freehand2D
+from batoolset.drawings.shapes.image2d import Image2D
+from batoolset.drawings.shapes.line2d import Line2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.polygon2d import Polygon2D
+from batoolset.drawings.shapes.polyline2d import PolyLine2D
+from batoolset.drawings.shapes.scalebar import ScaleBar
+from batoolset.drawings.shapes.square2d import Square2D
+from batoolset.drawings.shapes.txt2d import TAText2D
 from pyfigures.gui.scrollableEZFIG import scrollable_EZFIG
 from batoolset.tools.qthandler import XStream, QtHandler
-from batoolset.uitools.blinker import Blinker
+from batoolset.uis.blinker import Blinker
 from batoolset.GUI.overlay_hints import Overlay
 import atexit
 import tempfile

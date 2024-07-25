@@ -110,27 +110,26 @@ from pyfigures.gui.lutmultiselector import LutWidget
 from pyfigures.gui.spaceselector import SpaceSelectorWidget
 from pyfigures.gui.asingleoraspanel import AsSingleOrPanel
 from pyfigures.gui.dimchooser import DimensionChooser
-from batoolset.pyqt.pleasewaitdialog import PleaseWaitDialog
+from batoolset.pyqts.pleasewaitdialog import PleaseWaitDialog
 from builtins import Exception
 from pyfigures.gui.fontselectorgui import FontSelector
-from batoolset.draw.shapes.rectangle2d import Rectangle2D
+from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 from pyfigures.gui.bg_color_selection import BackgroundColorPicker
 from pyfigures.gui.panelcreationwidget import PanelCreator
 from batoolset.dims.tools import scaling_factor_to_achieve_DPI
 from batoolset.img import guess_dimensions
-from batoolset.pyqt.tools import distance, getCtrlModifier
+from batoolset.pyqts.tools import distance, getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
-from batoolset.xml.tools import _replace_filename_tags
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.simple_text_editor import TextEditor
-from batoolset.serialization.tools import deserialize_to_dict
-from batoolset.serialization.tools import object_to_xml, create_object, clone_object
+from batoolset.serializations.tools import deserialize_to_dict
+from batoolset.serializations.tools import object_to_xml, create_object, clone_object
 import os
 from functools import partial
 from batoolset.lists.tools import is_iterable, move_right, move_left, swap_items, flatten_iterable, \
     find_first_object_of_type, find_all_objects_of_type, divide_list_into_sublists
 from pyfigures.gui.customdialog import CustomDialog
-from batoolset.draw.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
+from batoolset.drawings.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
 import sys
 import numpy as np
 import traceback
@@ -139,20 +138,20 @@ from qtpy.QtCore import QSize, QRect, QRectF, QPoint, QPointF, Qt, QSizeF, Signa
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QMenu, QDialog,QWidget,QApplication, QVBoxLayout, QPushButton,QScrollArea,QLabel,QInputDialog, QMessageBox,QSpinBox
 from qtpy.QtGui import QBrush, QPen, QColor, QTransform,QPainter, QColor,QFontMetrics,QImage,QPdfWriter,QPageSize,QTextCursor, QFont, QTextCharFormat
-from batoolset.draw.shapes.freehand2d import Freehand2D
-from batoolset.draw.shapes.scalebar import ScaleBar
-from batoolset.draw.shapes.polygon2d import Polygon2D
-from batoolset.draw.shapes.line2d import Line2D
-from batoolset.draw.shapes.rect2d import Rect2D
-from batoolset.draw.shapes.square2d import Square2D
-from batoolset.draw.shapes.ellipse2d import Ellipse2D
-from batoolset.draw.shapes.circle2d import Circle2D
-from batoolset.draw.shapes.point2d import Point2D
-from batoolset.draw.shapes.polyline2d import PolyLine2D
-from batoolset.draw.shapes.image2d import Image2D
+from batoolset.drawings.shapes.freehand2d import Freehand2D
+from batoolset.drawings.shapes.scalebar import ScaleBar
+from batoolset.drawings.shapes.polygon2d import Polygon2D
+from batoolset.drawings.shapes.line2d import Line2D
+from batoolset.drawings.shapes.rect2d import Rect2D
+from batoolset.drawings.shapes.square2d import Square2D
+from batoolset.drawings.shapes.ellipse2d import Ellipse2D
+from batoolset.drawings.shapes.circle2d import Circle2D
+from batoolset.drawings.shapes.point2d import Point2D
+from batoolset.drawings.shapes.polyline2d import PolyLine2D
+from batoolset.drawings.shapes.image2d import Image2D
 from batoolset.figure.alignment import packX, pack2, align2, align_positions
 # from batoolset.figure.column import Column
-from batoolset.draw.shapes.txt2d import TAText2D
+from batoolset.drawings.shapes.txt2d import TAText2D
 from batoolset.figure.fig_tools import  get_master_bounds2 #get_master_bounds,
 # from batoolset.figure.row import Row
 import os.path
@@ -2984,6 +2983,8 @@ class MyWidget(QWidget):
                             add_empty_images_instead_of_None=add_empty_images)
                 if tmp.isEmpty():  # if only empty it cannot find the size --> so better skip it
                     continue
+                if len(tmp)==1:
+                    tmp = tmp.content[0]
                 self.shapes_to_draw.append(tmp)
                 self.force_update_size_of_parent.emit(tmp)
 
@@ -3013,6 +3014,7 @@ class MyWidget(QWidget):
             #             elm.update()
 
             groups = [grp for grp in groups if not grp.isEmpty()]
+            groups = [grp.content[0] if len(grp)==1 else grp for grp in groups] # unpack groups that just contain one image
 
             # print(groups)
 

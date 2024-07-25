@@ -3,7 +3,7 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from batoolset.luts.lut_minimal_test import list_available_luts, PaletteCreator
-from batoolset.pyqt.tools import get_items_of_combo
+from batoolset.pyqts.tools import get_items_of_combo
 import numpy as np
 from qtpy.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QComboBox, QLabel
 from qtpy.QtGui import QPixmap, QImage
