@@ -128,7 +128,7 @@ import os
 from functools import partial
 from batoolset.lists.tools import is_iterable, move_right, move_left, swap_items, flatten_iterable, \
     find_first_object_of_type, find_all_objects_of_type, divide_list_into_sublists
-from pyfigures.gui.customdialog import CustomDialog
+from batoolset.GUI.customdialog import CustomDialog
 from batoolset.drawings.shapes.group import Group, set_to_size, get_parent_of_obj, set_to_width
 import sys
 import numpy as np

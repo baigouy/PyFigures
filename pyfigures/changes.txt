@@ -1,3 +1,7 @@
+26/07/2024
+-added a preview for the selected LUT
+-Lut editor and creator tools are finalized but I still need to find a way to add new luts easily to the default lut list and to store them in the files (we'll see later).
+
 25/07/2024
 -fixed a weird bug caused by a folder being named xml with an init in it while I was using an xml.etree somehwere
 -simplified a lot the java install process using the great install-jdk library to ease the use of the bio-formats library

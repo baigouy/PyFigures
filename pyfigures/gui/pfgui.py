@@ -31,7 +31,7 @@ from batoolset.files.tools import write_string_to_file, read_string_from_file, c
 from batoolset.serializations.tools import deserialize_to_dict, has_custom_script, clone_object
 from batoolset.serializations.tools import clone_object, object_to_xml, create_object
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
-from pyfigures.gui.customdialog import CustomDialog
+from batoolset.GUI.customdialog import CustomDialog
 from batoolset.drawings.shapes.group import Group, set_to_size, set_to_width, set_to_height, set_to_width_im2d, \
     set_to_height_im2d, areIndicesOverlapping
 from pyfigures.gui.group_builder_GUI import PanelOrRow
@@ -2223,8 +2223,8 @@ if __name__ == '__main__':
 
         if demo:
             # w.paint.EZFIG_panel.shapes_to_draw = tst_stacks_n_sizes()
-            # w.paint.EZFIG_panel.shapes_to_draw = channel_n_lut_test()
-            w.paint.EZFIG_panel.shapes_to_draw = mega_image_tst()
+            w.paint.EZFIG_panel.shapes_to_draw = channel_n_lut_test()
+            # w.paint.EZFIG_panel.shapes_to_draw = mega_image_tst()
             # w.paint.EZFIG_panel.shapes_to_draw = tst_scale_bar()
             # w.paint.EZFIG_panel.shapes_to_draw = tst_empties_and_templates()
             # w.paint.EZFIG_panel.shapes_to_draw = mini_figure()

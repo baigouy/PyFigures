@@ -15,7 +15,7 @@ from batoolset.pyqts.tools import check_antialiasing, get_shape_after_rotation_a
     get_original_shape_from_rect_and_angle, get_centroid, create_dim_slider, clear_layout, select_in_combobox, \
     getCtrlModifier, getCtrlModifierAsString
 from batoolset.serializations.tools import clone_object
-from pyfigures.gui.customdialog import CustomDialog
+from batoolset.GUI.customdialog import CustomDialog
 import sys
 import os
 import math

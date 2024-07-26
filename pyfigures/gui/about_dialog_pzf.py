@@ -2,7 +2,6 @@ from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from qtpy.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QPushButton
 from qtpy.QtCore import Qt
-import sys
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None, title="About My Software", name="My Software", version="Version 1.0.0", description="""
@@ -65,4 +64,6 @@ def main():
     about_dialog.exec_()
 
 if __name__ == '__main__':
+    import sys
     main()
+    sys.exit(0)
