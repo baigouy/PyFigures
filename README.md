@@ -49,6 +49,8 @@ Perform the following steps **only once** to set up your environment:
     ```
 
 5. **Optional: Install openjdk8 if you plan to use bioformats**
+    
+    **Note:** this step needs to be done only once, if you already did it you can skip this step.
 
     ```sh
     pip install install-jdk
