@@ -50,12 +50,13 @@ Perform the following steps **only once** to set up your environment:
 
 5. **Optional: Install openjdk8 if you plan to use bioformats**
     
-    **Note:** this step needs to be done only once, if you already did it you can skip this step.
-
     ```sh
     pip install install-jdk
     python -c "import os; import jdk; jdk_path = os.path.join(os.path.expanduser('~'), '.jdk/jdk8'); jre_path = os.path.join(os.path.expanduser('~'), '.jre/jdk8'); os.makedirs(jdk_path, exist_ok=True); os.makedirs(jre_path, exist_ok=True); jdk.install('8', path=jdk_path); jdk.install('8', path=jre_path, jre=True)"
     ```
+    
+   **Note:** this step needs to be done **only once**, if you already did it you can skip this step.
+
    
 6. **Optional: Install additional dependencies for bioformats support:**
     
