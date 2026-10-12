@@ -2572,8 +2572,8 @@ def sharing_steps() -> list[TutorialStep]:
                 'You now know the full collaboration and accessibility toolkit.<br><br>'
                 'Still to explore in the <b>Help</b> menu: the <b>Stacks, Channels &amp; '
                 'Movies</b>, <b>Automate</b> and <b>Poster &amp; Photo Album</b> tutorials. '
-                'The <b>MCP server</b> (see the docs) also lets an AI assistant drive all '
-                'of this in plain language.<br><br>'
+                'The <b>MCP server</b> (see the docs) also lets an MCP client such as '
+                'Claude drive all of this in plain language.<br><br>'
                 'Happy figure-making!'
             ),
             get_target=None,
@@ -2836,7 +2836,7 @@ def stacks_steps() -> list[TutorialStep]:
 def automation_steps() -> list[TutorialStep]:
     """Building figures without clicking each panel: drafts from a results
     folder, recipes, the figure library, version compare, style copy, the
-    pre-submission review and the AI assistant (MCP)."""
+    pre-submission review and the MCP server."""
     return _require_figure([
         TutorialStep(
             title='Automate: drafts, recipes &amp; library',
@@ -2869,8 +2869,8 @@ def automation_steps() -> list[TutorialStep]:
                 'formats… Open <b>File → "Build figure from recipe…"</b> and pick one.<br><br>'
                 'Change an image or a setting in the recipe and rebuild — the figure '
                 'updates identically every time. The same recipe runs from the command '
-                'line (<code>python -m pyfigures.recipe my_figure.yaml</code>) and from '
-                'the AI assistant.<br><br>'
+                'line (<code>python -m pyfigures.recipe my_figure.yaml</code>) and through '
+                'the MCP server.<br><br>'
                 'Every key is described in <code>docs/RECIPES.md</code>; '
                 '<code>docs/recipe_example.yaml</code> is a full example.'
             ),
@@ -2955,10 +2955,10 @@ def automation_steps() -> list[TutorialStep]:
             title='Automate complete!',
             message=(
                 'You can now build and check figures in bulk.<br><br>'
-                'The <b>AI assistant</b> route: PyFigures ships an <b>MCP server</b> with '
-                'the same tools (see <code>docs/MCP_SERVER.md</code>) — ask an assistant '
-                'to "make a 3-panel figure from this folder with 10 µm scale bars" and it '
-                'drives PyFigures for you.'
+                'PyFigures also ships an <b>MCP server</b> with the same tools (see '
+                '<code>docs/MCP_SERVER.md</code>): connect it to an MCP client such as '
+                'Claude, ask for "a 3-panel figure from this folder with 10 µm scale bars" '
+                'and it drives PyFigures for you.'
             ),
         ),
     ], first=4)
@@ -3162,7 +3162,7 @@ def poster_steps() -> list[TutorialStep]:
                 'whole folders (wildcards allowed), the arrangement of each page and '
                 'its text.<br><br>'
                 'The same recipe runs from the command line '
-                '(<code>poster_headless build</code>) and from the AI assistant. '
+                '(<code>poster_headless build</code>) and through the MCP server. '
                 'See <code>docs/poster.md</code>.'
             ),
             get_target=lambda win: _poster_tool(win, win.recipe_action),

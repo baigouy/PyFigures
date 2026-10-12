@@ -327,6 +327,9 @@
     <li><a href="#lettering">Auto-lettering</a></li>
     <li><a href="#undo-redo">Undo / Redo</a></li>
     <li><a href="#export">Export</a></li>
+    <li><a href="#automation">Drafts, recipes, library</a></li>
+    <li><a href="#stacks">Stacks &amp; movies</a></li>
+    <li><a href="#mcp">MCP server</a></li>
     <li><a href="#templates">Templates</a></li>
     <li><a href="#consolidate">Consolidation</a></li>
     <li><a href="#annotations">Annotations</a></li>
@@ -459,14 +462,20 @@
     <div class="table-wrap">
       <table>
         <tr><th>Entry</th><th>Description</th><th>Shortcut</th></tr>
-        <tr><td><strong>Open</strong></td><td>Opens a file dialog to load a <code>.pyf</code> file and append it to the canvas.</td><td></td></tr>
-        <tr><td><strong>New</strong></td><td>Clears the canvas and resets the current figure.</td><td></td></tr>
+        <tr><td><strong>Open…</strong></td><td>Opens a <code>.pyf</code> figure, replacing the current one.</td><td><kbd>Ctrl O</kbd></td></tr>
+        <tr><td><strong>Merge into current figure…</strong></td><td>Appends the contents of another <code>.pyf</code> to the current figure.</td><td></td></tr>
+        <tr><td><strong>New</strong></td><td>Clears the canvas and resets the current figure.</td><td><kbd>Ctrl N</kbd></td></tr>
+        <tr><td><strong>Draft figure from folder…</strong></td><td>Assembles a first-pass figure from a folder of images and CSVs: grid layout, data plots, scale bars, A/B/C letters. See <a href="#automation">Automation</a>.</td><td></td></tr>
+        <tr><td><strong>Build figure from recipe…</strong></td><td>Builds a figure from a YAML/JSON recipe — reproducible, rebuildable when the data change. See <a href="#automation">Automation</a>.</td><td></td></tr>
+        <tr><td><strong>Search figure library…</strong></td><td>Indexes a folder tree of past <code>.pyf</code> figures and searches them by panel, label or caption.</td><td></td></tr>
         <tr><td><strong>Save</strong></td><td>Saves the figure to the current <code>.pyf</code> file. Prompts for a filename on first save.</td><td><kbd>Ctrl S</kbd></td></tr>
         <tr><td><strong>Save As…</strong></td><td>Saves the figure to a new filename.</td><td></td></tr>
         <tr><td><strong>Save And Consolidate…</strong></td><td>Saves the figure <em>and</em> copies all referenced image files into a <code>.files</code> folder alongside the <code>.pyf</code>, making the project fully portable. See <a href="#consolidate">Consolidation</a>.</td><td></td></tr>
-        <tr><td><strong>Export as svg</strong></td><td>Exports the entire figure as a scalable SVG file.</td><td></td></tr>
-        <tr><td><strong>Export as pdf</strong></td><td>Exports the figure as a PDF.</td><td></td></tr>
-        <tr><td><strong>Export as… (jpg, tif, png)</strong></td><td>Exports the figure as a raster image. A dialog lets you choose format and resolution.</td><td></td></tr>
+        <tr><td><strong>Compare with another version…</strong></td><td>Visual diff against another <code>.pyf</code>: side-by-side renders, a pixel-difference overlay and a list of what changed.</td><td></td></tr>
+        <tr><td><strong>Figure caption / legend…</strong></td><td>Writes the figure's caption (stored beside the <code>.pyf</code>, exportable for submission).</td><td></td></tr>
+        <tr><td><strong>Alt text (accessibility)…</strong></td><td>Drafts and edits the figure's description for screen-reader users.</td><td></td></tr>
+        <tr><td><strong>Copy style from another figure…</strong></td><td>Gives this figure the fonts, letters, scale bars, spacing and chart styling of another <code>.pyf</code>.</td><td></td></tr>
+        <tr><td><strong>Export As ▸</strong></td><td>SVG, PDF, PDF + LaTeX, PNG, TIF, JPEG, print-ready CMYK TIFF, video, source-data bundle. See <a href="#export">Export</a>.</td><td></td></tr>
       </table>
     </div>
 
@@ -511,6 +520,40 @@
         <tr><td><strong>Remove all texts</strong></td><td>Removes only text annotations.</td></tr>
         <tr><td><strong>Remove all ROIs</strong></td><td>Removes all drawn ROI shapes (circles, rectangles, polygons, lines, freehand, points).</td></tr>
         <tr><td><strong>Remove all insets</strong></td><td>Removes inset images embedded in other images.</td></tr>
+        <tr><td><strong>Tidy text typography</strong></td><td>Safe typography fixes on every label: 2*3→2×3, 37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5.</td></tr>
+        <tr><td><strong>Add LUT colour bar…</strong></td><td>Inserts an intensity calibration bar matching a LUT.</td></tr>
+        <tr><td><strong>Add scale bar to all panels…</strong></td><td>Adds a scale bar to every panel at once.</td></tr>
+        <tr><td><strong>Add multi-channel merge…</strong></td><td>Overlays 2–4 single-channel images (e.g. DAPI + GFP + RFP) into one pseudo-coloured panel.</td></tr>
+        <tr><td><strong>Add zoom callout to selected panel…</strong></td><td>Boxes a region of the selected image and shows it magnified in a corner inset, joined by leader lines.</td></tr>
+        <tr><td><strong>Add arrow pointing at a feature…</strong></td><td>An arrow whose tip stays on the chosen pixel whatever the figure size.</td></tr>
+        <tr><td><strong>Stack views ▸</strong></td><td>Montage of frames, channel split, kymograph along a line, orthogonal views (XZ / YZ). See <a href="#stacks">Stacks &amp; movies</a>.</td></tr>
+        <tr><td><strong>Add data plot from CSV…</strong></td><td>Bar / box / violin / scatter / grouped plot from a CSV of measurements, with significance brackets.</td></tr>
+      </table>
+    </div>
+
+    <!-- QC -->
+    <h3>QC menu</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Audit figure</strong></td><td>Lists panels missing a scale bar or a letter.</td></tr>
+        <tr><td><strong>Check journal compliance… / Apply journal guidelines…</strong></td><td>Checks (or applies) a journal's width, fonts, minimum font size and resolution.</td></tr>
+        <tr><td><strong>Check print resolution… / Enforce minimum font size…</strong></td><td>Effective dpi of every panel at the printed size; raises every text to a minimum size.</td></tr>
+        <tr><td><strong>Check image integrity…</strong></td><td>Screens panels for reused, flipped/rotated or internally cloned images.</td></tr>
+        <tr><td><strong>Check scale-bar consistency…</strong></td><td>Flags panels whose displayed physical scale differs.</td></tr>
+        <tr><td><strong>Pre-submission review (all checks)…</strong></td><td>Runs every check at once and lists the questions a reviewer would ask.</td></tr>
+        <tr><td><strong>Adjustment provenance ledger…</strong></td><td>Per-panel record of brightness/contrast, LUT, crop, rotation and scripts, with a ready-to-paste Methods paragraph.</td></tr>
+        <tr><td><strong>Fonts (portable / Helvetica)…</strong></td><td>What Helvetica/Arial resolve to on this machine, and which portable fonts are available.</td></tr>
+        <tr><td><strong>Check for changed source files… / Remap image paths…</strong></td><td>Finds images or CSVs that changed since the figure was saved; repoints moved files.</td></tr>
+      </table>
+    </div>
+
+    <!-- Tools -->
+    <h3>Tools menu</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Poster / collage designer…</strong></td><td>A separate tool for posters, photo-collage pages and photo albums, where images can be freely placed and rotated. Guide: <code>docs/poster.md</code>.</td></tr>
       </table>
     </div>
 
@@ -527,11 +570,22 @@
       </table>
     </div>
 
+    <!-- Review -->
+    <h3>Review menu</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Export for review…</strong></td><td>Writes a self-contained HTML page of the figure that co-authors open in any browser to pin comments on panels.</td></tr>
+        <tr><td><strong>Import review comments… / View review comments</strong></td><td>Loads their comments back and lists them on the figure.</td></tr>
+      </table>
+    </div>
+
     <!-- View -->
     <h3>View menu</h3>
     <div class="table-wrap">
       <table>
         <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Theme → System (auto)</strong></td><td>Follows the operating system's light/dark setting.</td></tr>
         <tr><td><strong>Theme → Light</strong></td><td>Switches the application to the default light color scheme. The choice is remembered across sessions.</td></tr>
         <tr><td><strong>Theme → Dark</strong></td><td>Switches the application to a dark color scheme (dark-gray backgrounds, light text). The figure/canvas area turns near-black. The choice is remembered across sessions.</td></tr>
       </table>
@@ -549,14 +603,20 @@
     <div class="table-wrap">
       <table>
         <tr><th>Entry</th><th>Description</th></tr>
-        <tr><td><strong>About</strong></td><td>Shows version, author, and license information.</td></tr>
+        <tr><td><strong>About</strong></td><td>Shows version, author and licence information; in the standalone app, a button opens the third-party licences.</td></tr>
         <tr><td><strong>Show Tips</strong></td><td>Opens a scrollable tips dialog with usage hints.</td></tr>
         <tr><td><strong>List shortcuts</strong></td><td>Opens a dialog listing all keyboard shortcuts.</td></tr>
         <tr><td><strong>Show color-blind assistant</strong></td><td>Launches a tool to preview and adjust figure colors for color-vision deficiencies. See <a href="#colorblind">Color-blind assistant</a>.</td></tr>
+        <tr><td><strong>Preview figure under colour-blindness…</strong></td><td>Shows the whole figure as a deuteranope, protanope or tritanope would see it.</td></tr>
         <tr><td><strong>User Guide</strong></td><td>Opens this user guide in your default web browser.</td></tr>
         <tr><td><strong>▶ Beginner Tutorial</strong></td><td>Starts a step-by-step interactive tutorial covering the core workflow: drop images, arrange rows, resize, add a scale bar and lettering, then save.</td></tr>
         <tr><td><strong>▶ Medium Tutorial</strong></td><td>Starts an intermediate interactive tutorial covering .pyf files, labels above/below images, text annotations, and templates.</td></tr>
         <tr><td><strong>▶ Advanced Tutorial</strong></td><td>Starts an advanced interactive tutorial with expert-level tips and workflows. The tutorial panel appears at the bottom-right of the window and can be dragged to any position.</td></tr>
+        <tr><td><strong>▶ Publication &amp; QC Tutorial</strong></td><td>Makes a finished figure journal-ready: the Annotations batch tools, the whole QC menu, a caption, and the PDF, PDF + LaTeX and print-ready CMYK exports.</td></tr>
+        <tr><td><strong>▶ Sharing, Review &amp; Accessibility Tutorial</strong></td><td>Collaboration and accessibility: portable (consolidated) copies, the Review comment round-trip, fixing moved-file links, colour-blindness checks and theming.</td></tr>
+        <tr><td><strong>▶ Stacks, Channels &amp; Movies Tutorial</strong></td><td>Projections, channel split, montages, kymographs, orthogonal views, channel merges and movie export.</td></tr>
+        <tr><td><strong>▶ Automate: Drafts, Recipes &amp; Library Tutorial</strong></td><td>Draft a figure from a folder, build one from a recipe, search past figures.</td></tr>
+        <tr><td><strong>▶ Poster &amp; Photo Album Tutorial</strong></td><td>Opens the poster / collage designer and guides you through it.</td></tr>
       </table>
     </div>
   </section>
@@ -810,15 +870,68 @@
 
   <section id="export">
     <h2>Export</h2>
-    <p>PyFigures supports three export paths:</p>
+    <p>All exports are under <strong>File → Export As</strong>:</p>
     <div class="table-wrap">
       <table>
         <tr><th>Format</th><th>Menu entry</th><th>Notes</th></tr>
-        <tr><td><strong>SVG</strong></td><td>File → Export as svg</td><td>Vector format. Ideal for further editing in Inkscape or Illustrator.</td></tr>
-        <tr><td><strong>PDF</strong></td><td>File → Export as pdf</td><td>Vector format suitable for submission.</td></tr>
-        <tr><td><strong>Raster (JPG / TIFF / PNG)</strong></td><td>File → Export as… (jpg, tif, png)</td><td>A dialog lets you choose the format and DPI. TIFF is recommended for publication.</td></tr>
+        <tr><td><strong>SVG</strong></td><td>Export As → SVG</td><td>Vector format. Ideal for further editing in Inkscape or Illustrator.</td></tr>
+        <tr><td><strong>PDF</strong></td><td>Export As → PDF</td><td>Vector format suitable for submission.</td></tr>
+        <tr><td><strong>PDF + LaTeX</strong></td><td>Export As → PDF + LaTeX…</td><td>A PDF without text plus a LaTeX overlay, so labels use your document's fonts and real math.</td></tr>
+        <tr><td><strong>Raster (PNG / TIF / JPEG)</strong></td><td>Export As → PNG / TIF / JPEG</td><td>A dialog lets you choose the DPI. TIFF is recommended for publication.</td></tr>
+        <tr><td><strong>Print-ready TIFF</strong></td><td>Export As → Print-ready TIFF (CMYK)…</td><td>High-DPI CMYK (or RGB) TIFF for print submission.</td></tr>
+        <tr><td><strong>Video</strong></td><td>Export As → Video (animate time-stacks)…</td><td>Animates the figure's movies and time stacks. See <a href="#stacks">Stacks &amp; movies</a>.</td></tr>
+        <tr><td><strong>Source data bundle</strong></td><td>Export As → Source data bundle…</td><td>A folder with the rendered figure, each panel's source image or CSV, and provenance — for journals that ask for source data.</td></tr>
       </table>
     </div>
+  </section>
+
+  <section id="automation">
+    <h2>Automation: drafts, recipes, library</h2>
+    <p>
+      <strong>File → Draft figure from folder…</strong> assembles a first-pass figure from a
+      folder of images and CSVs. <strong>File → Build figure from recipe…</strong> builds a
+      figure from a short YAML or JSON file that lists rows of images (or file patterns), LUTs,
+      crops, scale bars, letters, drawings, insets, journal size, caption, checks and exports —
+      rebuild it whenever the data change. The same recipe runs from the command line
+      (<code>python -m pyfigures.recipe build fig.yaml</code>) and through the <a href="#mcp">MCP server</a>.
+      Full guide: <code>docs/RECIPES.md</code>; example: <code>docs/recipe_example.yaml</code>.
+    </p>
+    <p>
+      <strong>File → Search figure library…</strong> indexes your past figures so you can find
+      and reuse one by panel, label or caption.
+    </p>
+  </section>
+
+  <section id="stacks">
+    <h2>Stacks &amp; movies</h2>
+    <p>
+      Z stacks, time stacks and movies (<code>.mp4</code>, <code>.mov</code>, <code>.avi</code>,
+      <code>.mkv</code>, …) are added like any image. <strong>Annotations → Stack views</strong>
+      turns the selected stack into a montage of frames, a channel split, a kymograph along a
+      line, or orthogonal views (XZ / YZ).
+    </p>
+    <p>
+      <strong>File → Export As → Video…</strong> animates every movie and time stack of the
+      figure. Choose <code>.mp4</code> for a file that plays everywhere, including QuickTime,
+      Safari, Keynote and PowerPoint on a Mac (H.264). <code>.webm</code> (VP9) is for web pages.
+    </p>
+    <div class="callout">
+      Video support uses PyAV, which brings its own copy of ffmpeg — nothing else to install.
+      If it is missing, PyFigures offers to install it (<code>pip install av</code>) the first time
+      you add a movie or export a video. The standalone apps already include it (on Apple Silicon
+      Macs they need macOS 14 or newer). A movie too long for the memory is loaded keeping every
+      k-th frame.
+    </div>
+  </section>
+
+  <section id="mcp">
+    <h2>MCP server</h2>
+    <p>
+      PyFigures ships an MCP server: connected to an MCP client such as Claude, it builds, edits,
+      checks and exports figures from plain-language requests (install with
+      <code>pip install pyfigures[ai]</code>). Every menu feature has an equivalent tool.
+      Setup and tool list: <code>docs/MCP_SERVER.md</code>.
+    </p>
   </section>
 
   <section id="templates">
@@ -837,6 +950,7 @@
     </ol>
     <div class="callout">
       Templates are perfect for generating sets of figures that share the same layout — e.g. the same experiment repeated across multiple conditions.
+      A recipe can fill a template too (<code>template:</code> + <code>fill:</code>, see <code>docs/RECIPES.md</code>).
     </div>
   </section>
 

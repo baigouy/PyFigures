@@ -63,7 +63,7 @@ Three equivalent ways:
 |---|---|
 | **Command line** | `python -m pyfigures.recipe build fig1.yaml` |
 | **GUI** | *File → Build figure from recipe…* — builds, then opens the figure |
-| **MCP / AI assistant** | `build_figure_from_recipe("fig1.yaml")` |
+| **MCP server** | `build_figure_from_recipe("fig1.yaml")` |
 
 Command-line options:
 
@@ -1170,7 +1170,7 @@ fold them back into the recipe (most have a recipe key).
 ## 26. Same features in the GUI and the MCP server
 
 Everything a recipe does can also be done in the GUI and through the MCP
-server (AI assistants), and edited afterwards in either.
+server, and edited afterwards in either.
 
 | Recipe | GUI | MCP tool |
 |---|---|---|

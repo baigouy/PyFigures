@@ -464,7 +464,7 @@ grouping from the start.
 
 MCP: `list_poster_layouts` (names/descriptions/slot counts) and
 `apply_poster_layout(poster_path, layout_name, indices, margin_mm)` — so an
-AI assistant can compose a whole page from a folder of photos by picking a
+MCP client can compose a whole page from a folder of photos by picking a
 layout name that matches the photo count. The catalog itself lives in
 `pyfigures/poster/poster_templates.py` (`LAYOUTS`, `list_layouts`,
 `apply_layout`) if you want to see or extend the slot definitions.
@@ -493,7 +493,7 @@ if there are more photos than slots.
 MCP/CLI: `sketch_poster_layout(poster_path, layout_name, margin_mm)` creates
 the empty slots; `fill_poster_template_slot(poster_path, index, image_path)`
 fills one by index (see `list_poster_images`'s `is_template` field to find
-which ones are still empty). This lets an AI assistant lay a page out first
+which ones are still empty). This lets an MCP client lay a page out first
 and decide/receive which photo goes where afterwards, one call per slot —
 just like looping `fill_template` over a main-editor template.
 

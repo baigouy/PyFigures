@@ -42,11 +42,29 @@ jobs:
       - name: Install pyfigures and its dependencies
         run: pip install ".[video]"
 
+      # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
+      # distributed under the GPLv3: licence texts go inside the bundle and the
+      # corresponding source is attached to the release (see the release job).
+      - name: Collect licence notices
+        run: python packaging/collect_licenses.py notices third_party
+
       # -----------------------------------------------------------------------
       # Build
       # -----------------------------------------------------------------------
       - name: Build with PyInstaller
         run: pyinstaller pyfigures.spec
+
+      - name: Licence files next to the executable too (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cp third_party/THIRD_PARTY_LICENSES.txt third_party/SOURCES.md dist/PyFigures/
+
+      - name: Upload the source manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources-${{ matrix.artifact_name }}
+          path: third_party/sources.json
+          retention-days: 30
 
       # -----------------------------------------------------------------------
       # Package — Windows
@@ -107,13 +125,33 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all artifacts
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download the executables
         uses: actions/download-artifact@v4
         with:
+          pattern: PyFigures-*
           path: artifacts
+
+      - name: Download the source manifests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sources-*
+          path: manifests
+
+      # GPLv3 section 6(d): the corresponding source is offered from the same
+      # place as the executables — every bundled component's source archive
+      # (Python packages, Qt, FFmpeg and its libraries + their build scripts)
+      - name: Gather the corresponding source
+        run: python packaging/collect_licenses.py sources corresponding-source manifests/*/sources.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            corresponding-source/*.tar
           generate_release_notes: true
+          body: |
+            The executables are distributed under the GNU GPL v3 (they include PyQt6, Qt and FFmpeg with x264/x265); PyFigures' own source code is BSD-2-Clause. Licence texts are inside each app (Help → About → Third-party licences). The complete corresponding source of everything bundled is attached below (`corresponding-source-*.tar`), together with this repository's source code.

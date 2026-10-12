@@ -6,3 +6,6 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+# generated at build time by packaging/collect_licenses.py
+third_party/
+corresponding-source/

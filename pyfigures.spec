@@ -15,6 +15,15 @@ datas += collect_data_files('qtawesome')          # icon font files
 datas += collect_data_files('matplotlib')
 datas += collect_data_files('skimage')
 datas += collect_data_files('sklearn')
+# Licence texts + where the corresponding source is (GPLv3: the bundle includes
+# PyQt6, Qt and FFmpeg/x264); made by packaging/collect_licenses.py, shown by
+# Help > About
+import os
+for _f in ('THIRD_PARTY_LICENSES.txt', 'SOURCES.md'):
+    if os.path.isfile(os.path.join('third_party', _f)):
+        datas.append((os.path.join('third_party', _f), 'third_party'))
+    else:
+        raise SystemExit('run "python packaging/collect_licenses.py notices third_party" first')
 
 # ---------------------------------------------------------------------------
 # Hidden imports that PyInstaller cannot detect automatically

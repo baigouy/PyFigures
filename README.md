@@ -208,8 +208,6 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **read-lif**            | Reads Leica .lif files                                      | https://pypi.org/project/read-lif/            | GPL v3             |
 | **czifile**             | Reads Zeiss .czi files                                      | https://pypi.org/project/czifile/             | BSD (BSD-3-Clause) |
 | **tifffile**            | Reads .tiff files (also reads Zeiss .lsm files)             | https://pypi.org/project/tifffile/            | BSD                |
-| **python-bioformats**               | A library to open scientific images                         | https://pypi.org/project/python-bioformats/               | GPLv2                |
-| **python-javabridge**               | A library to run java executables (required for bioformats) | https://pypi.org/project/python-javabridge/               | BSD                |
 | **scikit-image**        | Image processing                                            | https://pypi.org/project/scikit-image/        | BSD (Modified BSD) |
 | **scipy**               | Great library to work with numpy arrays                     | https://pypi.org/project/scipy/               | BSD                | 
 | **scikit-learn**               | Great library for machine learning                          | https://pypi.org/project/scikit-learn/               | BSD                | 
@@ -219,8 +217,35 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **urllib3**             | Model architecture and trained models download              | https://pypi.org/project/urllib3/             | MIT                |
 | **qtawesome**           | Elegant icons for PyQT/PySide                                       | https://pypi.org/project/QtAwesome/           | MIT                |
 | **pandas**              | Data analysis toolkit                                       | https://pypi.org/project/pandas/              | BSD (BSD-3-Clause) |
-| **numba**               | GPU acceleration of numpy ops                               | https://pypi.org/project/numba/               | BSD                |
 | **roifile**               | A library to read ImageJ ROIs                               | https://pypi.org/project/roifile/               | BSD 3-Clause                |
+| **Qt** (PyQt6-Qt6)      | The Qt libraries under PyQt6                                | https://www.qt.io/                            | LGPL v3            |
+| **pyqt6-plugins**       | Qt image-format plugins (TIFF, ...)                         | https://pypi.org/project/pyqt6-plugins/       | GPL v3             |
+| **batoolset**           | Image I/O and tools (same author)                           | https://pypi.org/project/batoolset/           | BSD                |
+| **elasticdeform**       | Image deformation                                           | https://pypi.org/project/elasticdeform/       | BSD                |
+| **imagecodecs**         | Image compression codecs (TIFF, ...)                        | https://pypi.org/project/imagecodecs/         | BSD 3-Clause       |
+| **prettytable**         | Text tables                                                 | https://pypi.org/project/prettytable/         | BSD 3-Clause       |
+| **pyperclip**           | Clipboard                                                   | https://pypi.org/project/pyperclip/           | BSD                |
+| **pyautogui**           | Screen helpers                                              | https://pypi.org/project/PyAutoGUI/           | BSD                |
+| **psutil**              | Memory checks                                               | https://pypi.org/project/psutil/              | BSD 3-Clause       |
+| **Deprecated**          | Deprecation warnings                                        | https://pypi.org/project/Deprecated/          | MIT                |
+| **Requests**            | Downloads                                                   | https://pypi.org/project/requests/            | Apache 2.0         |
+
+Optional (installed only if you ask for them):
+
+| Library name            | Use                                                         | Link                                          | License            |
+|-------------------------|-------------------------------------------------------------|-----------------------------------------------|--------------------|
+| **PyAV** (`av`, `pyfigures[video]`) | Reads videos, writes H.264 / VP9 videos         | https://pypi.org/project/av/                  | BSD 3-Clause       |
+| **FFmpeg** (inside PyAV) | Video codecs; this build includes **x264 and x265** (GPL v2+) and LGPL/BSD codec libraries | https://ffmpeg.org/ | **GPL v3** as built |
+| **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
+| **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
+| **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
+| **pyimagej / scyjava / JPype** | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
+| **python-bioformats / python-javabridge** | Older Bio-Formats reader                  | https://pypi.org/project/python-bioformats/   | GPL v2 / BSD       |
+
+### Licence of PyFigures and of the standalone executables
+
+- **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6, read-lif and pyqt6-plugins are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
+- **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built.
 
 # Other Figure-Making Software
 
