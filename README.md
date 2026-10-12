@@ -86,7 +86,6 @@ Perform the following steps **only once** to set up your environment:
     
     This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video and the MCP server), use `pip install -U pyfigures[all]` instead.
     
-    **Note:** if you received errors, you may not have a compiler installed (see the Troubleshooting section after)
 
 7. **Optional: Install video support (reading movies, exporting H.264 videos):**
     
@@ -131,70 +130,6 @@ Alternatively, you can install the software as a standalone executable. This doe
 
 **First launch on a Mac:** the app is not signed by Apple, so macOS refuses to open it the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once).
 
-## Troubleshooting Installation Issues
-
-If you encounter **issues** related to installing the **python-javabridge** package, follow these steps:
-
-1. Prerequisites for All Systems
-   Before installing python-javabridge, ensure the following:
-
-   - **Ensure a C Compiler is Available**:
-
-      - The package requires a C compiler to build C extensions. Depending on your operating system, this will be different.
-
-
-2. **Windows**-Specific Instructions
-
-   If you are on Windows and encounter the error Microsoft Visual C++ 14.0 or greater is required, follow these steps to resolve it:
-
-   - **Download the Build Tools**:
-      - Visit the [Microsoft C++ Build Tools download page](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
-
-   - **Run the installer**.
-     - During the installation process, **select the "Desktop development with C++" workload**.
-
-
-   - Verify Installation:
-
-      - Open a command prompt and run '**cl**'. If the command is recognized and provides output, the installation was successful.
-   
-
-   - **Retry Installation**:
-
-       - After installing the build tools, try to install the python-javabridge package again:
-
-         ```sh
-         pip install python-javabridge
-         ```
-
-3. **MacOS and Linux**
-
-   For MacOS and Linux systems, ensure you have the necessary build tools:
-
-   - **MacOS**:
-   
-      Install Xcode Command Line Tools by running:
-   
-      ```sh
-      xcode-select --install
-      ```
-
-   - **Linux**:
-
-      Install build-essential (on Debian-based systems) or the equivalent development tools package for your distribution. For example, on Ubuntu, you can run:
-      
-      ```sh
-      sudo apt-get install build-essential
-      ```
-
-   **After ensuring that a suitable compiler is available, retry the installation**:
-
-      ```sh
-      pip install python-javabridge
-      ```
-
-   By following these steps, you should be able to resolve issues and successfully install python-javabridge. If you continue to experience problems, consult the relevant documentation or seek support from the community
-   
 # Third party libraries
 
 Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br> <font color='red'>**IMPORTANTLY: if you disagree with any license below, <u>please uninstall PyFigures</u>**.<br></font>
@@ -242,7 +177,6 @@ Optional (installed only if you ask for them):
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
 | **pyimagej / scyjava / JPype** (`pyfigures[bioformats]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
-| **python-bioformats / python-javabridge** | Older Bio-Formats reader                  | https://pypi.org/project/python-bioformats/   | GPL v2 / BSD       |
 
 ### Licence of PyFigures and of the standalone executables
 
