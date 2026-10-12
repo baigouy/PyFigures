@@ -1,0 +1,62 @@
+{
+ "rgb_odd_size.mp4": {
+  "frames": 4,
+  "fps": 10,
+  "width": 322,
+  "height": 242,
+  "means": [
+   30.93,
+   90.93,
+   150.93,
+   210.93
+  ]
+ },
+ "rgb_odd_size.mov": {
+  "frames": 4,
+  "fps": 10,
+  "width": 322,
+  "height": 242,
+  "means": [
+   30.93,
+   90.93,
+   150.93,
+   210.93
+  ]
+ },
+ "grey.mp4": {
+  "frames": 4,
+  "fps": 10,
+  "width": 160,
+  "height": 120,
+  "means": [
+   30.94,
+   90.94,
+   150.94,
+   210.94
+  ]
+ },
+ "full_hd.mp4": {
+  "frames": 4,
+  "fps": 10,
+  "width": 1920,
+  "height": 1080,
+  "means": [
+   30.94,
+   90.94,
+   150.94,
+   210.94
+  ]
+ },
+ "pyfigures_export.mp4": {
+  "frames": 4,
+  "fps": 25.0,
+  "width": 512,
+  "height": 384,
+  "means": [
+   21.66,
+   85.38,
+   149.27,
+   212.87
+  ]
+ }
+}

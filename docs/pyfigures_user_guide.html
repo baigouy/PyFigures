@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PyFigures – User Guide</title>
+  <style>
+    /* ── Reset & base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      color: #1a1a2e;
+      background: #f7f8fc;
+    }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .page-wrapper { display: flex; min-height: 100vh; }
+
+    nav#sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      width: 240px;
+      min-width: 240px;
+      overflow-y: auto;
+      background: #1a1a2e;
+      color: #c8d0e7;
+      padding: 24px 0 40px;
+    }
+    nav#sidebar .logo {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      padding: 0 20px 20px;
+      border-bottom: 1px solid #2e2e4a;
+      margin-bottom: 12px;
+    }
+    nav#sidebar .logo span { color: #6c9fff; }
+    nav#sidebar ul { list-style: none; }
+    nav#sidebar li a {
+      display: block;
+      padding: 6px 20px;
+      color: #a0aec0;
+      text-decoration: none;
+      font-size: 0.875rem;
+      border-left: 3px solid transparent;
+      transition: color .15s, border-color .15s, background .15s;
+    }
+    nav#sidebar li a:hover,
+    nav#sidebar li a.active {
+      color: #fff;
+      border-left-color: #6c9fff;
+      background: rgba(108,159,255,.08);
+    }
+    nav#sidebar .section-label {
+      padding: 16px 20px 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #4a5568;
+    }
+
+    main {
+      flex: 1;
+      max-width: 960px;
+      padding: 48px 56px;
+    }
+
+    /* ── Typography ────────────────────────────────────────────── */
+    h1 { font-size: 2rem; margin-bottom: .4em; color: #1a1a2e; }
+    h2 {
+      font-size: 1.4rem;
+      margin: 2.4em 0 .6em;
+      padding-bottom: .3em;
+      border-bottom: 2px solid #e2e8f0;
+      color: #1a1a2e;
+    }
+    h3 { font-size: 1.05rem; margin: 1.6em 0 .4em; color: #2d3748; }
+    h4 { font-size: .95rem; margin: 1.2em 0 .3em; color: #4a5568; }
+    p  { margin-bottom: .9em; }
+    a  { color: #4a7fd4; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong { color: #2d3748; }
+
+    /* ── Screenshot figures ────────────────────────────────────── */
+    figure {
+      margin: 1.4em 0 2em;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    figure.placeholder {
+      background: repeating-linear-gradient(
+        45deg,
+        #f0f4ff,
+        #f0f4ff 10px,
+        #e8eeff 10px,
+        #e8eeff 20px
+      );
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #718096;
+      font-size: .85rem;
+    }
+    figure.placeholder .ph-icon { font-size: 2.5rem; }
+    figcaption {
+      padding: 8px 14px;
+      font-size: .82rem;
+      color: #718096;
+      background: #f7f8fc;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* ── Tables ────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin: 1em 0 1.6em; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    th {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 9px 14px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td { padding: 8px 14px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    tr:nth-child(even) td { background: #f7f9ff; }
+    tr:hover td { background: #eef2ff; }
+    kbd {
+      background: #2d3748;
+      color: #e2e8f0;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: monospace;
+      font-size: .82rem;
+      white-space: nowrap;
+    }
+
+    /* ── Callouts ──────────────────────────────────────────────── */
+    .callout {
+      border-left: 4px solid #6c9fff;
+      background: #eef3ff;
+      padding: 10px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 1em 0 1.4em;
+      font-size: .9rem;
+    }
+    .callout.warn {
+      border-color: #f6ad55;
+      background: #fffaf0;
+    }
+    .callout.danger {
+      border-color: #fc8181;
+      background: #fff5f5;
+    }
+
+    /* ── DnD flow diagram ──────────────────────────────────────── */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      align-items: stretch;
+      margin: 1.2em 0 1.8em;
+      font-size: .85rem;
+    }
+    .flow-step {
+      background: #fff;
+      border: 1px solid #c7d2fe;
+      border-radius: 8px;
+      padding: 12px 16px;
+      min-width: 140px;
+      flex: 1;
+      text-align: center;
+    }
+    .flow-step strong { display: block; color: #3730a3; margin-bottom: 4px; }
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      padding: 0 6px;
+      color: #a0aec0;
+      font-size: 1.4rem;
+    }
+
+    /* ── Menu tree ─────────────────────────────────────────────── */
+    .menu-tree { list-style: none; margin: .6em 0 1.4em 0; }
+    .menu-tree > li {
+      margin-bottom: .2em;
+    }
+    .menu-tree .menu-name {
+      display: inline-block;
+      background: #1a1a2e;
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 10px;
+      font-weight: 600;
+      font-size: .85rem;
+      margin-bottom: 4px;
+    }
+    .menu-tree ul { list-style: none; padding-left: 20px; border-left: 2px solid #e2e8f0; margin: 4px 0 8px; }
+    .menu-tree ul li { padding: 3px 0 3px 10px; font-size: .88rem; }
+    .menu-tree ul li .action { color: #2d3748; font-weight: 500; }
+    .menu-tree ul li .desc { color: #718096; }
+    .menu-tree ul li .shortcut { float: right; }
+    .sep-line { border: none; border-top: 1px dashed #e2e8f0; margin: 4px 0; }
+
+    /* ── Context menu options ──────────────────────────────────── */
+    .ctx-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      margin: 1em 0 1.6em;
+    }
+    .ctx-card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    }
+    .ctx-card h4 { margin: 0 0 6px; color: #3730a3; font-size: .9rem; }
+    .ctx-card p { margin: 0; font-size: .83rem; color: #4a5568; }
+
+    /* ── Toolbar strip ─────────────────────────────────────────── */
+    .toolbar-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 1em 0 1.6em;
+      align-items: center;
+      background: #2d3748;
+      padding: 10px 14px;
+      border-radius: 8px;
+    }
+    .tb-btn {
+      background: #4a5568;
+      color: #e2e8f0;
+      border-radius: 5px;
+      padding: 4px 10px;
+      font-size: .8rem;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .tb-sep { width: 1px; background: #4a5568; height: 24px; margin: 0 4px; }
+    .tb-label { color: #a0aec0; font-size: .8rem; }
+    .tb-widget {
+      background: #fff;
+      color: #1a1a2e;
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: .8rem;
+    }
+
+    /* ── Section anchors ───────────────────────────────────────── */
+    section { scroll-margin-top: 24px; }
+
+    /* ── Hero ──────────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #1a1a2e 0%, #2d3561 100%);
+      color: #fff;
+      border-radius: 12px;
+      padding: 36px 40px;
+      margin-bottom: 2.4em;
+    }
+    .hero h1 { color: #fff; margin-bottom: .3em; }
+    .hero p { color: #a0b4d0; margin: 0; font-size: 1rem; }
+    .hero .badge {
+      display: inline-block;
+      background: #6c9fff22;
+      border: 1px solid #6c9fff55;
+      color: #a0c4ff;
+      border-radius: 20px;
+      padding: 2px 12px;
+      font-size: .78rem;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="page-wrapper">
+
+<!-- ══════════════════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="logo">Py<span>Figures</span> Guide</div>
+  <ul>
+    <li class="section-label">Getting started</li>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#window-layout">Window layout</a></li>
+
+    <li class="section-label">Interface</li>
+    <li><a href="#toolbar">Toolbar</a></li>
+    <li><a href="#menus">Menu bar</a></li>
+    <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+    <li><a href="#status-bar">Status bar</a></li>
+
+    <li class="section-label">Drag &amp; Drop</li>
+    <li><a href="#dnd-overview">How DnD works</a></li>
+    <li><a href="#dnd-pyf">Dropping .pyf files</a></li>
+    <li><a href="#dnd-images">Dropping images</a></li>
+    <li><a href="#dnd-menu">DnD context menu</a></li>
+    <li><a href="#dnd-template">Dropping onto templates</a></li>
+
+    <li class="section-label">Context menus</li>
+    <li><a href="#ctx-canvas">Canvas right-click</a></li>
+    <li><a href="#ctx-image">Image right-click</a></li>
+    <li><a href="#ctx-group">Group right-click</a></li>
+
+    <li class="section-label">Features</li>
+    <li><a href="#lettering">Auto-lettering</a></li>
+    <li><a href="#undo-redo">Undo / Redo</a></li>
+    <li><a href="#export">Export</a></li>
+    <li><a href="#templates">Templates</a></li>
+    <li><a href="#consolidate">Consolidation</a></li>
+    <li><a href="#annotations">Annotations</a></li>
+    <li><a href="#scalebar">Scale bars</a></li>
+    <li><a href="#colorblind">Color-blind assistant</a></li>
+    <li><a href="#ui-theme">UI theme</a></li>
+  </ul>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════════════ -->
+<main>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="badge">User Guide</div>
+    <h1>PyFigures</h1>
+    <p>A scientific figure assembly tool — compose, annotate, and export publication-ready figures by dragging and dropping images.</p>
+  </div>
+
+  <!-- ── OVERVIEW ─────────────────────────────────────────────── -->
+  <section id="overview">
+    <h2>Overview</h2>
+    <p>
+      <strong>PyFigures</strong> lets you build multi-panel scientific figures without writing code.
+      You drag images onto the canvas, arrange them into rows, columns, or panels, add annotations
+      (scale bars, ROIs, text labels, lettering), and export as SVG, PDF, or raster.
+    </p>
+    <p>
+      The core workflow is:
+    </p>
+    <div class="flow">
+      <div class="flow-step"><strong>1. Drop files</strong>Drag images or .pyf files onto the window</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>2. Arrange</strong>Choose row / column / panel from the pop-up menu</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>3. Annotate</strong>Add scale bars, text, ROIs via right-click</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>4. Export</strong>Save as .pyf, SVG, PDF, or TIFF/PNG/JPG</div>
+    </div>
+  </section>
+
+  <!-- ── WINDOW LAYOUT ────────────────────────────────────────── -->
+  <section id="window-layout">
+    <h2>Window layout</h2>
+
+    <figure>
+      <img src="screenshots/main_window.png" alt="Main window" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 1 — Main window. Run <code>docs/capture_screenshots.py</code> to generate this image.</figcaption>
+    </figure>
+    <div class="callout">
+      Run <code>PYTHONPATH=..:../BAtools_pkg python3 docs/capture_screenshots.py</code> from the project root to auto-generate all screenshots in <code>docs/screenshots/</code>.
+    </div>
+
+    <p>The window is divided into four zones:</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Zone</th><th>Description</th></tr>
+        <tr><td><strong>Menu bar</strong></td><td>File, Selection, Lettering, Annotations, Template, View, Help menus.</td></tr>
+        <tr><td><strong>Toolbar</strong></td><td>Quick-access buttons, figure-width spinner, unit selector, spacing, auto-lettering toggle.</td></tr>
+        <tr><td><strong>Canvas</strong></td><td>Scrollable drawing area. Drag images here; click to select shapes; right-click for context menus.</td></tr>
+        <tr><td><strong>Status bar</strong></td><td>Bottom strip. Shows loading messages and a progress bar during image loading.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── TOOLBAR ──────────────────────────────────────────────── -->
+  <section id="toolbar">
+    <h2>Toolbar</h2>
+
+    <figure>
+      <img src="screenshots/toolbar.png" alt="Toolbar" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 2 — Toolbar strip.</figcaption>
+    </figure>
+
+    <div class="toolbar-strip">
+      <span class="tb-btn">📂 Open</span>
+      <span class="tb-btn">🗒 New</span>
+      <span class="tb-sep"></span>
+      <span class="tb-btn">💾 Save</span>
+      <span class="tb-btn">⬆ Export raster</span>
+      <span class="tb-sep"></span>
+      <span class="tb-btn">↩ Undo</span>
+      <span class="tb-btn">↪ Redo</span>
+      <span class="tb-sep"></span>
+      <span class="tb-label">Figure width:</span>
+      <span class="tb-widget">512 px</span>
+      <span class="tb-widget">≈18.06 cm</span>
+      <span class="tb-widget">Cm ▾</span>
+      <span class="tb-btn">✓</span>
+      <span class="tb-sep"></span>
+      <span class="tb-label">Y Spacing:</span>
+      <span class="tb-widget">3</span>
+      <span class="tb-sep"></span>
+      <span class="tb-widget">☑ Auto Lettering</span>
+      <span class="tb-widget">a</span>
+      <span class="tb-sep"></span>
+      <span class="tb-widget">☐ Page Bounds</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <tr><th>Control</th><th>Action</th></tr>
+        <tr><td><strong>Open</strong></td><td>Open a <code>.pyf</code> file and append its contents to the current canvas.</td></tr>
+        <tr><td><strong>New</strong></td><td>Clear the canvas and start a new blank figure.</td></tr>
+        <tr><td><strong>Save</strong></td><td>Save the current figure to its <code>.pyf</code> file. Uses <kbd>Ctrl S</kbd>.</td></tr>
+        <tr><td><strong>Export raster</strong></td><td>Export as JPG, TIFF, or PNG (see <a href="#export">Export</a>).</td></tr>
+        <tr><td><strong>Undo / Redo</strong></td><td>Step through the edit history. <kbd>Ctrl Z</kbd> / <kbd>Ctrl Shift Z</kbd>.</td></tr>
+        <tr><td><strong>Figure width</strong></td><td>Set the pixel width of the selected element(s). The label next to it shows the equivalent in the chosen unit.</td></tr>
+        <tr><td><strong>Unit selector</strong></td><td>Switch the display unit between <em>Cm</em> and <em>Inches</em>.</td></tr>
+        <tr><td><strong>✓ (Apply size)</strong></td><td>Apply the width value to the current selection.</td></tr>
+        <tr><td><strong>Y Spacing</strong></td><td>Vertical gap (pixels) between elements in the canvas layout.</td></tr>
+        <tr><td><strong>Auto Lettering</strong></td><td>When checked, panels are automatically labelled a, b, c… starting from the letter in the adjacent field.</td></tr>
+        <tr><td><strong>Page Bounds</strong></td><td>Toggle a page-size overlay on the canvas. Opens a dialog to set width and height.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── MENU BAR ─────────────────────────────────────────────── -->
+  <section id="menus">
+    <h2>Menu bar</h2>
+
+    <!-- File -->
+    <h3>File menu</h3>
+    <figure>
+      <img src="screenshots/menu_file.png" alt="File menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 3 — File menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th><th>Shortcut</th></tr>
+        <tr><td><strong>Open</strong></td><td>Opens a file dialog to load a <code>.pyf</code> file and append it to the canvas.</td><td></td></tr>
+        <tr><td><strong>New</strong></td><td>Clears the canvas and resets the current figure.</td><td></td></tr>
+        <tr><td><strong>Save</strong></td><td>Saves the figure to the current <code>.pyf</code> file. Prompts for a filename on first save.</td><td><kbd>Ctrl S</kbd></td></tr>
+        <tr><td><strong>Save As…</strong></td><td>Saves the figure to a new filename.</td><td></td></tr>
+        <tr><td><strong>Save And Consolidate…</strong></td><td>Saves the figure <em>and</em> copies all referenced image files into a <code>.files</code> folder alongside the <code>.pyf</code>, making the project fully portable. See <a href="#consolidate">Consolidation</a>.</td><td></td></tr>
+        <tr><td><strong>Export as svg</strong></td><td>Exports the entire figure as a scalable SVG file.</td><td></td></tr>
+        <tr><td><strong>Export as pdf</strong></td><td>Exports the figure as a PDF.</td><td></td></tr>
+        <tr><td><strong>Export as… (jpg, tif, png)</strong></td><td>Exports the figure as a raster image. A dialog lets you choose format and resolution.</td><td></td></tr>
+      </table>
+    </div>
+
+    <!-- Selection -->
+    <h3>Selection menu</h3>
+    <figure>
+      <img src="screenshots/menu_selection.png" alt="Selection menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 4 — Selection menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th><th>Shortcut</th></tr>
+        <tr><td><strong>Reset Selection</strong></td><td>Deselects everything on the canvas.</td><td><kbd>Esc</kbd></td></tr>
+        <tr><td><strong>Duplicate Selection</strong></td><td>Creates a copy of the currently selected element(s).</td><td><kbd>Ctrl D</kbd></td></tr>
+      </table>
+    </div>
+
+    <!-- Lettering -->
+    <h3>Lettering menu</h3>
+    <figure>
+      <img src="screenshots/menu_lettering.png" alt="Lettering menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 5 — Lettering menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Parameters</strong></td><td>Opens the lettering configuration dialog: set the starting letter, case (upper/lower), font, and color for automatic panel labels. See <a href="#lettering">Auto-lettering</a>.</td></tr>
+      </table>
+    </div>
+
+    <!-- Annotations -->
+    <h3>Annotations menu</h3>
+    <figure>
+      <img src="screenshots/menu_annotations.png" alt="Annotations menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 6 — Annotations menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Remove all annotations (ROIs, scale bars, texts, …)</strong></td><td>Removes every annotation drawn on every image in the figure.</td></tr>
+        <tr><td><strong>Remove all scale bars</strong></td><td>Removes only scale bar annotations.</td></tr>
+        <tr><td><strong>Remove all texts</strong></td><td>Removes only text annotations.</td></tr>
+        <tr><td><strong>Remove all ROIs</strong></td><td>Removes all drawn ROI shapes (circles, rectangles, polygons, lines, freehand, points).</td></tr>
+        <tr><td><strong>Remove all insets</strong></td><td>Removes inset images embedded in other images.</td></tr>
+      </table>
+    </div>
+
+    <!-- Template -->
+    <h3>Template menu</h3>
+    <figure>
+      <img src="screenshots/menu_template.png" alt="Template menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 7 — Template menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Convert figure to template</strong></td><td>Replaces all image content with placeholder slots, keeping the layout, annotations, and styling intact. Drop new images onto the template slots to fill them. Ideal for reusing a figure layout across many conditions. See <a href="#templates">Templates</a>.</td></tr>
+      </table>
+    </div>
+
+    <!-- View -->
+    <h3>View menu</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>Theme → Light</strong></td><td>Switches the application to the default light color scheme. The choice is remembered across sessions.</td></tr>
+        <tr><td><strong>Theme → Dark</strong></td><td>Switches the application to a dark color scheme (dark-gray backgrounds, light text). The figure/canvas area turns near-black. The choice is remembered across sessions.</td></tr>
+      </table>
+    </div>
+    <div class="callout">
+      The selected theme is stored in your user settings and applied automatically the next time you launch PyFigures.
+    </div>
+
+    <!-- Help -->
+    <h3>Help menu</h3>
+    <figure>
+      <img src="screenshots/menu_help.png" alt="Help menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 8 — Help menu.</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Entry</th><th>Description</th></tr>
+        <tr><td><strong>About</strong></td><td>Shows version, author, and license information.</td></tr>
+        <tr><td><strong>Show Tips</strong></td><td>Opens a scrollable tips dialog with usage hints.</td></tr>
+        <tr><td><strong>List shortcuts</strong></td><td>Opens a dialog listing all keyboard shortcuts.</td></tr>
+        <tr><td><strong>Show color-blind assistant</strong></td><td>Launches a tool to preview and adjust figure colors for color-vision deficiencies. See <a href="#colorblind">Color-blind assistant</a>.</td></tr>
+        <tr><td><strong>User Guide</strong></td><td>Opens this user guide in your default web browser.</td></tr>
+        <tr><td><strong>▶ Beginner Tutorial</strong></td><td>Starts a step-by-step interactive tutorial covering the core workflow: drop images, arrange rows, resize, add a scale bar and lettering, then save.</td></tr>
+        <tr><td><strong>▶ Medium Tutorial</strong></td><td>Starts an intermediate interactive tutorial covering .pyf files, labels above/below images, text annotations, and templates.</td></tr>
+        <tr><td><strong>▶ Advanced Tutorial</strong></td><td>Starts an advanced interactive tutorial with expert-level tips and workflows. The tutorial panel appears at the bottom-right of the window and can be dragged to any position.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── SHORTCUTS ────────────────────────────────────────────── -->
+  <section id="shortcuts">
+    <h2>Keyboard shortcuts</h2>
+    <figure>
+      <img src="screenshots/dialog_shortcuts.png" alt="Shortcuts dialog" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 9 — Shortcuts dialog (Help → List shortcuts).</figcaption>
+    </figure>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Shortcut</th><th>Action</th></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Deselect / clear current selection</td></tr>
+        <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete the selected element</td></tr>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>Reorder the selected element within its parent group, or nudge its position</td></tr>
+        <tr><td><kbd>Ctrl A</kbd></td><td>Select all elements</td></tr>
+        <tr><td><kbd>Ctrl D</kbd> / <kbd>Ctrl V</kbd></td><td>Duplicate the current selection</td></tr>
+        <tr><td><kbd>Ctrl S</kbd></td><td>Save the figure</td></tr>
+        <tr><td><kbd>Ctrl Z</kbd></td><td>Undo</td></tr>
+        <tr><td><kbd>Ctrl Shift Z</kbd> / <kbd>Ctrl Y</kbd></td><td>Redo</td></tr>
+      </table>
+    </div>
+    <div class="callout">
+      On macOS replace <kbd>Ctrl</kbd> with <kbd>⌘ Cmd</kbd>.
+    </div>
+  </section>
+
+  <!-- ── STATUS BAR ───────────────────────────────────────────── -->
+  <section id="status-bar">
+    <h2>Status bar</h2>
+    <figure>
+      <img src="screenshots/status_bar.png" alt="Status bar" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 10 — Status bar with loading progress.</figcaption>
+    </figure>
+    <p>
+      The status bar at the bottom of the window shows a text message and a compact progress bar
+      during image loading. The message reads <em>Loading N/M image(s)…</em> and the bar fills as
+      each image is decoded in the background. Both are hidden when loading is complete.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       DRAG AND DROP
+  ═══════════════════════════════════════════════════════════════ -->
+  <section id="dnd-overview">
+    <h2>Drag &amp; Drop — overview</h2>
+    <p>
+      PyFigures is built around drag-and-drop. You can drop files directly onto
+      the main window from your file manager at any time. Two categories of files are handled:
+    </p>
+    <div class="ctx-grid">
+      <div class="ctx-card">
+        <h4>📄 .pyf files</h4>
+        <p>PyFigures project files. Dropped asynchronously — the window stays responsive while objects load. Multiple .pyf files can be dropped at once.</p>
+      </div>
+      <div class="ctx-card">
+        <h4>🖼 Image files</h4>
+        <p>Any raster or vector image supported by the image reader (TIFF, PNG, JPG, SVG, CZI, LIF, …). Multiple images can be dropped together.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      Dropping a mix of <code>.pyf</code> files and images in the same drag operation is not supported. Drop them separately.
+    </div>
+  </section>
+
+  <section id="dnd-pyf">
+    <h2>Dropping .pyf files</h2>
+    <div class="flow">
+      <div class="flow-step"><strong>Drop .pyf</strong>One or more .pyf files onto the window</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Security check</strong>If the file contains a custom script, a warning dialog appears</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Background parse</strong>XML is read in a worker thread — canvas stays usable</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Layout appears</strong>Groups and shapes appear instantly (images load progressively)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Images fill in</strong>Progress bar shows N/M as each image decodes</div>
+    </div>
+    <div class="callout warn">
+      <strong>Security warning:</strong> files that contain a <code>custom_loading_script</code> field trigger a confirmation dialog before loading. Only accept files from sources you trust.
+    </div>
+    <div class="callout">
+      <strong>Tip:</strong> you can drop a <code>.pyf</code> file while other images are still loading — the queues are merged automatically.
+    </div>
+  </section>
+
+  <section id="dnd-images">
+    <h2>Dropping image files</h2>
+    <div class="flow">
+      <div class="flow-step"><strong>Drop images</strong>One or more image files</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Background load</strong>Pixel data read in a worker thread</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Context menu</strong>Choose how to arrange the images</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Arranged</strong>Images added to canvas in the chosen layout</div>
+    </div>
+    <p>
+      After the images are loaded a small pop-up context menu appears near the drop location.
+      The available options depend on how many files were dropped and where they landed.
+    </p>
+  </section>
+
+  <section id="dnd-menu">
+    <h2>DnD context menu</h2>
+    <figure>
+      <img src="screenshots/dnd_context_menu.png" alt="DnD context menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 11 — The pop-up menu that appears after dropping image files. Screenshot: drop images onto the canvas and capture the menu.</figcaption>
+    </figure>
+    <div class="ctx-grid">
+      <div class="ctx-card">
+        <h4>➕ Add as single image(s)</h4>
+        <p>Each dropped file becomes an independent element on the canvas — no grouping.</p>
+      </div>
+      <div class="ctx-card">
+        <h4>↔ To row</h4>
+        <p>Arranges all dropped images side-by-side in a horizontal row group. <em>(Only shown when more than one image is dropped.)</em></p>
+      </div>
+      <div class="ctx-card">
+        <h4>↕ To column</h4>
+        <p>Stacks the images vertically in a column group. <em>(Only shown when more than one image is dropped.)</em></p>
+      </div>
+      <div class="ctx-card">
+        <h4>▦ To panel</h4>
+        <p>Opens a dialog to configure the number of rows and columns, then arranges the images into a grid. <em>(Only shown when more than one image is dropped.)</em></p>
+      </div>
+      <div class="ctx-card">
+        <h4>🎯 Assign to template image</h4>
+        <p>Replaces the template slot under the cursor with the dropped image(s). Only shown when the drop lands on an existing template placeholder. See <a href="#dnd-template">Dropping onto templates</a>.</p>
+      </div>
+      <div class="ctx-card">
+        <h4>✕ Ignore</h4>
+        <p>Cancels the drop operation — nothing is added to the canvas.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="dnd-template">
+    <h2>Dropping onto template slots</h2>
+    <p>
+      When a figure has been <a href="#templates">converted to a template</a>, each image slot
+      shows a grey placeholder. Drop one or more images directly onto a placeholder to fill it:
+    </p>
+    <div class="flow">
+      <div class="flow-step"><strong>Open template .pyf</strong>A figure with placeholder slots</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Drop image(s)</strong>Onto a grey placeholder</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>"Assign to template image"</strong>Choose this option from the DnD menu</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><strong>Slot filled</strong>All annotations and styling are preserved</div>
+    </div>
+    <div class="callout">
+      If you drop multiple images onto a single template slot, they replace successive slots in order.
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       CONTEXT MENUS
+  ═══════════════════════════════════════════════════════════════ -->
+  <section id="ctx-canvas">
+    <h2>Canvas right-click menu</h2>
+    <figure>
+      <img src="screenshots/ctx_canvas.png" alt="Canvas context menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 12 — Right-click on empty canvas area. Screenshot: right-click on a blank area of the canvas.</figcaption>
+    </figure>
+    <p>Right-clicking on the canvas background (no element selected) offers general canvas actions.</p>
+  </section>
+
+  <section id="ctx-image">
+    <h2>Image right-click menu</h2>
+    <figure>
+      <img src="screenshots/ctx_image.png" alt="Image context menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 13 — Right-click on a single image. Screenshot: click an image to select it, then right-click.</figcaption>
+    </figure>
+    <p>Right-clicking a selected image offers image-specific operations:</p>
+    <div class="ctx-grid">
+      <div class="ctx-card"><h4>Edit Image</h4><p>Open the image properties dialog (channels, LUTs, crop, rotation, background).</p></div>
+      <div class="ctx-card"><h4>Duplicate Selection</h4><p>Creates a copy of the image.</p></div>
+      <div class="ctx-card"><h4>Add scale bar</h4><p>Attaches a scale bar annotation. Requires the pixel-to-unit conversion factor to be set.</p></div>
+      <div class="ctx-card"><h4>Add text</h4><p>Adds a text annotation to the image.</p></div>
+      <div class="ctx-card"><h4>Draw ROI</h4><p>Opens ROI drawing tools (circle, rectangle, polygon, line, freehand, point).</p></div>
+      <div class="ctx-card"><h4>Channel split (Gray / Magenta-Green)</h4><p>Splits a multi-channel image into separate panels. <em>Only shown for multi-channel images.</em></p></div>
+      <div class="ctx-card"><h4>Split by a dimension</h4><p>Splits a multi-dimensional image along a chosen axis. <em>Only shown when extra dimensions exist.</em></p></div>
+      <div class="ctx-card"><h4>Convert to template</h4><p>Turns this image into a placeholder slot.</p></div>
+    </div>
+  </section>
+
+  <section id="ctx-group">
+    <h2>Group right-click menu</h2>
+    <figure>
+      <img src="screenshots/ctx_group.png" alt="Group context menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 14 — Right-click on a group. Screenshot: click a row or panel group, then right-click.</figcaption>
+    </figure>
+    <p>Right-clicking a group (row, column, or panel) gives layout and label operations:</p>
+    <div class="ctx-grid">
+      <div class="ctx-card"><h4>Edit Group</h4><p>Change orientation (row / column) and spacing.</p></div>
+      <div class="ctx-card"><h4>Add Empty image to the group</h4><p>Inserts a blank placeholder at the end of the group.</p></div>
+      <div class="ctx-card"><h4>Add text labels above / below</h4><p>Adds a row of text annotations above or below each image in the row. <em>Row groups only.</em></p></div>
+      <div class="ctx-card"><h4>Add text label left / right of row</h4><p>Adds a single label to the left or right of the row.</p></div>
+      <div class="ctx-card"><h4>To row / To column / To panel</h4><p>Re-arrange the group's layout.</p></div>
+      <div class="ctx-card"><h4>Force same width and height</h4><p>Crops all images in the group to match the first image's dimensions.</p></div>
+      <div class="ctx-card"><h4>Force same AR as first image</h4><p>Adjusts crop to match the aspect ratio of the first image.</p></div>
+      <div class="ctx-card"><h4>Set / Reset LUT(s)</h4><p>Apply or clear Look-Up Tables for all images in the group.</p></div>
+      <div class="ctx-card"><h4>Change font for all non-Letter text</h4><p>Opens a font dialog and applies the chosen font to every text annotation in the group.</p></div>
+      <div class="ctx-card"><h4>Remove all annotations</h4><p>Strips all ROIs, scale bars, and text from every image in the group.</p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════
+       FEATURES
+  ═══════════════════════════════════════════════════════════════ -->
+  <section id="lettering">
+    <h2>Auto-lettering</h2>
+    <figure>
+      <img src="screenshots/dialog_lettering.png" alt="Lettering dialog" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 15 — Lettering parameters dialog (Lettering → Parameters).</figcaption>
+    </figure>
+    <p>
+      When the <strong>Auto Lettering</strong> checkbox in the toolbar is enabled, PyFigures
+      automatically overlays panel labels (a, b, c… or A, B, C…) on each top-level element.
+    </p>
+    <ul style="margin: .6em 0 1em 1.4em;">
+      <li>Set the <strong>starting letter</strong> in the one-character field next to the checkbox.</li>
+      <li>Configure font, size, color, and case via <strong>Lettering → Parameters</strong>.</li>
+      <li>Letters are rendered live and update as you add or remove panels.</li>
+      <li>Individual letter text elements are locked — edit them only through the Parameters dialog.</li>
+    </ul>
+  </section>
+
+  <section id="undo-redo">
+    <h2>Undo / Redo</h2>
+    <p>
+      Every user action that modifies the figure is saved to an undo stack stored as temporary
+      <code>.xml</code> files on disk. This means the history survives even large figures with
+      many images.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Action</th><th>Shortcut</th></tr>
+        <tr><td>Undo</td><td><kbd>Ctrl Z</kbd></td></tr>
+        <tr><td>Redo</td><td><kbd>Ctrl Shift Z</kbd> or <kbd>Ctrl Y</kbd></td></tr>
+      </table>
+    </div>
+    <div class="callout">
+      The undo history is <strong>not</strong> saved inside the <code>.pyf</code> file — it is lost when you close the application.
+    </div>
+  </section>
+
+  <section id="export">
+    <h2>Export</h2>
+    <p>PyFigures supports three export paths:</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Format</th><th>Menu entry</th><th>Notes</th></tr>
+        <tr><td><strong>SVG</strong></td><td>File → Export as svg</td><td>Vector format. Ideal for further editing in Inkscape or Illustrator.</td></tr>
+        <tr><td><strong>PDF</strong></td><td>File → Export as pdf</td><td>Vector format suitable for submission.</td></tr>
+        <tr><td><strong>Raster (JPG / TIFF / PNG)</strong></td><td>File → Export as… (jpg, tif, png)</td><td>A dialog lets you choose the format and DPI. TIFF is recommended for publication.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="templates">
+    <h2>Templates</h2>
+    <p>
+      A template is a <code>.pyf</code> file where all image content has been replaced by
+      grey placeholder slots, while the layout, annotations, scale bars, and LUTs are preserved.
+    </p>
+    <p><strong>Creating a template:</strong> <em>Template → Convert figure to template</em>.</p>
+    <p><strong>Using a template:</strong></p>
+    <ol style="margin: .6em 0 1em 1.4em; line-height: 2;">
+      <li>Open or drop the template <code>.pyf</code>.</li>
+      <li>Drag your new images from the file manager.</li>
+      <li>Drop them onto the grey placeholder slots.</li>
+      <li>Choose <strong>Assign DND content to template image</strong> from the pop-up menu.</li>
+    </ol>
+    <div class="callout">
+      Templates are perfect for generating sets of figures that share the same layout — e.g. the same experiment repeated across multiple conditions.
+    </div>
+  </section>
+
+  <section id="consolidate">
+    <h2>Consolidation</h2>
+    <p>
+      When you share a <code>.pyf</code> file, it contains only <em>paths</em> to the source
+      images — the images themselves are not embedded. If the recipient does not have the same
+      paths, images will appear missing.
+    </p>
+    <p>
+      <strong>File → Save And Consolidate…</strong> solves this by:
+    </p>
+    <ol style="margin: .6em 0 1em 1.4em; line-height: 2;">
+      <li>Saving the <code>.pyf</code> file as usual.</li>
+      <li>Creating a sibling <code>.files/</code> folder.</li>
+      <li>Copying every referenced image into that folder.</li>
+      <li>Updating the paths inside the <code>.pyf</code> to point to the local copies.</li>
+    </ol>
+    <p>You can then zip and share the <code>.pyf</code> + <code>.files/</code> pair as a fully self-contained archive.</p>
+  </section>
+
+  <section id="annotations">
+    <h2>Annotations</h2>
+    <p>
+      Annotations are attached to individual images and include:
+    </p>
+    <div class="ctx-grid">
+      <div class="ctx-card"><h4>Scale bar</h4><p>Right-click an image → Add scale bar. Requires pixel-to-unit conversion factor. See <a href="#scalebar">Scale bars</a>.</p></div>
+      <div class="ctx-card"><h4>Text</h4><p>Rich-text labels with full font control. Placed above, below, or overlaid on images.</p></div>
+      <div class="ctx-card"><h4>ROI shapes</h4><p>Circle, Ellipse, Rectangle, Square, Line, Polyline, Polygon, Freehand, Point — drawn directly on images.</p></div>
+      <div class="ctx-card"><h4>Insets</h4><p>Images embedded inside other images as magnified detail panels.</p></div>
+    </div>
+    <p>
+      Bulk removal is available via the <strong>Annotations</strong> menu or via the group
+      right-click menu (removes only within that group).
+    </p>
+  </section>
+
+  <section id="scalebar">
+    <h2>Scale bars</h2>
+    <p>
+      A scale bar annotation renders a physical-length bar with a text legend (e.g. <em>10 µm</em>).
+      To add one:
+    </p>
+    <ol style="margin: .6em 0 1em 1.4em; line-height: 2;">
+      <li>Right-click the image.</li>
+      <li>Set or confirm the <strong>pixel-to-unit conversion factor</strong> (usually stored in the image metadata).</li>
+      <li>Choose bar width in physical units and placement (bottom-right by default).</li>
+    </ol>
+    <div class="callout">
+      Scale bars automatically recompute their pixel length when the image is resized.
+    </div>
+  </section>
+
+  <section id="colorblind">
+    <h2>Color-blind assistant</h2>
+    <figure>
+      <img src="screenshots/colorblind_assistant.png" alt="Color-blind assistant" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
+      <figcaption>Fig 16 — Color-blind assistant (Help → Show color-blind assistant).</figcaption>
+    </figure>
+    <p>
+      <strong>Help → Show color-blind assistant</strong> opens a side-by-side preview of the figure
+      as seen by viewers with different types of color-vision deficiency (deuteranopia, protanopia, tritanopia).
+      Use it to verify that your color choices remain distinguishable for all readers.
+    </p>
+  </section>
+
+  <section id="ui-theme">
+    <h2>UI theme</h2>
+    <p>
+      PyFigures supports <strong>Light</strong> and <strong>Dark</strong> color schemes, switchable
+      at any time from <strong>View → Theme</strong>. The active theme is stored in your user
+      settings and restored automatically on the next launch — no manual configuration needed.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Theme</th><th>Description</th></tr>
+        <tr><td><strong>Light</strong></td><td>Default system appearance — white/gray backgrounds, dark text.</td></tr>
+        <tr><td><strong>Dark</strong></td><td>Dark-gray backgrounds, light text, near-black canvas area. Easier on the eyes in low-light environments.</td></tr>
+      </table>
+    </div>
+    <div class="callout">
+      A checkmark next to the active theme name shows which mode is currently in use.
+      Switching themes applies instantly without restarting the application.
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script>
+  /* Highlight the active sidebar link based on scroll position */
+  const sections = document.querySelectorAll('section[id]');
+  const links    = document.querySelectorAll('#sidebar a');
+
+  function onScroll() {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 80) current = s.id;
+    });
+    links.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+</script>
+</body>
+</html>

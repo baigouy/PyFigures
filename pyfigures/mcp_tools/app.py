@@ -1,0 +1,141 @@
+"""PyFigures MCP tools — FastMCP server object and the tool decorator (reports warnings).
+
+Split out of pyfigures/mcp_server.py (which re-exports every name and
+remains the server entry point: ``python -m pyfigures.mcp_server``).
+"""
+from __future__ import annotations
+
+import fnmatch
+import io
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from textwrap import indent
+from mcp.server.fastmcp import FastMCP, Image
+
+mcp = FastMCP(
+    "pyfigures",
+    instructions=(
+        "Inspect, create, and edit PyFigures .pyf scientific-figure layout files. "
+        "Tools for reading: describe_figure, get_xml, get_annotations, list_images. "
+        "Tools for creating: create_figure, add_group, add_image. "
+        "Tools for editing: set_spacing, set_orientation, reorder_children, resize_figure, "
+        "set_annotation_text, add_annotation, add_corner_labels, remove_annotation, "
+        "add_roi_rect, add_roi_ellipse, add_roi_line, add_roi_polygon, "
+        "add_significance_bracket (stats bar + * / n.s. / p-value label over a plot), remove_group, "
+        "remove_image, set_image_filename, fill_template, batch_fill_templates, "
+        "clone_image, move_image, set_size, layout_canvas, remap_paths. "
+        "Scale bar tools: get_scale_bar, set_scale_bar, remove_scale_bar, set_scale_bar_all. "
+        "Inset / picture-in-picture tools: add_inset, add_zoom_callout (magnified-detail "
+        "box + inset + leader lines), list_insets, remove_inset, set_inset_property. "
+        "Row/column label tools: add_label_row, add_side_label, list_label_rows, remove_label_row. "
+        "Figure-level settings: get_figure_properties, set_figure_properties; "
+        "caption/legend: set_figure_caption, get_figure_caption, export_caption "
+        "(stored in a .caption.json sidecar beside the .pyf, exportable for submission). "
+        "Fonts: list_fonts reports portable/bundled fonts and what Helvetica/Arial "
+        "resolve to (drop redistributable clones in pyfigures/gui/fonts for cross-machine "
+        "reproducibility); set the figure font with set_figure_properties(font_family=...). "
+        "Multi-channel microscopy: add_channel_merge overlays single-channel images "
+        "into one pseudo-coloured composite (DAPI+GFP+RFP → merge). "
+        "Image display tools: transform_image (rotation/crop/opacity/flip), "
+        "set_lut (colour LUTs + normalization), "
+        "configure_image (channels, Z-projection, serie_to_open, normalization). "
+        "Tools for scripted images: add_scripted_image, get_script, set_script. "
+        "Use add_scripted_image to add a matplotlib/numpy panel in one step — "
+        "never call add_image + set_script separately for this purpose. "
+        "Generic property access (covers ALL Image2D fields): "
+        "list_image_properties, get_image_property, set_image_property. "
+        "Layout recompute: recompute_layout (explicit trigger; all structural tools "
+        "already call this automatically). "
+        "Raw XML fallback: write_xml. "
+        "Folder-to-figure workflow: scan_folder (list files + layout suggestions), "
+        "create_figure_from_folder (one-shot create + populate from a folder), "
+        "auto_configure_images (auto-set LUTs + scale bars from image metadata). "
+        "Journal guidelines: paste a journal's figure requirements, extract the "
+        "numbers, then use apply_journal_guidelines (one-shot resize + font + labels "
+        "+ scale bars) or the individual checkers check_journal_compliance (read-only "
+        "PASS/FAIL report), check_resolution (per-panel print DPI at the target "
+        "width), and enforce_min_font_size (raise all fonts to the minimum); "
+        "list_journal_presets enumerates the built-in journal column widths. "
+        "Integrity: check_image_integrity screens panels for exact file reuse, "
+        "cross-panel duplication (incl. flipped/rotated/inverted) and within-panel "
+        "copy-move cloning before submission; export_adjustment_ledger produces a "
+        "per-panel image-adjustment provenance record + a ready-to-paste Methods "
+        "paragraph disclosing brightness/contrast/LUT/crop/rotation/scripts. "
+        "Rendering: render_preview returns a PNG image of the figure so you can "
+        "visually verify a layout you built/edited (catch overlaps, clipping, "
+        "wrong LUT, missing panels); export_figure writes the final deliverable "
+        "to PNG/TIFF/JPG/SVG/PDF at a chosen DPI; export_print_ready writes a "
+        "high-DPI CMYK/RGB TIFF for print submission; export_latex writes an "
+        "Inkscape-style 'PDF + LaTeX' pair (text-free graphics + \\input-able "
+        "LaTeX overlay so labels use the document font and real math) for physicists "
+        "(with_caption=True wraps it in a figure float with the stored \\caption). "
+        "QC + finishing: audit_figure inventories every panel and flags those "
+        "missing a scale bar or a label; style_annotation restyles a label's "
+        "font/size/bold/italic/underline/colour while preserving its rich "
+        "formatting (super/subscript, per-word colour); add_lut_calibration_bar "
+        "adds an intensity colour bar matching a LUT. "
+        "Templates/sharing: templatify_figure turns a figure into reusable "
+        "template slots; consolidate_figure bundles all image files beside the "
+        ".pyf; export_video animates time-stack/video panels to mp4. Review: "
+        "export_review writes an HTML review page, list_review_comments / "
+        "import_review_comments manage reviewer comments. Accessibility: "
+        "simulate_color_blindness renders the figure as a colour-blind reader "
+        "would see it (deuteranopia/protanopia/tritanopia); generate_alt_text / "
+        "set_alt_text draft and store the figure's alt text. "
+        "Arrows: add_arrow points an arrow AT a pixel (tip exact at any size). "
+        "Stacks: a stack is one image by default; opt-in views are "
+        "add_stack_montage (time/Z frames + stamps), add_channel_split (channels + "
+        "merge), add_kymograph and add_orthogonal_views. Upkeep: "
+        "check_source_changes (sources changed since the last save), copy_style "
+        "(fonts / letters / scale bars / spacing from another figure). Backgrounds: "
+        "set_figure_properties(page_background=...) colours the whole figure behind "
+        "the panels (the gaps); set_label_background boxes the labels. Recipes "
+        "(build_figure_from_recipe) are documented in docs/RECIPES.md."
+    ),
+)
+
+_fastmcp_tool = mcp.tool
+
+
+def _tool_with_warnings(*t_args, **t_kwargs):
+    """Drop-in for ``mcp.tool()``: runs the tool, then appends any warning raised
+    via _warn() during the call (e.g. a failed layout recompute) to a plain-text
+    result, so a tool never silently reports success. JSON results are left
+    untouched (the warning still goes to the server log)."""
+    import functools
+    register = _fastmcp_tool(*t_args, **t_kwargs)
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def inner(*args, **kwargs):
+            _TOOL_WARNINGS.clear()
+            res = fn(*args, **kwargs)
+            if _TOOL_WARNINGS and isinstance(res, str) \
+                    and not res.lstrip().startswith(("{", "[")):
+                res = res + "\n" + "\n".join("WARNING: " + w for w in _TOOL_WARNINGS)
+            _TOOL_WARNINGS.clear()
+            return res
+        register(inner)
+        return inner
+    return deco
+
+
+mcp.tool = _tool_with_warnings
+
+
+# Warnings raised while a tool runs (e.g. a failed layout recompute). The tool
+# wrapper installed below appends them to the tool's text result, so a problem
+# is reported instead of the tool claiming success.
+_TOOL_WARNINGS: list[str] = []
+
+
+def _warn(msg: str) -> None:
+    _TOOL_WARNINGS.append(msg)
+    print("pyfigures-mcp WARNING: " + msg, file=sys.stderr)

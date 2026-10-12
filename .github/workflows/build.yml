@@ -1,0 +1,119 @@
+name: Build Executables
+
+# Trigger on version tags (e.g. v0.1.10) or manually from the Actions tab
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: PyFigures-Windows
+            artifact_path: PyFigures-Windows.zip
+          - os: macos-13          # Intel x86_64
+            artifact_name: PyFigures-macOS-Intel
+            artifact_path: PyFigures-macOS-Intel.dmg
+          - os: macos-latest      # Apple Silicon (arm64)
+            artifact_name: PyFigures-macOS-AppleSilicon
+            artifact_path: PyFigures-macOS-AppleSilicon.dmg
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install build tools
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller pyinstaller-hooks-contrib
+
+      - name: Install pyfigures and its dependencies
+        run: pip install ".[video]"
+
+      # -----------------------------------------------------------------------
+      # Build
+      # -----------------------------------------------------------------------
+      - name: Build with PyInstaller
+        run: pyinstaller pyfigures.spec
+
+      # -----------------------------------------------------------------------
+      # Package — Windows
+      # -----------------------------------------------------------------------
+      - name: Package (Windows — zip)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: Compress-Archive -Path dist\PyFigures -DestinationPath PyFigures-Windows.zip
+
+      # -----------------------------------------------------------------------
+      # Package — macOS (.app → .dmg)
+      # -----------------------------------------------------------------------
+      - name: Install create-dmg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
+      - name: Package (macOS-Intel — dmg)
+        if: matrix.os == 'macos-13'
+        run: |
+          create-dmg \
+            --volname "PyFigures" \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 450 185 \
+            PyFigures-macOS-Intel.dmg \
+            dist/PyFigures.app
+
+      - name: Package (macOS-AppleSilicon — dmg)
+        if: matrix.os == 'macos-latest'
+        run: |
+          create-dmg \
+            --volname "PyFigures" \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --app-drop-link 450 185 \
+            PyFigures-macOS-AppleSilicon.dmg \
+            dist/PyFigures.app
+
+      # -----------------------------------------------------------------------
+      # Upload artifacts
+      # -----------------------------------------------------------------------
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # Create a GitHub Release and attach artifacts when a tag is pushed
+  # ---------------------------------------------------------------------------
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

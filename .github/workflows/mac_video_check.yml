@@ -1,0 +1,29 @@
+name: Mac video check
+
+# Plays the exported sample videos (tests/mac_check/samples, made by
+# tests/mac_check/make_samples.py) with Apple's own decoder — the one QuickTime,
+# Safari, Keynote and PowerPoint use — on Intel and Apple Silicon Macs.
+# Run it from the Actions tab, or it runs by itself when the samples change.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tests/mac_check/**'
+      - '.github/workflows/mac_video_check.yml'
+
+jobs:
+  play:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-latest]     # Intel x86_64, Apple Silicon
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install AVFoundation bindings
+        run: pip install numpy pyobjc-framework-AVFoundation pyobjc-framework-Quartz
+      - name: Play every sample with AVFoundation
+        run: python tests/mac_check/check_on_mac.py

@@ -1,0 +1,107 @@
+# PyFigures figure recipe — full guide: docs/RECIPES.md. Build with any of:
+#   python -m pyfigures.recipe build recipe_example.yaml     (command line / Makefile)
+#   File -> Build figure from recipe…                        (GUI)
+#   build_figure_from_recipe("recipe_example.yaml")          (MCP / AI)
+#
+# All paths are relative to this file. Re-running after the data changed rebuilds
+# the figure and re-runs the statistics of the plot panels. Unknown keys and
+# missing files are errors, so a pipeline never ships a half-built figure.
+
+output: figures/Figure1.pyf       # the .pyf to write
+journal: nature                   # optional: size for a journal (see list_journal_presets)
+column: double                    #   single | double | ...
+letter_panels: true               # A, B, C... (default true)
+title: "Figure 1"
+background: white                 # colour of the gaps between panels (default transparent)
+label_background: black           # optional box behind letters / labels / stamps
+caption: >                        # optional; omitted -> an auto stub listing the panels
+  (A-B) WT and KO guts stained for actin (63x). (C-E) Replicates.
+  (F) Cells per field; one-way ANOVA with Tukey HSD. Scale bars, 10 µm.
+
+defaults:                         # applied to every panel that doesn't override them
+  px_to_unit: 0.1                 # micrometres per pixel
+  scale_bar: {units: 10, unit: "µm"}
+
+rows:                             # each row is one horizontal strip of panels
+  # every row is scaled to the full figure width, panels at a common height —
+  # so a panel alone in its row becomes as wide as the figure: pair plots with
+  # images (or other plots) rather than giving them a row of their own
+  - - {image: data/wt_actin.tif, lut: red}
+    - {image: data/ko_actin.tif, lut: red, crop: {left: 20, right: 20}}
+  - - {glob: "data/replicates/rep*.tif", lut: gray}      # one panel per match, sorted
+    - {plot: data/counts.csv, kind: box, ylabel: "cells / field", stats_mode: auto}
+
+# A bare file name is an image panel without options:  - [wt.tif, ko.tif]
+#
+# Shortcut instead of 'rows': a flat list chunked into rows of N panels
+#   panels:
+#     - {image: a.tif}
+#     - {image: b.tif}
+#     - {image: c.tif}
+#   columns: 2
+#
+# Panel keys
+#   image / glob : lut (name or list per channel), crop {left,right,top,bottom},
+#                  scale_bar {units, unit, color, placement, label}, px_to_unit,
+#                  projection (max|avg|min — one image of a Z stack),
+#                  label (image only)
+#   image only   : arrows [{at: [x, y], from: nw|top left|<degrees>, length, color,
+#                           stroke, head (small|normal|large), both_ends, label}]
+#                    -> the arrow's point is exactly at (x, y), at any size
+#                  kymograph {line: [x1, y1, x2, y2], width, channel, projection,
+#                             frame_height, cmap, mark_line, line_color, label}
+#                  orthogonal {at: [x, y], z, time_point, channel, colors, z_scale,
+#                              gap, background, crosshair, crosshair_color, label}
+#   plot (CSV)   : kind (bar|box|violin|scatter|grouped), error (sem|sd|ci95|none),
+#                  ylabel, xlabel, title, stats_mode (auto|parametric|nonparametric),
+#                  annotate_stats, only_significant, label
+#
+# A stack is one panel by default. Several views of it are opt-in:
+#   montage (stack) : axis (t|z), frames (N | "all" | "a:b:step" | [0, 5, 9]),
+#                     columns, projection, channel, lut, interval, unit, stamps,
+#                     stamp_format, stamp_placement, stamp_color, time_zero, series,
+#                     scale_bar, px_to_unit (bar on the last frame)
+#                     e.g.  - - {montage: data/embryo.tif, axis: t, frames: 5}
+#   split (stack or list of channel files) : names, colors, gray, merge,
+#                     merge_label, projection, frame, series, label_placement,
+#                     scale_bar, px_to_unit (bar on the last panel)
+#                     e.g.  - - {split: data/cells.tif, names: [DAPI, GFP, RFP]}
+#
+# On an image panel (pixel coordinates of the raw image):
+#   text: ["WT", {text: "n = 12", placement: bottom right}]
+#   corner_labels: {top_right: ["*"], bottom_left: [DAPI, GFP]}
+#   rois: [{rect: [x, y, w, h]}, {ellipse: [x, y, w, h]}, {line: [x1, y1, x2, y2], arrow: true},
+#          {polygon: [[x, y], ...]}, {circle: [cx, cy, r]}, {square: [cx, cy, side]},
+#          {point: [x, y]}, {points: [[x, y], ...], size: 6}]   + color, fill, stroke, opacity
+#   properties: {border_size: 3, opacity: 0.5}     # escape hatch: any stored panel field
+#
+# Figure-wide checking / bundling:
+#   checks: [integrity, scale, scale_bars, labels, {check: journal, fail: false}]
+#   exports: [pdf, ledger, colorblind]   # + adjustment ledger, colour-blind preview
+#   consolidate: true                    # copy the sources into fig.files/
+# Or build from a template instead of rows:
+#   template: templates/2x3.pyf
+#   fill: [wt_1.tif, "ko_*.tif"]
+#   brackets: [{x1: 40, x2: 200, y: 30, label: "**"}]
+#   inset: {image: detail.tif, placement: top right, size: 0.3}
+#   zoom: {box: [x, y, w, h], corner: bottom right, size: 0.4}   # box + magnified view + leader lines
+#   rotate: 12          flip: h | v | hv
+#   channels: [true, false, true]     z_range: [3, 18]     display_range: [200, 3500]
+#
+# More panel kinds:
+#   merge: [c1.tif, c2.tif]  colors, mode (sum|max), normalization (per_channel|none), label
+#   colorbar: MATPLOTLIB_viridis  vmin, vmax, label, orientation, ticks, tick_labels
+#   script: |  (Python setting self.img)  — needs  allow_scripts: true
+#
+# A row with options:
+#   - panels: [wt.tif, ko.tif]
+#     labels: [WT, KO]            labels_position: above|below
+#     side_label: "Day 1"         side_label_position: left|right|top|bottom
+#     orientation: Y              spacing: 8
+#
+# Finishing (top level):
+#   width_mm: 120 (or width_cm / width_in / width_px, instead of journal)   dpi: 300
+#   font: {family: Arial, size: 8}     min_font_pt: 6     tidy_text: true
+#   letter_placement: top left         auto_configure: true     alt_text: auto
+#   copy_style_from: published/Figure1.pyf    copy_style_aspects: [fonts, letters]
+#   exports: [pdf, png, {format: tif, dpi: 600}, latex, print, video, source_data, review, caption]
