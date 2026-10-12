@@ -92,11 +92,7 @@ a = Analysis(
         'matplotlib': {'backends': 'all'},
     },
     runtime_hooks=[],
-    # Exclude optional Java bridge — users can still use Fiji if pre-installed
     excludes=[
-        'javabridge',
-        'bioformats',
-        'python_javabridge',
         'tkinter',
         '_tkinter',
     ],
