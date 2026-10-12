@@ -136,3 +136,27 @@ def test_readme_lists_every_dependency_with_its_licence():
     for r in rows:
         assert r.rstrip(" |").split("|")[-1].strip(), r          # every row names a licence
     assert "corresponding source" in table and "GNU GPL v3" in table
+
+
+def test_every_extra_named_in_the_docs_exists():
+    with open(os.path.join(ROOT, "setup.py"), encoding="utf-8") as f:
+        setup = f.read()
+    block = setup[setup.index("extras_require"):]
+    extras = set(re.findall(r"^\s*'(\w+)':\s*\[", block, re.M))
+    assert {"ai", "video", "bioformats", "all"} <= extras
+    docs = [os.path.join(ROOT, "README.md")]
+    for name in os.listdir(os.path.join(ROOT, "docs")):
+        if name.endswith((".md", ".html")):
+            docs.append(os.path.join(ROOT, "docs", name))
+    named = set()
+    for p in docs:
+        with open(p, encoding="utf-8") as f:
+            named |= set(re.findall(r"pyfigures\[(\w+)\]", f.read()))
+    assert named and not named - extras, named - extras
+    # 'all' really is all the other extras
+    all_block = block[block.index("'all'"):]
+    all_block = all_block[:all_block.index("]")]
+    for extra in extras - {"all"}:
+        sub = block[block.index(f"'{extra}'"):]
+        for req in re.findall(r'"([^"]+)"', sub[:sub.index("]")]):
+            assert f'"{req}"' in all_block, (extra, req)

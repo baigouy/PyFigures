@@ -81,8 +81,10 @@ Perform the following steps **only once** to set up your environment:
 6. **Optional: Install additional dependencies for bioformats support:**
     
     ```sh
-    pip install -U pyfigures[all]
+    pip install -U pyfigures[bioformats]
     ```
+    
+    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video and the MCP server), use `pip install -U pyfigures[all]` instead.
     
     **Note:** if you received errors, you may not have a compiler installed (see the Troubleshooting section after)
 
@@ -239,7 +241,7 @@ Optional (installed only if you ask for them):
 | **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
-| **pyimagej / scyjava / JPype** | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
+| **pyimagej / scyjava / JPype** (`pyfigures[bioformats]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
 | **python-bioformats / python-javabridge** | Older Bio-Formats reader                  | https://pypi.org/project/python-bioformats/   | GPL v2 / BSD       |
 
 ### Licence of PyFigures and of the standalone executables

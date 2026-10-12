@@ -69,6 +69,14 @@ setuptools.setup(
         'video': [
             "av",            # PyAV: reads videos and writes H.264 (bundles ffmpeg; Windows/macOS/Linux)
         ],
+        'bioformats': [
+            "pyimagej",      # Fiji / Bio-Formats reader for .lif, .czi, .nd2, ... (needs Java)
+        ],
+        'all': [
+            "mcp>=1.0",
+            "av",
+            "pyimagej",
+        ],
     },
     python_requires='>=3.9'  # PyQt6 dropped 3.7/3.8; tested up to 3.12
 )
