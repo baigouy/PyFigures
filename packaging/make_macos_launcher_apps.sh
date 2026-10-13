@@ -8,13 +8,15 @@
 set -euo pipefail
 DIST="${1:-dist}"
 VERSION="${2:-0.0.0}"
+ICONS="$(cd "$(dirname "$0")/.." && pwd)/images/icons"   # drawn by packaging/make_icons.py
 test -d "$DIST/PyFigures.app" || { echo "no $DIST/PyFigures.app: run pyinstaller first" >&2; exit 1; }
 
 make_launcher() {
   local name="$1" flag="$2" id="$3"
   local app="$DIST/$name.app"
   rm -rf "$app"
-  mkdir -p "$app/Contents/MacOS"
+  mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+  cp "$ICONS/pyfigures_$id.icns" "$app/Contents/Resources/$id.icns"
 
   printf '%s\n' \
     '#!/bin/bash' \
@@ -41,6 +43,7 @@ make_launcher() {
     "  <key>CFBundleDisplayName</key><string>$name</string>" \
     '  <key>CFBundlePackageType</key><string>APPL</string>' \
     "  <key>CFBundleShortVersionString</key><string>$VERSION</string>" \
+    "  <key>CFBundleIconFile</key><string>$id.icns</string>" \
     '  <key>NSHighResolutionCapable</key><true/>' \
     '</dict>' \
     '</plist>' \

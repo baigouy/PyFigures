@@ -50,6 +50,21 @@ def test_spec_builds_the_album_and_poster_executables_on_windows():
     compile(spec, "pyfigures.spec", "exec")
 
 
+@pytest.mark.parametrize("name", ["pyfigures", "pyfigures_album", "pyfigures_poster"])
+def test_every_executable_has_its_icon(name):
+    from PIL import Image
+    icons = os.path.join(ROOT, "images", "icons")
+    with Image.open(os.path.join(icons, name + ".ico")) as ico:
+        assert (16, 16) in ico.info["sizes"] and (256, 256) in ico.info["sizes"]
+    with Image.open(os.path.join(icons, name + ".icns")) as icns:
+        assert icns.format == "ICNS"
+    with Image.open(os.path.join(icons, name + ".png")) as png:
+        assert png.size == (1024, 1024)
+    spec = _read("pyfigures.spec")
+    assert "icon=_icon('pyfigures')" in spec                      # main exe + macOS bundle
+    assert "icon=_icon(_launcher.lower().replace(' ', '_'))" in spec
+
+
 def test_workflow_ships_the_launchers_on_macos():
     wf = _read(".github", "workflows", "build.yml")
     assert "packaging/make_macos_launcher_apps.sh dist" in wf
@@ -76,6 +91,8 @@ def test_macos_launcher_apps_are_made_next_to_pyfigures_app(tmp_path, name, flag
         info = plistlib.load(f)
     assert info["CFBundleExecutable"] == name and info["CFBundleIdentifier"] == bundle_id
     assert info["CFBundleShortVersionString"] == "1.2.3" and info["CFBundlePackageType"] == "APPL"
+    icon = app / "Resources" / info["CFBundleIconFile"]
+    assert icon.read_bytes()[:4] == b"icns"
     launcher = (app / "MacOS" / name).read_text(encoding="utf-8")
     assert launcher.startswith("#!/bin/bash\n")
     assert f'exec open -n -a "$main" --args {flag}' in launcher

@@ -79,6 +79,13 @@ hiddenimports += [
 ]
 
 # ---------------------------------------------------------------------------
+# Icons (drawn by packaging/make_icons.py): .ico on Windows, .icns on macOS
+# ---------------------------------------------------------------------------
+def _icon(name):
+    ext = {'win32': '.ico', 'darwin': '.icns'}.get(sys.platform)
+    return os.path.join('images', 'icons', name + ext) if ext else None
+
+# ---------------------------------------------------------------------------
 # Analysis
 # ---------------------------------------------------------------------------
 a = Analysis(
@@ -120,8 +127,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,              # replace with 'images/PyFigures.ico' on Windows
-                            #             'images/PyFigures.icns' on macOS
+    icon=_icon('pyfigures'),
 )
 
 # The photo album and poster designers as their own executables: the same
@@ -151,7 +157,7 @@ for _launcher in ('PyFigures Album', 'PyFigures Poster'):
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=None,
+        icon=_icon(_launcher.lower().replace(' ', '_')),   # pyfigures_album / pyfigures_poster
     ))
 
 # ---------------------------------------------------------------------------
@@ -175,7 +181,7 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='PyFigures.app',
-        icon=None,          # replace with 'images/PyFigures.icns' when available
+        icon=_icon('pyfigures'),
         bundle_identifier='com.aigouy.pyfigures',
         info_plist={
             'NSHighResolutionCapable': True,
