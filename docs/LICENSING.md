@@ -46,6 +46,18 @@ The AGPL's extra clause concerns software that users interact with **over a
 network**: whoever runs a *modified* version as a network service must offer
 its source to those users. A desktop application is not affected.
 
+## omero-py (raw pixels from OMERO)
+
+`pip install pyfigures[omero]` adds omero-py (**GPL v2 or later**) and its
+network library zeroc-ice (Ice, ZeroC's **GPL v2** or commercial licence), for
+raw 16-bit / float reads from OMERO servers. It is a pip-only optional extra
+and is **not** bundled in the standalone apps: Ice has no PyPI wheel for
+Windows, and, as ZeroC licenses Ice under the GPL v2 *only* (not "or later"),
+it cannot be combined with the apps' GPL v3 components. omero-py itself would
+be fine (v2 or later includes v3). Without them,
+OMERO images are read through OMERO.web (256 levels per channel), which needs
+nothing extra.
+
 ## What the standalone apps must provide (and already do)
 
 1. **The licence texts and notices** of everything inside the bundle:

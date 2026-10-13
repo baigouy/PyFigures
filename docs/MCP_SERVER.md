@@ -261,7 +261,7 @@ python -m pyfigures.mcp_server --transport sse --port 8765
 
 ## 5. Available tools reference
 
-The server currently exposes **146 tools** (112 figure tools + 34 poster tools).
+The server currently exposes **147 tools** (113 figure tools + 34 poster tools).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -313,6 +313,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `add_equation(pyf_path, group_path, latex, font_size, color, fontset, label, ...)` | Add a **LaTeX equation** as a vector panel (typeset by Matplotlib mathtext, no TeX needed; `fontset="cm"` gives the LaTeX look). Written as an SVG in `equations/` next to the figure; editable in the GUI (right-click → Edit equation…) |
 | `scan_folder(folder, pattern)` | Scan a folder for image files and return layout suggestions as JSON |
 | `inspect_ome_zarr(path_or_url)` | Describe an **OME-Zarr** image (local `.zarr` folder or http(s) URL, e.g. the IDR) without reading pixels: axes, pyramid levels with pixel sizes in µm, channel names/colours, and the level read by default. `add_image` accepts the same path/URL; append `#level=N` to read another level. Needs `pip install pyfigures[zarr]` |
+| `inspect_omero_image(image_url)` | Describe an image on an **OMERO** server from its OMERO.web link (`…/webclient/img_detail/ID/`, `…/webclient/?show=image-ID`, `…/iviewer/?images=ID`): name, X/Y/Z/T/C sizes, pixel size in µm, channels, and the planes `add_image` would read (`#z=0-9&t=0&c=0,2` selects planes). Pixels come from OMERO.web's renderer: 256 levels per channel over its data range (exact for 8-bit), or raw in the image's own type (16-bit, float) when omero-py is installed (`pip install pyfigures[omero]`) and a login is set; `raw_reader` in the result says which. Private data: set `OMERO_USERNAME` / `OMERO_PASSWORD` in the server's environment (never stored in figures). No omero-py / Ice needed |
 | `create_figure_from_folder(pyf_path, folder, ...)` | Build a whole figure automatically from a folder of images |
 | `draft_figure(folder, out_pyf, plot_kind, journal, px_to_unit, scale_bar_units, ...)` | **Draft a complete figure in one call**: image grid + CSV data-plot panels (with stats) + scale bars + A/B/C letters + journal size + caption stub |
 | `build_figure_from_recipe(recipe_path)` | **Build a figure from a YAML/JSON recipe** — rows of `image` / `glob` / `plot` panels with LUTs, crops, scale bars, lettering, drawings (rect, ellipse, circle, square, line, polygon, points), insets, journal size and caption; `checks` run before exporting (a failure means nothing is exported), `consolidate` bundles the source files, `template` + `fill` fills a template, `properties` sets stored panel fields, exports include `ledger` and `colorblind`. Reproducible and git-diffable (byte-identical rebuilds); also `python -m pyfigures.recipe build fig.yaml [--render png]` and GUI File → Build figure from recipe…. Full guide: `docs/RECIPES.md`; example: `docs/recipe_example.yaml` |

@@ -924,10 +924,11 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(new_action)
         new_action.triggered.connect(self.new_fig)
 
-        url_action = QAction("Add image from URL / OME-Zarr…", self)
-        url_action.setToolTip("Add an image from an http(s) URL, or an OME-Zarr image (a URL such as "
-                              "https://…/image.zarr or a local .zarr folder) — e.g. from the IDR or "
-                              "your institute's OME-Zarr server. Pick the pyramid level to read.")
+        url_action = QAction("Add image from URL / OME-Zarr / OMERO…", self)
+        url_action.setToolTip("Add an image from an http(s) URL, an OME-Zarr image (a URL such as "
+                              "https://…/image.zarr or a local .zarr folder, e.g. from the IDR) or an "
+                              "image on your OMERO server (paste its OMERO.web link). For OME-Zarr "
+                              "pick the pyramid level; for OMERO log in if asked.")
         file_menu.addAction(url_action)
         url_action.triggered.connect(self.add_image_from_url_action)
 
@@ -2277,17 +2278,26 @@ class EZFIG_GUI(QMainWindow):
             lambda imgs: QTimer.singleShot(300, lambda: self.paint.EZFIG_panel._create_panel_real(imgs)))
 
     def add_image_from_url_action(self):
-        """File > Add image from URL / OME-Zarr…: one image, added as a new row.
-        For OME-Zarr the pyramid level is chosen from the image's own levels."""
+        """File > Add image from URL / OME-Zarr / OMERO…: one image, added as a
+        new row. For OME-Zarr the pyramid level is chosen from the image's own
+        levels; an OMERO link may need a login and, for a big stack, a choice
+        of planes."""
         url, ok = QInputDialog.getText(
-            self, 'Add image from URL / OME-Zarr',
-            'Image URL, OME-Zarr URL (…/image.zarr) or local .zarr folder:')
+            self, 'Add image from URL / OME-Zarr / OMERO',
+            'Image URL, OME-Zarr URL (…/image.zarr), local .zarr folder,\n'
+            'or the OMERO.web link of an image (…/webclient/img_detail/ID/):')
         url = (url or '').strip()
         if not ok or not url:
             return
         from pyfigures.path_resolution import source_exists
         if not source_exists(url):
             QMessageBox.warning(self, 'Not found', f'No image found at:\n{url}')
+            return
+        from batoolset import omero_web as O
+        if O.is_omero_url(url):
+            url = self._prepare_omero_url(url)
+            if url:
+                self.add_images_to_new_row([url])
             return
         if url.split('#', 1)[0].rstrip('/\\').lower().endswith('.zarr'):
             QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -2322,6 +2332,61 @@ class EZFIG_GUI(QMainWindow):
                 base = url.split('#', 1)[0]
                 url = base if level == default_level else f'{base}#level={level}'
         self.add_images_to_new_row([url])
+
+    def omero_login(self, base):
+        """Ask for an OMERO user name and password and log in (session kept in
+        memory only). Returns True once logged in, False if cancelled."""
+        from batoolset import omero_web as O
+        for _ in range(3):
+            user, ok = QInputDialog.getText(self, 'OMERO login', f'User name on {base}:')
+            if not ok or not user.strip():
+                return False
+            password, ok = QInputDialog.getText(self, 'OMERO login', f'Password for {user.strip()}:',
+                                                QLineEdit.EchoMode.Password)
+            if not ok:
+                return False
+            try:
+                O.login(base, user.strip(), password)
+                return True
+            except Exception as e:
+                QMessageBox.warning(self, 'OMERO login failed', str(e))
+        return False
+
+    def _prepare_omero_url(self, url):
+        """The OMERO link to add (canonical form + plane selection), after any
+        login and, for a stack too big to read whole, the choice of planes.
+        None if cancelled or unreadable."""
+        from batoolset import omero_web as O
+        fragment = url.split('#', 1)[1] if '#' in url else ''
+        while True:
+            base, image_id = O.parse_omero_url(url)
+            url = O.canonical_url(base, image_id) + (f'#{fragment}' if fragment else '')
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                info = O.describe(url)
+            except O.OmeroLoginRequired as e:
+                QApplication.restoreOverrideCursor()
+                if not self.omero_login(e.base):
+                    return None
+                continue
+            except Exception as e:
+                QApplication.restoreOverrideCursor()
+                QMessageBox.warning(self, 'Cannot read the OMERO image', f'{url}\n\n{type(e).__name__}: {e}')
+                return None
+            QApplication.restoreOverrideCursor()
+            size = info['size']
+            n_bytes = size['width'] * size['height'] * info['rendered_planes'] * 2
+            if info['rendered_planes'] <= O.MAX_PLANES and n_bytes <= O.DEFAULT_MAX_BYTES:
+                return url
+            default = f"z=0-{size['z'] - 1}&t=0" if size['z'] > 1 else 't=0'
+            fragment, ok = QInputDialog.getText(
+                self, 'Planes to read',
+                f"{info['name'] or 'This image'} has {size['z']} Z × {size['t']} T × {size['c']} C "
+                f"planes of {size['width']} × {size['height']} px: too many to read at once.\n"
+                'Planes to read (z, t, c: e.g. z=0-9&t=0, or t=0,10,20&c=0,2):', text=default)
+            fragment = (fragment or '').strip().lstrip('#')
+            if not ok or not fragment:
+                return None
 
     def _equation_dialog(self, **settings):
         """Run the equation dialog; return its values, or None if cancelled."""
@@ -2672,12 +2737,41 @@ class EZFIG_GUI(QMainWindow):
         # run_pyfigures() — that is where the ImageJ/JVM non-daemon threads (which
         # would otherwise hang the interpreter) are dealt with.
 
+    def _login_to_omero_servers_of(self, pyf_list):
+        """A figure with images on a private OMERO server: log in (once per
+        server) before its images are read in the background."""
+        import re as _re
+        from batoolset import omero_web as O
+        checked = set()
+        for path in pyf_list:
+            try:
+                with open(path, encoding='utf-8', errors='replace') as f:
+                    text = f.read()
+            except OSError:
+                continue
+            for url in _re.findall(r'https?://[^"<>\s]+', text):
+                parsed = O.parse_omero_url(url.replace('&amp;', '&'))
+                if parsed is None or parsed[0] in checked:
+                    continue
+                checked.add(parsed[0])
+                try:
+                    O.image_data(url.replace('&amp;', '&'))
+                except O.OmeroLoginRequired as e:
+                    QApplication.restoreOverrideCursor()
+                    self.omero_login(e.base)
+                except Exception:
+                    pass                  # unreachable server etc.: reported when the image loads
+
     def _start_pyf_loader(self, pyf_list, only_pyf_drop=False, append=True, reset_undo=False):
         """Start a background thread to load .pyf files without blocking the UI.
 
         append=False replaces the current figure with the first loaded file
         (File>Open toolbar behaviour); reset_undo resets the undo stack right
         before the objects are applied (interactive Open)."""
+        self._login_to_omero_servers_of(pyf_list)
+        # until _on_pyf_loading_done has run on this thread: the loader thread
+        # can end before its queued results reach the window (wait_for_images)
+        self._pyf_loads_pending = getattr(self, '_pyf_loads_pending', 0) + 1
         self._pyf_only_drop = only_pyf_drop
         self._pyf_append = append
         self._pyf_reset_undo_pending = reset_undo
@@ -3014,6 +3108,7 @@ class EZFIG_GUI(QMainWindow):
 
     @Slot()
     def _on_pyf_loading_done(self):
+        self._pyf_loads_pending = max(0, getattr(self, '_pyf_loads_pending', 0) - 1)
         source = getattr(self, '_pyf_single_source', None)
         if self._pyf_only_drop:
             # a .pyf dropped onto the canvas becomes an unsaved new composition
@@ -5489,7 +5584,8 @@ class EZFIG_GUI(QMainWindow):
             running = th is not None and th.isRunning()
         except RuntimeError:
             running = False
-        return running or bool(getattr(self, '_lazy_img_queue', None)) \
+        return running or getattr(self, '_pyf_loads_pending', 0) > 0 \
+            or bool(getattr(self, '_lazy_img_queue', None)) \
             or bool(getattr(self, '_active_img_loaders', None))
 
     def wait_for_images(self, timeout=600):
@@ -5504,9 +5600,23 @@ class EZFIG_GUI(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             t0 = _time.time()
+            thread_gone_since = None
             while self._images_loading() and _time.time() - t0 < timeout:
                 QApplication.processEvents()
                 _time.sleep(0.005)
+                th = getattr(self, '_pyf_loader_thread', None)
+                try:
+                    th_running = th is not None and th.isRunning()
+                except RuntimeError:
+                    th_running = False
+                if getattr(self, '_pyf_loads_pending', 0) and not th_running:
+                    # the loader's results are normally handled within a few
+                    # event-loop passes; never wait forever on a lost one
+                    thread_gone_since = thread_gone_since or _time.time()
+                    if _time.time() - thread_gone_since > 5:
+                        self._pyf_loads_pending = 0
+                else:
+                    thread_gone_since = None
             # the last image's refresh/reflow are queued: run them now
             for _ in range(3):
                 QApplication.processEvents()

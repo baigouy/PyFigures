@@ -151,6 +151,35 @@ def inspect_ome_zarr(path_or_url: str) -> str:
 
 
 @mcp.tool()
+def inspect_omero_image(image_url: str) -> str:
+    """Describe an image on an **OMERO** server without reading its pixels: name,
+    size (X, Y, Z, T, C), pixel size in µm, channel names / colours / windows,
+    and the planes add_image would read.
+
+    *image_url*: the image's OMERO.web link, as shown by the browser — e.g.
+    ``https://omero.example.org/webclient/img_detail/1234/``,
+    ``…/webclient/?show=image-1234`` or ``…/iviewer/?images=1234``. Append
+    ``#z=0-9&t=0&c=0,2`` to choose planes / channels. Give the same link to
+    add_image (or a recipe) to add the image. Pixels come from OMERO.web's
+    renderer: 256 levels per channel over the channel's data range (exact for
+    8-bit data). Private data needs a login: set OMERO_USERNAME and
+    OMERO_PASSWORD in the MCP server's environment (never stored in figures).
+    """
+    from batoolset import omero_web as O
+    if not O.is_omero_url(image_url):
+        return ("ERROR: not an OMERO image link (expected …/webclient/img_detail/ID/, "
+                "…/webclient/?show=image-ID or …/iviewer/?images=ID)")
+    try:
+        info = O.describe(image_url)
+    except O.OmeroLoginRequired as e:
+        return (f"ERROR: {e}. Set OMERO_USERNAME and OMERO_PASSWORD in the environment of the "
+                "MCP server, or open the image once in the PyFigures GUI to log in.")
+    except Exception as e:
+        return f"ERROR: cannot read {image_url}: {type(e).__name__}: {e}"
+    return json.dumps(info, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def list_images(pyf_path: str) -> str:
     """List all image file paths referenced in the figure, as JSON.
 
@@ -495,7 +524,8 @@ def add_image(
       folder or a URL such as ``https://…/image.zarr``. For OME-Zarr the largest
       pyramid level within 512 MB / 8192 px is read; append ``#level=N`` to the
       URL to choose one (see inspect_ome_zarr). Pixel size and channel colours
-      come from the OME metadata.
+      come from the OME metadata. An **OMERO** image's OMERO.web link
+      (``…/webclient/img_detail/ID/``; see inspect_omero_image) works too.
     *label*: optional panel label (plain text or Qt HTML, e.g. "<b>A</b>").
     *label_placement*: "top left" | "top right" | "bottom left" | "bottom right".
     """

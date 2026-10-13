@@ -178,6 +178,13 @@ def _raw_width_from_file(filename) -> int | None:
             return level_size(filename)[1]
         except Exception:
             return None
+    from batoolset.omero_web import is_omero_url
+    if is_omero_url(filename):
+        try:                       # OMERO image: its size from OMERO.web
+            from batoolset.omero_web import size_of
+            return size_of(filename)[0]
+        except Exception:
+            return None
     if not os.path.isfile(filename):
         return None
     low = filename.lower()

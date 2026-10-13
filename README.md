@@ -111,6 +111,16 @@ Perform the following steps **only once** to set up your environment:
 
     Then use *File → Add image from URL / OME-Zarr…* (or give the URL to `add_image` / a recipe), e.g. an image from the [IDR](https://idr.openmicroscopy.org/) such as `https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0062A/6001240.zarr`. The pyramid level, pixel size (for scale bars) and channel colours come from the image; only the chosen level is downloaded. Remote images are read with `requests`, so no extra network library is needed. Plain image URLs (`https://…/image.tif`) work without this extra.
 
+    **OMERO** needs nothing extra: paste an image's OMERO.web link (`https://…/webclient/img_detail/1234/`) in the same dialog, or give it to `add_image` / a recipe. PyFigures reads it through OMERO.web (no omero-py / Ice install), asks for a login on private servers (kept in memory only; scripts and the MCP server use `OMERO_USERNAME` / `OMERO_PASSWORD`), and gets the pixel size and channels from OMERO. Pixels come from OMERO.web's renderer: 256 levels per channel over its data range, exact for 8-bit images and ample for display. The figure stays a desktop file; nothing is stored on the server.
+
+    **Raw 16-bit / float pixels from OMERO (optional):** install omero-py, and once you are logged in the planes are read raw, in the image's own data type, through OMERO's own API (the server's Ice port 4064, `OMERO_HOST` / `OMERO_PORT` if different, or its websocket endpoint). Anything that fails there falls back to OMERO.web. omero-py needs zeroc-ice, which has no PyPI wheel for Windows: on Windows install Glencoe Software's zeroc-ice wheel for your Python first (https://github.com/glencoesoftware/zeroc-ice-py-win-x86_64/releases), then
+
+    ```sh
+    pip install -U pyfigures[omero]
+    ```
+
+    (Linux and macOS: Glencoe also publishes zeroc-ice wheels; otherwise pip compiles it.) Not included in the standalone apps.
+
 9. **Optional: PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
 
     ```sh
@@ -197,6 +207,7 @@ Optional (installed only if you ask for them):
 | **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
 | **zarr** (`pyfigures[zarr]`) | OME-Zarr images (with numcodecs)                       | https://pypi.org/project/zarr/                | MIT                |
 | **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels                            | https://pypi.org/project/PyMuPDF/             | **AGPL v3**        |
+| **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
 | **pyimagej / scyjava / JPype** (`pyfigures[bioformats]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |

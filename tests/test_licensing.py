@@ -162,10 +162,13 @@ def test_every_extra_named_in_the_docs_exists():
         with open(p, encoding="utf-8") as f:
             named |= set(re.findall(r"pyfigures\[(\w+)\]", f.read()))
     assert named and not named - extras, named - extras
-    # 'all' really is all the other extras
+    # 'all' really is all the other extras — except 'omero': omero-py needs
+    # zeroc-ice, which has no wheel on PyPI for Windows (and often fails to
+    # build elsewhere), so it would break `pip install pyfigures[all]`
     all_block = block[block.index("'all'"):]
     all_block = all_block[:all_block.index("]")]
-    for extra in extras - {"all"}:
+    assert "omero" in extras and "omero-py" not in all_block
+    for extra in extras - {"all", "omero"}:
         sub = block[block.index(f"'{extra}'"):]
         for req in re.findall(r'"([^"]+)"', sub[:sub.index("]")]):
             assert f'"{req}"' in all_block, (extra, req)

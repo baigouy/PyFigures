@@ -79,6 +79,12 @@ setuptools.setup(
         'pdf': [
             "pymupdf",       # PDF files as vector panels (AGPL v3)
         ],
+        # raw (16-bit) pixels from OMERO; without it OMERO images are read
+        # through OMERO.web with 256 levels per channel. Left out of the "all"
+        # extra: it needs zeroc-ice, which has no PyPI wheel for Windows (README).
+        'omero': [
+            "omero-py",
+        ],
         'all': [
             "mcp>=1.0",
             "av",
