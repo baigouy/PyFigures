@@ -7,7 +7,10 @@ dimensions, with minimal wasted space. That is the wrong tool for a
 should be free to sit at an angle, overlap, and breathe on a page — not be
 cropped or auto-packed. The poster designer is a second, separate tool
 built for that job. It lives under `Tools > Poster / collage designer…`
-(or `python -m pyfigures.poster`).
+(or `python -m pyfigures.poster`). In the standalone app it has its own
+launcher too: **PyFigures Poster.exe** next to PyFigures.exe on Windows,
+**PyFigures Poster.app** next to PyFigures.app on macOS (keep the two side
+by side; it opens PyFigures.app with `--poster`).
 
 **Photo albums have their own designer**, `Tools > Photo album designer…`
 (or `python -m pyfigures.album`): the same canvas and tools, but every

@@ -81,25 +81,27 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install create-dmg
 
-      # The photo album designer: a small launcher app running PyFigures.app --album
-      # (on Windows it is "PyFigures Album.exe", built by pyfigures.spec)
-      - name: Photo album launcher (macOS)
+      # The photo album and poster designers: small launcher apps running
+      # PyFigures.app --album / --poster (on Windows they are "PyFigures Album.exe"
+      # and "PyFigures Poster.exe", built by pyfigures.spec)
+      - name: Album and poster launchers (macOS)
         if: runner.os == 'macOS'
         run: |
-          bash packaging/make_macos_album_app.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
+          bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
 
       - name: Package (macOS — dmg)
         if: runner.os == 'macOS'
         run: |
           mkdir dmg_src
-          cp -R dist/PyFigures.app "dist/PyFigures Album.app" dmg_src/
+          cp -R dist/PyFigures.app "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
           create-dmg \
             --volname "PyFigures" \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "PyFigures.app" 150 120 \
-            --icon "PyFigures Album.app" 150 270 \
-            --app-drop-link 450 185 \
+            --window-size 600 460 \
+            --icon-size 90 \
+            --icon "PyFigures.app" 150 90 \
+            --icon "PyFigures Album.app" 150 220 \
+            --icon "PyFigures Poster.app" 150 350 \
+            --app-drop-link 450 220 \
             ${{ matrix.artifact_path }} \
             dmg_src
 

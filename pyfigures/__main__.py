@@ -290,14 +290,17 @@ def run_pyfigures():
 def requested_tool(argv, executable):
     """'album' or 'poster' when that designer should open instead of the
     figure editor: `--album`/`--poster` on the command line, or, in the
-    standalone app, the 'PyFigures Album' executable (a copy of PyFigures
-    built by pyfigures.spec, told apart only by its name). None otherwise."""
+    standalone app, the 'PyFigures Album' / 'PyFigures Poster' executables
+    (copies of PyFigures built by pyfigures.spec, told apart only by their
+    name). None otherwise."""
     if '--album' in argv:
         return 'album'
     if '--poster' in argv:
         return 'poster'
-    if 'album' in os.path.basename(executable).lower():
-        return 'album'
+    name = os.path.basename(executable).lower()
+    for tool in ('album', 'poster'):
+        if tool in name:
+            return tool
     return None
 
 

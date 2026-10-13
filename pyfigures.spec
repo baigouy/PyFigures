@@ -124,20 +124,23 @@ exe = EXE(
                             #             'images/PyFigures.icns' on macOS
 )
 
-# The photo album designer as its own executable: the same program under
-# another name (pyfigures/__main__.py opens the album designer when its
-# executable name contains "Album"), sharing the bundle's libraries. Windows
-# only: on macOS "PyFigures Album.app" is a small launcher made by
-# .github/workflows/build.yml that runs PyFigures.app --album, so the whole
-# app isn't shipped twice.
+# The photo album and poster designers as their own executables: the same
+# program under another name (pyfigures/__main__.py opens the album/poster
+# designer when its executable name contains "Album"/"Poster"), sharing the
+# bundle's libraries. Windows only: on macOS "PyFigures Album.app" and
+# "PyFigures Poster.app" are small launchers made by
+# packaging/make_macos_launcher_apps.sh that run PyFigures.app --album /
+# --poster, so the whole app isn't shipped three times.
 extra_exes = []
-if sys.platform == 'win32':
+for _launcher in ('PyFigures Album', 'PyFigures Poster'):
+    if sys.platform != 'win32':
+        break
     extra_exes.append(EXE(
         pyz,
         a.scripts,
         [],
         exclude_binaries=True,
-        name='PyFigures Album',
+        name=_launcher,
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
