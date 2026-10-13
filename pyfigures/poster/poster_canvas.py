@@ -18,8 +18,8 @@ import subprocess
 import sys
 import tempfile
 
-from qtpy.QtCore import Qt, QRectF, QPointF, QSize, QSizeF, Signal, QBuffer, QIODevice
-from qtpy.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPdfWriter, QPageSize, QTransform, QPalette
+from qtpy.QtCore import Qt, QRectF, QPointF, QSize, QSizeF, Signal, QBuffer, QIODevice, QMarginsF
+from qtpy.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPdfWriter, QPageSize, QPageLayout, QTransform, QPalette
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QWidget, QInputDialog, QFileDialog, QMessageBox, QApplication, QProgressDialog
 
@@ -573,20 +573,23 @@ class PosterCanvas(QWidget):
         px_per_mm = dpi / 25.4
         writer = QPdfWriter(str(path))
         writer.setResolution(dpi)
+        # Qt's default margins shift the page content and clip its far edges
+        writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
         saved_index = self.current_page_index
         painter = QPainter()
         try:
-            for i, page in enumerate(self.pages):
-                writer.setPageSize(QPageSize(QSizeF(page.width_mm, page.height_mm), QPageSize.Millimeter))
-                if i == 0:
-                    painter.begin(writer)
-                else:
-                    writer.newPage()
-                self.current_page_index = i
-                painter.setRenderHint(QPainter.Antialiasing, True)
-                mm_to_px = _MmToPx(scale=px_per_mm, origin=QPointF(0.0, 0.0))
-                self._paint_content(painter, mm_to_px)
-            painter.end()
+            with self._vector_pyf_images(self.pages):
+                for i, page in enumerate(self.pages):
+                    writer.setPageSize(QPageSize(QSizeF(page.width_mm, page.height_mm), QPageSize.Millimeter))
+                    if i == 0:
+                        painter.begin(writer)
+                    else:
+                        writer.newPage()
+                    self.current_page_index = i
+                    painter.setRenderHint(QPainter.Antialiasing, True)
+                    mm_to_px = _MmToPx(scale=px_per_mm, origin=QPointF(0.0, 0.0))
+                    self._paint_content(painter, mm_to_px)
+                painter.end()
         finally:
             self.current_page_index = saved_index
             self.update()
@@ -645,6 +648,45 @@ class PosterCanvas(QWidget):
             for shape in page.shapes_to_draw:
                 if isinstance(shape, PosterImage) and shape.source_pyf and os.path.isfile(shape.source_pyf):
                     yield shape
+
+    @contextlib.contextmanager
+    def _vector_pyf_images(self, pages):
+        """Vector (PDF/SVG) export only: every image flattened from a .pyf
+        (PosterImage.source_pyf) is drawn from that figure re-rendered as SVG
+        instead of from its PNG flatten. Text, plots and drawings stay vectors
+        and the micrographs keep their native resolution, exactly as when the
+        figure is exported on its own. Each figure is rendered once per export
+        (in a subprocess, like every other .pyf render here); an image whose
+        render fails keeps its PNG flatten. Nested calls reuse the outer one."""
+        if getattr(self, '_vector_export_active', False):
+            yield
+            return
+        from qtpy.QtSvg import QSvgRenderer
+        self._vector_export_active = True
+        tmp_dir = tempfile.mkdtemp(prefix='pyf_poster_vec_')
+        rendered = {}
+        touched = []
+        try:
+            for shape in self._pyf_sourced_images(pages):
+                key = os.path.abspath(shape.source_pyf)
+                if key not in rendered:
+                    out = os.path.join(tmp_dir, f'fig_{len(rendered)}.svg')
+                    try:
+                        _render_pyf_subprocess(key, out, PYF_RENDER_DPI)
+                        renderer = QSvgRenderer(out)
+                        rendered[key] = renderer if renderer.isValid() else None
+                    except Exception:
+                        rendered[key] = None
+                if rendered[key] is not None:
+                    shape._vector = rendered[key]
+                    touched.append(shape)
+            yield
+        finally:
+            for shape in touched:
+                shape._vector = None
+            self._vector_export_active = False
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @contextlib.contextmanager
     def _high_res_pyf_images(self, pages, dpi):
@@ -707,16 +749,17 @@ class PosterCanvas(QWidget):
         caveat as the main editor's export_print_ready; fine for layout/
         proofing, not colour-critical print). 'pdf'/'svg' are vector, always
         RGB (Qt has no CMYK writer for either), so *color_mode* is ignored
-        for those two. Any image flattened from a .pyf is transparently
-        re-rendered at a matching resolution first if the cached flatten
-        would otherwise be the bottleneck — see _high_res_pyf_images."""
+        for those two. Images flattened from a .pyf are drawn as vectors in
+        pdf/svg (_vector_pyf_images) and, in tiff/eps, re-rendered at a
+        matching resolution if the cached flatten would otherwise be the
+        bottleneck (_high_res_pyf_images)."""
         filetype = filetype.lower().lstrip('.')
         if filetype not in self.PRINT_FILETYPES:
             raise ValueError(f'unsupported print filetype {filetype!r}; use one of {self.PRINT_FILETYPES}')
+        if filetype in ('pdf', 'svg'):
+            self.save(out_path, filetype=filetype, dpi=dpi)
+            return
         with self._high_res_pyf_images([self.current_page], dpi):
-            if filetype in ('pdf', 'svg'):
-                self.save(out_path, filetype=filetype, dpi=dpi)
-                return
             self._export_raster_print_page(out_path, filetype, color_mode=color_mode, dpi=dpi)
 
     def _export_raster_print_page(self, out_path, filetype, color_mode='cmyk', dpi=300):
@@ -762,7 +805,9 @@ class PosterCanvas(QWidget):
         if filetype not in self.PRINT_FILETYPES:
             raise ValueError(f'unsupported print filetype {filetype!r}; use one of {self.PRINT_FILETYPES}')
 
-        with self._high_res_pyf_images(self.pages, dpi):
+        resolution = contextlib.nullcontext() if filetype in ('pdf', 'svg') \
+            else self._high_res_pyf_images(self.pages, dpi)
+        with resolution, self._vector_pyf_images(self.pages if filetype in ('pdf', 'svg') else []):
             if filetype == 'pdf':
                 self.export_album_pdf(out_path, dpi=dpi)
                 return {'mode': 'single_file', 'path': str(out_path), 'page_count': len(self.pages)}
@@ -1625,10 +1670,13 @@ class PosterCanvas(QWidget):
         # uses (QScrollArea.setBackgroundRole(QPalette.Dark) in scrollableEZFIG.py),
         # so both tools look the same in light and dark theme.
         painter.fillRect(self.rect(), self.palette().color(QPalette.Dark))
-        self._paint_content(painter, self._mm_to_px)
+        self._paint_content(painter, self._mm_to_px, editor_overlays=True)
         painter.end()
 
-    def _paint_content(self, painter, mm_to_px):
+    def _paint_content(self, painter, mm_to_px, editor_overlays=False):
+        """Paint the current page. *editor_overlays* (on-screen only) adds the
+        selection outlines, handles, hints and snap guides, which must never
+        end up in an export or a thumbnail."""
         page_rect_px = self._page_rect_px_for(mm_to_px)
 
         painter.fillRect(page_rect_px, QColor(255, 255, 255))
@@ -1653,6 +1701,9 @@ class PosterCanvas(QWidget):
             _, gy1 = mm_to_px(mid_x_mm, self.page_height_mm)
             painter.setPen(QPen(QColor(150, 150, 150), 1, Qt.DashLine))
             painter.drawLine(QPointF(gx, gy0), QPointF(gx, gy1))
+
+        if not editor_overlays:
+            return
 
         if self.multi_selected:
             self._paint_multi_selection(painter, mm_to_px)
@@ -1824,18 +1875,24 @@ class PosterCanvas(QWidget):
                 generator.setTitle(title)
             if description:
                 generator.setDescription(description)
-            painter = QPainter(generator)
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            self._paint_content(painter, mm_to_px)
-            painter.end()
+            with self._vector_pyf_images([self.current_page]):
+                # Qt's SVG engine ignores drawPixmap source rects (crops)
+                from pyfigures.gui.svg_painter import CroppingPainter
+                painter = CroppingPainter(generator)
+                painter.setRenderHint(QPainter.Antialiasing, True)
+                self._paint_content(painter, mm_to_px)
+                painter.end()
         elif filetype == 'pdf':
             writer = QPdfWriter(str(path))
             writer.setPageSize(QPageSize(QSizeF(self.page_width_mm, self.page_height_mm), QPageSize.Millimeter))
+            # Qt's default margins shift the page content and clip its far edges
+            writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Millimeter)
             writer.setResolution(dpi)
-            painter = QPainter(writer)
-            painter.setRenderHint(QPainter.Antialiasing, True)
-            self._paint_content(painter, mm_to_px)
-            painter.end()
+            with self._vector_pyf_images([self.current_page]):
+                painter = QPainter(writer)
+                painter.setRenderHint(QPainter.Antialiasing, True)
+                self._paint_content(painter, mm_to_px)
+                painter.end()
         else:
             image = QImage(page_w_px, page_h_px, QImage.Format_ARGB32)
             image.fill(Qt.white)

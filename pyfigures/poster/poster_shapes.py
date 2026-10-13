@@ -129,6 +129,10 @@ class PosterImage:
         self.crop_bottom = crop_bottom
         self._pixmap = None
         self._pixmap_path = None
+        # Set only during a vector (PDF/SVG) export: a QSvgRenderer of the
+        # source .pyf rendered as vectors, drawn instead of the PNG flatten so
+        # text and plots stay vector and images keep their native resolution.
+        self._vector = None
 
     @property
     def is_template(self):
@@ -275,6 +279,18 @@ class PosterImage:
             painter.setPen(QPen(QColor(170, 170, 170), 2))
             painter.drawLine(QPointF(cx - r, cy), QPointF(cx + r, cy))
             painter.drawLine(QPointF(cx, cy - r), QPointF(cx, cy + r))
+        elif self._vector is not None:
+            # the whole (uncropped) figure, clipped to the visible part
+            vis_w = max(1e-6, 1.0 - self.crop_left - self.crop_right)
+            vis_h = max(1e-6, 1.0 - self.crop_top - self.crop_bottom)
+            full_w = img_local.width() / vis_w
+            full_h = img_local.height() / vis_h
+            full = QRectF(img_local.left() - self.crop_left * full_w,
+                          img_local.top() - self.crop_top * full_h, full_w, full_h)
+            painter.save()
+            painter.setClipRect(img_local, Qt.IntersectClip)
+            self._vector.render(painter, full)
+            painter.restore()
         else:
             pm = self.pixmap()
             if not pm.isNull():

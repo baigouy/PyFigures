@@ -34,7 +34,10 @@ class CroppingPainter(QPainter):
                 target = a[0]
                 if isinstance(target, (QPoint, QPointF)):
                     return base(self, target, sub)
-                return base(self, target, sub)
+                # (target, image, whole-image source): no 2-argument QRectF
+                # overload exists for drawPixmap
+                whole = QRectF(sub.rect()) if isinstance(target, QRectF) else sub.rect()
+                return base(self, target, sub, whole)
         # (x, y, image, sx, sy, sw, sh[, flags]) — QImage only
         if len(a) >= 4 and isinstance(a[2], kind) and not isinstance(a[0], (QRect, QRectF, QPoint, QPointF)):
             sx, sy = (a + [0, 0])[3:5]

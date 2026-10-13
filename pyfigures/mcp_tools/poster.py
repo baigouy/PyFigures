@@ -203,9 +203,11 @@ def add_poster_image(poster_path: str, image_path: str,
                      page: int | None = None) -> str:
     """Add one photo to a poster page, freely positioned and rotated.
 
-    *image_path* may also be a .pyf scientific figure: it is flattened to an
-    image (exactly like dropping it in the poster GUI) and remembered, so
-    export_poster_source_data nests that figure's own source-data bundle.
+    *image_path* may also be a .pyf scientific figure: it is shown from a
+    300 DPI flatten (exactly like dropping it in the poster GUI) and
+    remembered, so PDF/SVG exports draw the figure itself as vectors with its
+    images at native resolution, and export_poster_source_data nests that
+    figure's own source-data bundle.
 
     Rotation (theta, degrees) grows the image's bounding box instead of
     cropping it — the whole photo stays visible, tilted, which is the opposite

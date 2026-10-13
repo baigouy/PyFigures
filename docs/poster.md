@@ -282,20 +282,22 @@ accepts, so those instead write to a **folder** you pick: one numbered file
 per page (`page_01_cover_front.tif`, `page_02_spread.tif`, ...) plus a
 `manifest.json`.
 
-**A pasted-in `.pyf` figure gets re-rendered at full resolution for this.**
-Normally, dropping a `.pyf` onto the page flattens it once at a fixed 300 DPI
-(see "Bringing in a finished figure" below) — fine on screen, but if that
-panel is later enlarged, or the print export's DPI is higher than that
-flatten's own effective resolution, the cached copy becomes the sharpness
-ceiling, not the export settings. Print-ready export checks this per image
-and, if the cached flatten would be the bottleneck, transparently re-renders
-that image fresh from its original `.pyf` at whatever DPI its actual on-page
-size needs — so a chart pasted small and then stretched across a spread
-comes out print-sharp, not upscaled. Skipped (no needless re-render) when
-the cached flatten is already sharp enough; a re-render that fails for any
-reason just falls back to the cached copy rather than aborting the export.
-Never touches the document itself — the swap only exists for the duration
-of the export.
+**A pasted-in `.pyf` figure keeps its full quality in exports.** On screen,
+a `.pyf` dropped onto the page is shown from a 300 DPI flatten (see
+"Bringing in a finished figure" below). Exports do not use that flatten:
+
+- **PDF and SVG** (plain export, whole-document PDF and print-ready PDF/SVG)
+  draw the figure itself, re-rendered as vectors from its `.pyf`: text,
+  plots, arrows, scale bars and SVG drawings stay vectors (text as outlines)
+  and the micrographs are embedded at their **native resolution**, exactly
+  as when the figure is exported on its own. Crops and rotations made on the
+  poster apply as usual.
+- **TIFF/EPS print-ready** export re-renders the figure from its `.pyf` at
+  whatever DPI its on-page size needs, if the flatten would otherwise be the
+  sharpness ceiling (skipped when it is already sharp enough).
+
+A figure whose `.pyf` has moved or fails to render falls back to the flatten
+rather than aborting the export. The document itself is never changed.
 
 ## Consolidation: source-data bundle
 
@@ -710,11 +712,14 @@ editor (`pyfigures/gui/ezfig.py`, `pyfigures/gui/pfgui.py`):
   to know it exists. `export_print_ready`/`_export_raster_print_page`/
   `export_album_print_ready` add print-ready TIFF/EPS (optionally CMYK via
   Pillow, no ICC profile) and PDF/SVG export, one page or the whole
-  document; `_high_res_pyf_images` (a context manager, wrapping both of
-  those) transparently re-renders any `source_pyf`-backed image at a
-  resolution matching its actual on-page size before the export runs,
-  swapping it back afterward, so a pasted-in figure isn't capped at its
-  cached flatten's resolution. Also `_render_pyf_to_png`/
+  document. `_vector_pyf_images` (PDF/SVG exports, entered by `save()` and
+  `export_album_pdf`) re-renders each `source_pyf`-backed image as SVG and
+  sets `PosterImage._vector` (a `QSvgRenderer`) for the export, which
+  `PosterImage.paint` draws, clipped to the crop, instead of the PNG;
+  `_high_res_pyf_images` (raster print-ready) re-renders it at a resolution
+  matching its on-page size. Both restore the shapes afterward. Exports call
+  `_paint_content` without `editor_overlays`, so selection outlines,
+  handles, hints and guides are never exported. Also `_render_pyf_to_png`/
   `_render_pyf_subprocess` — the one bridge to `.pyf`, via
   `pyfigures.gui.render_headless` in a subprocess, never an in-process
   import of `pfgui`/`ezfig.py`. `_push_undo_checkpoint`/`undo`/`redo`/
