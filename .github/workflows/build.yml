@@ -81,27 +81,27 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install create-dmg
 
-      - name: Package (macOS-Intel — dmg)
-        if: matrix.os == 'macos-15-intel'
+      # The photo album designer: a small launcher app running PyFigures.app --album
+      # (on Windows it is "PyFigures Album.exe", built by pyfigures.spec)
+      - name: Photo album launcher (macOS)
+        if: runner.os == 'macOS'
         run: |
-          create-dmg \
-            --volname "PyFigures" \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --app-drop-link 450 185 \
-            PyFigures-macOS-Intel.dmg \
-            dist/PyFigures.app
+          bash packaging/make_macos_album_app.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
 
-      - name: Package (macOS-AppleSilicon — dmg)
-        if: matrix.os == 'macos-latest'
+      - name: Package (macOS — dmg)
+        if: runner.os == 'macOS'
         run: |
+          mkdir dmg_src
+          cp -R dist/PyFigures.app "dist/PyFigures Album.app" dmg_src/
           create-dmg \
             --volname "PyFigures" \
             --window-size 600 400 \
             --icon-size 100 \
+            --icon "PyFigures.app" 150 120 \
+            --icon "PyFigures Album.app" 150 270 \
             --app-drop-link 450 185 \
-            PyFigures-macOS-AppleSilicon.dmg \
-            dist/PyFigures.app
+            ${{ matrix.artifact_path }} \
+            dmg_src
 
       # -----------------------------------------------------------------------
       # Upload artifacts

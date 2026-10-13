@@ -248,6 +248,11 @@ separate window that enforces exactly that structure:
   between the two in either window.
 - Its tutorial is *Help > Photo Album Tutorial* in the figure editor (or the
   Tutorial button in its toolbar).
+- In the standalone app it has its own launcher: **PyFigures Album.exe**
+  next to PyFigures.exe on Windows, **PyFigures Album.app** next to
+  PyFigures.app on macOS (it opens PyFigures.app in album mode, so keep the
+  two side by side). `PyFigures --album` / `python -m pyfigures --album` do
+  the same from a terminal (`--poster` opens the poster designer).
 
 ## Print-ready export
 

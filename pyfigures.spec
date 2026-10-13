@@ -124,11 +124,39 @@ exe = EXE(
                             #             'images/PyFigures.icns' on macOS
 )
 
+# The photo album designer as its own executable: the same program under
+# another name (pyfigures/__main__.py opens the album designer when its
+# executable name contains "Album"), sharing the bundle's libraries. Windows
+# only: on macOS "PyFigures Album.app" is a small launcher made by
+# .github/workflows/build.yml that runs PyFigures.app --album, so the whole
+# app isn't shipped twice.
+extra_exes = []
+if sys.platform == 'win32':
+    extra_exes.append(EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name='PyFigures Album',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon=None,
+    ))
+
 # ---------------------------------------------------------------------------
 # Collect (one-directory bundle)
 # ---------------------------------------------------------------------------
 coll = COLLECT(
     exe,
+    *extra_exes,
     a.binaries,
     a.datas,
     strip=False,

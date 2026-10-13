@@ -287,6 +287,25 @@ def run_pyfigures():
     os._exit(exit_code)
 
 
+def requested_tool(argv, executable):
+    """'album' or 'poster' when that designer should open instead of the
+    figure editor: `--album`/`--poster` on the command line, or, in the
+    standalone app, the 'PyFigures Album' executable (a copy of PyFigures
+    built by pyfigures.spec, told apart only by its name). None otherwise."""
+    if '--album' in argv:
+        return 'album'
+    if '--poster' in argv:
+        return 'poster'
+    if 'album' in os.path.basename(executable).lower():
+        return 'album'
+    return None
+
+
 if __name__ == '__main__':
-    # Run the PyFigures GUI
-    run_pyfigures()
+    tool = requested_tool(sys.argv[1:], sys.executable if getattr(sys, 'frozen', False) else '')
+    if tool is not None:
+        from pyfigures.poster.__main__ import run_poster_designer
+        run_poster_designer(album=tool == 'album')
+    else:
+        # Run the PyFigures GUI
+        run_pyfigures()
