@@ -28,6 +28,8 @@ def run_pyfigures():
 
     # Initialize the QApplication
     app = QApplication(sys.argv)
+    from pyfigures.icons import set_app_identity
+    set_app_identity('pyfigures')
 
     # Install a Qt-safe global exception hook: without it, any unhandled exception
     # raised inside a slot/timer/event makes PyQt6 abort the whole app with

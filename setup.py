@@ -22,7 +22,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url=__URL__,
-    package_data={'': ['*.md','*.json']},
+    package_data={'': ['*.md','*.json'], 'pyfigures': ['icons/*.png']},   # window icons
     license='BSD',
     include_package_data=True,
     packages=setuptools.find_packages(),

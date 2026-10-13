@@ -13,6 +13,8 @@ from qtpy.QtWidgets import QApplication
 
 def run_poster_designer(album=False):
     app = QApplication(sys.argv)
+    from pyfigures.icons import set_app_identity
+    set_app_identity('pyfigures_album' if album else 'pyfigures_poster')
 
     # Same Qt-safe global exception hook the main editor installs: without
     # it, an unhandled exception in a slot/timer/event aborts the whole

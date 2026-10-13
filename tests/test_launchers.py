@@ -58,11 +58,48 @@ def test_every_executable_has_its_icon(name):
         assert (16, 16) in ico.info["sizes"] and (256, 256) in ico.info["sizes"]
     with Image.open(os.path.join(icons, name + ".icns")) as icns:
         assert icns.format == "ICNS"
-    with Image.open(os.path.join(icons, name + ".png")) as png:
+    with Image.open(os.path.join(ROOT, "pyfigures", "icons", name + ".png")) as png:
         assert png.size == (1024, 1024)
     spec = _read("pyfigures.spec")
     assert "icon=_icon('pyfigures')" in spec                      # main exe + macOS bundle
     assert "icon=_icon(_launcher.lower().replace(' ', '_'))" in spec
+
+
+def test_window_icons(qapp, monkeypatch):
+    from qtpy.QtWidgets import QApplication, QMessageBox
+    from pyfigures import icons
+    from pyfigures.poster.poster_window import PosterWindow
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Discard))
+
+    def same(qicon, name):
+        a = qicon.pixmap(32, 32).toImage()
+        b = icons.app_icon(name).pixmap(32, 32).toImage()
+        return not a.isNull() and a == b
+
+    for album, name in ((True, "pyfigures_album"), (False, "pyfigures_poster")):
+        w = PosterWindow(album=album)
+        assert same(w.windowIcon(), name)
+        w.close()
+    assert not same(icons.app_icon("pyfigures_album"), "pyfigures_poster")   # really different
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    EZFIG_GUI.show_tips = lambda self: None
+    g = EZFIG_GUI()
+    try:
+        assert same(g.windowIcon(), "pyfigures")
+    finally:
+        g._dirty = False
+        g.close()
+    old = QApplication.windowIcon()
+    try:
+        icons.set_app_identity("pyfigures_album")
+        assert same(QApplication.windowIcon(), "pyfigures_album")
+    finally:
+        QApplication.setWindowIcon(old)
+
+
+def test_icons_ship_in_the_package():
+    setup = _read("setup.py")
+    assert "'pyfigures': ['icons/*.png']" in setup
 
 
 def test_workflow_ships_the_launchers_on_macos():

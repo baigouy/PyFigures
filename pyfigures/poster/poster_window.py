@@ -54,6 +54,8 @@ class PosterWindow(QMainWindow):
         self.album = bool(album)
         self.tool_name = 'Photo Album Designer' if self.album else 'Poster / Collage Designer'
         self.setWindowTitle(f'PyFigures — {self.tool_name}')
+        from pyfigures.icons import app_icon
+        self.setWindowIcon(app_icon('pyfigures_album' if self.album else 'pyfigures_poster'))
 
         self.canvas = PosterCanvas(page_width_mm=210.0, page_height_mm=297.0)
         if self.album:

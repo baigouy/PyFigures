@@ -1,7 +1,8 @@
 """Draws the three app icons — PyFigures (figure editor), PyFigures Album
 (photo album designer) and PyFigures Poster (poster designer) — and writes
-each as a 1024 px PNG, a Windows .ico and a macOS .icns into images/icons/.
-pyfigures.spec and packaging/make_macos_launcher_apps.sh use them.
+each as a Windows .ico and a macOS .icns into images/icons/ (used by
+pyfigures.spec and packaging/make_macos_launcher_apps.sh) and a 1024 px PNG
+into pyfigures/icons/ (the window icons, see pyfigures.icons).
 
     python packaging/make_icons.py [out_dir]
 
@@ -152,12 +153,16 @@ def draw_poster(img):
         _shadowed(img, card, radius=10, offset=(0, 8), alpha=120)
 
 
-def make(out_dir):
-    os.makedirs(out_dir, exist_ok=True)
+def make(out_dir, png_dir=None):
+    """.ico/.icns into *out_dir*, the PNG (the window icon) into *png_dir*
+    (default: *out_dir*)."""
+    png_dir = png_dir or out_dir
+    for d in (out_dir, png_dir):
+        os.makedirs(d, exist_ok=True)
     for name, (top, bottom, fn) in ICONS.items():
         img = _tile(top, bottom)
         globals()[fn](img)
-        img.save(os.path.join(out_dir, f'{name}.png'))
+        img.save(os.path.join(png_dir, f'{name}.png'))
         img.save(os.path.join(out_dir, f'{name}.ico'), sizes=ICO_SIZES)
         img.save(os.path.join(out_dir, f'{name}.icns'))
         print('made', name)
@@ -165,4 +170,7 @@ def make(out_dir):
 
 if __name__ == '__main__':
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    make(sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, 'images', 'icons'))
+    if len(sys.argv) > 1:
+        make(sys.argv[1])
+    else:      # the build's .ico/.icns, and the window icons shipped in the package
+        make(os.path.join(root, 'images', 'icons'), os.path.join(root, 'pyfigures', 'icons'))

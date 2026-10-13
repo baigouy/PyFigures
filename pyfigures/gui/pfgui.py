@@ -585,8 +585,8 @@ class EZFIG_GUI(QMainWindow):
                   window_width,
                   window_height))
 
-        self.setWindowIcon(
-            get_icon('fa.newspaper-o', color=QColor(200, 200, 200)))  # very easy to change the color of my icon
+        from pyfigures.icons import app_icon
+        self.setWindowIcon(app_icon('pyfigures'))
 
         # zoom parameters
         self._update_window_title()
