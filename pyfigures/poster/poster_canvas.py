@@ -226,7 +226,7 @@ class PosterCanvas(QWidget):
         # Photo-album mode: front/back covers are pinned at the two ends
         # (single pages) and every interior page is enforced to be a
         # 'spread' (one continuous two-page canvas, so a photo/text can
-        # freely cross the middle) — see set_album_mode(). False is a plain
+        # freely cross the middle) — see new_document(album=True). False is a plain
         # poster: any single page, no enforcement at all.
         self.album_mode = False
         self.selected = None
@@ -411,7 +411,7 @@ class PosterCanvas(QWidget):
         """Reset to one fresh blank single page — used for File > New, so a
         previously multi-page album doesn't leave stray pages behind. With
         *album* the fresh document is a blank photo album instead (front
-        cover, one spread, back cover; see set_album_mode), as the photo
+        cover, one spread, back cover; add/remove/move_page keep it so), as the photo
         album designer starts — not an undoable edit, a new document."""
         if album:
             self.pages = [PosterPage(width_mm, height_mm, kind='cover_front'),
@@ -429,42 +429,6 @@ class PosterCanvas(QWidget):
         self._resize_to_page()
         self.update()
         self._undo_redo_init()
-        self._push_undo_checkpoint()
-
-    def set_album_mode(self, enabled):
-        """Turn photo-album structure on/off.
-
-        Enabling pins a blank front cover at the start and a blank back
-        cover at the end (both plain single pages) and — if the document was
-        still just its original blank single page — turns that page into the
-        first interior spread rather than discarding it, so toggling this on
-        never loses existing work. From then on add_page()/remove_page()/
-        move_page() refuse to touch the cover slots or insert anything but a
-        'spread' between them (see those methods).
-
-        Disabling only lifts that enforcement; it does not delete or
-        re-kind any existing page — a document can freely go back to being
-        edited as a plain multi-page document, or the user can trim it back
-        down to one page by hand."""
-        enabled = bool(enabled)
-        if enabled == self.album_mode:
-            return
-        if enabled:
-            if len(self.pages) == 1 and self.pages[0].kind == 'single':
-                only = self.pages[0]
-                only.kind = 'spread'
-                if abs(only.width_mm - self.base_page_width_mm) < 0.01:
-                    only.width_mm = self.base_page_width_mm * 2.0
-            if self.pages[0].kind != 'cover_front':
-                self.pages.insert(0, PosterPage(self.base_page_width_mm, self.base_page_height_mm,
-                                                kind='cover_front'))
-            if self.pages[-1].kind != 'cover_back':
-                self.pages.append(PosterPage(self.base_page_width_mm, self.base_page_height_mm,
-                                             kind='cover_back'))
-            self.current_page_index = min(self.current_page_index, len(self.pages) - 1)
-        self.album_mode = enabled
-        self._resize_to_page()
-        self.update()
         self._push_undo_checkpoint()
 
     def page_count(self):
@@ -493,7 +457,7 @@ class PosterCanvas(QWidget):
         one base page's size.
 
         In album_mode, *kind* is forced to 'spread' (covers are pinned and
-        managed by set_album_mode, not added by hand) and the insertion point
+        made by new_document(album=True), not added by hand) and the insertion point
         is clamped to strictly between the front and back cover."""
         if self.album_mode:
             kind = 'spread'

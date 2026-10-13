@@ -558,13 +558,12 @@ album; omit it for a plain single-page poster, or to target page 0 of an album.
 
 | Tool | Description |
 |------|-------------|
-| `create_poster(poster_path, page_preset, page_width_mm, page_height_mm)` | Create a new, empty poster page (default preset `A4`) |
+| `create_poster(poster_path, page_preset, page_width_mm, page_height_mm, album)` | Create a new, empty poster page (default preset `A4`); `album=True` creates a new photo album (`.pyfalbum`, must not exist yet): pinned front cover, one spread, pinned back cover — every page added later is a spread between the covers, and covers can't be removed/moved/duplicated/re-kinded. An existing poster is never converted into an album |
 | `add_poster_page(poster_path, kind, width_mm, height_mm, index)` | Add a page — `kind` is `spread` (default, two pages as one continuous canvas, double-width), `cover_front`/`cover_back`, or `single`; turns the document into a `.pyfalbum` the moment it has more than one page |
 | `list_poster_pages(poster_path)` | List every page: index/kind/width_mm/height_mm/shape_count/has_background |
 | `remove_poster_page(poster_path, page)` / `duplicate_poster_page(poster_path, page)` | Delete or copy one page (errors removing the last remaining page) |
 | `move_poster_page(poster_path, from_index, to_index)` | Reorder pages |
 | `set_poster_page_kind(poster_path, page, kind)` | Change a page's kind after the fact (size/content untouched) |
-| `set_poster_album_mode(poster_path, enabled)` | Turn strict photo-book structure on/off: pins a blank front/back cover and forces every new page to a `spread` inserted between them (existing content becomes the first spread, never lost); disabling only lifts the enforcement |
 | `add_poster_image(poster_path, image_path, x_mm, y_mm, width_mm, height_mm, theta, frame, caption, page)` | Add a photo, freely positioned/rotated (rotation grows the box, never crops); `frame` is `none`/`simple`/`polaroid` |
 | `add_poster_text(poster_path, html, style, x_mm, y_mm, width_mm, height_mm, theta, page)` | Add a freely positioned/rotated text box (title/caption); `html` is plain text or simple HTML for formatting (omit for the style's placeholder wording); `style` is `h1`/`h2`/`h3`/`body`(default)/`caption` — a Markdown-heading-like size *as a fraction of the page height*, so it scales with page size; overridden by width_mm/height_mm if given |
 | `set_poster_background(poster_path, image_path, zoom, pan_x, pan_y, page)` / `clear_poster_background(poster_path, page)` | Set or remove the full-page background image; always covers the page (no gaps), `zoom`>=1.0 and `pan_x`/`pan_y` (0..1, 0.5=centered) set its crop/position |

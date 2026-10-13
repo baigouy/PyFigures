@@ -81,8 +81,10 @@ def test_pyfposter_round_trip_every_field(qapp, canvas, photos, tmp_path):
 
 
 def test_pyfalbum_round_trip_pages(qapp, canvas, photos, tmp_path):
+    canvas.new_document(album=True)
+    assert canvas.album_mode and not canvas.is_modified()
+    canvas.goto_page(1)
     canvas.add_image(photos["red"])
-    canvas.set_album_mode(True)
     canvas.add_page()                                 # after the current page, and becomes current
     canvas.add_image(photos["blue"])
     doc = str(tmp_path / "a.pyfalbum")
@@ -92,6 +94,10 @@ def test_pyfalbum_round_trip_pages(qapp, canvas, photos, tmp_path):
     assert c2.album_mode and [p.kind for p in c2.pages] == ["cover_front", "spread", "spread", "cover_back"]
     assert [len(p.shapes_to_draw) for p in c2.pages] == [0, 1, 1, 0]
     assert c2.base_page_width_mm == 210 and c2.base_page_height_mm == 297
+
+
+def test_album_mode_cannot_be_toggled_on_a_document(canvas):
+    assert not hasattr(canvas, "set_album_mode")      # albums are only made as albums
 
 
 def test_pyfposter_refuses_multipage(canvas, tmp_path):
@@ -204,8 +210,7 @@ def test_page_operations_are_undoable(canvas, photos):
     canvas.add_image(photos["red"])
     steps = [lambda: canvas.add_page("spread"), lambda: canvas.duplicate_page(0),
              lambda: canvas.move_page(0, 2), lambda: canvas.set_page_kind("cover_back", 2),
-             lambda: canvas.remove_page(1), lambda: canvas.set_album_mode(True),
-             lambda: canvas.set_page_size_mm(297, 420)]
+             lambda: canvas.remove_page(1), lambda: canvas.set_page_size_mm(297, 420)]
     states = []
     for step in steps:
         states.append([(p.kind, p.width_mm, len(p.shapes_to_draw)) for p in canvas.pages])

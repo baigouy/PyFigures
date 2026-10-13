@@ -502,7 +502,7 @@ class PosterWindow(QMainWindow):
         self._refresh_page_action_states()
 
     def _refresh_page_action_states(self):
-        # In album mode covers are pinned/auto-managed (set_album_mode) — the
+        # In album mode covers are pinned (new_document(album=True)) — the
         # manual "add a cover"/"add a plain page" choices and the
         # duplicate/delete/move actions on a cover slot are all disabled
         # rather than left to silently no-op.

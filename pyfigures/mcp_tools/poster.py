@@ -63,19 +63,32 @@ def _poster_result(ok, payload):
 
 @mcp.tool()
 def create_poster(poster_path: str, page_preset: str | None = "A4",
-                  page_width_mm: float | None = None, page_height_mm: float | None = None) -> str:
+                  page_width_mm: float | None = None, page_height_mm: float | None = None,
+                  album: bool = False) -> str:
     """Create a new, empty poster/collage page (.pyfposter) — the poster
-    designer's own free-placement canvas, unrelated to .pyf scientific figures.
+    designer's own free-placement canvas, unrelated to .pyf scientific figures —
+    or, with album=True, a new photo album (.pyfalbum).
 
-    Use this to start a poster, decorative collage, or photo-album page: images
-    added afterwards (add_poster_image) can be freely positioned and rotated
-    without cropping, unlike panels in the scientific figure editor.
+    Use this to start a poster or decorative collage: images added afterwards
+    (add_poster_image) can be freely positioned and rotated without
+    cropping, unlike panels in the scientific figure editor.
+
+    *album*: True makes a photo album instead — the photo album designer's
+    document: a pinned front cover (page 0), one two-page spread (page 1)
+    and a pinned back cover (page 2). add_poster_page then only adds spreads
+    between the covers, and the covers can't be removed, moved, duplicated
+    or re-kinded. *poster_path* must end in .pyfalbum and must not exist yet:
+    a photo album is only ever created as one, an existing poster is never
+    converted (build_poster_from_recipe with `album: true` also makes one).
 
     *page_preset* is one of A4 (default)/A3/A2/A1/A0 (portrait, ISO mm sizes);
-    pass explicit page_width_mm/page_height_mm instead for a custom size.
+    pass explicit page_width_mm/page_height_mm instead for a custom size (a
+    spread is twice that width).
     Returns the new document's page size and (empty) image list as JSON.
     """
     args = ["create", poster_path]
+    if album:
+        args.append("--album")
     if page_width_mm is not None and page_height_mm is not None:
         args += ["--page-width", str(page_width_mm), "--page-height", str(page_height_mm)]
     elif page_preset:
@@ -165,22 +178,6 @@ def set_poster_page_kind(poster_path: str, page: int, kind: str) -> str:
     if kind not in _POSTER_PAGE_KINDS:
         return f"ERROR: unknown kind {kind!r}; use one of {_POSTER_PAGE_KINDS}"
     return _poster_result(*_run_poster_op(["set-page-kind", poster_path, str(page), kind]))
-
-
-@mcp.tool()
-def set_poster_album_mode(poster_path: str, enabled: bool) -> str:
-    """Turn real photo-album structure on/off for a poster document.
-
-    Enabling pins a blank front cover at the start and a blank back cover at
-    the end (both plain single pages) — turning whatever was the document's
-    only page into the first interior spread if it was still just that, so
-    existing work is never lost — and from then on every new page added via
-    add_poster_page is forced to be a "spread" (two pages as one continuous
-    canvas, so a photo can sit right across the middle) inserted strictly
-    between the two covers; remove_poster_page/move_poster_page refuse to
-    touch the cover slots. Disabling only lifts that enforcement — it never
-    deletes or re-kinds a page. Returns the updated page list as JSON."""
-    return _poster_result(*_run_poster_op(["set-album-mode", poster_path, "true" if enabled else "false"]))
 
 
 @mcp.tool()

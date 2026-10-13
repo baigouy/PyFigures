@@ -90,6 +90,15 @@ def _poster(tmp_path, preset="A4", **kw):
     return p
 
 
+def _album(tmp_path, photo=None):
+    """A new photo album (create_poster album=True), *photo* on its spread."""
+    p = str(tmp_path / "book.pyfalbum")
+    ok(M.create_poster(p, album=True))
+    if photo:
+        ok(M.add_poster_image(p, photo, page=1))
+    return p
+
+
 def _imgs(p, page=None):
     return ok(M.list_poster_images(p, page=page))["images"]
 
@@ -516,9 +525,8 @@ def test_last_page_cannot_be_removed(tmp_path):
 
 
 def test_album_mode_structure_and_rules(tmp_path, photos):
-    p = _poster(tmp_path)
-    ok(M.add_poster_image(p, photos["red"]))
-    d = ok(M.set_poster_album_mode(p, True))
+    p = _album(tmp_path, photos["red"])
+    d = ok(M.list_poster_pages(p))
     assert d["album_mode"] is True
     assert [(pg["kind"], pg["width_mm"], pg["shape_count"]) for pg in d["pages"]] == [
         ("cover_front", 210, 0), ("spread", 420, 1), ("cover_back", 210, 0)]
@@ -538,9 +546,22 @@ def test_album_mode_structure_and_rules(tmp_path, photos):
     err(M.set_poster_page_kind(p, 2, "single"), "album mode")
     d = ok(M.move_poster_page(p, 1, 3))
     assert d["pages"][3]["shape_count"] == 1
-    d = ok(M.set_poster_album_mode(p, False))
-    assert d["album_mode"] is False and len(d["pages"]) == 5
-    ok(M.remove_poster_page(p, 0))                             # allowed again
+    assert not hasattr(M, "set_poster_album_mode")             # an album stays an album
+
+
+def test_create_album_only_as_a_new_pyfalbum(tmp_path, photos):
+    d = ok(M.create_poster(str(tmp_path / "a3.pyfalbum"), page_preset="A3", album=True))
+    assert d["album_mode"] is True and d["page_count"] == 3 and d["page_kind"] == "cover_front"
+    pages = ok(M.list_poster_pages(str(tmp_path / "a3.pyfalbum")))["pages"]
+    assert [(pg["width_mm"], pg["height_mm"]) for pg in pages] == [(297, 420), (594, 420), (297, 420)]
+    err(M.create_poster(str(tmp_path / "x.pyfposter"), album=True), "pyfalbum")
+    poster = str(tmp_path / "old.pyfalbum")                   # a plain multi-page document
+    ok(M.create_poster(poster))
+    ok(M.add_poster_page(poster))
+    err(M.create_poster(poster, album=True), "already exists")   # never converted
+    assert ok(M.list_poster_pages(poster))["album_mode"] is False
+    d = ok(M.create_poster(str(tmp_path / "plain.pyfposter")))
+    assert d["album_mode"] is False and d["page_count"] == 1
 
 
 def test_no_page_argument_means_page_zero(tmp_path, photos):
@@ -629,9 +650,7 @@ def test_preview_poster_returns_png(tmp_path, photos):
 
 
 def test_render_album_pdf_page_sizes(tmp_path, photos):
-    p = _poster(tmp_path)
-    ok(M.add_poster_image(p, photos["red"]))
-    ok(M.set_poster_album_mode(p, True))
+    p = _album(tmp_path, photos["red"])
     out = str(tmp_path / "book.pdf")
     d = ok(M.render_poster_album(p, out, dpi=50))
     assert d["page_count"] == 3
@@ -657,9 +676,7 @@ def test_print_ready_single_page(tmp_path, photos):
 
 
 def test_print_ready_album_folder_and_pdf(tmp_path, photos):
-    p = _poster(tmp_path)
-    ok(M.add_poster_image(p, photos["red"]))
-    ok(M.set_poster_album_mode(p, True))
+    p = _album(tmp_path, photos["red"])
     folder = str(tmp_path / "print")
     d = ok(M.export_poster_album_print_ready(p, folder, format="tiff", dpi=30))
     assert d["mode"] == "folder" and d["page_count"] == 3
@@ -673,9 +690,7 @@ def test_print_ready_album_folder_and_pdf(tmp_path, photos):
 
 
 def test_web_export_is_self_contained(tmp_path, photos):
-    p = _poster(tmp_path)
-    ok(M.add_poster_image(p, photos["red"]))
-    ok(M.set_poster_album_mode(p, True))
+    p = _album(tmp_path, photos["red"])
     out = str(tmp_path / "book.html")
     d = ok(M.export_poster_web(p, out, dpi=20, quality=60))
     assert d["page_count"] == 3

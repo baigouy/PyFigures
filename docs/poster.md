@@ -535,16 +535,15 @@ out_path, dpi)` renders every page as one multi-page PDF (a spread becomes
 one double-width PDF page); `render_poster`/`preview_poster` still render
 just one page (add `page=N` to pick which).
 
-`set_poster_album_mode(poster_path, enabled)` turns the strict book
-structure of a document file on/off (what makes it a photo album, opened by
-the photo album designer — see "Photo album designer" above): enabling pins a blank front
-and back cover and makes `add_poster_page` insert spreads between them
-(turning whatever was already there into the first interior spread rather
-than discarding it). While it's on, anything that would break the book —
-removing, duplicating or moving a cover, adding a non-spread page, or
-re-kinding a cover / an interior spread — is refused with an `ERROR:`
-explaining why (these used to "succeed" silently without doing anything).
-Disabling only lifts the enforcement, it never deletes or re-kinds a page.
+`create_poster(album_path, album=True)` creates a new **photo album**
+(`.pyfalbum`, the photo album designer's document — see "Photo album
+designer" above): a pinned front cover, one spread and a pinned back cover,
+and `add_poster_page` then inserts spreads between the covers. Anything that
+would break the book — removing, duplicating or moving a cover, adding a
+non-spread page, or re-kinding a cover / an interior spread — is refused
+with an `ERROR:` explaining why. A photo album is only ever created as one
+(this, or a recipe with `album: true`); there is no tool to turn an
+existing poster into an album or back.
 
 Without `page=`, a tool works on page 0; `add_poster_page` without `index`
 appends at the end (just before the back cover in album mode).
@@ -695,8 +694,9 @@ editor (`pyfigures/gui/ezfig.py`, `pyfigures/gui/pfgui.py`):
   touches those properties, so it works unchanged whether the document has
   one page or many; `add_page`/`remove_page`/`duplicate_page`/`move_page`/
   `goto_page` manage the page list, `export_album_pdf` renders every page as
-  one multi-page PDF. `album_mode` + `set_album_mode()` add the strict
-  book-structure enforcement (pinned front/back cover, interior pages forced
+  one multi-page PDF. `album_mode` (set by `new_document(album=True)`, a
+  recipe or loading a photo album — never toggled on an existing document)
+  adds the strict book-structure enforcement (pinned front/back cover, interior pages forced
   to `'spread'`) on top of that same page list — `add_page`/`remove_page`/
   `move_page` all check `self.album_mode` themselves, so nothing else needs
   to know it exists. `export_print_ready`/`_export_raster_print_page`/
