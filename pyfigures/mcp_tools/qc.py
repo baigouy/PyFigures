@@ -63,7 +63,7 @@ def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
         if getattr(img, "isText", False):
             return False
         fn = img.filename
-        if isinstance(fn, str) and fn.lower().endswith(".svg"):
+        if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
             return False
         return True
 
@@ -219,7 +219,7 @@ def _scale_consistency_panels(pyf_path: str) -> list[dict]:
         if getattr(img, "isText", False):
             return False
         fn = img.filename
-        if isinstance(fn, str) and fn.lower().endswith(".svg"):
+        if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
             return False
         return True
 

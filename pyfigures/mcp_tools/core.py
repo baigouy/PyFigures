@@ -181,7 +181,7 @@ def _raw_size_from_file(filename) -> tuple[int, int] | None:
     if not os.path.isfile(filename):
         return None
     low = filename.lower()
-    if low.endswith(".svg"):
+    if low.endswith((".svg", ".pdf")):     # vector panels have no pixel size
         return None
     if low.endswith((".tif", ".tiff")):
         try:

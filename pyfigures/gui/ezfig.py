@@ -644,10 +644,18 @@ class MyWidget(QWidget):
     SVG_INKSCAPE = 96
     SVG_ILLUSTRATOR = 72
 
+    def wait_for_pending_images(self):
+        """Exports first wait for images still loading in the background (in
+        the GUI), so no panel is exported before its pixels are there."""
+        window = self.window()
+        if window is not self and hasattr(window, 'wait_for_images'):
+            window.wait_for_images()
+
     def save(self, path, filetype=None, title=None, description=None, svg_dpi=SVG_INKSCAPE):
         if path is None or not isinstance(path, str):
             logger.error('please provide a valide path to save the image "' + str(path) + '"')
             return
+        self.wait_for_pending_images()
         if filetype is None:
             if path.lower().endswith('.svg'):
                 filetype = 'svg'
@@ -841,6 +849,7 @@ class MyWidget(QWidget):
         Returns the number of frames written, or 0 if the figure has no time-stack.
         Static (non-video) panels are drawn identically in every frame.
         """
+        self.wait_for_pending_images()
         from batoolset.img import write_video
         import numpy as np
 
@@ -1107,6 +1116,7 @@ class MyWidget(QWidget):
         Without a caption the output stays a bare picture group (unchanged).
         """
         import os as _os
+        self.wait_for_pending_images()
         stem = _os.path.splitext(path)[0]
         image_format = image_format.lower().lstrip('.')
         img_path = f"{stem}.{image_format}"
@@ -2206,6 +2216,13 @@ class MyWidget(QWidget):
                 else:
                     edit_image = self.contextMenu.addAction("Edit Image")
                     edit_image.triggered.connect(lambda: self.update_image_annotations(image2d=self.selected_shape))
+                    from pyfigures.equations import is_equation
+                    gui = self.window()
+                    if is_equation(getattr(self.selected_shape, 'filename', None)) \
+                            and hasattr(gui, 'edit_equation'):
+                        _eq_shape = self.selected_shape
+                        edit_eq = self.contextMenu.addAction("Edit equation…")
+                        edit_eq.triggered.connect(lambda: gui.edit_equation(_eq_shape))
             if isinstance(top_parent_of_sel, Group) and top_parent_of_sel.isText:
                 edit_text_row = self.contextMenu.addAction("Edit text row")
                 edit_text_row.triggered.connect(lambda: self.edit_text_row_content(top_parent_of_sel))

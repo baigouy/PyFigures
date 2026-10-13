@@ -115,17 +115,20 @@ _MERGE_KEYS = {"colors", "mode", "label", "label_placement", "normalization"}
 _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels",
                   "panel_label"}
 _SCRIPT_KEYS = {"label"}
+_EQUATION_KEYS = {"font_size", "color", "fontset", "label"}
 # a montage / split / merge also takes a scale bar (on its LAST panel only)
 _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit"}
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
                       "rois", "inset", "zoom", "brackets"}
-_PANEL_KINDS = ("image", "glob", "plot", "montage", "split", "merge", "colorbar", "script")
+_PANEL_KINDS = ("image", "glob", "plot", "montage", "split", "merge", "colorbar", "script",
+                "equation")
 _KIND_KEYS = {"image": _IMAGE_KEYS, "glob": _IMAGE_KEYS - _SINGLE_PANEL_ONLY,
               "plot": _PLOT_KEYS, "montage": _MONTAGE_KEYS | _SERIES_BAR_KEYS,
               "split": _SPLIT_KEYS | _SERIES_BAR_KEYS,
               "merge": _MERGE_KEYS | _SERIES_BAR_KEYS,
-              "colorbar": _COLORBAR_KEYS, "script": _SCRIPT_KEYS}
+              "colorbar": _COLORBAR_KEYS, "script": _SCRIPT_KEYS,
+              "equation": _EQUATION_KEYS}
 _DEFAULT_KEYS = (_IMAGE_KEYS | _PLOT_KEYS) - _SINGLE_PANEL_ONLY - {"title"}
 _ROW_KEYS = {"panels", "orientation", "spacing", "labels", "labels_position",
              "labels_orientation", "side_label", "side_label_position"}
@@ -595,6 +598,14 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             if kind == "colorbar":
                 plan_row.append((kind, str(panel["colorbar"]), merged))
                 continue
+            if kind == "equation":
+                from pyfigures import equations as _eq
+                try:
+                    _eq.check(str(panel["equation"]), merged.get("fontset", "cm"))
+                except ValueError as e:
+                    raise RecipeError(f"{where}: {e}") from None
+                plan_row.append((kind, str(panel["equation"]), merged))
+                continue
             if kind in ("split", "merge") and isinstance(panel[kind], list):
                 files = [_resolve(base, f) for f in panel[kind]]
                 missing = [f for f in files if not source_exists(f)]
@@ -1016,7 +1027,7 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
         i = -1                      # index of the row's last Image2D panel
         n_sub = 0                   # montage / split groups nested in this row
         for c, (kind, path, opts) in enumerate(row):
-            if isinstance(path, str) and kind not in ("script", "colorbar"):
+            if isinstance(path, str) and kind not in ("script", "colorbar", "equation"):
                 name = os.path.basename(path)
             elif isinstance(path, list):
                 name = f"{len(path)} channel files"
@@ -1077,6 +1088,14 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
             if kind == "script":
                 label = _label_html(str(opts["label"])) if opts.get("label") else ""
                 warnings += _check(M.add_scripted_image(out, gp, path, label=label), step)
+                i += 1
+                n_other += 1
+                continue
+            if kind == "equation":
+                kw = {k: opts[k] for k in ("font_size", "color", "fontset") if k in opts}
+                if opts.get("label"):
+                    kw["label"] = _label_html(str(opts["label"]))
+                warnings += _check(M.add_equation(out, gp, path, **kw), step)
                 i += 1
                 n_other += 1
                 continue

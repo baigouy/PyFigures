@@ -534,3 +534,31 @@ def test_every_entry_runs_without_error(gui, cap, ui, qapp, monkeypatch):
             right_click(gui, cap, target, pick=path)
             qapp.processEvents()
             assert not errors, (path, errors)
+
+
+def test_equation_panel_offers_edit_equation(qapp, tmp_path, cap, ui):
+    """Only an equation panel gets 'Edit equation…', and it opens the editor
+    on that panel."""
+    from pyfigures import mcp_server as M
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    pyf = os.path.join(str(tmp_path), "eq.pyf")
+    M.create_figure(pyf, mode="groups", num_groups=1, orientation="X", spacing=3)
+    M.add_equation(pyf, [0], r"\alpha + \beta")
+    M.add_image(pyf, [0], _img(os.path.join(str(tmp_path), "g.tif"), np.full((40, 60), 60, np.uint8), "hw"))
+    EZFIG_GUI.show_tips = lambda self: None
+    g = EZFIG_GUI()
+    g.resize(1300, 900)
+    g.show()
+    try:
+        g._start_pyf_loader([pyf], append=False, reset_undo=True)
+        _settle(qapp, g)
+        eq, plain = images(rows(g)[0])
+        edited = []
+        g.edit_equation = lambda shape: edited.append(shape)
+        assert "Edit equation…" not in _labels(right_click(g, cap, plain))
+        right_click(g, cap, eq, pick=["Edit equation…"])
+        assert edited == [eq]
+    finally:
+        g._dirty = False
+        g._stop_all_img_loaders()
+        g.close()

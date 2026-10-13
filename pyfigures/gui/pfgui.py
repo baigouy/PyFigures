@@ -931,6 +931,13 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(url_action)
         url_action.triggered.connect(self.add_image_from_url_action)
 
+        equation_action = QAction("Add equation (LaTeX)…", self)
+        equation_action.setToolTip("Type a LaTeX equation (e.g. \\Delta F/F_0); it is typeset as a "
+                                   "vector panel, no TeX installation needed. Right-click it later to "
+                                   "edit it.")
+        file_menu.addAction(equation_action)
+        equation_action.triggered.connect(self.add_equation_action)
+
         draft_action = QAction("Draft figure from folder…", self)
         draft_action.setToolTip("Auto-assemble a first-pass figure from a folder of "
                                 "images and CSVs: grid layout, data plots, scale bars, "
@@ -2315,6 +2322,60 @@ class EZFIG_GUI(QMainWindow):
                 base = url.split('#', 1)[0]
                 url = base if level == default_level else f'{base}#level={level}'
         self.add_images_to_new_row([url])
+
+    def _equation_dialog(self, **settings):
+        """Run the equation dialog; return its values, or None if cancelled."""
+        from pyfigures.gui.equation_dialog import EquationDialog
+        dlg = EquationDialog(self, **settings)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dlg.values()
+
+    def _write_equation(self, v):
+        from pyfigures import equations as E
+        try:
+            return E.make_equation(self.current_file, v['latex'], v['font_size'], v['color'],
+                                   v['fontset'])
+        except ValueError as e:
+            QMessageBox.warning(self, 'Cannot typeset the equation', str(e))
+            return None
+
+    def add_equation_action(self):
+        """File > Add equation (LaTeX)…: the equation is added as a new row."""
+        v = self._equation_dialog()
+        if not v:
+            return
+        path = self._write_equation(v)
+        if path:
+            self.add_images_to_new_row([path])
+
+    def edit_equation(self, shape):
+        """Right-click > Edit equation…: retypeset *shape*'s equation in place
+        (same displayed height to start with), then reflow the figure so every
+        row keeps its width."""
+        from pyfigures import equations as E
+        settings = E.read_settings(getattr(shape, 'filename', None) or '')
+        if settings is None:
+            return
+        v = self._equation_dialog(**settings)
+        if not v:
+            return
+        path = self._write_equation(v)
+        if not path or os.path.abspath(path) == os.path.abspath(shape.filename):
+            return
+        shown_height = shape.height()
+        shape.filename = path
+        shape.setFigure(path)
+        size = shape.renderer.defaultSize()
+        shape.setWidth(size.width())
+        shape.setHeight(size.height())
+        if shown_height > 0:
+            shape.setToHeight(shown_height)
+        self._lazy_size_drift = True
+        self._reflow_after_lazy_load()
+        self.paint.EZFIG_panel.update_size()
+        self.paint.EZFIG_panel.update()
+        self._mark_dirty()
 
     def add_images_to_new_row(self, lst):
         self._load_images_then_callback(lst,
@@ -5421,6 +5482,38 @@ class EZFIG_GUI(QMainWindow):
     def _save(self, output_file):
         if output_file is not None:
             self.paint.EZFIG_panel.save(output_file)
+
+    def _images_loading(self):
+        th = getattr(self, '_pyf_loader_thread', None)
+        try:
+            running = th is not None and th.isRunning()
+        except RuntimeError:
+            running = False
+        return running or bool(getattr(self, '_lazy_img_queue', None)) \
+            or bool(getattr(self, '_active_img_loaders', None))
+
+    def wait_for_images(self, timeout=600):
+        """Block (keeping the window responsive) until the figure's images have
+        finished loading in the background. Exports call this first: a figure
+        exported right after opening used to show the panels not loaded yet as
+        empty or black. Returns False on timeout."""
+        if not self._images_loading():
+            return True
+        import time as _time
+        self.statusBar().showMessage('Waiting for the images to finish loading…')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            t0 = _time.time()
+            while self._images_loading() and _time.time() - t0 < timeout:
+                QApplication.processEvents()
+                _time.sleep(0.005)
+            # the last image's refresh/reflow are queued: run them now
+            for _ in range(3):
+                QApplication.processEvents()
+            self._flush_lazy_refresh()
+        finally:
+            QApplication.restoreOverrideCursor()
+        return not self._images_loading()
 
     def export_as_latex(self):
         output_file = saveFileDialog(parent_window=self,

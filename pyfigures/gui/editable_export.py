@@ -55,6 +55,8 @@ def capture_scene(panel) -> dict:
     from qtpy.QtSvg import QSvgGenerator
     from batoolset.lists.tools import flatten_iterable
 
+    if hasattr(panel, "wait_for_pending_images"):
+        panel.wait_for_pending_images()
     bounds = panel.updateBounds()
     width = float(bounds.width())
     height = float(bounds.height())

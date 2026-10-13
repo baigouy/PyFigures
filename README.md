@@ -111,6 +111,16 @@ Perform the following steps **only once** to set up your environment:
 
     Then use *File → Add image from URL / OME-Zarr…* (or give the URL to `add_image` / a recipe), e.g. an image from the [IDR](https://idr.openmicroscopy.org/) such as `https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0062A/6001240.zarr`. The pyramid level, pixel size (for scale bars) and channel colours come from the image; only the chosen level is downloaded. Remote images are read with `requests`, so no extra network library is needed. Plain image URLs (`https://…/image.tif`) work without this extra.
 
+9. **Optional: PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
+
+    ```sh
+    pip install -U pyfigures[pdf]
+    ```
+
+    A PDF dropped onto the canvas (first page) becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. Uses PyMuPDF (AGPL v3).
+
+**Equations** need nothing extra: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel) typesets LaTeX mathematics with Matplotlib — no TeX installation — as a vector panel; right-click it to edit it.
+
 ### Run
    
    **Note:** The following steps need to be performed **only after** the software has been installed.
@@ -186,6 +196,7 @@ Optional (installed only if you ask for them):
 | **FFmpeg** (inside PyAV) | Video codecs; this build includes **x264 and x265** (GPL v2+) and LGPL/BSD codec libraries | https://ffmpeg.org/ | **GPL v3** as built |
 | **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
 | **zarr** (`pyfigures[zarr]`) | OME-Zarr images (with numcodecs)                       | https://pypi.org/project/zarr/                | MIT                |
+| **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels                            | https://pypi.org/project/PyMuPDF/             | **AGPL v3**        |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
 | **pyimagej / scyjava / JPype** (`pyfigures[bioformats]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |

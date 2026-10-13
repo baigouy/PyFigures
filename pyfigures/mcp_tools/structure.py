@@ -515,6 +515,43 @@ def add_image(
 
 
 @mcp.tool()
+def add_equation(
+    pyf_path: str,
+    group_path: list[int],
+    latex: str,
+    font_size: float = 12.0,
+    color: str = "black",
+    fontset: str = "cm",
+    label: str = "",
+    label_placement: str = "top left",
+) -> str:
+    """Add a typeset equation as a vector panel.
+
+    *latex*: LaTeX mathematics, e.g. ``\\Delta F/F_0 = \\frac{F-F_0}{F_0}`` (with or
+      without surrounding $…$; text outside $…$ is set as plain text). Typeset by
+      Matplotlib's mathtext — a LaTeX maths subset, no TeX installation needed.
+    *font_size*: in points; *color*: a colour name or #rrggbb.
+    *fontset*: "cm" (Computer Modern, the LaTeX look; default), "stix",
+      "stixsans", "dejavusans" or "dejavuserif".
+    The equation is written as an SVG (glyphs as outlines) in an ``equations``
+    folder next to the figure and added like an image: it stays vector in PDF/SVG
+    exports and is scaled with the layout like any panel.
+    *group_path* / *label* / *label_placement*: as for add_image.
+    """
+    from pyfigures import equations as E
+    if not os.path.isfile(pyf_path):
+        return f"ERROR: no such figure: {pyf_path}"
+    try:
+        svg = E.make_equation(pyf_path, latex, font_size, color, fontset)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    res = add_image(pyf_path, group_path, svg, label=label, label_placement=label_placement)
+    if res.startswith("ERROR"):
+        return res
+    return res.replace(Path(svg).name, f"equation {E.normalize(latex)}") + f" (file: {svg})"
+
+
+@mcp.tool()
 def remove_image(pyf_path: str, group_path: list[int], image_index: int) -> str:
     """Remove an image from the figure.
 

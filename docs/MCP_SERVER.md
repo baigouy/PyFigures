@@ -261,7 +261,7 @@ python -m pyfigures.mcp_server --transport sse --port 8765
 
 ## 5. Available tools reference
 
-The server currently exposes **145 tools** (111 figure tools + 34 poster tools).
+The server currently exposes **146 tools** (112 figure tools + 34 poster tools).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -309,7 +309,8 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 |------|-------------|
 | `create_figure(pyf_path, ...)` | Create a new empty `.pyf` file |
 | `add_group(pyf_path, ...)` | Add a row/column group |
-| `add_image(pyf_path, group_path, filename, ...)` | Add an image panel |
+| `add_image(pyf_path, group_path, filename, ...)` | Add an image panel. A PDF (first page; needs `pip install pyfigures[pdf]`) or an SVG file is a **vector panel**, kept as vectors in PDF/SVG exports |
+| `add_equation(pyf_path, group_path, latex, font_size, color, fontset, label, ...)` | Add a **LaTeX equation** as a vector panel (typeset by Matplotlib mathtext, no TeX needed; `fontset="cm"` gives the LaTeX look). Written as an SVG in `equations/` next to the figure; editable in the GUI (right-click → Edit equation…) |
 | `scan_folder(folder, pattern)` | Scan a folder for image files and return layout suggestions as JSON |
 | `inspect_ome_zarr(path_or_url)` | Describe an **OME-Zarr** image (local `.zarr` folder or http(s) URL, e.g. the IDR) without reading pixels: axes, pyramid levels with pixel sizes in µm, channel names/colours, and the level read by default. `add_image` accepts the same path/URL; append `#level=N` to read another level. Needs `pip install pyfigures[zarr]` |
 | `create_figure_from_folder(pyf_path, folder, ...)` | Build a whole figure automatically from a folder of images |

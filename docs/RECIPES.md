@@ -42,7 +42,7 @@ Contents
 15. [Text, corner labels, ROIs and brackets](#15-text-corner-labels-rois-and-brackets)
 16. [Insets and zoom callouts](#16-insets-and-zoom-callouts)
 17. [Rotation, flips, channels and display range](#17-rotation-flips-channels-and-display-range)
-18. [More panel kinds — `merge`, `colorbar`, `script`](#18-more-panel-kinds--merge-colorbar-script)
+18. [More panel kinds — `merge`, `colorbar`, `script`, `equation`](#18-more-panel-kinds--merge-colorbar-script-equation)
 19. [Row options — columns, spacing, label rows, side labels](#19-row-options--columns-spacing-label-rows-side-labels)
 20. [Finishing — size, fonts, metadata, alt text, style, exports, checks, templates](#20-finishing--size-fonts-metadata-alt-text-style-exports-checks-templates)
 21. [Scale bars and crops](#21-scale-bars-and-crops)
@@ -206,6 +206,7 @@ Every panel is a mapping with **exactly one** *kind* key naming its source:
 | `merge` | a list of single-channel files | one colour overlay panel (§18) |
 | `colorbar` | a LUT name | a calibration bar for that LUT (§18) |
 | `script` | Python code | a generated panel, e.g. a matplotlib model (§18) |
+| `equation` | LaTeX mathematics | a typeset equation, as a vector panel (§18) |
 
 A row can also be a mapping with its own options (§19):
 
@@ -290,7 +291,7 @@ rows:
 
 | Key | Values | Meaning |
 |---|---|---|
-| `image` | path or URL | The image file — or an http(s) URL, or an **OME-Zarr** image: a local `.zarr` folder or a URL such as `https://…/image.zarr` (needs `pip install pyfigures[zarr]`). OME-Zarr reads the largest pyramid level within 512 MB / 8192 px, with the pixel size and channel colours of the file; add `#level=N` to the path to choose a level. |
+| `image` | path or URL | The image file — or an http(s) URL, or an **OME-Zarr** image: a local `.zarr` folder or a URL such as `https://…/image.zarr` (needs `pip install pyfigures[zarr]`). OME-Zarr reads the largest pyramid level within 512 MB / 8192 px, with the pixel size and channel colours of the file; add `#level=N` to the path to choose a level. A **PDF** (first page, e.g. a plot from Matplotlib, pgfplots or gnuplot; needs `pip install pyfigures[pdf]`) or an **SVG** file is a vector panel and stays vector in PDF/SVG exports. |
 | `lut` | a name, or a list with one entry per channel | Colour look-up table(s), e.g. `gray`, `green`, `[red, green, blue]`, `MATPLOTLIB_magma`. `null` in a list leaves that channel as is. Case-insensitive. See §23. |
 | `projection` | `max`, `min`, `avg`, `none` | How a Z stack is shown as one image. Without it a Z stack shows its **first slice**. |
 | `crop` | `{left, right, top, bottom}` | Pixels removed from each edge of the raw image (non-negative integers; give only the sides you need). |
@@ -705,7 +706,7 @@ All five also work in `defaults`.
 
 ---
 
-## 18. More panel kinds — `merge`, `colorbar`, `script`
+## 18. More panel kinds — `merge`, `colorbar`, `script`, `equation`
 
 **`merge`** — overlay single-channel files into one colour image:
 
@@ -759,6 +760,22 @@ rows:
 The script is stored in the `.pyf` and re-runs when the figure is opened.
 Without `allow_scripts: true` a recipe with a `script:` panel is refused — a
 recipe someone sends you should never run code without you saying so.
+
+**`equation`** — LaTeX mathematics typeset as a vector panel (by Matplotlib's
+mathtext, a LaTeX maths subset: no TeX installation needed). Without `$…$` the
+whole text is a formula; with `$…$`, text outside the dollars is plain text.
+
+```yaml
+- - {image: cell.tif}
+  - {equation: '\Delta F/F_0 = \frac{F - F_0}{F_0}', font_size: 10, label: Model}
+```
+
+Keys: `font_size` (pt, 12), `color` (`black`), `fontset` (`cm` = Computer
+Modern, the LaTeX look; `stix`, `stixsans`, `dejavusans`, `dejavuserif`),
+`label`. The equation is written as an SVG in an `equations` folder next to the
+figure; like any panel it is scaled with its row. Quote the formula with single
+quotes in YAML so that backslashes are kept. A formula that cannot be typeset
+is reported before anything is built.
 
 ---
 
@@ -1205,6 +1222,7 @@ server, and edited afterwards in either.
 | `merge` | Annotations → Add multi-channel merge… | `add_channel_merge` |
 | `colorbar` | Annotations → Add LUT colour bar… | `add_lut_calibration_bar` |
 | `script` | Edit Image → Script tab (on an empty image) | `add_scripted_image`, `set_script` |
+| `equation` | File → Add equation (LaTeX)…; right-click → Edit equation… | `add_equation` |
 | row `orientation`, `spacing` | drop → To column; right-click → Change space between elements | `add_group`, `set_orientation`, `set_spacing` |
 | row `labels`, `side_label` | right-click → Add labels ▶ | `add_label_row`, `add_side_label` |
 | `width_*`, `dpi` | Figure width box in the toolbar | `resize_figure` |

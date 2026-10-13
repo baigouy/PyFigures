@@ -76,11 +76,15 @@ setuptools.setup(
         'zarr': [
             "zarr",          # OME-Zarr images, local or from a URL (read over http with requests)
         ],
+        'pdf': [
+            "pymupdf",       # PDF files as vector panels (AGPL v3)
+        ],
         'all': [
             "mcp>=1.0",
             "av",
             "pyimagej",
             "zarr",
+            "pymupdf",
         ],
     },
     python_requires='>=3.9'  # PyQt6 dropped 3.7/3.8; tested up to 3.12
