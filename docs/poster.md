@@ -514,7 +514,7 @@ just like looping `fill_template` over a main-editor template.
 Everything above is also exposed as MCP tools on PyFigures' existing MCP
 server (see [docs/MCP_SERVER.md](MCP_SERVER.md) for setup) — so an MCP
 client can compose a whole poster or photo-album page from a folder of
-photos: `create_poster`, `add_poster_image` (position/size/rotation/frame/
+photos: `create_poster` (or `create_album`), `add_poster_image` (position/size/rotation/frame/
 caption), `add_poster_text` (a title/caption text box, sized via the same
 h1/h2/h3/body/caption `style` presets as the GUI — `list_poster_images`
 returns both images and text boxes, told apart by their `kind` field),
@@ -540,7 +540,7 @@ out_path, dpi)` renders every page as one multi-page PDF (a spread becomes
 one double-width PDF page); `render_poster`/`preview_poster` still render
 just one page (add `page=N` to pick which).
 
-`create_poster(album_path, album=True)` creates a new **photo album**
+`create_album(album_path)` creates a new **photo album**
 (`.pyfalbum`, the photo album designer's document — see "Photo album
 designer" above): a pinned front cover, one spread and a pinned back cover,
 and `add_poster_page` then inserts spreads between the covers. Anything that

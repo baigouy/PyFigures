@@ -63,32 +63,47 @@ def _poster_result(ok, payload):
 
 @mcp.tool()
 def create_poster(poster_path: str, page_preset: str | None = "A4",
-                  page_width_mm: float | None = None, page_height_mm: float | None = None,
-                  album: bool = False) -> str:
+                  page_width_mm: float | None = None, page_height_mm: float | None = None) -> str:
     """Create a new, empty poster/collage page (.pyfposter) — the poster
-    designer's own free-placement canvas, unrelated to .pyf scientific figures —
-    or, with album=True, a new photo album (.pyfalbum).
+    designer's own free-placement canvas, unrelated to .pyf scientific figures.
+    For a photo album use create_album instead.
 
     Use this to start a poster or decorative collage: images added afterwards
     (add_poster_image) can be freely positioned and rotated without
     cropping, unlike panels in the scientific figure editor.
 
-    *album*: True makes a photo album instead — the photo album designer's
-    document: a pinned front cover (page 0), one two-page spread (page 1)
-    and a pinned back cover (page 2). add_poster_page then only adds spreads
-    between the covers, and the covers can't be removed, moved, duplicated
-    or re-kinded. *poster_path* must end in .pyfalbum and must not exist yet:
-    a photo album is only ever created as one, an existing poster is never
-    converted (build_poster_from_recipe with `album: true` also makes one).
-
     *page_preset* is one of A4 (default)/A3/A2/A1/A0 (portrait, ISO mm sizes);
-    pass explicit page_width_mm/page_height_mm instead for a custom size (a
-    spread is twice that width).
+    pass explicit page_width_mm/page_height_mm instead for a custom size.
     Returns the new document's page size and (empty) image list as JSON.
     """
-    args = ["create", poster_path]
-    if album:
-        args.append("--album")
+    return _create("create", poster_path, page_preset, page_width_mm, page_height_mm)
+
+
+@mcp.tool()
+def create_album(album_path: str, page_preset: str | None = "A4",
+                 page_width_mm: float | None = None, page_height_mm: float | None = None) -> str:
+    """Create a new, empty photo album (.pyfalbum) — the photo album
+    designer's document: a front cover (page 0), one two-page spread (page 1)
+    and a back cover (page 2).
+
+    Fill it with the same tools as a poster, picking the page with their
+    *page* argument (add_poster_image(album_path, photo, page=1), ...).
+    add_poster_page adds more spreads between the covers; the covers can't
+    be removed, moved, duplicated or re-kinded.
+
+    *album_path* gets ".pyfalbum" added when it has no extension, and must
+    not exist yet: an album is only ever created as one, an existing poster
+    is never converted (build_poster_from_recipe with `album: true` also
+    makes one). *page_preset* is one of A4 (default)/A3/A2/A1/A0 for a single
+    page (a cover); a spread is twice as wide. Pass page_width_mm/
+    page_height_mm instead for a custom page size.
+    Returns the new album's first page and page count as JSON.
+    """
+    return _create("create-album", album_path, page_preset, page_width_mm, page_height_mm)
+
+
+def _create(op, path, page_preset, page_width_mm, page_height_mm):
+    args = [op, path]
     if page_width_mm is not None and page_height_mm is not None:
         args += ["--page-width", str(page_width_mm), "--page-height", str(page_height_mm)]
     elif page_preset:

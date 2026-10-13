@@ -558,7 +558,8 @@ album; omit it for a plain single-page poster, or to target page 0 of an album.
 
 | Tool | Description |
 |------|-------------|
-| `create_poster(poster_path, page_preset, page_width_mm, page_height_mm, album)` | Create a new, empty poster page (default preset `A4`); `album=True` creates a new photo album (`.pyfalbum`, must not exist yet): pinned front cover, one spread, pinned back cover — every page added later is a spread between the covers, and covers can't be removed/moved/duplicated/re-kinded. An existing poster is never converted into an album |
+| `create_poster(poster_path, page_preset, page_width_mm, page_height_mm)` | Create a new, empty poster page (default preset `A4`) |
+| `create_album(album_path, page_preset, page_width_mm, page_height_mm)` | Create a new, empty photo album (`.pyfalbum`, added when the path has no extension; must not exist yet): front cover (page 0), one spread (page 1), back cover (page 2) — fill it with the poster tools' `page` argument; pages added later are spreads between the covers, and covers can't be removed/moved/duplicated/re-kinded. An existing poster is never converted into an album |
 | `add_poster_page(poster_path, kind, width_mm, height_mm, index)` | Add a page — `kind` is `spread` (default, two pages as one continuous canvas, double-width), `cover_front`/`cover_back`, or `single`; turns the document into a `.pyfalbum` the moment it has more than one page |
 | `list_poster_pages(poster_path)` | List every page: index/kind/width_mm/height_mm/shape_count/has_background |
 | `remove_poster_page(poster_path, page)` / `duplicate_poster_page(poster_path, page)` | Delete or copy one page (errors removing the last remaining page) |

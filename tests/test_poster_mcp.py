@@ -91,9 +91,9 @@ def _poster(tmp_path, preset="A4", **kw):
 
 
 def _album(tmp_path, photo=None):
-    """A new photo album (create_poster album=True), *photo* on its spread."""
+    """A new photo album (create_album), *photo* on its spread."""
     p = str(tmp_path / "book.pyfalbum")
-    ok(M.create_poster(p, album=True))
+    ok(M.create_album(p))
     if photo:
         ok(M.add_poster_image(p, photo, page=1))
     return p
@@ -550,18 +550,24 @@ def test_album_mode_structure_and_rules(tmp_path, photos):
 
 
 def test_create_album_only_as_a_new_pyfalbum(tmp_path, photos):
-    d = ok(M.create_poster(str(tmp_path / "a3.pyfalbum"), page_preset="A3", album=True))
+    d = ok(M.create_album(str(tmp_path / "a3"), page_preset="A3"))     # extension added
+    assert d["path"] == str(tmp_path / "a3.pyfalbum")
     assert d["album_mode"] is True and d["page_count"] == 3 and d["page_kind"] == "cover_front"
     pages = ok(M.list_poster_pages(str(tmp_path / "a3.pyfalbum")))["pages"]
     assert [(pg["width_mm"], pg["height_mm"]) for pg in pages] == [(297, 420), (594, 420), (297, 420)]
-    err(M.create_poster(str(tmp_path / "x.pyfposter"), album=True), "pyfalbum")
+    d = ok(M.create_album(str(tmp_path / "custom.pyfalbum"), page_width_mm=200, page_height_mm=200))
+    assert d["page_width_mm"] == 200
+    err(M.create_album(str(tmp_path / "x.pyfposter")), "pyfalbum")
+    err(M.create_album(str(tmp_path / "bad.pyfalbum"), page_preset="A9"), "invalid choice")
     poster = str(tmp_path / "old.pyfalbum")                   # a plain multi-page document
     ok(M.create_poster(poster))
     ok(M.add_poster_page(poster))
-    err(M.create_poster(poster, album=True), "already exists")   # never converted
+    err(M.create_album(poster), "already exists")             # never converted
     assert ok(M.list_poster_pages(poster))["album_mode"] is False
     d = ok(M.create_poster(str(tmp_path / "plain.pyfposter")))
     assert d["album_mode"] is False and d["page_count"] == 1
+    import inspect
+    assert "album" not in inspect.signature(M.create_poster).parameters
 
 
 def test_no_page_argument_means_page_zero(tmp_path, photos):

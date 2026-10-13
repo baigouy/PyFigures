@@ -46,7 +46,7 @@ JSON shape either way.
     python -m pyfigures.poster.poster_headless set-page-kind <poster> <page> <kind>
     python -m pyfigures.poster.poster_headless render-album <poster> <out_path.pdf> [--dpi N]
 
-Photo albums: create --album makes a new photo album (a .pyfalbum with a
+Photo albums: create-album makes a new photo album (a .pyfalbum with a
 pinned front cover, one spread and a pinned back cover); every add-page on
 it is a 'spread' inserted strictly between the two covers, and
 remove-page/move-page/duplicate-page/set-page-kind refuse to touch the cover
@@ -54,7 +54,7 @@ slots. A photo album is only ever created as one (here, by a recipe with
 `album: true`, or in the photo album designer) — an existing poster is never
 converted into an album, nor an album back into a poster.
 
-    python -m pyfigures.poster.poster_headless create <album.pyfalbum> --album [--preset A4]
+    python -m pyfigures.poster.poster_headless create-album <album.pyfalbum> [--preset A4] [--page-width MM --page-height MM]
 
 Print-ready export (tiff/eps rasterised, optionally CMYK; pdf/svg vector,
 always RGB — Qt has no CMYK writer for either): print-current-page exports
@@ -225,7 +225,7 @@ def _page_dict(index, page):
             'shape_count': len(page.shapes_to_draw), 'has_background': page.background is not None}
 
 
-def op_create(args):
+def op_create(args, album=False):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     w, h = args.page_width, args.page_height
     if args.preset:
@@ -236,20 +236,27 @@ def op_create(args):
         raise ValueError('page width and height must be positive')
     if (w is None) != (h is None):
         raise ValueError('give both --page-width and --page-height, or neither')
-    if args.album:
+    if album:
         # A photo album is made as one from the start (like the photo album
         # designer); an existing poster is never converted into one.
+        if not _os.path.splitext(args.poster)[1]:
+            args.poster += '.pyfalbum'
         if not args.poster.lower().endswith('.pyfalbum'):
             raise ValueError('a photo album is saved as .pyfalbum')
         if _os.path.exists(args.poster):
             raise FileExistsError(f'{_os.path.abspath(args.poster)} already exists; '
                                   'a photo album can only be created as a new file')
     canvas = _canvas_from(args.poster, page_width_mm=w, page_height_mm=h)
-    if args.album:
+    if album:
         canvas.new_document(w or 210.0, h or 297.0, album=True)
         canvas.file_path = _os.path.abspath(args.poster)
     _save(canvas, args.poster)
     return {'ok': True, 'path': _os.path.abspath(args.poster), **_doc_dict(canvas)}
+
+
+def op_create_album(args):
+    """A new photo album: pinned front cover, one spread, pinned back cover."""
+    return op_create(args, album=True)
 
 
 def op_add_image(args):
@@ -709,13 +716,12 @@ def _main(argv=None) -> int:
                                       '(see pyfigures/poster/poster_recipe.py)')
     bd.add_argument('recipe')
 
-    c = sub.add_parser('create')
-    c.add_argument('poster')
-    c.add_argument('--page-width', type=float, default=None)
-    c.add_argument('--page-height', type=float, default=None)
-    c.add_argument('--preset', choices=list(PAGE_PRESETS), default=None)
-    c.add_argument('--album', action='store_true',
-                   help='a new photo album (.pyfalbum): front cover, one spread, back cover')
+    for name in ('create', 'create-album'):
+        c = sub.add_parser(name)
+        c.add_argument('poster')
+        c.add_argument('--page-width', type=float, default=None)
+        c.add_argument('--page-height', type=float, default=None)
+        c.add_argument('--preset', choices=list(PAGE_PRESETS), default=None)
 
     _PAGE_HELP = 'which page to operate on (0-based; default: the document\'s only/first page)'
 
@@ -933,7 +939,7 @@ def _main(argv=None) -> int:
 
     args = ap.parse_args(argv)
     ops = {
-        'create': op_create, 'add-image': op_add_image, 'add-text': op_add_text,
+        'create': op_create, 'create-album': op_create_album, 'add-image': op_add_image, 'add-text': op_add_text,
         'set-background': op_set_background, 'adjust-background': op_adjust_background,
         'clear-background': op_clear_background,
         'remove-image': op_remove_image, 'set-frame': op_set_frame, 'list': op_list,
