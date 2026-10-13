@@ -1,8 +1,9 @@
 """Licence notices and corresponding source for the standalone PyFigures apps.
 
 PyFigures' own code is BSD-2-Clause, but the standalone executables bundle
-copyleft code: PyQt6, read-lif and pyqt6-plugins (GPLv3), Qt (LGPLv3) and
-PyAV's FFmpeg, built with --enable-version3 and x264/x265 (GPLv3 as a whole).
+copyleft code: PyQt6, read-lif and pyqt6-plugins (GPLv3), Qt (LGPLv3),
+PyAV's FFmpeg, built with --enable-version3 and x264/x265 (GPLv3 as a whole),
+and PyMuPDF with MuPDF (AGPLv3; its PyPI source archive contains MuPDF's).
 Each executable is therefore distributed under the GNU GPL version 3, and must
 come with (1) the licence texts and notices of everything inside it and (2)
 access to the complete corresponding source, offered from the same place as
@@ -35,6 +36,8 @@ import urllib.request
 PYPI_JSON = "https://pypi.org/pypi/{name}/{version}/json"
 GNU_TEXTS = {
     "GNU GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/gpl-3.0.txt",
+    # PyMuPDF / MuPDF (PDF files as vector panels)
+    "GNU AFFERO GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/agpl-3.0.txt",
     "GNU LESSER GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/lgpl-3.0.txt",
     "GNU GENERAL PUBLIC LICENSE, Version 2": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
     "GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt",
@@ -192,7 +195,9 @@ def notices(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     py = _python_components()
     ff = _ffmpeg_components()
-    gpl = sorted(c["name"] for c in py if "GPL" in c["license"] and "LGPL" not in c["license"])
+    agpl = sorted(c["name"] for c in py if "AFFERO" in c["license"].upper() or "AGPL" in c["license"].upper())
+    gpl = sorted(c["name"] for c in py if "GPL" in c["license"] and "LGPL" not in c["license"]
+                 and c["name"] not in agpl)
     release = _release_page()
     head = [
         "PyFigures standalone application - licence information",
@@ -209,6 +214,13 @@ def notices(out_dir):
         "GNU LGPL version 3 and is dynamically linked: you may replace the Qt",
         "libraries inside this bundle with your own (modified) build.",
         "",
+    ] + ([
+        f"{', '.join(agpl)} (PDF files as vector panels, with the MuPDF library) is",
+        "licensed under the GNU Affero General Public License version 3 (full text",
+        "below), which section 13 of the GPL v3 allows to be combined with it; those",
+        "components keep the AGPL terms.",
+        "",
+    ] if agpl else []) + [
         "THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY",
         "APPLICABLE LAW (see sections 15-16 of the GPL below).",
         "",
@@ -250,7 +262,7 @@ def notices(out_dir):
     with open(os.path.join(out_dir, "sources.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=1)
     missing = [c["name"] for c in py if not c["source"]]
-    print(f"{len(py)} Python packages, {len(ff)} FFmpeg components; GPL: {gpl}")
+    print(f"{len(py)} Python packages, {len(ff)} FFmpeg components; GPL: {gpl}; AGPL: {agpl}")
     if missing:
         print("no source archive found (must come from their repositories):", ", ".join(missing))
 

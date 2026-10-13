@@ -117,7 +117,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[pdf]
     ```
 
-    A PDF dropped onto the canvas (first page) becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. Uses PyMuPDF (AGPL v3).
+    A PDF dropped onto the canvas (first page) becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. Uses PyMuPDF (AGPL v3). The standalone apps already include it.
 
 **Equations** need nothing extra: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel) typesets LaTeX mathematics with Matplotlib — no TeX installation — as a vector panel; right-click it to edit it.
 
@@ -204,7 +204,7 @@ Optional (installed only if you ask for them):
 ### Licence of PyFigures and of the standalone executables
 
 - **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6, read-lif and pyqt6-plugins are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
-- **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built.
+- **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. They also include PyMuPDF/MuPDF (PDF panels), which keeps its **GNU Affero GPL v3** licence (GPL v3 section 13 allows the combination). Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built. [docs/LICENSING.md](docs/LICENSING.md) explains the reasoning.
 
 # Other Figure-Making Software
 

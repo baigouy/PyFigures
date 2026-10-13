@@ -2,6 +2,7 @@
 import sys
 from PyInstaller.utils.hooks import (
     collect_data_files,
+    collect_dynamic_libs,
     collect_submodules,
 )
 
@@ -43,6 +44,11 @@ hiddenimports += collect_submodules('imagecodecs')
 hiddenimports += collect_submodules('av')
 hiddenimports += collect_submodules('zarr')          # OME-Zarr reading
 hiddenimports += collect_submodules('numcodecs')
+# PyMuPDF (pyfigures[pdf], AGPLv3): PDF files as vector panels, with its
+# native MuPDF libraries (collected explicitly, see `binaries` below)
+hiddenimports += collect_submodules('pymupdf')
+hiddenimports += ['fitz']
+binaries = collect_dynamic_libs('pymupdf')
 hiddenimports += [
     # PyQt6 / Qt
     'PyQt6',
@@ -94,7 +100,7 @@ def _icon(name):
 a = Analysis(
     ['pyfigures/__main__.py'],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
