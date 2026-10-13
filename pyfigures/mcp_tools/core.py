@@ -59,7 +59,9 @@ def _encode_str(value: str) -> str:
 def _strip_tags(s: str) -> str:
     """Best-effort plain text from a possibly-HTML string (for length/logging)."""
     import re as _re
-    return _re.sub(r"<[^>]+>", "", s or "")
+    # Qt rich text carries a <head><style>…</style></head> block: drop its CSS
+    s = _re.sub(r"<(style|head|script)[^>]*>.*?</\1>", "", s or "", flags=_re.DOTALL | _re.IGNORECASE)
+    return _re.sub(r"<[^>]+>", "", s)
 
 
 def _escape_if_plain(s: str) -> str:

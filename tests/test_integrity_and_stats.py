@@ -75,6 +75,21 @@ def test_integrity_detects_copy_move_clone():
     assert 0 not in cloned
 
 
+def test_integrity_repeated_texture_is_not_a_clone():
+    # parallel fibres: every block has the same light/dark pattern (same
+    # signature) but its own pixels -> must not be reported as copy-move
+    rng = np.random.default_rng(11)
+    x = np.arange(240)
+    stripes = (np.sin(x / 2.5)[None, :] * 60 + 128) * np.ones((240, 1))
+    img = np.clip(stripes + rng.normal(0, 12, (240, 240)), 0, 255).astype(np.float32) / 255
+    count, _ = integrity_ops.within_panel_clones(img)
+    assert count == 0
+    # the same image with a real pasted patch is still caught
+    img[150:200, 150:200] = img[20:70, 20:70]
+    count, _ = integrity_ops.within_panel_clones(img)
+    assert count > 0
+
+
 def test_integrity_clean_figure_has_no_flags():
     tmp = tempfile.mkdtemp()
     rng = np.random.default_rng(7)
@@ -174,6 +189,20 @@ def test_adjustment_ledger_detects_types_and_clean_panel():
     types_b = {a["type"] for a in data["panels"][1]["adjustments"]}
     assert {"crop", "rotation", "brightness_contrast", "lut"} <= types_b
     assert "Panel a: no adjustments" in data["methods_paragraph"]
+
+
+def test_adjustment_ledger_label_ignores_qt_html_header():
+    # letters written by Qt carry a <head><style> CSS block: it must not leak
+    # into the panel label or the Methods paragraph
+    qt_html = ('<!DOCTYPE HTML><html><head><meta name="qrichtext" content="1" />'
+               '<style type="text/css">p, li { white-space: pre-wrap; }</style></head>'
+               '<body><p><b>A</b></p></body></html>')
+    tmp = tempfile.mkdtemp()
+    pyf = _write_pyf_fields([{"_lbl": qt_html, "crop_left": "5"}], tmp)
+    data = json.loads(M.export_adjustment_ledger(pyf))
+    assert data["panels"][0]["label"] == "A"
+    assert "white-space" not in data["methods_paragraph"]
+    assert "Panel A: cropped" in data["methods_paragraph"]
 
 
 def test_adjustment_ledger_flags_custom_script_and_inconsistent_ranges():

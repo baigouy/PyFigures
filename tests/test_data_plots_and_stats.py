@@ -177,6 +177,30 @@ def test_data_plot_script_executes_to_figure(tmp_path):
 
 
 @needs_staplot
+def test_scale_bar_all_skips_data_plot_panels(tmp_path):
+    """A chart has no pixel size: set_scale_bar_all must not give it a scale bar."""
+    from pyfigures.mcp_server import create_figure, add_data_plot, add_image, set_scale_bar_all
+    import xml.etree.ElementTree as ET
+    from PIL import Image as PILImage
+
+    d = str(tmp_path)
+    png = os.path.join(d, "cells.png")
+    PILImage.fromarray(np.zeros((40, 60), dtype=np.uint8)).save(png)
+    csvp = _wide_csv(os.path.join(d, "c.csv"), {"A": [1, 2, 3], "B": [4, 5, 6]})
+    pyf = os.path.join(d, "fig.pyf")
+    create_figure(pyf, mode="canvas")
+    add_image(pyf, [], png)
+    add_data_plot(pyf, [], csvp, kind="bar")
+    msg = set_scale_bar_all(pyf, 10, px_to_unit=0.1)
+    assert "applied to 1 image(s)" in msg and "Skipped 1 data-plot" in msg
+    root = ET.parse(pyf).getroot()
+    for im in root.iter("Image2D"):
+        has_bar = any(a.tag == "ScaleBar" for a in im.iter())
+        is_plot = "staplot" in (im.findtext("custom_loading_script") or "")
+        assert has_bar == (not is_plot)
+
+
+@needs_staplot
 def test_add_data_plot_bad_kind_errors(tmp_path):
     from pyfigures.mcp_server import create_figure, add_data_plot
     d = str(tmp_path)

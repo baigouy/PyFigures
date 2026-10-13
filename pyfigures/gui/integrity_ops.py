@@ -191,11 +191,15 @@ def _hamming(a, b):
 # within-panel copy-move (block hashing)
 # --------------------------------------------------------------------------- #
 def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
-                        search_max=384):
+                        search_max=384, min_corr=0.99, max_checks=200000):
     """Find non-adjacent, textured regions whose signature is identical - the
     fingerprint of copy-move retouching. Uses stride-1 sliding windows (so a
     pasted region is caught at *any* offset, not just grid-aligned ones) with a
-    cheap 8x8 signature, fully vectorised. Returns (count, sample_pairs)."""
+    cheap 8x8 signature, fully vectorised. A signature only says two blocks have
+    the same light/dark pattern (any two similar edges do), so each candidate
+    pair is then confirmed on the pixels themselves: the two blocks' Pearson
+    correlation must be >= *min_corr*.
+    Returns (count, sample_pairs)."""
     g = np.ascontiguousarray(g, dtype=np.float32)
     h, w = g.shape[:2]
     if max(h, w) > search_max:          # bound cost on large panels
@@ -226,6 +230,8 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
     _uniq, inv, counts = np.unique(sv, return_inverse=True, return_counts=True)
 
     pairs = []
+    checks = 0
+    inv = inv.reshape(-1)
     for grp in np.nonzero(counts > 1)[0]:
         members = keep[np.nonzero(inv == grp)[0]]
         pts = [(int(m % pw), int(m // pw)) for m in members]   # (x, y)
@@ -234,9 +240,24 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
                 (x1, y1), (x2, y2) = pts[i], pts[j]
                 if abs(x1 - x2) < block and abs(y1 - y2) < block:
                     continue                                    # overlapping - not a clone
+                checks += 1
+                if checks > max_checks:                         # safety cap on cost
+                    break
+                # a copy stays near-perfectly correlated with its source even
+                # after the panel was resampled; similar textures (fibres,
+                # edges) share the signature but correlate far less (~0.9)
+                a = win[y1, x1].ravel() - win[y1, x1].mean()
+                b = win[y2, x2].ravel() - win[y2, x2].mean()
+                den = float(np.sqrt(float(np.einsum('i,i->', a, a)) * float(np.einsum('i,i->', b, b))))
+                if den <= 0 or float(np.einsum('i,i->', a, b)) / den < min_corr:
+                    continue                                    # same pattern, different pixels
                 pairs.append(((x1, y1), (x2, y2)))
                 if len(pairs) > 5000:                           # safety cap
                     break
+            if checks > max_checks or len(pairs) > 5000:
+                break
+        if checks > max_checks or len(pairs) > 5000:
+            break
     if len(pairs) < min_clones:
         return 0, []
     return len(pairs), pairs[:max_report]

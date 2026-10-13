@@ -310,9 +310,15 @@ def set_scale_bar_all(
 
     added = 0
     updated = 0
+    skipped = 0
 
     def _process_img(img: ET.Element):
-        nonlocal added, updated
+        nonlocal added, updated, skipped
+        # a chart or a LUT calibration bar has no pixel size: no scale bar
+        script = _decode(img.findtext("custom_loading_script")) or ""
+        if "from staplot import api" in script or "ColorbarBase(" in script:
+            skipped += 1
+            return
         action = _apply_scalebar_to_img(
             img, bar_width_in_units, legend_html,
             placement, bar_color_int, px_to_unit,
@@ -345,10 +351,11 @@ def set_scale_bar_all(
         return "No images found in this figure."
     _save(tree, pyf_path)
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
+    skip_note = f" Skipped {skipped} data-plot / colour-bar panel(s)." if skipped else ""
     return (
         f"Scale bar applied to {total} image(s): "
         f"{added} added, {updated} updated. "
-        f"Settings: '{text}', {placement}{px_note}."
+        f"Settings: '{text}', {placement}{px_note}.{skip_note}"
     )
 
 
