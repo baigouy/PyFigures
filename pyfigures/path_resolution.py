@@ -34,6 +34,24 @@ def _parts(path: str) -> list[str]:
     return [c for c in _SEP_RE.split(p) if c not in ("", ".")]
 
 
+def is_remote(path) -> bool:
+    """True for an http(s) URL (e.g. an OME-Zarr image on a server)."""
+    return isinstance(path, str) and bool(re.match(r"^https?://", path.strip(), re.I))
+
+
+def source_exists(path) -> bool:
+    """True when *path* is an image source PyFigures can read: an existing file,
+    a local .zarr store (a folder) or a remote URL (checked when it is read)."""
+    if not isinstance(path, str) or not path.strip():
+        return False
+    if is_remote(path):
+        return True
+    p = path.split("#", 1)[0]
+    if p.rstrip("/\\").lower().endswith(".zarr"):
+        return os.path.isdir(p)
+    return os.path.isfile(path)
+
+
 def _looks_absolute(path: str) -> bool:
     return bool(re.match(r"^([A-Za-z]:[\\/]|/|\\\\)", path.strip()))
 

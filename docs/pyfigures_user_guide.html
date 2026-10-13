@@ -465,6 +465,7 @@
         <tr><td><strong>Open…</strong></td><td>Opens a <code>.pyf</code> figure, replacing the current one.</td><td><kbd>Ctrl O</kbd></td></tr>
         <tr><td><strong>Merge into current figure…</strong></td><td>Appends the contents of another <code>.pyf</code> to the current figure.</td><td></td></tr>
         <tr><td><strong>New</strong></td><td>Clears the canvas and resets the current figure.</td><td><kbd>Ctrl N</kbd></td></tr>
+        <tr><td><strong>Add image from URL / OME-Zarr…</strong></td><td>Adds an image from an http(s) URL, or an OME-Zarr image (a URL such as <code>https://…/image.zarr</code>, e.g. from the IDR, or a local <code>.zarr</code> folder) as a new row. For OME-Zarr you pick the pyramid level; pixel size and channel colours come from the file. Needs <code>pip install pyfigures[zarr]</code>.</td><td></td></tr>
         <tr><td><strong>Draft figure from folder…</strong></td><td>Assembles a first-pass figure from a folder of images and CSVs: grid layout, data plots, scale bars, A/B/C letters. See <a href="#automation">Automation</a>.</td><td></td></tr>
         <tr><td><strong>Build figure from recipe…</strong></td><td>Builds a figure from a YAML/JSON recipe — reproducible, rebuildable when the data change. See <a href="#automation">Automation</a>.</td><td></td></tr>
         <tr><td><strong>Search figure library…</strong></td><td>Indexes a folder tree of past <code>.pyf</code> figures and searches them by panel, label or caption.</td><td></td></tr>

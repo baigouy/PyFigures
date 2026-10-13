@@ -261,7 +261,7 @@ python -m pyfigures.mcp_server --transport sse --port 8765
 
 ## 5. Available tools reference
 
-The server currently exposes **144 tools** (110 figure tools + 34 poster tools).
+The server currently exposes **145 tools** (111 figure tools + 34 poster tools).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -311,6 +311,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `add_group(pyf_path, ...)` | Add a row/column group |
 | `add_image(pyf_path, group_path, filename, ...)` | Add an image panel |
 | `scan_folder(folder, pattern)` | Scan a folder for image files and return layout suggestions as JSON |
+| `inspect_ome_zarr(path_or_url)` | Describe an **OME-Zarr** image (local `.zarr` folder or http(s) URL, e.g. the IDR) without reading pixels: axes, pyramid levels with pixel sizes in µm, channel names/colours, and the level read by default. `add_image` accepts the same path/URL; append `#level=N` to read another level. Needs `pip install pyfigures[zarr]` |
 | `create_figure_from_folder(pyf_path, folder, ...)` | Build a whole figure automatically from a folder of images |
 | `draft_figure(folder, out_pyf, plot_kind, journal, px_to_unit, scale_bar_units, ...)` | **Draft a complete figure in one call**: image grid + CSV data-plot panels (with stats) + scale bars + A/B/C letters + journal size + caption stub |
 | `build_figure_from_recipe(recipe_path)` | **Build a figure from a YAML/JSON recipe** — rows of `image` / `glob` / `plot` panels with LUTs, crops, scale bars, lettering, drawings (rect, ellipse, circle, square, line, polygon, points), insets, journal size and caption; `checks` run before exporting (a failure means nothing is exported), `consolidate` bundles the source files, `template` + `fill` fills a template, `properties` sets stored panel fields, exports include `ledger` and `colorblind`. Reproducible and git-diffable (byte-identical rebuilds); also `python -m pyfigures.recipe build fig.yaml [--render png]` and GUI File → Build figure from recipe…. Full guide: `docs/RECIPES.md`; example: `docs/recipe_example.yaml` |

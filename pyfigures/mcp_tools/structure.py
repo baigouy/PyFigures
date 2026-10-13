@@ -117,6 +117,40 @@ def write_xml(pyf_path: str, xml_content: str) -> str:
 
 
 @mcp.tool()
+def inspect_ome_zarr(path_or_url: str) -> str:
+    """Describe an **OME-Zarr** image (local ``.zarr`` folder or http(s) URL,
+    e.g. from the IDR or an institutional OME-Zarr server) without reading its
+    pixels: axes, pyramid levels (shape, data type, pixel size in µm), channel
+    names / colours / display windows, and the level PyFigures reads by default.
+
+    Use it before add_image to pick a level: append ``#level=N`` to the URL to
+    read level N instead of the default (the largest within 512 MB / 8192 px).
+    Needs the ``zarr`` package (``pip install pyfigures[zarr]``).
+    """
+    try:
+        from batoolset import ome_zarr as Z
+    except ImportError as e:
+        return f"ERROR: OME-Zarr support is not available ({e})."
+    try:
+        info = Z.describe(path_or_url)
+        level, w, h = Z.level_size(path_or_url)
+    except ImportError:
+        return "ERROR: OME-Zarr needs the 'zarr' package: pip install zarr"
+    except Exception as e:
+        return f"ERROR: cannot read {path_or_url}: {type(e).__name__}: {e}"
+    names = [str(n).lower() for n in info["axes"]]
+    for lv in info["levels"]:
+        for ax in ("x", "y", "z"):
+            if ax in names:
+                i = names.index(ax)
+                unit = (info["units"][i] or "micrometer").lower()
+                lv[f"pixel_size_{ax}_um"] = round(lv["scale"][i] * Z._UNIT_TO_UM.get(unit, 1.0), 6)
+    info["default_level"] = level
+    info["default_level_size_px"] = [w, h]
+    return json.dumps(info, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def list_images(pyf_path: str) -> str:
     """List all image file paths referenced in the figure, as JSON.
 
@@ -456,7 +490,12 @@ def add_image(
     *group_path*: list of ints.
       - [] → free-canvas (image added directly under <list>; matches real PyFigures default).
       - [0] → top-level group 0; [0, 1] → first sub-group inside group 0.
-    *filename*: absolute path to the image file (PNG, TIFF, JPG, …).
+    *filename*: absolute path to the image file (PNG, TIFF, JPG, …), an
+      http(s) URL to an image, or an **OME-Zarr** image — a local ``.zarr``
+      folder or a URL such as ``https://…/image.zarr``. For OME-Zarr the largest
+      pyramid level within 512 MB / 8192 px is read; append ``#level=N`` to the
+      URL to choose one (see inspect_ome_zarr). Pixel size and channel colours
+      come from the OME metadata.
     *label*: optional panel label (plain text or Qt HTML, e.g. "<b>A</b>").
     *label_placement*: "top left" | "top right" | "bottom left" | "bottom right".
     """

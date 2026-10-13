@@ -340,7 +340,8 @@ def add_channel_split(
         if not 0 <= int(frame) < nt:
             return f"ERROR: frame {frame} out of range (the stack has {nt} time point(s): 0..{nt - 1})."
     else:
-        missing = [f for f in channel_files if not os.path.isfile(f)]
+        from pyfigures.path_resolution import source_exists
+        missing = [f for f in channel_files if not source_exists(f)]
         if missing:
             return "ERROR: channel file(s) not found: " + ", ".join(missing)
         n = len(channel_files)
@@ -428,7 +429,8 @@ def _source_panel(root, group_path, image_index):
         return None, None, f"image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     fn = _first_filename(img)
-    if not fn or not os.path.isfile(fn):
+    from pyfigures.path_resolution import source_exists
+    if not fn or not source_exists(fn):
         return None, None, "the source panel has no readable image file."
     ser = _child_text(img, "serie_to_open")
     try:

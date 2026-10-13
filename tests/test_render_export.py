@@ -129,6 +129,55 @@ def test_export_latex_with_caption_float(real_figure, tmp_path):
     assert r"\begin{picture}" in tex             # graphics group still present
 
 
+def _put_xy(line):
+    return [float(v) for v in line.split(r"\put(")[1].split(")")[0].split(",")]
+
+
+def test_export_latex_typesets_scale_bar_legend(tmp_path):
+    """The scale-bar legend goes to the LaTeX overlay, inside the picture, and
+    is not left as text in the graphics PDF; labels sit inside the picture
+    whatever the figure's position on the canvas."""
+    from pyfigures.mcp_server import set_scale_bar
+    p = str(tmp_path / "fig.pyf")
+    create_figure(p, mode="canvas")
+    add_image(p, [], _tif(str(tmp_path / "big.tif"), 90, size=200), label="A")
+    set_scale_bar(p, [], 0, 20, label="20 um", px_to_unit=0.5)
+    out = str(tmp_path / "sb.pdf")
+    r = json.loads(export_latex(p, out))
+    tex = open(r["latex_overlay"], encoding="utf-8").read()
+    h_ratio = float(tex.split(r"\begin{picture}(1,")[1].split(")")[0])
+    puts = [ln for ln in tex.splitlines() if r"\put(" in ln and "includegraphics" not in ln]
+    assert any("20 um" in ln for ln in puts) and any("{A}" in ln for ln in puts)
+    for ln in puts:
+        x, y = _put_xy(ln)
+        assert 0.0 <= x <= 1.0 and 0.0 <= y <= h_ratio, ln
+    import fitz
+    with fitz.open(out) as doc:
+        assert "20 um" not in doc[0].get_text()
+
+
+def test_free_canvas_figure_is_not_shifted_on_export(tmp_path):
+    """A free-canvas figure starting at the canvas origin used to be exported
+    shifted by the 50-unit editor margin, cropping its top-left part."""
+    from PIL import Image as PILImage
+    p = str(tmp_path / "fig.pyf")
+    create_figure(p, mode="canvas")
+    from batoolset.img import Img
+    ramp = np.add.outer(np.arange(200), np.arange(200)) * 255 // 398
+    src = str(tmp_path / "ramp.tif")
+    Img(ramp.astype(np.uint8), dimensions='hw').save(src)
+    add_image(p, [], src)
+    out = str(tmp_path / "o.png")
+    json.loads(export_figure(p, out, dpi=72))
+    im = np.asarray(PILImage.open(out).convert("RGBA")).astype(int)
+    # the image fills the whole export (no transparent band from a shift) and
+    # its dark top-left corner is at the export's top-left
+    assert im.shape[0] >= 190 and im.shape[1] >= 190
+    assert im[2:-2, 2:-2, 3].min() == 255
+    assert im[3, 3, :3].mean() < 30
+    assert im[-4, -4, :3].mean() > 225
+
+
 def test_export_latex_with_caption_but_none_set(real_figure, tmp_path):
     """with_caption=True but no caption stored → plain overlay + a note."""
     out = str(tmp_path / "nocap.pdf")

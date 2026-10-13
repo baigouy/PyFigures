@@ -232,6 +232,29 @@ def test_svg_export_keeps_crops(cropped_figure, tmp_path):
     assert sizes == [(60, 80), (120, 80)]
 
 
+def test_vector_exports_have_the_figure_true_size(cropped_figure, tmp_path):
+    """Regression: PDF/SVG used a fixed A4 page at 96 dpi — figures came out at
+    75 % of their size and anything beyond the page was cut off."""
+    import pyfigures.mcp_server as M
+    fitz = pytest.importorskip("fitz")
+    M.resize_figure(cropped_figure, width_mm=300)
+    pdf = str(tmp_path / "big.pdf")
+    M.export_figure(cropped_figure, pdf)
+    page = fitz.open(pdf)[0]
+    assert page.rect.width / 72 * 25.4 == pytest.approx(300, abs=0.5)
+    content = None
+    for b in page.get_bboxlog():
+        r = fitz.Rect(b[1])
+        content = r if content is None else content | r
+    assert content.width / 72 * 25.4 == pytest.approx(300, abs=0.5)      # not shrunk, not clipped
+    assert content.y1 <= page.rect.y1 + 0.5
+    svg = str(tmp_path / "big.svg")
+    M.export_figure(cropped_figure, svg)
+    head = open(svg, encoding="utf-8").read(600)
+    width_mm = float(re.search(r'width="([\d.]+)mm"', head).group(1))
+    assert width_mm == pytest.approx(300, abs=0.5)
+
+
 def test_recipe_exports_pptx_and_illustrator(tmp_path):
     import tifffile
     from pyfigures.recipe import build_figure_from_recipe

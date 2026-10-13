@@ -70,6 +70,8 @@ import os
 import re
 import sys
 
+from pyfigures.path_resolution import source_exists
+
 __all__ = ["RecipeError", "RecipeChecksFailed", "load_recipe", "build_figure_from_recipe",
            "main"]
 
@@ -336,7 +338,7 @@ def _check_extras(opts, where, base):
                 _check_mapping(item, allowed, required, where, f"{key} {k + 1}")
                 if key == "zoom":
                     _check_point(item["box"], 4, where, f"zoom {k + 1} 'box'")
-                if "image" in item and not os.path.isfile(_resolve(base, item["image"])):
+                if "image" in item and not source_exists(_resolve(base, item["image"])):
                     raise RecipeError(f"{where}: {key} image not found: {_resolve(base, item['image'])}")
     if "brackets" in opts:
         if not isinstance(opts["brackets"], list):
@@ -361,6 +363,9 @@ def _check_extras(opts, where, base):
 
 
 def _resolve(base_dir, p):
+    from pyfigures.path_resolution import is_remote
+    if is_remote(p):
+        return str(p).strip()          # a URL (e.g. OME-Zarr on a server) is used as is
     p = os.path.expanduser(str(p))
     return os.path.normpath(p if os.path.isabs(p) else os.path.join(base_dir, p))
 
@@ -558,7 +563,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             fill.extend(matches)
         else:
             p = _resolve(base, f)
-            if not os.path.isfile(p):
+            if not source_exists(p):
                 raise RecipeError(f"fill {k + 1}: file not found: {p}")
             fill.append(p)
 
@@ -592,7 +597,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                 continue
             if kind in ("split", "merge") and isinstance(panel[kind], list):
                 files = [_resolve(base, f) for f in panel[kind]]
-                missing = [f for f in files if not os.path.isfile(f)]
+                missing = [f for f in files if not source_exists(f)]
                 if missing:
                     raise RecipeError(f"{where}: file(s) not found: {', '.join(missing)}")
                 if kind == "merge" and len(files) < 2:
@@ -610,7 +615,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                     plan_row.append(("image", m, dict(merged)))
                 continue
             path = _resolve(base, panel[kind])
-            if not os.path.isfile(path):
+            if not source_exists(path):
                 raise RecipeError(f"{where}: file not found: {path}")
             plan_row.append((kind, path, merged))
         if "labels" in row_opts and isinstance(row_opts["labels"], list) \

@@ -40,7 +40,7 @@ jobs:
           pip install pyinstaller pyinstaller-hooks-contrib
 
       - name: Install pyfigures and its dependencies
-        run: pip install ".[video]"
+        run: pip install ".[video,zarr]"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the

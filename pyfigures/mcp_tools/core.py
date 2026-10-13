@@ -169,7 +169,16 @@ def _raw_size_from_file(filename) -> tuple[int, int] | None:
     """(width, height) of an image in source pixels, read from the file header
     without decoding pixels. None for non-files, SVGs, videos, multi-series
     containers or anything unreadable (those keep their stored size)."""
-    if not filename or not isinstance(filename, str) or not os.path.isfile(filename):
+    if not filename or not isinstance(filename, str):
+        return None
+    if filename.split("#", 1)[0].rstrip("/\\").lower().endswith(".zarr"):
+        try:                       # OME-Zarr (local or URL): the level that is read
+            from batoolset.ome_zarr import level_size
+            _, w, h = level_size(filename)
+            return w, h
+        except Exception:
+            return None
+    if not os.path.isfile(filename):
         return None
     low = filename.lower()
     if low.endswith(".svg"):

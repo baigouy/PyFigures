@@ -73,10 +73,14 @@ setuptools.setup(
         'bioformats': [
             "pyimagej",      # Fiji / Bio-Formats reader for .lif, .czi, .nd2, ... (needs Java)
         ],
+        'zarr': [
+            "zarr",          # OME-Zarr images, local or from a URL (read over http with requests)
+        ],
         'all': [
             "mcp>=1.0",
             "av",
             "pyimagej",
+            "zarr",
         ],
     },
     python_requires='>=3.9'  # PyQt6 dropped 3.7/3.8; tested up to 3.12

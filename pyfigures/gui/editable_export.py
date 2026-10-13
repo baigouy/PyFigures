@@ -60,7 +60,10 @@ def capture_scene(panel) -> dict:
     height = float(bounds.height())
     if width <= 0 or height <= 0:
         raise RuntimeError("the figure contains no panels to export")
-    pad = float(getattr(panel, "_EXTRA_PADDING", 0))
+    # the figure's own top-left corner (not a fixed margin: free-canvas
+    # figures can start anywhere)
+    pad_x = float(bounds.x())
+    pad_y = float(bounds.y())
 
     data = QByteArray()
     buf = QBuffer(data)
@@ -72,7 +75,7 @@ def capture_scene(panel) -> dict:
     gen.setResolution(72)           # 1 SVG unit = 1 point = 1 canvas unit
     from pyfigures.gui.svg_painter import CroppingPainter
     painter = CroppingPainter(gen)
-    painter.translate(-pad, -pad)
+    painter.translate(-pad_x, -pad_y)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -92,7 +95,7 @@ def capture_scene(panel) -> dict:
     for s in fig_images:
         try:
             r = s.getRect(all=True)
-            rects.append((float(r.x()) - pad, float(r.y()) - pad, float(r.width()), float(r.height())))
+            rects.append((float(r.x()) - pad_x, float(r.y()) - pad_y, float(r.width()), float(r.height())))
         except Exception:
             pass
     scene = parse_svg(bytes(data))

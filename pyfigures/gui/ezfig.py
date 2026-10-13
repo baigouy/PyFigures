@@ -660,31 +660,34 @@ class MyWidget(QWidget):
         if filetype in ['svg','pdf']:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             QApplication.processEvents()
+            # The page is the figure itself, at its true physical size: canvas
+            # units are points, so 1 unit = 1 pt at 72 dpi. (A fixed A4 page at
+            # 96 dpi used to shrink every figure to 75 % — a 183 mm Nature
+            # column came out 137 mm — and cut off anything beyond the page.)
+            # *svg_dpi* is kept for compatibility and no longer changes the size.
+            import math
+            from qtpy.QtCore import QSizeF, QMarginsF, QRectF
+            bounds = self.updateBounds()
+            fig_w = max(1.0, float(bounds.width()))
+            fig_h = max(1.0, float(bounds.height()))
             if filetype == 'svg':
                 generator = QSvgGenerator()
                 generator.setFileName(path)
-                if svg_dpi == self.SVG_ILLUSTRATOR:
-                    generator.setSize(QSize(595, 842))
-                    generator.setViewBox(QRect(0, 0, 595, 842))
-                else:
-                    generator.setSize(QSize(794, 1123))
-                    generator.setViewBox(QRect(0, 0, 794, 1123))
+                generator.setSize(QSize(int(math.ceil(fig_w)), int(math.ceil(fig_h))))
+                generator.setViewBox(QRectF(0, 0, fig_w, fig_h))
             else:
+                from qtpy.QtGui import QPageLayout
                 generator = QPdfWriter(path)
-                # Set the page size of the PDF to match the default size of the SVG
-                # generator.setPageSize(QSize(794, 1123))
-                # Set the page size of the PDF
-                page_size = QPageSize(QPageSize.A4)
-                # page_width = page_size.width(QPageSize.Millimeter)
-                # page_height = page_size.height(QPageSize.Millimeter)
-                generator.setPageSize(page_size)
+                # whole points, rounded up (Qt rounds page sizes; never clip)
+                generator.setPageSize(QPageSize(QSizeF(math.ceil(fig_w), math.ceil(fig_h)), QPageSize.Unit.Point, '',
+                                                QPageSize.SizeMatchPolicy.ExactMatch))
+                generator.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Point)
 
             if title is not None and isinstance(title, str):
                 generator.setTitle(title)
             if description is not None and isinstance(description, str):
                 generator.setDescription(description)
-            generator.setResolution(
-                svg_dpi)  # fixes issues in inkscape of pt size --> 72 pr illustrator and 96 pr inkscape but need change size
+            generator.setResolution(72)
 
             if filetype == 'svg':
                 # Qt's SVG engine ignores drawImage source rects: crop ourselves
@@ -692,7 +695,7 @@ class MyWidget(QWidget):
                 painter = CroppingPainter(generator)
             else:
                 painter = QPainter(generator)
-            painter.translate(-self._EXTRA_PADDING, -self._EXTRA_PADDING)
+            painter.translate(-bounds.x(), -bounds.y())
 
             # print(generator.title(), generator.heightMM(), generator.height(), generator.widthMM(),
             #       generator.resolution(), generator.description(), generator.logicalDpiX())
@@ -738,7 +741,9 @@ class MyWidget(QWidget):
             except Exception:
                 pass
             painter = QPainter(image)  # see what happens in case of rounding of pixels
-            painter.translate(-self._EXTRA_PADDING*scaling_factor_dpi, -self._EXTRA_PADDING*scaling_factor_dpi)
+            # start at the figure's own top-left corner, which is not always
+            # the default margin (free-canvas figures can start anywhere)
+            painter.translate(-img_bounds.x() * scaling_factor_dpi, -img_bounds.y() * scaling_factor_dpi)
             # painter.begin()
             painter.scale(scaling_factor_dpi, scaling_factor_dpi)
 
@@ -801,8 +806,9 @@ class MyWidget(QWidget):
         image = QImage(size, QImage.Format_RGBA8888)
         image.fill(QColor(*bg_color))  # opaque background (videos have no alpha)
         painter = QPainter(image)
-        painter.translate(-self._EXTRA_PADDING * scaling_factor_dpi,
-                           -self._EXTRA_PADDING * scaling_factor_dpi)
+        bounds = self.updateBounds()
+        painter.translate(-bounds.x() * scaling_factor_dpi,
+                          -bounds.y() * scaling_factor_dpi)
         painter.scale(scaling_factor_dpi, scaling_factor_dpi)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         painter.setRenderHint(QPainter.Antialiasing)      # also forces the display cache to be bypassed
@@ -960,6 +966,11 @@ class MyWidget(QWidget):
                 for a in anns:
                     if isinstance(a, TAText2D):
                         out.append(a)
+                        continue
+                    # scale-bar legends are typeset by LaTeX too
+                    legend = getattr(a, 'legend', None)
+                    if isinstance(legend, TAText2D):
+                        out.append(legend)
             if isinstance(node, TAText2D):
                 out.append(node)
 
@@ -1115,7 +1126,8 @@ class MyWidget(QWidget):
         bounds = self.updateBounds()
         W = float(bounds.width()) or 1.0
         H = float(bounds.height()) or 1.0
-        EP = self._EXTRA_PADDING
+        X0 = float(bounds.x())
+        Y0 = float(bounds.y())
         h_ratio = H / W
         img_name = _os.path.basename(img_path)
 
@@ -1127,8 +1139,8 @@ class MyWidget(QWidget):
                 continue
             if getattr(a, 'is_letter', False) and r'\textbf{' not in latex:
                 latex = r'\textbf{' + latex + '}'
-            x = (a.x() - EP) / W
-            y = (H - (a.y() - EP)) / W  # picture y is measured from the bottom
+            x = (a.x() - X0) / W
+            y = (H - (a.y() - Y0)) / W  # picture y is measured from the bottom
             puts.append(
                 f"    \\put({x:.4f},{y:.4f}){{"
                 f"\\makebox(0,0)[lt]{{\\smash{{{latex}}}}}}}%"

@@ -75,7 +75,8 @@ def stack_info(path: str, series: int | None = None) -> dict:
          "interval": 2.0, "time_unit": "min"}
 
     'd' is the Z axis. Raises StackInfoError if the file can't be read."""
-    if not path or not os.path.isfile(path):
+    from pyfigures.path_resolution import source_exists
+    if not path or not source_exists(path):
         raise StackInfoError(f"no such file: {path}")
     try:
         from batoolset.img import Img, guess_dimensions

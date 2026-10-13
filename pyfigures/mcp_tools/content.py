@@ -180,7 +180,8 @@ def add_channel_merge(
         return "ERROR: normalization must be 'per_channel' or 'none'."
     if not channel_files or len(channel_files) < 1:
         return "ERROR: provide at least one channel file."
-    missing = [f for f in channel_files if not os.path.isfile(f)]
+    from pyfigures.path_resolution import source_exists
+    missing = [f for f in channel_files if not source_exists(f)]
     if missing:
         return "ERROR: channel file(s) not found: " + ", ".join(missing)
 

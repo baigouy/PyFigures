@@ -924,6 +924,13 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(new_action)
         new_action.triggered.connect(self.new_fig)
 
+        url_action = QAction("Add image from URL / OME-Zarr…", self)
+        url_action.setToolTip("Add an image from an http(s) URL, or an OME-Zarr image (a URL such as "
+                              "https://…/image.zarr or a local .zarr folder) — e.g. from the IDR or "
+                              "your institute's OME-Zarr server. Pick the pyramid level to read.")
+        file_menu.addAction(url_action)
+        url_action.triggered.connect(self.add_image_from_url_action)
+
         draft_action = QAction("Draft figure from folder…", self)
         draft_action.setToolTip("Auto-assemble a first-pass figure from a folder of "
                                 "images and CSVs: grid layout, data plots, scale bars, "
@@ -2261,6 +2268,53 @@ class EZFIG_GUI(QMainWindow):
         # Group.__init__ won't re-load them.
         self._load_images_then_callback(lst,
             lambda imgs: QTimer.singleShot(300, lambda: self.paint.EZFIG_panel._create_panel_real(imgs)))
+
+    def add_image_from_url_action(self):
+        """File > Add image from URL / OME-Zarr…: one image, added as a new row.
+        For OME-Zarr the pyramid level is chosen from the image's own levels."""
+        url, ok = QInputDialog.getText(
+            self, 'Add image from URL / OME-Zarr',
+            'Image URL, OME-Zarr URL (…/image.zarr) or local .zarr folder:')
+        url = (url or '').strip()
+        if not ok or not url:
+            return
+        from pyfigures.path_resolution import source_exists
+        if not source_exists(url):
+            QMessageBox.warning(self, 'Not found', f'No image found at:\n{url}')
+            return
+        if url.split('#', 1)[0].rstrip('/\\').lower().endswith('.zarr'):
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                from batoolset import ome_zarr as Z
+                info = Z.describe(url)
+                default_level = Z.level_size(url)[0]
+            except Exception as e:
+                QApplication.restoreOverrideCursor()
+                QMessageBox.warning(self, 'Cannot read OME-Zarr', f'{url}\n\n{type(e).__name__}: {e}')
+                return
+            QApplication.restoreOverrideCursor()
+            names = [str(n).lower() for n in info['axes']]
+            items = []
+            for lv in info['levels']:
+                sh = lv['shape']
+                w = sh[names.index('x')] if 'x' in names else sh[-1]
+                h = sh[names.index('y')] if 'y' in names else sh[-2]
+                px = ''
+                if 'x' in names:
+                    i = names.index('x')
+                    unit = (info['units'][i] or 'micrometer').lower()
+                    px = f", {lv['scale'][i] * Z._UNIT_TO_UM.get(unit, 1.0):.3g} µm/px"
+                items.append(f"Level {lv['level']}: {w} × {h} px{px}")
+            if len(items) > 1:
+                item, ok = QInputDialog.getItem(self, 'Pyramid level',
+                                                'Resolution to read (level 0 = full):',
+                                                items, default_level, False)
+                if not ok:
+                    return
+                level = items.index(item)
+                base = url.split('#', 1)[0]
+                url = base if level == default_level else f'{base}#level={level}'
+        self.add_images_to_new_row([url])
 
     def add_images_to_new_row(self, lst):
         self._load_images_then_callback(lst,

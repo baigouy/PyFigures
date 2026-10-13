@@ -290,7 +290,7 @@ rows:
 
 | Key | Values | Meaning |
 |---|---|---|
-| `image` | path | The image file. |
+| `image` | path or URL | The image file — or an http(s) URL, or an **OME-Zarr** image: a local `.zarr` folder or a URL such as `https://…/image.zarr` (needs `pip install pyfigures[zarr]`). OME-Zarr reads the largest pyramid level within 512 MB / 8192 px, with the pixel size and channel colours of the file; add `#level=N` to the path to choose a level. |
 | `lut` | a name, or a list with one entry per channel | Colour look-up table(s), e.g. `gray`, `green`, `[red, green, blue]`, `MATPLOTLIB_magma`. `null` in a list leaves that channel as is. Case-insensitive. See §23. |
 | `projection` | `max`, `min`, `avg`, `none` | How a Z stack is shown as one image. Without it a Z stack shows its **first slice**. |
 | `crop` | `{left, right, top, bottom}` | Pixels removed from each edge of the raw image (non-negative integers; give only the sides you need). |

@@ -41,6 +41,8 @@ hiddenimports += collect_submodules('imagecodecs')
 # PyAV (pyfigures[video]): H.264 export that plays on a Mac + video reading;
 # the frozen app cannot pip install it later, so it must be bundled here
 hiddenimports += collect_submodules('av')
+hiddenimports += collect_submodules('zarr')          # OME-Zarr reading
+hiddenimports += collect_submodules('numcodecs')
 hiddenimports += [
     # PyQt6 / Qt
     'PyQt6',

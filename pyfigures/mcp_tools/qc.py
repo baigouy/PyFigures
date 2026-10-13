@@ -170,7 +170,15 @@ def check_resolution(
 def _raw_width_from_file(filename) -> int | None:
     """Read an image's source-pixel width from its file header without decoding
     the pixels. Returns None for non-file / unreadable / multi-series formats."""
-    if not filename or not isinstance(filename, str) or not os.path.isfile(filename):
+    if not filename or not isinstance(filename, str):
+        return None
+    if filename.split("#", 1)[0].rstrip("/\\").lower().endswith(".zarr"):
+        try:                       # OME-Zarr (local or URL): the level that is read
+            from batoolset.ome_zarr import level_size
+            return level_size(filename)[1]
+        except Exception:
+            return None
+    if not os.path.isfile(filename):
         return None
     low = filename.lower()
     if low.endswith((".tif", ".tiff")):
