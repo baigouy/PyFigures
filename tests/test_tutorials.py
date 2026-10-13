@@ -42,7 +42,7 @@ _TUTORIALS = {
 _START_METHODS = {
     "start_beginner_tutorial", "start_advanced_tutorial", "start_expert_tutorial",
     "start_publication_tutorial", "start_sharing_tutorial", "start_stacks_tutorial",
-    "start_automation_tutorial", "start_poster_tutorial",
+    "start_automation_tutorial", "start_poster_tutorial", "start_album_tutorial",
 }
 
 

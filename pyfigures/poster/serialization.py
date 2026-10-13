@@ -86,6 +86,18 @@ def sniff_root_tag(path):
     return None
 
 
+def is_photo_album(path):
+    """True for a .pyfalbum saved in photo album mode (pinned covers) — those
+    open in the photo album designer, everything else in the poster
+    designer. Reads only the root element, like sniff_root_tag."""
+    try:
+        for _event, elem in ET.iterparse(path, events=('start',)):
+            return elem.tag == ALBUM_ROOT_TAG and elem.get('album_mode', '0') == '1'
+    except Exception:
+        return False
+    return False
+
+
 def _write_page_shapes(parent_elem, background, shapes_to_draw, doc_dir=None):
     if background is not None:
         bg_attrs = {

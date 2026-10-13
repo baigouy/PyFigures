@@ -11,7 +11,7 @@ import sys
 from qtpy.QtWidgets import QApplication
 
 
-def run_poster_designer():
+def run_poster_designer(album=False):
     app = QApplication(sys.argv)
 
     # Same Qt-safe global exception hook the main editor installs: without
@@ -30,7 +30,7 @@ def run_poster_designer():
     apply_theme(load_saved_theme())
 
     from pyfigures.poster.poster_window import PosterWindow
-    win = PosterWindow()
+    win = PosterWindow(album=album)
     win.show()
     win.raise_()
     win.activateWindow()

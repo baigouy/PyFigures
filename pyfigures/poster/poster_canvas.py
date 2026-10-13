@@ -407,14 +407,22 @@ class PosterCanvas(QWidget):
             return 'pyfalbum'
         return 'pyfposter'
 
-    def new_document(self, width_mm=210.0, height_mm=297.0):
+    def new_document(self, width_mm=210.0, height_mm=297.0, album=False):
         """Reset to one fresh blank single page — used for File > New, so a
-        previously multi-page album doesn't leave stray pages behind."""
-        self.pages = [PosterPage(width_mm, height_mm, kind='single')]
+        previously multi-page album doesn't leave stray pages behind. With
+        *album* the fresh document is a blank photo album instead (front
+        cover, one spread, back cover; see set_album_mode), as the photo
+        album designer starts — not an undoable edit, a new document."""
+        if album:
+            self.pages = [PosterPage(width_mm, height_mm, kind='cover_front'),
+                          PosterPage(width_mm * 2.0, height_mm, kind='spread'),
+                          PosterPage(width_mm, height_mm, kind='cover_back')]
+        else:
+            self.pages = [PosterPage(width_mm, height_mm, kind='single')]
         self.current_page_index = 0
         self.base_page_width_mm = width_mm
         self.base_page_height_mm = height_mm
-        self.album_mode = False
+        self.album_mode = bool(album)
         self.selected = None
         self.multi_selected = []
         self.file_path = None

@@ -528,25 +528,117 @@ def test_page_dock_add_duplicate_move_delete(win, photos, messages):
     assert c.page_count() == 1 and messages[-1][1] == "Only page"
 
 
-def test_album_mode_checkbox_and_cover_buttons(win, photos):
+@pytest.fixture
+def album_win(qapp, monkeypatch, messages):
+    from pyfigures.poster.poster_window import PosterWindow
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Discard))
+    w = PosterWindow(album=True)
+    w.show()
+    qapp.processEvents()
+    yield w
+    w.canvas.mark_saved()
+    w.close()
+
+
+def test_poster_window_cannot_become_an_album(win):
+    from qtpy.QtWidgets import QCheckBox
+    assert not win.album and not win.canvas.album_mode
+    assert not win.page_dock.findChildren(QCheckBox)     # no album toggle any more
+    assert not hasattr(win, "album_mode_check")
+    labels = [a.text() for a in win.page_add_menu.actions() if a.isVisible()]
+    assert labels == ["Spread (two pages)", "Front cover", "Back cover", "Plain page"]
+    win.new_action.trigger()
+    assert not win.canvas.album_mode and [p.kind for p in win.canvas.pages] == ["single"]
+
+
+def test_album_window_starts_as_an_album_with_pinned_covers(album_win, photos):
+    win = album_win
     c = win.canvas
-    c.add_image(photos["red"])
-    win.album_mode_check.setChecked(True)
+    assert win.album and c.album_mode and not c.is_modified() and not c.can_undo()
+    assert "Photo Album Designer" in win.windowTitle()
     assert [p.kind for p in c.pages] == ["cover_front", "spread", "cover_back"]
-    labels = {a.text(): a for a in win.page_add_menu.actions()}
-    assert not labels["Front cover"].isEnabled() and not labels["Plain page"].isEnabled()
+    assert c.pages[1].width_mm == 2 * c.pages[0].width_mm
+    labels = [a.text() for a in win.page_add_menu.actions() if a.isVisible()]
+    assert labels == ["Spread (two pages)"]              # covers/plain pages: never by hand
     win.page_list.setCurrentRow(0)
     assert not win.page_dup_button.isEnabled() and not win.page_del_button.isEnabled()
     assert not win.page_up_button.isEnabled() and not win.page_down_button.isEnabled()
     win.page_list.setCurrentRow(1)
+    c.add_image(photos["red"])
     assert win.page_dup_button.isEnabled() and not win.page_up_button.isEnabled()
     assert not win.page_down_button.isEnabled()          # the back cover is next
-    labels["Spread (two pages)"].trigger()
+    win.page_add_menu.actions()[0].trigger()
     assert [p.kind for p in c.pages] == ["cover_front", "spread", "spread", "cover_back"]
     win.undo_action.trigger()
     assert win.page_list.count() == 3                    # dock follows undo
-    win.album_mode_check.setChecked(False)
-    assert not c.album_mode and len(c.pages) == 3
+    c.mark_saved()
+    win.new_action.trigger()                             # New: a blank album again
+    assert c.album_mode and [p.kind for p in c.pages] == ["cover_front", "spread", "cover_back"]
+    assert not c.is_modified()
+
+
+def test_album_window_saves_pyfalbum_and_reopens_it(album_win, monkeypatch, tmp_path, photos):
+    from pyfigures.poster.serialization import is_photo_album
+    c = album_win.canvas
+    c.goto_page(1)
+    c.add_image(photos["red"])
+    _file_dialogs(monkeypatch, save_path=str(tmp_path / "trip"))
+    album_win.save_action.trigger()
+    path = str(tmp_path / "trip.pyfalbum")
+    assert c.file_path == path and is_photo_album(path)
+    album_win.new_action.trigger()
+    album_win.open_poster(path)
+    assert c.album_mode and c.page_count() == 3 and c.file_path == path
+
+
+def test_each_designer_refuses_the_others_documents(win, album_win, tmp_path, photos, messages):
+    from pyfigures.poster.serialization import is_photo_album
+    album_win.canvas.goto_page(1)
+    album_win.canvas.add_image(photos["red"])
+    album = str(tmp_path / "book.pyfalbum")
+    album_win.canvas.save(album, filetype="pyfalbum")
+    win.canvas.add_image(photos["blue"])
+    poster = str(tmp_path / "one.pyfposter")
+    win.canvas.save(poster, filetype="pyfposter")
+    win.canvas.add_page("spread")
+    pages = str(tmp_path / "pages.pyfalbum")              # multi-page, but not a photo album
+    win.canvas.save(pages, filetype="pyfalbum")
+    assert is_photo_album(album) and not is_photo_album(poster) and not is_photo_album(pages)
+
+    win.open_poster(album)
+    assert messages[-1][1] == "Photo album" and "pyfigures.album" in messages[-1][2]
+    assert not win.canvas.album_mode and win.canvas.file_path == pages     # nothing replaced
+    for other in (poster, pages):
+        album_win.open_poster(other)
+        assert messages[-1][1] == "Not a photo album"
+        assert album_win.canvas.file_path == album
+    win.open_poster(poster)
+    assert win.canvas.file_path == poster
+
+
+def test_each_designer_refuses_the_others_recipes(win, album_win, tmp_path, photos, messages):
+    import shutil
+    shutil.copy(photos["red"], tmp_path / "a.png")
+    (tmp_path / "album.yaml").write_text(
+        "output: book.pyfalbum\nalbum: true\nspreads:\n  - images: [a.png]\n", encoding="utf-8")
+    (tmp_path / "poster.yaml").write_text("output: p.pyfposter\nimages: [a.png]\n", encoding="utf-8")
+    win.build_from_recipe(str(tmp_path / "album.yaml"))
+    assert messages[-1][1] == "Photo album" and not (tmp_path / "book.pyfalbum").exists()
+    album_win.build_from_recipe(str(tmp_path / "poster.yaml"))
+    assert messages[-1][1] == "Not a photo album" and not (tmp_path / "p.pyfposter").exists()
+    album_win.build_from_recipe(str(tmp_path / "album.yaml"))
+    assert messages[-1][1] == "Recipe built" and album_win.canvas.album_mode
+    win.build_from_recipe(str(tmp_path / "poster.yaml"))
+    assert messages[-1][1] == "Recipe built" and not win.canvas.album_mode
+
+
+def test_album_launcher_opens_the_album_designer(monkeypatch):
+    import runpy
+    import pyfigures.poster.__main__ as poster_main
+    calls = []
+    monkeypatch.setattr(poster_main, "run_poster_designer", lambda album=False: calls.append(album))
+    runpy.run_module("pyfigures.album", run_name="__main__")
+    assert calls == [True]
 
 
 def test_page_thumbnails_show_content(win, photos):

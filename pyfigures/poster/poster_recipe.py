@@ -311,7 +311,7 @@ def build_from_plan(plan, canvas=None):
                 raise PosterRecipeError(f'background: {exc}') from exc
     if canvas is None:
         canvas = PosterCanvas(page_width_mm=w0, page_height_mm=h0)
-    canvas.new_document(w0, h0)
+    canvas.new_document(w0, h0, album=plan['album'])   # undoing the build gives a blank one
     with canvas._batch_edit():
         pages = []
         for spec in plan['pages']:

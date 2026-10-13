@@ -344,13 +344,14 @@ def test_recipe_gui_button(qapp, photos, tmp_path, monkeypatch):
     root = tmp_path / "proj"
     r = _write_recipe(root / "album.yaml", ALBUM_RECIPE)
     monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (r, "")))
-    w = PosterWindow()
+    w = PosterWindow(album=True)                       # an album recipe: the album designer
     w.recipe_action.trigger()
     assert seen == ["Recipe built"]
     assert w.page_list.count() == 4 and w.canvas.album_mode and not w.canvas.is_modified()
     assert w.canvas.file_path == str(root / "out" / "trip.pyfalbum")
     w.canvas.undo()                                    # the build is one undo step back to blank
-    assert len(w.canvas.pages) == 1
+    assert [p.kind for p in w.canvas.pages] == ["cover_front", "spread", "cover_back"]
+    assert w.canvas.album_mode
     w.canvas.redo()
     bad = _write_recipe(root / "bad.yaml", "output: y.pyfposter\narrange: spiral\n")
     monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (bad, "")))

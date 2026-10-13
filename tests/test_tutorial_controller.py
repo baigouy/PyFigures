@@ -412,6 +412,59 @@ def test_poster_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
         g.close()
 
 
+def test_album_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    EZFIG_GUI.show_tips = lambda self: None
+    g = EZFIG_GUI()
+    try:
+        g.start_album_tutorial()
+        _process()
+        aw = g._album_window
+        assert aw.album and aw.isVisible() and aw._tutorial._bubble.isVisible()
+        assert aw._tutorial._bubble._title.text() == "Photo Album tutorial"
+        assert getattr(g, "_poster_window", None) is None      # a separate window
+        aw._tutorial.stop()
+        aw.canvas.mark_saved()
+        aw.close()
+    finally:
+        g._dirty = False
+        g.close()
+
+
+def test_album_tutorial_skip_and_set_up(qapp, monkeypatch, tmp_path):
+    from qtpy.QtWidgets import QMessageBox, QFileDialog
+    from pyfigures.poster.poster_window import PosterWindow
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Discard))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                        staticmethod(lambda *a, **k: (str(tmp_path / "book.pyfalbum"), "")))
+    monkeypatch.setattr(T, "_DEMO_DIR", [str(tmp_path / "samples")])
+    os.makedirs(str(tmp_path / "samples"))
+    w = PosterWindow(album=True)
+    w.resize(1300, 900)
+    try:
+        w.tutorial_action.trigger()
+        ctrl = w._tutorial
+        titles = [s.title for s in ctrl._steps]
+        assert titles[0] == "Photo Album tutorial" and titles[-1] == "Photo Album complete!"
+        assert "Step 7 — Pages of the album" in titles
+
+        def on_step(step):
+            if step.title == "Step 7 — Pages of the album":
+                assert not ctrl._current_step().completion_check(w)
+                w._add_page("spread")
+                assert ctrl._current_step().completion_check(w)
+            if step.title == "Step 8 — Save":
+                assert w.save_poster()
+                assert ctrl._current_step().completion_check(w)
+        assert _walk_with_setups(ctrl, qapp, w, on_step=on_step) == []
+        assert w.canvas.album_mode and w.canvas.file_path == str(tmp_path / "book.pyfalbum")
+    finally:
+        if getattr(w, "_tutorial", None) is not None:
+            w._tutorial.stop()
+        w.canvas.mark_saved()
+        w.close()
+
+
 def test_poster_tutorial_skip_and_set_up(poster_win, qapp):
     w = poster_win
     w.tutorial_action.trigger()                # the toolbar's Tutorial button
@@ -429,7 +482,7 @@ def test_poster_tutorial_skip_and_set_up(poster_win, qapp):
         if step.title == "Step 5 — Add a title":
             w.canvas.add_text("Hello", style="h1")
             assert ctrl._current_step().completion_check(w)
-        if step.title == "Step 7 — Pages and photo albums":
+        if step.title == "Step 7 — Pages":
             w._add_page("single")
             assert ctrl._current_step().completion_check(w)
         if step.title == "Step 8 — Save":

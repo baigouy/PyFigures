@@ -15,7 +15,7 @@ from qtpy.QtCore import Qt, QSize, QPointF
 from qtpy.QtWidgets import (
     QMainWindow, QToolBar, QScrollArea, QFileDialog, QMessageBox, QComboBox,
     QLabel, QWidget, QHBoxLayout, QVBoxLayout, QAction, QToolButton, QMenu,
-    QDockWidget, QListWidget, QListWidgetItem, QPushButton, QInputDialog, QCheckBox
+    QDockWidget, QListWidget, QListWidgetItem, QPushButton, QInputDialog
 )
 from qtpy.QtGui import QKeySequence, QPalette, QIcon, QPixmap, QPainter
 
@@ -44,11 +44,20 @@ ADD_IMAGE_FILE_FILTER = ('Images and figures (*.png *.jpg *.jpeg *.bmp *.tif *.t
 
 
 class PosterWindow(QMainWindow):
-    def __init__(self, parent=None):
+    """The poster / collage designer, or with *album* the photo album
+    designer (pfgui's Tools menu, `python -m pyfigures.album`). The two are
+    kept apart: a poster window never turns into a photo album, and each
+    refuses to open the other's documents (see open_poster)."""
+
+    def __init__(self, parent=None, album=False):
         super().__init__(parent)
-        self.setWindowTitle('PyFigures — Poster / Collage Designer')
+        self.album = bool(album)
+        self.tool_name = 'Photo Album Designer' if self.album else 'Poster / Collage Designer'
+        self.setWindowTitle(f'PyFigures — {self.tool_name}')
 
         self.canvas = PosterCanvas(page_width_mm=210.0, page_height_mm=297.0)
+        if self.album:
+            self.canvas.new_document(album=True)
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidget(self.canvas)
         self.scroll_area.setWidgetResizable(False)
@@ -120,7 +129,7 @@ class PosterWindow(QMainWindow):
         self.recipe_action = QAction('Build from recipe…', self)
         self.recipe_action.setToolTip('Build a whole poster or photo album from a YAML/JSON recipe '
                                       '(pages, backgrounds, photos or folders, arrangement, text) — '
-                                      'the same recipe the command line and the AI tools use.')
+                                      'the same recipe the command line and the MCP server use.')
         self.recipe_action.triggered.connect(self.build_from_recipe)
         bar.addAction(self.recipe_action)
 
@@ -382,15 +391,13 @@ class PosterWindow(QMainWindow):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(4, 4, 4, 4)
 
-        self.album_mode_check = QCheckBox('Photo album mode')
-        self.album_mode_check.setToolTip('A real photo-book structure: a pinned front cover and '
-                                         'back cover (single pages) with every page between them '
-                                         'a spread — two pages side by side as one continuous '
-                                         'canvas, so a photo or text can sit right across the '
-                                         'middle. Turning this on keeps whatever is on the page '
-                                         'now as the first interior spread.')
-        self.album_mode_check.toggled.connect(self._toggle_album_mode)
-        layout.addWidget(self.album_mode_check)
+        # No poster <-> album switch here: photo albums have their own
+        # designer (album=True), which pins the covers for good.
+        if self.album:
+            hint = QLabel('Front cover, spreads (two pages side by side, so a photo or text can '
+                          'sit right across the middle) and back cover.')
+            hint.setWordWrap(True)
+            layout.addWidget(hint)
 
         self.page_list = QListWidget()
         self.page_list.setIconSize(QSize(64, 64))
@@ -407,6 +414,8 @@ class PosterWindow(QMainWindow):
         self._cover_front_action = add_menu.addAction('Front cover', lambda: self._add_page('cover_front'))
         self._cover_back_action = add_menu.addAction('Back cover', lambda: self._add_page('cover_back'))
         self._plain_page_action = add_menu.addAction('Plain page', lambda: self._add_page('single'))
+        for action in (self._cover_front_action, self._cover_back_action, self._plain_page_action):
+            action.setVisible(not self.album)              # an album only ever adds spreads
         add_button.setMenu(add_menu)
         add_button.setPopupMode(QToolButton.InstantPopup)
         add_row.addWidget(add_button)
@@ -434,10 +443,6 @@ class PosterWindow(QMainWindow):
         self.page_dock = dock
         self._refresh_page_list()
 
-    def _toggle_album_mode(self, checked):
-        self.canvas.set_album_mode(checked)
-        self._refresh_page_list()
-
     def _add_page(self, kind):
         self.canvas.add_page(kind=kind)
         self._refresh_page_list()
@@ -452,9 +457,8 @@ class PosterWindow(QMainWindow):
             return
         i = self.canvas.current_page_index
         if self.canvas.album_mode and i in (0, self.canvas.page_count() - 1):
-            QMessageBox.information(self, 'Cover page', 'Front/back covers are pinned in photo album '
-                                    'mode — turn album mode off first if this document really '
-                                    "shouldn't have covers.")
+            QMessageBox.information(self, 'Cover page', 'A photo album always keeps its front and '
+                                    'back covers.')
             return
         self.canvas.remove_page()
         self._refresh_page_list()
@@ -495,10 +499,6 @@ class PosterWindow(QMainWindow):
         self.page_list.setCurrentRow(self.canvas.current_page_index)
         self.page_list.blockSignals(False)
         self._sync_page_size_combo()
-
-        self.album_mode_check.blockSignals(True)
-        self.album_mode_check.setChecked(self.canvas.album_mode)
-        self.album_mode_check.blockSignals(False)
         self._refresh_page_action_states()
 
     def _refresh_page_action_states(self):
@@ -562,7 +562,7 @@ class PosterWindow(QMainWindow):
         import os
         name = os.path.basename(self.canvas.file_path) if self.canvas.file_path else 'Untitled'
         star = '*' if self.canvas.is_modified() else ''
-        self.setWindowTitle(f'{star}{name} — PyFigures Poster / Collage Designer')
+        self.setWindowTitle(f'{star}{name} — PyFigures {self.tool_name}')
 
     def _confirm_discard(self):
         """True if it's fine to replace/close the current document: nothing
@@ -587,14 +587,14 @@ class PosterWindow(QMainWindow):
             event.ignore()
 
     def start_tutorial(self):
-        """Guided tour of this window (also Help → Poster & Photo Album
-        Tutorial in the figure editor)."""
+        """Guided tour of this window (also Help → Poster Tutorial / Photo
+        Album Tutorial in the figure editor)."""
         from pyfigures.gui.tutorial import TutorialController, poster_steps
         if getattr(self, '_tutorial', None) is None:
             self._tutorial = TutorialController(self)
         self.show()
         self.raise_()
-        self._tutorial.start(poster_steps())
+        self._tutorial.start(poster_steps(album=self.album))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -604,7 +604,7 @@ class PosterWindow(QMainWindow):
     def new_poster(self):
         if not self._confirm_discard():
             return
-        self.canvas.new_document()
+        self.canvas.new_document(album=self.album)
         self._refresh_page_list()
         self._update_title()
 
@@ -645,11 +645,17 @@ class PosterWindow(QMainWindow):
         if not self._confirm_discard():
             return
         if not path:
-            path, _ = QFileDialog.getOpenFileName(
-                self, 'Open poster', '',
-                'PyFigures poster/album (*.pyfposter *.pyfalbum);;'
-                'PyFigures poster (*.pyfposter);;PyFigures album (*.pyfalbum)')
+            if self.album:
+                path, _ = QFileDialog.getOpenFileName(self, 'Open photo album', '',
+                                                      'PyFigures album (*.pyfalbum)')
+            else:
+                path, _ = QFileDialog.getOpenFileName(
+                    self, 'Open poster', '',
+                    'PyFigures poster/album (*.pyfposter *.pyfalbum);;'
+                    'PyFigures poster (*.pyfposter);;PyFigures album (*.pyfalbum)')
         if not path:
+            return
+        if not self._refuse_other_designers_file(path):
             return
         try:
             self.canvas.load(path)
@@ -668,6 +674,31 @@ class PosterWindow(QMainWindow):
                                 'be found (moved, renamed or deleted); they show as grey boxes:\n\n'
                                 + '\n'.join(lines))
 
+    def _refuse_other_designers_file(self, path, is_album=None):
+        """True if *path* (or a recipe whose `album:` is *is_album*) belongs
+        in this window; otherwise says which designer opens it and returns
+        False. Photo albums only open in the photo album designer, posters
+        and plain multi-page documents only in the poster designer."""
+        import os
+        if is_album is None:
+            if not os.path.isfile(path):
+                return True                    # load() reports the real error
+            from pyfigures.poster.serialization import is_photo_album
+            is_album = is_photo_album(path)
+        if is_album == self.album:
+            return True
+        if is_album:
+            QMessageBox.information(self, 'Photo album',
+                                    f'{os.path.basename(path)} is a photo album: open it in the photo '
+                                    'album designer (Tools > Photo album designer… in the figure '
+                                    'editor, or python -m pyfigures.album).')
+        else:
+            QMessageBox.information(self, 'Not a photo album',
+                                    f'{os.path.basename(path)} is a poster, not a photo album: open it '
+                                    'in the poster designer (Tools > Poster / collage designer… in '
+                                    'the figure editor, or python -m pyfigures.poster).')
+        return False
+
     def build_from_recipe(self, path=None):
         """Build the document a recipe describes (see poster_recipe.py), save
         it where the recipe says, and open it here."""
@@ -678,7 +709,13 @@ class PosterWindow(QMainWindow):
                                                   'Recipe (*.yaml *.yml *.json)')
         if not path:
             return
-        from pyfigures.poster.poster_recipe import build_poster_from_recipe
+        from pyfigures.poster.poster_recipe import build_poster_from_recipe, load_recipe, plan_recipe
+        try:
+            plan = plan_recipe(load_recipe(path), path)
+        except Exception:
+            plan = None                        # build_poster_from_recipe reports the mistake below
+        if plan is not None and not self._refuse_other_designers_file(path, is_album=plan['album']):
+            return
         try:
             result = build_poster_from_recipe(path, canvas=self.canvas)
         except Exception as exc:
@@ -869,7 +906,7 @@ class PosterWindow(QMainWindow):
 
     # ---- automatic arrangement -------------------------------------------------
     # Same pure functions the headless MCP tools use (pyfigures.poster.poster_layouts)
-    # — one click here does exactly what an AI-driven arrange_poster_* call would do.
+    # — one click here does exactly what an MCP arrange_poster_* call would do.
 
     def arrange_scatter(self):
         self.canvas.arrange('scatter')

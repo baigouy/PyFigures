@@ -17,7 +17,7 @@ publication_steps()  batch annotations, the QC menu, caption, submission exports
 sharing_steps()      consolidate, review round trip, merge, remap, colour blindness, theme
 stacks_steps()       projection, channel split, montage, kymograph, orthogonal views, merge, video
 automation_steps()   draft from folder, recipes, library, compare, copy style, alt text, review
-poster_steps()       the poster / photo-album window (runs on PosterWindow)
+poster_steps()       the poster window; album=True the photo album window (PosterWindow)
 
 Steps that need what an earlier step built declare it (``requires``); when
 the user skipped that step the bubble says so and "Set it up for me" creates
@@ -2571,7 +2571,7 @@ def sharing_steps() -> list[TutorialStep]:
             message=(
                 'You now know the full collaboration and accessibility toolkit.<br><br>'
                 'Still to explore in the <b>Help</b> menu: the <b>Stacks, Channels &amp; '
-                'Movies</b>, <b>Automate</b> and <b>Poster &amp; Photo Album</b> tutorials. '
+                'Movies</b>, <b>Automate</b>, <b>Poster</b> and <b>Photo Album</b> tutorials. '
                 'The <b>MCP server</b> (see the docs) also lets an MCP client such as '
                 'Claude drive all of this in plain language.<br><br>'
                 'Happy figure-making!'
@@ -3022,19 +3022,76 @@ def _poster_is_saved(win):
     return bool(c.file_path) and not c.is_modified()
 
 
-def poster_steps() -> list[TutorialStep]:
-    """The poster / photo-album designer (Tools → Poster / collage designer)."""
-    return [
-        TutorialStep(
-            title='Poster &amp; Photo Album tutorial',
+def poster_steps(album=False) -> list[TutorialStep]:
+    """The poster / collage designer (Tools → Poster / collage designer), or
+    with *album* the photo album designer (Tools → Photo album designer):
+    same window class, so the same steps except the intro, pages and end."""
+    if album:
+        intro = TutorialStep(
+            title='Photo Album tutorial',
             message=(
-                'This window makes <b>posters</b>, <b>collages</b> and whole '
-                '<b>photo albums</b>: photos can be freely placed, rotated and '
-                'layered on a page, over a background image.<br><br>'
-                'It is separate from the figure editor; figures (<code>.pyf</code>) can '
-                'be placed on a page as pictures. Click <b>Next</b>.'
+                'This window makes <b>photo albums</b>: a front cover, two-page '
+                '<b>spreads</b> and a back cover. Photos can be freely placed, rotated '
+                'and layered on each page, over a background image.<br><br>'
+                'It is separate from the figure editor and from the poster designer. '
+                'Click <b>Next</b>.'
             ),
-        ),
+        )
+        pages = TutorialStep(
+            title='Step 7 — Pages of the album',
+            message=(
+                'The <b>Pages</b> panel lists the album: front cover, spreads, back '
+                'cover. <b>+ Page</b> adds a spread (two pages side by side, so a photo '
+                'can sit across the middle); spreads can be duplicated, reordered or '
+                'removed, the covers stay first and last.<br><br>'
+                'The step advances once the album has a second spread.'
+            ),
+            get_target=lambda win: win.page_dock,
+            completion_check=lambda win: win.canvas.page_count() >= 4,
+        )
+        saved_as = 'An album is saved as <code>.pyfalbum</code>.'
+        done = TutorialStep(
+            title='Photo Album complete!',
+            message=(
+                'You can now lay out whole photo books.<br><br>'
+                'Tip: put a figure made in the main editor in the album with '
+                '<b>Add image…</b> → pick the <code>.pyf</code>.'
+            ),
+        )
+    else:
+        intro = TutorialStep(
+            title='Poster tutorial',
+            message=(
+                'This window makes <b>posters</b> and <b>collages</b>: photos can be '
+                'freely placed, rotated and layered on a page, over a background '
+                'image.<br><br>'
+                'It is separate from the figure editor; figures (<code>.pyf</code>) can '
+                'be placed on a page as pictures. Photo albums have their own designer '
+                '(Tools → Photo album designer… in the figure editor). Click <b>Next</b>.'
+            ),
+        )
+        pages = TutorialStep(
+            title='Step 7 — Pages',
+            message=(
+                'The <b>Pages</b> panel lists the pages of the document. Add, '
+                'duplicate, reorder or remove pages there; choose a page size from the '
+                'list.<br><br>'
+                'The step advances once the document has two or more pages.'
+            ),
+            get_target=lambda win: win.page_dock,
+            completion_check=lambda win: win.canvas.page_count() >= 2,
+        )
+        saved_as = 'One page is saved as <code>.pyfposter</code>, several as <code>.pyfalbum</code>.'
+        done = TutorialStep(
+            title='Poster complete!',
+            message=(
+                'You can now lay out posters and collages.<br><br>'
+                'Tip: put a figure made in the main editor on a poster with '
+                '<b>Add image…</b> → pick the <code>.pyf</code>.'
+            ),
+        )
+    return [
+        intro,
         TutorialStep(
             title='Step 1 — Add photos',
             message=(
@@ -3115,24 +3172,11 @@ def poster_steps() -> list[TutorialStep]:
             requires_text='No background picture to hand? Use a sample one.',
             prepare=_poster_prep_background,
         ),
-        TutorialStep(
-            title='Step 7 — Pages and photo albums',
-            message=(
-                'The <b>Pages</b> panel lists the pages of the document. Add, '
-                'duplicate, reorder or remove pages there; choose a page size from the '
-                'list.<br><br>'
-                'Tick <b>Photo album mode</b> for a photo book: a front cover, two-page '
-                'spreads and a back cover.<br><br>'
-                'The step advances once the document has two or more pages.'
-            ),
-            get_target=lambda win: win.page_dock,
-            completion_check=lambda win: win.canvas.page_count() >= 2,
-        ),
+        pages,
         TutorialStep(
             title='Step 8 — Save',
             message=(
-                'Click <b>Save</b>. One page is saved as <code>.pyfposter</code>, '
-                'several as <code>.pyfalbum</code>.<br><br>'
+                f'Click <b>Save</b>. {saved_as}<br><br>'
                 'Image paths are stored relative to the document too, so the folder '
                 'can be moved or shared without breaking it.'
             ),
@@ -3168,12 +3212,5 @@ def poster_steps() -> list[TutorialStep]:
             get_target=lambda win: _poster_tool(win, win.recipe_action),
             auto_advance=False,
         ),
-        TutorialStep(
-            title='Poster &amp; Photo Album complete!',
-            message=(
-                'You can now lay out posters and whole photo books.<br><br>'
-                'Tip: put a figure made in the main editor on a poster with '
-                '<b>Add image…</b> → pick the <code>.pyf</code>.'
-            ),
-        ),
+        done,
     ]

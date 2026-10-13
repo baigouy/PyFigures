@@ -6,7 +6,14 @@ dimensions, with minimal wasted space. That is the wrong tool for a
 **poster** or a **decorative collage / photo-album page**, where images
 should be free to sit at an angle, overlap, and breathe on a page — not be
 cropped or auto-packed. The poster designer is a second, separate tool
-built for that job. It lives under `Tools > Poster / collage designer…`.
+built for that job. It lives under `Tools > Poster / collage designer…`
+(or `python -m pyfigures.poster`).
+
+**Photo albums have their own designer**, `Tools > Photo album designer…`
+(or `python -m pyfigures.album`): the same canvas and tools, but every
+document is a photo book — front cover, two-page spreads, back cover (see
+"Photo album designer" below). The poster designer cannot turn a poster
+into a photo album, and each designer refuses to open the other's files.
 
 ## What it is (and isn't)
 
@@ -39,12 +46,12 @@ built for that job. It lives under `Tools > Poster / collage designer…`.
   one from *Add image…*) and it's flattened to a plain photo (see "Bringing
   in a finished figure" below) — from that point on it's just an image, with
   no ongoing link back to the source figure.
-- A document isn't limited to one page: the **Pages** panel (see "Photo
-  albums: multiple pages" below) turns it into a photo album — front cover,
-  interior two-page spreads, back cover — saved as **`.pyfalbum`** instead of
-  `.pyfposter` the moment it grows past one plain page. Every tool above
-  (images, text, arrange, align/distribute, frames…) works exactly the same
-  on any page of an album; there's no separate "album mode" to learn.
+- A document isn't limited to one page: the **Pages** panel (see "Multiple
+  pages" below) adds pages, covers and two-page spreads — saved as
+  **`.pyfalbum`** instead of `.pyfposter` the moment it grows past one plain
+  page. Every tool above (images, text, arrange, align/distribute, frames…)
+  works exactly the same on any page, in the poster and the photo album
+  designer alike.
 - It isn't aimed at scientific precision (no scale bars, no journal-size
   presets, no per-panel scripting) — for that, use the main figure editor.
 - Its toolbar deliberately looks and behaves like the main editor's: the same
@@ -174,8 +181,7 @@ Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes — same as the main scientific-
 figure editor, and the toolbar's Undo/Redo buttons grey out automatically
 whenever there's nothing to undo/redo. It covers every kind of edit
 uniformly: moving/resizing/rotating/cropping a shape, adding/deleting/
-grouping, Align/Distribute, adding or removing a page, toggling photo-album
-mode, editing text — there's no separate list of "undoable" actions to keep
+grouping, Align/Distribute, adding or removing a page, editing text — there's no separate list of "undoable" actions to keep
 in sync as new edit kinds get added, because it works differently from a
 typical per-action undo stack: each checkpoint is a full snapshot of the
 whole document (every page, every shape) written to a private temp folder,
@@ -191,11 +197,11 @@ Open — it isn't saved into the `.pyfposter`/`.pyfalbum` file, so reopening a
 document always starts with a clean (empty) history, same as the main
 editor.
 
-## Photo albums: multiple pages
+## Multiple pages
 
 A poster document starts as a single page. The **Pages** panel on the left
 (dock — drag it out or hide it like any other Qt dock) is where you turn it
-into a multi-page photo album instead:
+into a multi-page document instead:
 
 - **+ Page** adds a page right after the current one — a dropdown offers
   **Spread** (two physical pages designed as *one continuous canvas*, so a
@@ -219,28 +225,29 @@ an A4-based document) — the two-pages-side-by-side layout a real photobook
 prints as — but nothing stops you from resizing it afterwards like any other
 page. The moment a document has more than one page (or its one page is a
 cover/spread), *Save*/*Save As…* switch from `.pyfposter` to `.pyfalbum`
-automatically; loading either format back just works (`Open…` accepts both).
+automatically; loading either format back just works (`Open…` accepts both,
+except photo albums, which open in the photo album designer).
 
-### Photo album mode (real book structure)
+## Photo album designer
 
-Manually adding covers and spreads works, but a real photo album is more
-regimented than that: a front cover, a back cover, and every page between
-them a pair (a spread), never a lone single page. The **Photo album mode**
-checkbox at the top of the Pages panel enforces exactly that structure
-instead of leaving it up to you to get right:
+A real photo album is more regimented than a multi-page poster: a front
+cover, a back cover, and every page between them a pair (a spread), never a
+lone single page. The **photo album designer** — `Tools > Photo album
+designer…` in the figure editor, or `python -m pyfigures.album` — is a
+separate window that enforces exactly that structure:
 
-- Turning it **on** pins a blank front cover at the start and a blank back
-  cover at the end (both plain single pages) — whatever was already on the
-  document's one page becomes the first interior spread rather than being
-  discarded, so switching a plain poster into an album never loses work.
-- With it on, **+ Page**'s Front cover/Back cover/Plain page choices are
-  disabled (there's only ever the two pinned covers — a new page can only be
-  a **Spread**), and Duplicate/Delete/Move up/Move down are disabled while a
-  cover page is selected — the covers stay put and every interior page stays
-  a two-page spread.
-- Turning it **off** only lifts that enforcement — it doesn't delete or
-  re-kind any page. A document can then be freely edited as a plain
-  multi-page document, or trimmed back down by hand.
+- Every document (at start and after *New*) is a blank album: a pinned
+  front cover, one interior spread and a pinned back cover.
+- **+ Page** only adds **Spreads**, just before the back cover; Duplicate/
+  Delete/Move up/Move down are disabled while a cover page is selected — the
+  covers stay put and every interior page stays a two-page spread.
+- Albums are saved as `.pyfalbum`. *Open…* and *Build from recipe…* only
+  take photo albums (recipes with `album: true`); a poster or a plain
+  multi-page document is refused with a pointer to the poster designer, and
+  the poster designer likewise refuses photo albums. There is no switch
+  between the two in either window.
+- Its tutorial is *Help > Photo Album Tutorial* in the figure editor (or the
+  Tutorial button in its toolbar).
 
 ## Print-ready export
 
@@ -365,7 +372,7 @@ files) is skipped with an error message rather than aborting the whole drop.
 ## Frames
 
 Any image can carry a frame, set from the annotation editor when it's
-selected (or via the MCP tools when driving the tool from an AI):
+selected (or via the MCP tools when driving the tool through the MCP server):
 
 - **none** (default) — just the photo, no border.
 - **simple** — a thin white border, like a printed photo.
@@ -497,11 +504,11 @@ which ones are still empty). This lets an MCP client lay a page out first
 and decide/receive which photo goes where afterwards, one call per slot —
 just like looping `fill_template` over a main-editor template.
 
-## Driving it from an AI (MCP tools)
+## MCP tools
 
 Everything above is also exposed as MCP tools on PyFigures' existing MCP
-server (see [docs/MCP_SERVER.md](MCP_SERVER.md) for setup) — so an AI
-assistant can compose a whole poster or photo-album page from a folder of
+server (see [docs/MCP_SERVER.md](MCP_SERVER.md) for setup) — so an MCP
+client can compose a whole poster or photo-album page from a folder of
 photos: `create_poster`, `add_poster_image` (position/size/rotation/frame/
 caption), `add_poster_text` (a title/caption text box, sized via the same
 h1/h2/h3/body/caption `style` presets as the GUI — `list_poster_images`
@@ -518,8 +525,7 @@ so a Qt crash can't take the MCP server down.
 
 **Photo albums (multiple pages)** get their own small set of tools:
 `add_poster_page(poster_path, kind, width_mm, height_mm, index)` (kind is
-"spread"/"cover_front"/"cover_back"/"single" — see "Photo albums: multiple
-pages" above) turns any document into a multi-page album; `list_poster_pages`
+"spread"/"cover_front"/"cover_back"/"single" — see "Multiple pages" above) turns any document into a multi-page album; `list_poster_pages`
 inventories every page (index/kind/size/shape_count/has_background);
 `remove_poster_page` / `duplicate_poster_page` / `move_poster_page` /
 `set_poster_page_kind` manage them. Every other poster tool above accepts an
@@ -530,7 +536,8 @@ one double-width PDF page); `render_poster`/`preview_poster` still render
 just one page (add `page=N` to pick which).
 
 `set_poster_album_mode(poster_path, enabled)` turns the strict book
-structure on/off (see "Photo album mode" above): enabling pins a blank front
+structure of a document file on/off (what makes it a photo album, opened by
+the photo album designer — see "Photo album designer" above): enabling pins a blank front
 and back cover and makes `add_poster_page` insert spreads between them
 (turning whatever was already there into the first interior spread rather
 than discarding it). While it's on, anything that would break the book —
@@ -713,9 +720,10 @@ editor (`pyfigures/gui/ezfig.py`, `pyfigures/gui/pfgui.py`):
   `export_album_web` renders every page to an in-memory JPEG (via
   `QBuffer`, base64-encoded) and hands them to `poster_web_export.
   build_album_html` for the self-contained flip-book HTML export.
-- `poster_window.py` — `PosterWindow`, the standalone toolbar/window, plus
-  the **Pages** dock (`_build_page_dock` and friends) for multi-page albums,
-  including the "Photo album mode" checkbox (`_toggle_album_mode`) and the
+- `poster_window.py` — `PosterWindow`, the standalone toolbar/window
+  (`album=True` makes it the photo album designer, see
+  `_refuse_other_designers_file`), plus the **Pages** dock
+  (`_build_page_dock` and friends) for multi-page documents, and the
   Undo/Redo toolbar actions (`_update_undo_redo_buttons`, connected to
   `canvas.undo_redo_changed`).
 - `serialization.py` — `.pyfposter` (one page, root `<PosterDocument>`) and

@@ -24,7 +24,9 @@ decorative photo-album pages: images can be freely rotated without being
 cropped, dragged anywhere with smart alignment guides, and placed over a
 full-page background image. It's a distinct tool with its own `.pyfposter`
 file format — it doesn't touch or share files with the scientific figure
-editor.
+editor. Photo albums (front cover, two-page spreads, back cover) have their own
+**Photo album designer** (`Tools > Photo album designer…`, or
+`python -m pyfigures.album`).
 
 ➜ See **[docs/poster.md](docs/poster.md)** for the full guide.
 

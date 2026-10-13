@@ -1220,6 +1220,11 @@ class EZFIG_GUI(QMainWindow):
                                   "background image. Independent from this figure editor and its files.")
         tools_menu.addAction(poster_action)
         poster_action.triggered.connect(self.open_poster_designer)
+        album_action = QAction("Photo album designer…", self)
+        album_action.setToolTip("Separate tool for photo books: a front cover, two-page spreads and "
+                                "a back cover, with freely placed and rotated photos on each page.")
+        tools_menu.addAction(album_action)
+        album_action.triggered.connect(self.open_album_designer)
 
         template = self.menuBar.addMenu("Template")
         templatify_action = QAction("Convert figure to template", self)  # ? shall I say it like that
@@ -1312,10 +1317,15 @@ class EZFIG_GUI(QMainWindow):
         automation_tuto_action.triggered.connect(self.start_automation_tutorial)
         help_menu.addAction(automation_tuto_action)
 
-        poster_tuto_action = QAction('▶  Poster & Photo Album Tutorial', self)
+        poster_tuto_action = QAction('▶  Poster Tutorial', self)
         poster_tuto_action.setToolTip('Opens the poster / collage designer and guides you through it')
         poster_tuto_action.triggered.connect(self.start_poster_tutorial)
         help_menu.addAction(poster_tuto_action)
+
+        album_tuto_action = QAction('▶  Photo Album Tutorial', self)
+        album_tuto_action.setToolTip('Opens the photo album designer and guides you through it')
+        album_tuto_action.triggered.connect(self.start_album_tutorial)
+        help_menu.addAction(album_tuto_action)
 
 
     # Maps each persistent toolbar QAction to its qtawesome icon name.
@@ -1535,6 +1545,11 @@ class EZFIG_GUI(QMainWindow):
         """The poster tutorial runs in the poster window, which it opens."""
         self.open_poster_designer()
         self._poster_window.start_tutorial()
+
+    def start_album_tutorial(self):
+        """The photo album tutorial runs in the photo album window, which it opens."""
+        self.open_album_designer()
+        self._album_window.start_tutorial()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -4937,6 +4952,16 @@ class EZFIG_GUI(QMainWindow):
         self._poster_window.show()
         self._poster_window.raise_()
         self._poster_window.activateWindow()
+
+    def open_album_designer(self):
+        # Same window class as the poster designer, in album mode: its own
+        # window, so a poster never becomes an album.
+        from pyfigures.poster.poster_window import PosterWindow
+        if getattr(self, '_album_window', None) is None:
+            self._album_window = PosterWindow(self, album=True)
+        self._album_window.show()
+        self._album_window.raise_()
+        self._album_window.activateWindow()
 
     def templatify_figure(self):  # , stuff_to_consolidate=None
 
