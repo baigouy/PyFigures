@@ -156,7 +156,9 @@ _EXPORTS = {"png": (".png", "figure"), "jpg": (".jpg", "figure"), "jpeg": (".jpg
             "print": ("_print.tif", "print"), "video": (".mp4", "video"),
             "source_data": ("_source_data", "source_data"), "review": ("_review.html", "review"),
             "caption": ("_caption.txt", "caption"), "ledger": ("_ledger.json", "ledger"),
-            "colorblind": ("_colorblind.png", "colorblind")}
+            "colorblind": ("_colorblind.png", "colorblind"),
+            "pptx": (".pptx", "pptx"), "illustrator": (".jsx", "illustrator"),
+            "jsx": (".jsx", "illustrator")}
 _EXPORT_KEYS = {"format", "path", "dpi", "color_mode", "frame_mode", "with_caption",
                 "cvd_type"}
 # checks: name -> the options it takes (besides `check` and `fail`)
@@ -880,6 +882,10 @@ def _export(M, out, spec, base):
         _check(res, step)
         with open(target, "w", encoding="utf-8") as f:
             f.write(res)
+    elif kind == "pptx":
+        res = M.export_pptx(out, target)
+    elif kind == "illustrator":
+        res = M.export_illustrator_script(out, target)
     elif kind == "colorblind":
         cvd = spec.get("cvd_type", "deuteranopia")
         try:

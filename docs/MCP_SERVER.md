@@ -261,7 +261,7 @@ python -m pyfigures.mcp_server --transport sse --port 8765
 
 ## 5. Available tools reference
 
-The server currently exposes **142 tools** (108 figure tools + 34 poster tools).
+The server currently exposes **144 tools** (110 figure tools + 34 poster tools).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -521,6 +521,8 @@ together.
 | `export_figure(pyf_path, out_path, dpi)` | Render the figure to a final image file — the shippable deliverable |
 | `render_preview(pyf_path, dpi, max_dimension)` | Render to a PNG and return it as a viewable image |
 | `export_latex(pyf_path, out_path, image_format, with_caption)` | 'PDF + LaTeX': text-free vector graphic + `\input`-able LaTeX label overlay; `with_caption` wraps it in a `figure` float using the stored caption |
+| `export_pptx(pyf_path, out_path)` | **Editable PowerPoint** (.pptx): one slide the size of the figure, one group per panel — pictures plus native text boxes (letters, labels, scale-bar text) and shapes (scale bars, ROIs, arrows, brackets, vector plots); crops and rotations kept. Text inside data plots is exported as outlines. GUI: Export As → PowerPoint (editable)… |
+| `export_illustrator_script(pyf_path, out_path)` | **Adobe Illustrator script** (.jsx + `<stem>_assets` PNG folder): run it in Illustrator (File → Scripts → Other Script…) to rebuild the figure with one group per panel, live text (ArialMT…) and vector paths. GUI: Export As → Adobe Illustrator script (.jsx)… |
 | `export_print_ready(pyf_path, out_path, color_mode, dpi)` | High-DPI (optionally CMYK) TIFF for a journal's printed version |
 | `export_video(pyf_path, out_path, frame_mode, bg_color)` | Export an animated figure (movies / time stacks) to `.mp4`, `.mov`, `.mkv`, `.webm` or `.avi`. With PyAV (`pip install av`, bundles ffmpeg) mp4/mov/mkv are H.264 and webm is VP9 — `.mp4` plays everywhere including on a Mac; without it OpenCV's MPEG-4 is used and the result carries a WARNING. Returns the path, size and `codec` |
 | `consolidate_figure(pyf_path, out_pyf)` | Save a self-contained copy with every referenced image bundled alongside |

@@ -61,6 +61,7 @@ setuptools.setup(
         "pyautogui",
         "imagecodecs",
         "psutil",
+        "python-pptx",     # editable PowerPoint export
     ],
     extras_require={
         'ai': [

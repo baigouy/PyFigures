@@ -168,6 +168,7 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **psutil**              | Memory checks                                               | https://pypi.org/project/psutil/              | BSD 3-Clause       |
 | **Deprecated**          | Deprecation warnings                                        | https://pypi.org/project/Deprecated/          | MIT                |
 | **Requests**            | Downloads                                                   | https://pypi.org/project/requests/            | Apache 2.0         |
+| **python-pptx**         | Editable PowerPoint export (with lxml and XlsxWriter)       | https://pypi.org/project/python-pptx/         | MIT                |
 
 Optional (installed only if you ask for them):
 

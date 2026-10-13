@@ -754,7 +754,7 @@ def build_figure_from_recipe(recipe_path: str) -> str:
     and side label; plus lettering, journal or explicit width, fonts, min font
     size, typography tidy, metadata auto-configuration, alt text, style copied
     from another figure, caption and exports (pdf/png/svg/tif/latex/print/
-    video/source_data/review/caption/ledger/colorblind); ``properties`` sets any
+    video/source_data/review/caption/ledger/colorblind/pptx/illustrator); ``properties`` sets any
     stored panel field. ``checks`` (integrity, scale, scale_bars, labels,
     resolution, journal) run before the exports — a failure returns an ERROR
     naming the failed checks (the .pyf is saved, nothing exported).

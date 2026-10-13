@@ -686,7 +686,12 @@ class MyWidget(QWidget):
             generator.setResolution(
                 svg_dpi)  # fixes issues in inkscape of pt size --> 72 pr illustrator and 96 pr inkscape but need change size
 
-            painter = QPainter(generator)
+            if filetype == 'svg':
+                # Qt's SVG engine ignores drawImage source rects: crop ourselves
+                from pyfigures.gui.svg_painter import CroppingPainter
+                painter = CroppingPainter(generator)
+            else:
+                painter = QPainter(generator)
             painter.translate(-self._EXTRA_PADDING, -self._EXTRA_PADDING)
 
             # print(generator.title(), generator.heightMM(), generator.height(), generator.widthMM(),

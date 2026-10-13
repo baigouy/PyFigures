@@ -883,6 +883,81 @@ def export_latex(pyf_path: str, out_path: str, image_format: str = "pdf",
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+def _editable_export(pyf_path: str, out_path: str, fmt: str):
+    """Run the headless editable export; returns (summary dict | None, error str | None)."""
+    if not os.path.isfile(pyf_path):
+        return None, f"no such .pyf file: {pyf_path}"
+    out_path = os.path.abspath(out_path)
+    ok, msg = _run_headless_op(["editable", pyf_path, out_path, "--format", fmt])
+    if not ok:
+        return None, msg
+    if not os.path.isfile(out_path):
+        return None, f"export reported success but {out_path} is missing"
+    summary = {"path": out_path}
+    # the JSON summary is the last stdout line (figure loading may print noise before it)
+    for line in reversed(msg.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                summary = json.loads(line)
+            except ValueError:
+                pass
+            break
+    summary["path"] = out_path
+    summary["bytes"] = os.path.getsize(out_path)
+    return summary, None
+
+
+@mcp.tool()
+def export_pptx(pyf_path: str, out_path: str) -> str:
+    """Export the figure as an **editable PowerPoint** slide (.pptx) — like
+    QuickFigures' PowerPoint export (GUI: Export As → PowerPoint (editable)).
+
+    The slide is the size of the figure. Every panel is a group holding its
+    picture(s) plus native PowerPoint objects: the panel letters, channel names,
+    labels and scale-bar text are editable text boxes; scale bars, ROIs, arrows,
+    brackets and vector plots are editable shapes. Cropped / rotated panels keep
+    their crop and rotation. Text inside data plots (tick labels) is exported as
+    exact outlines, not editable text.
+
+    Returns JSON: path, size in points, number of images / shapes / text boxes
+    and panel groups. Needs the ``python-pptx`` package.
+    """
+    if not out_path.lower().endswith(".pptx"):
+        return "ERROR: out_path must end in .pptx."
+    summary, err = _editable_export(pyf_path, out_path, "pptx")
+    if err:
+        return f"ERROR: {err}"
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def export_illustrator_script(pyf_path: str, out_path: str) -> str:
+    """Export the figure as an **Adobe Illustrator script** (.jsx) that rebuilds
+    it in Illustrator from native objects (GUI: Export As → Adobe Illustrator
+    script), like QuickFigures' Illustrator export.
+
+    Writes ``<stem>.jsx`` plus an ``<stem>_assets`` folder with the panel images
+    (PNG); keep them together. In Illustrator: File → Scripts → Other Script…,
+    pick the .jsx. The script creates an RGB document the size of the figure with
+    one group per panel: embedded images, live text (Arial by default, as
+    PostScript fonts ArialMT / Arial-BoldMT…) and vector paths for scale bars,
+    ROIs, arrows, brackets and vector plots.
+
+    Illustrator already opens PyFigures' SVG and PDF exports; the script gives a
+    cleaner result (one group per panel, real text frames, no clipping masks).
+
+    Returns JSON: path, assets folder, size in points and object counts.
+    """
+    if not out_path.lower().endswith(".jsx"):
+        return "ERROR: out_path must end in .jsx."
+    summary, err = _editable_export(pyf_path, out_path, "jsx")
+    if err:
+        return f"ERROR: {err}"
+    summary["usage"] = "Illustrator: File > Scripts > Other Script... and choose " + os.path.basename(out_path)
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
 @mcp.tool()
 def consolidate_figure(pyf_path: str, out_pyf: str) -> str:
     """Save a self-contained copy of the figure with every referenced image

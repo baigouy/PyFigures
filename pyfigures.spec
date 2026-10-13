@@ -15,6 +15,7 @@ datas += collect_data_files('qtawesome')          # icon font files
 datas += collect_data_files('matplotlib')
 datas += collect_data_files('skimage')
 datas += collect_data_files('sklearn')
+datas += collect_data_files('pptx')               # default.pptx template + XML parts
 # Licence texts + where the corresponding source is (GPLv3: the bundle includes
 # PyQt6, Qt and FFmpeg/x264); made by packaging/collect_licenses.py, shown by
 # Help > About

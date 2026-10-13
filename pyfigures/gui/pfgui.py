@@ -1011,6 +1011,20 @@ class EZFIG_GUI(QMainWindow):
         export_menu.addAction(export_as_latex_action)
         export_as_latex_action.triggered.connect(self.export_as_latex)
 
+        export_as_pptx_action = QAction("PowerPoint (editable)…", self)
+        export_as_pptx_action.setToolTip(
+            "One slide, one group per panel: pictures plus editable text boxes and shapes "
+            "(letters, labels, scale bars, ROIs, arrows).")
+        export_menu.addAction(export_as_pptx_action)
+        export_as_pptx_action.triggered.connect(self.export_as_pptx)
+
+        export_as_jsx_action = QAction("Adobe Illustrator script (.jsx)…", self)
+        export_as_jsx_action.setToolTip(
+            "A script that rebuilds the figure in Illustrator with live text and vector "
+            "shapes (File > Scripts > Other Script…). Images go to a <name>_assets folder.")
+        export_menu.addAction(export_as_jsx_action)
+        export_as_jsx_action.triggered.connect(self.export_as_illustrator)
+
         export_menu.addSeparator()
 
         _raster_title = QAction("— Raster —", self)
@@ -5402,6 +5416,48 @@ class EZFIG_GUI(QMainWindow):
             'In your document:\n'
             '  \\usepackage{graphicx,color}\n'
             '  \\def\\svgwidth{\\columnwidth}\\input{' + os.path.basename(tex_path) + '}')
+
+    def export_as_pptx(self):
+        output_file = saveFileDialog(parent_window=self,
+                                     extensions="PowerPoint (*.pptx);;All Files (*)",
+                                     default_ext='.pptx')
+        if output_file:
+            self._export_editable(output_file, 'pptx')
+
+    def export_as_illustrator(self):
+        output_file = saveFileDialog(parent_window=self,
+                                     extensions="Adobe Illustrator script (*.jsx);;All Files (*)",
+                                     default_ext='.jsx')
+        if output_file:
+            self._export_editable(output_file, 'jsx')
+
+    def _export_editable(self, output_file, fmt):
+        """Editable export (PowerPoint or Illustrator script) of the current figure."""
+        from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx
+        if not self.paint.EZFIG_panel.shapes_to_draw:
+            QMessageBox.information(self, 'Nothing to export', 'The figure contains no panels.')
+            return
+        name = 'PowerPoint' if fmt == 'pptx' else 'Illustrator script'
+        self.statusBar().showMessage(f'Exporting {name}, please wait...')
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            scene = capture_scene(self.paint.EZFIG_panel)
+            if fmt == 'pptx':
+                write_pptx(scene, output_file)
+                extra = ''
+            else:
+                _, assets = write_jsx(scene, output_file)
+                extra = ('\n\nKeep the folder ' + os.path.basename(assets) + ' next to it.\n'
+                         'In Illustrator: File > Scripts > Other Script…')
+        except Exception as e:
+            traceback.print_exc()
+            QApplication.restoreOverrideCursor()
+            self.statusBar().clearMessage()
+            QMessageBox.warning(self, f'{name} export failed', 'Could not export:\n' + str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        self.statusBar().showMessage(f'Exported {os.path.basename(output_file)}')
+        QMessageBox.information(self, f'{name} exported', 'Wrote ' + os.path.basename(output_file) + extra)
 
     def export_as_video(self):
         # only meaningful if the figure actually contains a video / time-stack panel

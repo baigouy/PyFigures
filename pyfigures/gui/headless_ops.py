@@ -9,6 +9,7 @@ mirroring pyfigures/gui/render_headless.py.
 
     python -m pyfigures.gui.headless_ops video       <pyf> <out.mp4> [--frame-mode freeze|blank] [--bg R,G,B]
     python -m pyfigures.gui.headless_ops consolidate <pyf> <out.pyf>
+    python -m pyfigures.gui.headless_ops editable    <pyf> <out.pptx|out.jsx> --format pptx|jsx
 """
 from __future__ import annotations
 
@@ -115,6 +116,38 @@ def export_latex(pyf_path: str, out_path: str, image_format: str = "pdf",
     return img_path, tex_path
 
 
+def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
+    """Export an editable PowerPoint (*fmt* 'pptx') or Adobe Illustrator script
+    (*fmt* 'jsx', plus its ``<stem>_assets`` image folder). Returns a JSON summary."""
+    import json as _json
+    from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx, scene_summary
+    out_path = _os.path.abspath(out_path)
+    app, gui = _build_gui(pyf_path)  # noqa: F841 (keep app alive)
+    try:
+        panel = gui.paint.EZFIG_panel
+        if not panel.shapes_to_draw:
+            raise RuntimeError("the figure contains no panels to export")
+        out_dir = _os.path.dirname(out_path)
+        if out_dir:
+            _os.makedirs(out_dir, exist_ok=True)
+        scene = capture_scene(panel)
+        summary = scene_summary(scene)
+        if fmt == "pptx":
+            write_pptx(scene, out_path)
+        else:
+            _, assets = write_jsx(scene, out_path)
+            summary["assets"] = assets
+    finally:
+        gui._dirty = False
+        gui.hide()
+        # a loader thread still running when the window is freed kills the process
+        gui._stop_all_img_loaders()
+    if not _os.path.isfile(out_path):
+        raise RuntimeError("editable export produced no output")
+    summary["path"] = out_path
+    return _json.dumps(summary)
+
+
 def fonts_report(out_json: str) -> str:
     """Write the portable-font report (bundled + available families) to *out_json*.
     Needs a QApplication for QFontDatabase, so it runs here off-screen."""
@@ -191,6 +224,11 @@ def _main(argv=None) -> int:
     lx.add_argument("--with-caption", action="store_true",
                     help="wrap in a figure float with the .caption.json sidecar caption")
 
+    ed = sub.add_parser("editable")
+    ed.add_argument("pyf_path")
+    ed.add_argument("out_path")
+    ed.add_argument("--format", required=True, choices=["pptx", "jsx"])
+
     fo = sub.add_parser("fonts")
     fo.add_argument("out_json")
 
@@ -207,6 +245,8 @@ def _main(argv=None) -> int:
                                     image_format=args.format,
                                     with_caption=args.with_caption)
             out = img + "\n" + tex
+        elif args.op == "editable":
+            out = export_editable(args.pyf_path, args.out_path, args.format)
         else:
             out = consolidate(args.pyf_path, args.out_path)
     except Exception as e:
@@ -217,4 +257,9 @@ def _main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    _code = _main()
+    # the work is done and reported: skip the interpreter/Qt teardown, which can
+    # crash (no message, non-zero exit) after a successful export
+    sys.stdout.flush()
+    sys.stderr.flush()
+    _os._exit(_code)
