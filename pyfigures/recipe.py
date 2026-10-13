@@ -102,7 +102,8 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
 _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
-               "corner_labels", "rois", "inset", "zoom", "brackets", "properties"}
+               "corner_labels", "rois", "inset", "zoom", "brackets", "properties",
+               "page"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
@@ -1102,7 +1103,8 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
             label = opts.get("label") or ""
             if label:
                 label = _label_html(str(label))
-            warnings += _check(M.add_image(out, gp, path, label=label), step)
+            extra = {"page": int(opts["page"])} if opts.get("page") is not None else {}
+            warnings += _check(M.add_image(out, gp, path, label=label, **extra), step)
             n_images += 1
             i += 1
             image_tasks.append((r, gp, i, path, opts, step))

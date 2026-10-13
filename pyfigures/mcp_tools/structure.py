@@ -513,6 +513,7 @@ def add_image(
     filename: str,
     label: str = "",
     label_placement: str = "top left",
+    page: int | None = None,
 ) -> str:
     """Add an image to the figure.
 
@@ -528,18 +529,36 @@ def add_image(
       (``…/webclient/img_detail/ID/``; see inspect_omero_image) works too.
     *label*: optional panel label (plain text or Qt HTML, e.g. "<b>A</b>").
     *label_placement*: "top left" | "top right" | "bottom left" | "bottom right".
+    *page*: for a multi-page **PDF**, the page to show (1 = first page; the
+      default). Stored as the panel's series (configure_image serie_to_open is
+      the same, 0-based).
     """
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
         return f"ERROR: {err}"
     img = _new_image2d(filename)
+    if page is not None:
+        if not str(filename).lower().endswith(".pdf"):
+            return "ERROR: page applies to PDF files only"
+        try:
+            import fitz
+            with fitz.open(filename) as doc:
+                n_pages = doc.page_count
+        except Exception as e:
+            return f"ERROR: cannot read {filename}: {e}"
+        if not 1 <= int(page) <= n_pages:
+            return f"ERROR: page must be between 1 and {n_pages}"
+        from .core import _set_child_text
+        _set_child_text(img, "serie_to_open", str(int(page) - 1))
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
     _append_image(container, img, is_root=(not group_path))
     _save(tree, pyf_path, recompute=True)
     n = len([c for c in container if c.tag == "Image2D"]) - 1
     suffix = f' with label "{label}" ({label_placement})' if label else ""
+    if page is not None:
+        suffix += f" (page {int(page)})"
     loc = "canvas" if not group_path else f"group {group_path}"
     return f"Added {Path(filename).name} as image {n} in {loc}{suffix}."
 

@@ -223,8 +223,12 @@ class _ImgLoaderWorker(QObject):
             if self._cancelled:
                 break
             try:
-                serie = self._series_map.get(path)
-                img = Img(path, serie_to_open=serie)
+                from batoolset.drawings.shapes.image2d import is_vector_file
+                if is_vector_file(path):
+                    img = None        # SVG / PDF panels: Image2D draws the file itself
+                else:
+                    serie = self._series_map.get(path)
+                    img = Img(path, serie_to_open=serie)
             except Exception:
                 img = None
             self._results[path] = img   # write before signalling

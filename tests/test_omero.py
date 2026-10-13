@@ -26,6 +26,8 @@ os.environ.setdefault("QT_API", "pyqt6")
 
 from batoolset import omero_web as O
 
+_REAL_RAW_CONNECTION = O.raw_connection
+
 # image 1 (public): T=2, Z=3, C=2, 40 x 50 uint16, 0.25 µm px
 RNG = np.random.default_rng(1)
 DATA = {1: RNG.integers(100, 4000, (2, 3, 40, 50, 2)).astype(np.uint16),
@@ -136,6 +138,9 @@ def fresh_sessions(monkeypatch):
     monkeypatch.delenv("OMERO_USER", raising=False)
     monkeypatch.delenv("OMERO_PASSWORD", raising=False)
     O._SESSIONS.clear()
+    # hermetic: never open a real Ice connection (omero-py may be installed);
+    # the fake_omero_py fixture restores the real function
+    monkeypatch.setattr(O, "raw_connection", lambda base: None)
     yield
     O._SESSIONS.clear()
 
@@ -263,6 +268,7 @@ def fake_omero_py(monkeypatch):
     omero.gateway = gateway
     monkeypatch.setitem(sys.modules, "omero", omero)
     monkeypatch.setitem(sys.modules, "omero.gateway", gateway)
+    monkeypatch.setattr(O, "raw_connection", _REAL_RAW_CONNECTION)
     O._RAW_CONNS.clear()
     O._CREDENTIALS.clear()
     yield calls

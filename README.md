@@ -127,7 +127,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[pdf]
     ```
 
-    A PDF dropped onto the canvas (first page) becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. Uses PyMuPDF (AGPL v3). The standalone apps already include it.
+    A PDF dropped onto the canvas becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Uses PyMuPDF (AGPL v3). The standalone apps already include it.
 
 **Equations** need nothing extra: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel) typesets LaTeX mathematics with Matplotlib — no TeX installation — as a vector panel; right-click it to edit it.
 
