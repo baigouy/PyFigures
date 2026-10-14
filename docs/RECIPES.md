@@ -774,10 +774,26 @@ whole text is a formula; with `$…$`, text outside the dollars is plain text.
 
 Keys: `font_size` (pt, 12), `color` (`black`), `fontset` (`cm` = Computer
 Modern, the LaTeX look; `stix`, `stixsans`, `dejavusans`, `dejavuserif`),
-`label`. The equation is written as an SVG in an `equations` folder next to the
-figure; like any panel it is scaled with its row. Quote the formula with single
-quotes in YAML so that backslashes are kept. A formula that cannot be typeset
-is reported before anything is built.
+`label`, `engine` (`mathtext`, the default, or `latex`), `preamble` (for
+`engine: latex`; default `\usepackage{amsmath,amssymb,bm,siunitx}`). The
+equation is written as an SVG in an `equations` folder next to the figure; like
+any panel it is scaled with its row. Quote the formula with single quotes in
+YAML so that backslashes are kept. A formula that cannot be typeset is reported
+before anything is built.
+
+**Full LaTeX** — `engine: latex` typesets with the computer's LaTeX installation
+(TeX Live, MiKTeX or MacTeX, with `dvisvgm`): any environment and any package.
+The SVG is saved, so the figure opens on computers without TeX. The value can
+also be a `.tex` file (its document body is used):
+
+```yaml
+- - {equation: '\begin{aligned} D &= \SI{0.12}{\micro\metre\squared\per\second} \\ \bm{F} &= -\nabla U \end{aligned}', engine: latex}
+  - {equation: maxwell.tex, engine: latex, preamble: '\usepackage{physics}'}
+```
+
+**Maths in labels** — in any `label`, `annotations` text or text row, `$…$` is
+typeset as maths (Matplotlib's mathtext, in the label's own font; `\$` is a
+literal dollar), on screen and in every export.
 
 ---
 

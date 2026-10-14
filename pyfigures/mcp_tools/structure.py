@@ -575,15 +575,23 @@ def add_equation(
     fontset: str = "cm",
     label: str = "",
     label_placement: str = "top left",
+    engine: str = "mathtext",
+    preamble: str | None = None,
 ) -> str:
     """Add a typeset equation as a vector panel.
 
     *latex*: LaTeX mathematics, e.g. ``\\Delta F/F_0 = \\frac{F-F_0}{F_0}`` (with or
-      without surrounding $…$; text outside $…$ is set as plain text). Typeset by
-      Matplotlib's mathtext — a LaTeX maths subset, no TeX installation needed.
+      without surrounding $…$; text outside $…$ is set as plain text), or the
+      path of a ``.tex`` file (its document body is used).
+    *engine*: "mathtext" (default): Matplotlib's mathtext, a LaTeX maths subset,
+      no TeX installation needed. "latex": the computer's LaTeX installation
+      (TeX Live / MiKTeX / MacTeX, with dvisvgm): full LaTeX — environments such
+      as align* or cases, and any package from *preamble* (default
+      ``\\usepackage{amsmath,amssymb,bm,siunitx}``). Either way the equation is
+      saved as an SVG, so the figure opens on computers without TeX.
     *font_size*: in points; *color*: a colour name or #rrggbb.
-    *fontset*: "cm" (Computer Modern, the LaTeX look; default), "stix",
-      "stixsans", "dejavusans" or "dejavuserif".
+    *fontset* (mathtext only): "cm" (Computer Modern, the LaTeX look; default),
+      "stix", "stixsans", "dejavusans" or "dejavuserif".
     The equation is written as an SVG (glyphs as outlines) in an ``equations``
     folder next to the figure and added like an image: it stays vector in PDF/SVG
     exports and is scaled with the layout like any panel.
@@ -592,14 +600,27 @@ def add_equation(
     from pyfigures import equations as E
     if not os.path.isfile(pyf_path):
         return f"ERROR: no such figure: {pyf_path}"
+    if engine not in E.ENGINES:
+        return f"ERROR: engine must be one of {', '.join(E.ENGINES)}"
+    if engine == "latex" and not E.latex_available():
+        return ("ERROR: engine='latex' needs a LaTeX installation (latex and dvisvgm from TeX Live, "
+                "MiKTeX or MacTeX); use engine='mathtext' otherwise")
+    if str(latex).strip().lower().endswith(".tex") and os.path.isfile(str(latex).strip()):
+        try:
+            latex = E.read_tex_file(str(latex).strip())
+        except (OSError, ValueError) as e:
+            return f"ERROR: {e}"
+        if engine == "mathtext":
+            latex = E.mathtext_formula(latex)
     try:
-        svg = E.make_equation(pyf_path, latex, font_size, color, fontset)
+        svg = E.make_equation(pyf_path, latex, font_size, color, fontset, engine, preamble)
     except ValueError as e:
         return f"ERROR: {e}"
     res = add_image(pyf_path, group_path, svg, label=label, label_placement=label_placement)
     if res.startswith("ERROR"):
         return res
-    return res.replace(Path(svg).name, f"equation {E.normalize(latex)}") + f" (file: {svg})"
+    shown = E.normalize(latex) if engine == "mathtext" else " ".join(latex.split())
+    return res.replace(Path(svg).name, f"equation {shown}") + f" (file: {svg})"
 
 
 @mcp.tool()

@@ -116,7 +116,7 @@ _MERGE_KEYS = {"colors", "mode", "label", "label_placement", "normalization"}
 _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels",
                   "panel_label"}
 _SCRIPT_KEYS = {"label"}
-_EQUATION_KEYS = {"font_size", "color", "fontset", "label"}
+_EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble"}
 # a montage / split / merge also takes a scale bar (on its LAST panel only)
 _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit"}
 # panel-local extras that make no sense repeated on every glob match
@@ -606,11 +606,23 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                 continue
             if kind == "equation":
                 from pyfigures import equations as _eq
-                try:
-                    _eq.check(str(panel["equation"]), merged.get("fontset", "cm"))
-                except ValueError as e:
-                    raise RecipeError(f"{where}: {e}") from None
-                plan_row.append((kind, str(panel["equation"]), merged))
+                eq = str(panel["equation"])
+                engine = merged.get("engine", "mathtext")
+                if engine not in _eq.ENGINES:
+                    raise RecipeError(f"{where}: engine must be one of {', '.join(_eq.ENGINES)}")
+                if engine == "latex" and not _eq.latex_available():
+                    raise RecipeError(f"{where}: engine: latex needs a LaTeX installation (latex and "
+                                      "dvisvgm from TeX Live, MiKTeX or MacTeX)")
+                if eq.strip().lower().endswith(".tex"):
+                    eq = _resolve(base, eq.strip())
+                    if not os.path.isfile(eq):
+                        raise RecipeError(f"{where}: .tex file not found: {eq}")
+                elif engine == "mathtext":
+                    try:
+                        _eq.check(eq, merged.get("fontset", "cm"))
+                    except ValueError as e:
+                        raise RecipeError(f"{where}: {e}") from None
+                plan_row.append((kind, eq, merged))
                 continue
             if kind in ("split", "merge") and isinstance(panel[kind], list):
                 files = [_resolve(base, f) for f in panel[kind]]
@@ -1099,7 +1111,8 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
                 n_other += 1
                 continue
             if kind == "equation":
-                kw = {k: opts[k] for k in ("font_size", "color", "fontset") if k in opts}
+                kw = {k: opts[k] for k in ("font_size", "color", "fontset", "engine", "preamble")
+                      if k in opts}
                 if opts.get("label"):
                     kw["label"] = _label_html(str(opts["label"]))
                 warnings += _check(M.add_equation(out, gp, path, **kw), step)

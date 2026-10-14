@@ -1770,6 +1770,12 @@ class EZFIG_GUI(QMainWindow):
                     if is_forbidden_image_file(url):
                         rejected.append(url)
                         continue
+                    if url.lower().endswith('.tex'):
+                        # a LaTeX file becomes an equation panel (its document body)
+                        eq = self._equation_from_tex(url)
+                        if eq:
+                            self.list.append(eq)
+                        continue
                     if not (url.lower().endswith('.pyf') or is_image_file(url)):
                         # a .txt/.csv/.docx... used to be added as a broken panel
                         unsupported.append(url)
@@ -2402,12 +2408,35 @@ class EZFIG_GUI(QMainWindow):
 
     def _write_equation(self, v):
         from pyfigures import equations as E
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             return E.make_equation(self.current_file, v['latex'], v['font_size'], v['color'],
-                                   v['fontset'])
+                                   v['fontset'], v.get('engine', 'mathtext'), v.get('preamble'))
         except ValueError as e:
+            QApplication.restoreOverrideCursor()
             QMessageBox.warning(self, 'Cannot typeset the equation', str(e))
             return None
+        finally:
+            if QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
+
+    def _equation_from_tex(self, tex_path):
+        """A dropped .tex file -> the path of its equation SVG (or None): typeset
+        with the LaTeX installation if there is one (full LaTeX), else its first
+        formula with Matplotlib's mathtext."""
+        from pyfigures import equations as E
+        try:
+            latex = E.read_tex_file(tex_path)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, 'Cannot read the .tex file', str(e))
+            return None
+        if E.latex_available():
+            v = {'latex': latex, 'font_size': 12.0, 'color': 'black', 'fontset': 'cm',
+                 'engine': 'latex', 'preamble': E.DEFAULT_PREAMBLE}
+        else:
+            v = {'latex': E.mathtext_formula(latex), 'font_size': 12.0, 'color': 'black',
+                 'fontset': 'cm', 'engine': 'mathtext'}
+        return self._write_equation(v)
 
     def add_equation_action(self):
         """File > Add equation (LaTeX)…: the equation is added as a new row."""

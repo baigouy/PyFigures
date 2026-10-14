@@ -467,9 +467,21 @@ class PosterText:
         self.width_mm = self.height_mm * (nat_w / nat_h)
         self.set_center_mm(center.x(), center.y())
 
+    def _layout_doc(self):
+        """self.doc with its $…$ typeset as maths (batoolset.drawings.math_text),
+        or self.doc itself; self.doc keeps the raw text (saved and edited)."""
+        # (cached in math_text, never on self: self is saved and copied)
+        try:
+            from batoolset.drawings.math_text import typeset_for
+            doc = typeset_for(self, self.doc)
+        except Exception:
+            doc = self.doc
+        doc.setTextWidth(-1)
+        return doc
+
     def _natural_size_px(self):
         self.doc.setTextWidth(-1)  # no wrapping — natural single-flow size
-        sz = self.doc.size()
+        sz = self._layout_doc().size()
         return max(sz.width(), 1.0), max(sz.height(), 1.0)
 
     def unrotated_rect_mm(self):
@@ -541,5 +553,5 @@ class PosterText:
         font_scale = min(box_w_px / nat_w_px, box_h_px / nat_h_px)
         painter.translate(-box_w_px / 2.0, -box_h_px / 2.0)
         painter.scale(font_scale, font_scale)
-        self.doc.drawContents(painter)
+        self._layout_doc().drawContents(painter)
         painter.restore()

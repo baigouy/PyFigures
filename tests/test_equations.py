@@ -90,11 +90,12 @@ def test_dialog_preview_and_errors(qapp):
     dlg = EquationDialog(latex=DFF, font_size=16, fontset="stix")
     ok = dlg.buttons.button(QDialogButtonBox.StandardButton.Ok)
     assert dlg.update_preview() and ok.isEnabled() and not dlg.preview.pixmap().isNull()
-    dlg.latex_edit.setText(r"\frac{a}{")
+    dlg.latex_edit.setPlainText(r"\frac{a}{")
     assert not dlg.update_preview() and not ok.isEnabled() and "cannot typeset" in dlg.error.text()
-    dlg.latex_edit.setText("x^2")
+    dlg.latex_edit.setPlainText("x^2")
     dlg.update_preview()
-    assert dlg.values() == {"latex": "x^2", "font_size": 16.0, "color": "black", "fontset": "stix"}
+    assert dlg.values() == {"latex": "x^2", "font_size": 16.0, "color": "black", "fontset": "stix",
+                            "engine": "mathtext", "preamble": E.DEFAULT_PREAMBLE}
 
 
 def test_gui_add_and_edit_equation(qapp, tmp_path, monkeypatch):

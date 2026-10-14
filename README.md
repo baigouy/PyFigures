@@ -129,7 +129,10 @@ Perform the following steps **only once** to set up your environment:
 
     A PDF dropped onto the canvas becomes a panel, laid out like an image. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Out of the box (and in the standalone apps), the page is rendered with pypdfium2 as a 600 dpi image. With this extra (PyMuPDF, AGPL v3) it stays a **vector panel**, like an SVG file, clipping included, in PDF and SVG exports.
 
-**Equations** need nothing extra: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel) typesets LaTeX mathematics with Matplotlib — no TeX installation — as a vector panel; right-click it to edit it.
+**LaTeX mathematics:**
+- **In any label or poster text**, `$…$` is typeset as maths (e.g. `$\Delta F/F_0$`, `$t = 12\,\mathrm{min}$`; `\$` is a literal dollar), on screen and in every export, as vectors, in the label's own font. No TeX installation needed.
+- **Equation panels**: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel), or drop a `.tex` file. Typeset by Matplotlib with no TeX installation, or, if TeX Live, MiKTeX or MacTeX is installed, with **full LaTeX** ("Full LaTeX" in the dialog, `engine="latex"`): any environment (`align*`, `cases`, `pmatrix`…) and any package (`siunitx`, `physics`, `bm`…). The result is saved as an SVG, so the figure opens anywhere; right-click → *Edit equation…* to change it.
+- **PDF + LaTeX export**: labels are typeset by LaTeX itself, in your document's font.
 
 ### Run
    

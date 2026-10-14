@@ -1,4 +1,4 @@
-"""Dialog to type a LaTeX equation, with a live preview (see pyfigures.equations)."""
+"""Dialog to type a LaTeX equation, with a preview (see pyfigures.equations)."""
 from __future__ import annotations
 
 import os
@@ -7,8 +7,9 @@ import tempfile
 from qtpy.QtCore import Qt, QTimer
 from qtpy.QtGui import QPixmap, QPainter, QColor
 from qtpy.QtSvg import QSvgRenderer
-from qtpy.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
-                            QFrame, QLabel, QLineEdit, QVBoxLayout)
+from qtpy.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+                            QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
+                            QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout)
 
 from pyfigures import equations as E
 
@@ -18,20 +19,45 @@ _FONTSET_LABELS = {"cm": "Computer Modern (LaTeX)", "stix": "STIX (Times-like)",
 
 
 class EquationDialog(QDialog):
-    """Returns its settings via values() after exec(): latex, font_size, color, fontset."""
+    """Returns its settings via values() after exec(): latex, font_size, color,
+    fontset, engine, preamble."""
 
-    def __init__(self, parent=None, latex="", font_size=12.0, color="black", fontset="cm"):
+    def __init__(self, parent=None, latex="", font_size=12.0, color="black", fontset="cm",
+                 engine=None, preamble=None):
         super().__init__(parent)
         self.setWindowTitle("Equation (LaTeX)")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
+        self._latex_ok = E.latex_available()
+        if engine is None:
+            engine = "mathtext"
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        self.latex_edit = QLineEdit(latex)
+        self.latex_edit = QPlainTextEdit(latex)
         self.latex_edit.setPlaceholderText(r"e.g. \Delta F/F_0 = \frac{F - F_0}{F_0}")
-        self.latex_edit.setToolTip("LaTeX mathematics (a LaTeX subset typeset by Matplotlib — no TeX "
-                                   "installation needed). Without $…$ the whole text is a formula; "
-                                   "with $…$, text outside the dollars is plain text.")
-        form.addRow("Equation:", self.latex_edit)
+        self.latex_edit.setToolTip("LaTeX mathematics. Without $…$ the whole text is a formula; "
+                                   "with $…$, text outside the dollars is plain text. With "
+                                   "“Full LaTeX”, environments (align*, cases…) and packages work.")
+        self.latex_edit.setFixedHeight(80)
+        row = QHBoxLayout()
+        row.addWidget(self.latex_edit)
+        self.load_button = QPushButton("Load .tex…")
+        self.load_button.setToolTip("Take the equation from a .tex file (its document body)")
+        self.load_button.clicked.connect(self._load_tex)
+        row.addWidget(self.load_button, 0, Qt.AlignmentFlag.AlignTop)
+        form.addRow("Equation:", row)
+        self.engine_check = QCheckBox("Full LaTeX (uses the LaTeX installation)")
+        self.engine_check.setChecked(engine == "latex" and self._latex_ok)
+        self.engine_check.setEnabled(self._latex_ok)
+        self.engine_check.setToolTip(
+            "Typeset with LaTeX itself (any environment, any package): needs TeX Live, MiKTeX or "
+            "MacTeX. The result is saved as an SVG, so the figure opens anywhere."
+            if self._latex_ok else
+            "No LaTeX installation found (latex and dvisvgm from TeX Live, MiKTeX or MacTeX). "
+            "Matplotlib's built-in LaTeX maths is used.")
+        form.addRow("", self.engine_check)
+        self.preamble_edit = QLineEdit(E.DEFAULT_PREAMBLE if preamble is None else preamble)
+        self.preamble_edit.setToolTip(r"LaTeX packages and definitions, e.g. \usepackage{physics}")
+        form.addRow("Preamble:", self.preamble_edit)
         self.size_spin = QDoubleSpinBox()
         self.size_spin.setRange(4.0, 200.0)
         self.size_spin.setDecimals(1)
@@ -67,18 +93,49 @@ class EquationDialog(QDialog):
         layout.addWidget(self.buttons)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(250)
         self._timer.timeout.connect(self.update_preview)
-        for sig in (self.latex_edit.textChanged, self.color_edit.textChanged):
-            sig.connect(lambda *_: self._timer.start())
-        self.size_spin.valueChanged.connect(lambda *_: self._timer.start())
-        self.fontset_combo.currentIndexChanged.connect(lambda *_: self._timer.start())
+        self.latex_edit.textChanged.connect(self._schedule)
+        self.color_edit.textChanged.connect(self._schedule)
+        self.preamble_edit.textChanged.connect(self._schedule)
+        self.size_spin.valueChanged.connect(self._schedule)
+        self.fontset_combo.currentIndexChanged.connect(self._schedule)
+        self.engine_check.toggled.connect(self._engine_changed)
+        self._engine_changed()
         self.update_preview()
 
+    def _engine_changed(self, *_):
+        full = self.engine_check.isChecked()
+        self.preamble_edit.setEnabled(full)
+        self.fontset_combo.setEnabled(not full)        # LaTeX uses its own fonts
+        self._schedule()
+
+    def _schedule(self, *_):
+        # LaTeX takes about a second per run: wait until typing pauses
+        self._timer.start(900 if self.engine_check.isChecked() else 250)
+
+    def _load_tex(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Equation from a .tex file", "",
+                                              "LaTeX (*.tex);;All files (*)")
+        if path:
+            self.load_tex(path)
+
+    def load_tex(self, path):
+        """Put the equation of the .tex file *path* in the editor."""
+        try:
+            text = E.read_tex_file(path)
+        except (OSError, ValueError) as e:
+            self.error.setText(str(e))
+            return
+        if not self.engine_check.isChecked():
+            text = E.mathtext_formula(text)
+        self.latex_edit.setPlainText(text)
+
     def values(self):
-        return {"latex": self.latex_edit.text().strip(), "font_size": self.size_spin.value(),
+        return {"latex": self.latex_edit.toPlainText().strip(), "font_size": self.size_spin.value(),
                 "color": self.color_edit.text().strip() or "black",
-                "fontset": self.fontset_combo.currentData()}
+                "fontset": self.fontset_combo.currentData(),
+                "engine": "latex" if self.engine_check.isChecked() else "mathtext",
+                "preamble": self.preamble_edit.text()}
 
     def update_preview(self):
         """Typeset the equation; show it, or the error and disable OK."""
@@ -91,12 +148,15 @@ class EquationDialog(QDialog):
             return False
         fd, tmp = tempfile.mkstemp(suffix=".svg")
         os.close(fd)
+        if v["engine"] == "latex":
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
-            E.render_svg(v["latex"], tmp, v["font_size"], v["color"], v["fontset"])
+            E.render_svg(v["latex"], tmp, v["font_size"], v["color"], v["fontset"],
+                         v["engine"], v["preamble"])
             renderer = QSvgRenderer(tmp)
             size = renderer.defaultSize()
             # preview at twice the size, within the dialog
-            scale = min(2.0, 480.0 / max(1, size.width()), 160.0 / max(1, size.height()))
+            scale = min(2.0, 500.0 / max(1, size.width()), 160.0 / max(1, size.height()))
             pm = QPixmap(max(1, int(size.width() * scale)), max(1, int(size.height() * scale)))
             pm.fill(QColor("white"))
             p = QPainter(pm)
@@ -112,5 +172,7 @@ class EquationDialog(QDialog):
             ok_button.setEnabled(False)
             return False
         finally:
+            if v["engine"] == "latex":
+                QApplication.restoreOverrideCursor()
             if os.path.isfile(tmp):
                 os.remove(tmp)
