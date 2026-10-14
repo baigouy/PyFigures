@@ -559,7 +559,10 @@ def add_image(
     if page is not None:
         suffix += f" (page {int(page)})"
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Added {Path(filename).name} as image {n} in {loc}{suffix}."
+    # a URL (OMERO link, OME-Zarr, http image) is named in full: its last
+    # path part can be meaningless ("?show=image-1")
+    shown = filename if str(filename).lower().startswith(("http://", "https://")) else Path(filename).name
+    return f"Added {shown} as image {n} in {loc}{suffix}."
 
 
 @mcp.tool()

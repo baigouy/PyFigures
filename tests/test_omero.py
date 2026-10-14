@@ -324,7 +324,7 @@ def test_img_and_pyfigures_tools(qapp, server, tmp_path):
     assert M.inspect_omero_image("https://host/a.tif").startswith("ERROR: not an OMERO")
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf, mode="groups", num_groups=1)
-    assert not M.add_image(pyf, [0], url).startswith("ERROR")
+    assert M.add_image(pyf, [0], url).startswith(f"Added {url} as image")   # the link, not "?show=…"
     out = str(tmp_path / "f.png")
     json.loads(M.export_figure(pyf, out, dpi=72))
     assert os.path.getsize(out) > 0
