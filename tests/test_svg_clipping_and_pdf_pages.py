@@ -86,6 +86,17 @@ def test_clipped_svg_panel_in_every_export(qapp, tmp_path, ext):
     json.loads(export_figure(pyf, out, dpi=100))
     if ext == "png":
         a = _rgb(Image.open(out))
+    elif ext == "svg":
+        # the panel's own SVG is embedded: real clip paths, no rasterised parts
+        # (rendered with ClippingSvgRenderer: MuPDF ignores clip paths)
+        import re
+        from batoolset.drawings.svg_clip_renderer import ClippingSvgRenderer
+        svg = open(out, encoding="utf-8").read()
+        assert svg.count("<clipPath") >= 3 and "<image" not in svg
+        assert re.search(r'<circle[^>]*cx="150"', svg)              # the source elements themselves
+        r = ClippingSvgRenderer(svg.encode("utf-8"))
+        vb = r.viewBoxF()
+        a = _qimage_array(r, int(vb.width() * 100 / 72), int(vb.height() * 100 / 72))
     else:
         with fitz.open(out) as doc:
             pix = doc[0].get_pixmap(dpi=100, alpha=False)
@@ -94,6 +105,38 @@ def test_clipped_svg_panel_in_every_export(qapp, tmp_path, ext):
             with fitz.open(out) as doc:
                 assert not doc[0].get_images()                               # all vector in PDF
     _check_clipped(a)
+
+
+def test_svg_panel_text_stays_text_in_svg_export(qapp, tmp_path):
+    """An SVG panel's own <text> is embedded as text (Qt's renderer would turn
+    it into outlines), also when the panel is cropped and rotated."""
+    import re
+    from pyfigures.mcp_server import create_figure, add_image, export_figure
+    from pyfigures.mcp_tools.core import _load, _save, _set_child_text, _iter_panel_elements
+    src = tmp_path / "label.svg"
+    src.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">'
+                    b'<style>.t{font-size:20px}</style>'
+                    b'<rect id="bg" width="200" height="100" fill="#ffeeaa"/>'
+                    b'<text class="t" x="10" y="50" font-family="Arial">Hello panel</text></svg>')
+    pyf = str(tmp_path / "f.pyf")
+    create_figure(pyf, mode="canvas")
+    add_image(pyf, [], str(src))
+    for name, settings in (("plain", {}), ("cropped", {"crop_left": "20", "theta": "30"})):
+        if settings:
+            tree, root = _load(pyf)
+            (img,) = list(_iter_panel_elements(root))
+            for k, v in settings.items():
+                _set_child_text(img, k, v)
+            _save(tree, pyf)
+        out = str(tmp_path / f"{name}.svg")
+        json.loads(export_figure(pyf, out, dpi=100))
+        svg = open(out, encoding="utf-8").read()
+        assert re.search(r"<text\b[^>]*>Hello panel</text>", svg), name
+        assert "#fd01" not in svg.lower(), name                      # no placeholder left
+        assert re.search(r'id="pyfp\d+_bg"', svg), name               # ids prefixed
+        assert re.search(r'clip-path="url\(#pyfpclip\d+\)"', svg), name
+        ids = re.findall(r'\bid="([^"]+)"', svg)
+        assert len(ids) == len(set(ids)), name
 
 
 def test_matplotlib_panel_curves_stay_inside_their_axes(qapp):

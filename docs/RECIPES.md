@@ -176,6 +176,7 @@ created as needed. Forward slashes work on every OS.
 | `allow_scripts` | `false` | Must be `true` for `script:` panels (they run Python code). §18. |
 | `checks` | none | Checks run after the build — `integrity`, `scale`, `scale_bars`, `labels`, `resolution`, `journal`; a failing one stops the build before the exports. §20. |
 | `consolidate` | `false` | `true`: copy every source file into `<figure>.files/` and link the figure to the copies; or a `.pyf` path to write that self-contained copy elsewhere. §20. |
+| `download_remote` | `false` | With `consolidate`: also save remote images (web links, OME-Zarr URLs, OMERO links) into the bundle instead of keeping their links. §20. |
 | `template` + `fill` | none | Build from a template `.pyf` (instead of `rows`): `fill` lists the image files (or globs) for its slots, in order. §20. |
 
 Multi-line captions — use YAML's folded style:
@@ -897,6 +898,18 @@ into a warning. The build summary's `checks` gives each result.
 shared or archived. `consolidate: share/fig.pyf` writes the self-contained copy
 there instead and leaves `output` linked to the originals. It runs last (after
 the exports). Same as File → Save And Consolidate.
+
+Remote images (web links, OME-Zarr on a server, OMERO links) stay links unless
+`download_remote: true`: then an OMERO image or remote OME-Zarr is saved as a
+local OME-Zarr of exactly what the panel shows (raw pixels with omero-py,
+channel colours, windows, pixel size) and any other link as the file itself.
+Private OMERO images need `OMERO_USERNAME` / `OMERO_PASSWORD`. An image that
+cannot be downloaded stays a link and is listed in the build's warnings.
+
+```yaml
+consolidate: true
+download_remote: true
+```
 
 ### Templates — `template` + `fill`
 

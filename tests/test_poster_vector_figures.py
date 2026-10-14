@@ -1,8 +1,10 @@
 """Poster designer: a .pyf figure placed on a poster is exported as vectors.
 
 On screen the figure is a PNG flatten; in a PDF/SVG export it is drawn from
-the figure itself, so its text and drawings stay vectors (text as outlines)
-and its images keep their native resolution. Also: cropped photos keep their crop in the poster's SVG export
+the figure itself, so its text and drawings stay vectors and its images keep
+their native resolution. In PDF the figure's paint commands are replayed
+(QPicture), so its text stays real, selectable text; in SVG it comes from the
+figure's SVG (text as outlines). Also: cropped photos keep their crop in the poster's SVG export
 (Qt's SVG engine ignores drawPixmap source rects).
 
 Run with PYTEST_QT_API=pyqt6.
@@ -64,14 +66,20 @@ def test_pdf_export_draws_the_figure_as_vectors(poster_with_figure, tmp_path):
     with fitz.open(out) as doc:
         page = doc[0]
         sizes = {(i[2], i[3]) for i in page.get_images(full=True)}
-        black = [d for d in page.get_drawings() if d.get("fill") == (0.0, 0.0, 0.0)]
+        words = page.get_text("words")
+        images = page.get_image_info()
     assert (400, 300) in sizes and (300, 300) in sizes   # native image resolution
     assert len(sizes) == 2                               # no flatten underneath
-    # the letters A and B are drawn as vector outlines, inside the figure
-    assert len(black) >= 2
+    # the letters A and B are real text (selectable, searchable), each on its image
+    letters = {w[4]: w[:4] for w in words}
+    assert set(letters) == {"A", "B"}, words
     mm = 72 / 25.4
-    xs = [(round(d["rect"].x0 / mm, 1), round(d["rect"].x1 / mm, 1)) for d in black]
-    assert all(19 <= x0 and x1 <= 141 for x0, x1 in xs), xs
+    for x0, y0, x1, y1 in letters.values():
+        assert 19 * mm <= x0 and x1 <= 141 * mm and 19 * mm <= y0, letters
+    a_box, b_box = sorted((i["bbox"] for i in images), key=lambda b: b[0])
+    assert a_box[0] - 1 <= letters["A"][0] < a_box[2]           # A on the left image
+    assert b_box[0] - 1 <= letters["B"][0] < b_box[2]           # B on the right one
+    assert letters["A"][3] - letters["A"][1] < 0.3 * (a_box[3] - a_box[1])  # letter-sized, not huge
 
 
 def test_poster_pdf_page_has_no_margin_shift(qapp, tmp_path):
@@ -101,6 +109,48 @@ def test_svg_export_draws_the_figure_as_vectors(poster_with_figure, tmp_path):
         svg = f.read()
     sizes = _svg_image_sizes(svg)
     assert (400, 300) in sizes and (300, 300) in sizes and len(sizes) == 2
+    # the figure's own SVG is embedded: its letters are real <text>, in a real font
+    texts = re.findall(r"<text\b[^>]*>([^<]*)</text>", svg)
+    assert "A" in texts and "B" in texts
+    assert 'font-family="Sans Serif"' not in svg
+    assert "#fe01" not in svg.lower()                    # no placeholder left
+    ids = re.findall(r'\bid="([^"]+)"', svg)
+    assert len(ids) == len(set(ids))                     # figure ids prefixed: no clash
+
+
+def test_svg_export_text_and_crop_render_in_place(poster_with_figure, tmp_path):
+    """The embedded figure lands where the PDF export puts it, cropped by an
+    SVG clipPath. Rendered with batoolset's ClippingSvgRenderer (MuPDF and
+    Qt's own SVG renderer ignore clip paths)."""
+    from qtpy.QtCore import QRectF
+    from qtpy.QtGui import QImage, QPainter, QColor
+    from batoolset.drawings.svg_clip_renderer import ClippingSvgRenderer
+    canvas, shape = poster_with_figure
+    shape.crop_right = 0.5
+    shape.width_mm = 60
+    out = str(tmp_path / "crop.svg")
+    canvas.save(out, filetype="svg", dpi=150)
+    svg = open(out, encoding="utf-8").read()
+    assert "<clipPath" in svg and "A" in re.findall(r"<text\b[^>]*>([^<]*)</text>", svg)
+    w_mm = float(re.search(r'<svg[^>]*\bwidth="([\d.]+)mm"', svg).group(1))
+    assert w_mm == pytest.approx(canvas.page_width_mm, abs=0.5)  # true page size (was 72-dpi based)
+    r = ClippingSvgRenderer(svg.encode("utf-8"))
+    vb = r.viewBoxF()
+    scale = 72 / 150                                        # draw at 72 dpi
+    qimg = QImage(int(vb.width() * scale), int(vb.height() * scale), QImage.Format.Format_RGB888)
+    qimg.fill(QColor("white"))
+    p = QPainter(qimg)
+    r.render(p, QRectF(0, 0, qimg.width(), qimg.height()))
+    p.end()
+    ptr = qimg.constBits()
+    ptr.setsize(qimg.sizeInBytes())
+    img = np.frombuffer(ptr, np.uint8).reshape(qimg.height(), qimg.bytesPerLine())[:, :qimg.width() * 3]
+    img = img.reshape(qimg.height(), qimg.width(), 3)
+    mm = 72 / 25.4
+    right = img[int(25 * mm):int(40 * mm), int(85 * mm):int(140 * mm), :3]
+    assert right.min() >= 250                              # cropped away
+    inside = img[int(25 * mm):int(40 * mm), int(25 * mm):int(75 * mm), :3]
+    assert inside.std() > 15                               # image A is there
 
 
 def test_cropped_figure_is_clipped_in_pdf(poster_with_figure, tmp_path):

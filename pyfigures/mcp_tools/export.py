@@ -959,27 +959,46 @@ def export_illustrator_script(pyf_path: str, out_path: str) -> str:
 
 
 @mcp.tool()
-def consolidate_figure(pyf_path: str, out_pyf: str) -> str:
+def consolidate_figure(pyf_path: str, out_pyf: str, download_remote: bool = False) -> str:
     """Save a self-contained copy of the figure with every referenced image
     bundled next to it (GUI: File → Save And Consolidate).
 
     Copies all linked image files into an ``<out>.files`` folder beside *out_pyf*
     and rewrites the figure to point at them, so the .pyf can be moved/shared
     without breaking image links. Returns the output path.
+
+    Remote images (http(s) images, OME-Zarr URLs, OMERO links) stay links by
+    default. ``download_remote=True`` saves them into the bundle as well: an
+    OMERO image or remote OME-Zarr as a local OME-Zarr of exactly what the
+    panel shows (raw pixels with omero-py, channel colours, windows, pixel
+    size), any other URL as the file itself. Private OMERO images need a login
+    (OMERO_USERNAME / OMERO_PASSWORD). Images that could not be downloaded keep
+    their link and are listed in ``not_downloaded``.
     """
     if not out_pyf.lower().endswith(".pyf"):
         return "ERROR: out_pyf must end in .pyf."
     if not os.path.isfile(pyf_path):
         return f"ERROR: no such .pyf file: {pyf_path}"
     out_pyf = os.path.abspath(out_pyf)
-    ok, msg = _run_headless_op(["consolidate", pyf_path, out_pyf])
+    args = ["consolidate", pyf_path, out_pyf]
+    if download_remote:
+        args.append("--download-remote")
+    ok, msg = _run_headless_op(args)
     if not ok:
         return f"ERROR: {msg}"
+    not_downloaded = []
+    for line in msg.splitlines():
+        if line.startswith("NOT_DOWNLOADED\t"):
+            _, url, err = (line.split("\t", 2) + ["", ""])[:3]
+            not_downloaded.append({"url": url, "error": err})
     files_dir = os.path.splitext(out_pyf)[0] + ".files"
-    return json.dumps({
+    out = {
         "output": out_pyf,
         "files_folder": files_dir if os.path.isdir(files_dir) else None,
-    }, ensure_ascii=False, indent=2)
+    }
+    if download_remote:
+        out["not_downloaded"] = not_downloaded
+    return json.dumps(out, ensure_ascii=False, indent=2)
 
 
 def _panel_source_files(fn: str | None, script: str | None) -> list[str]:

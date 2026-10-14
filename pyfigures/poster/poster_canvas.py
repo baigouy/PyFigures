@@ -14,6 +14,7 @@ import contextlib
 import hashlib
 import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -71,17 +72,135 @@ def _pyf_render_path(pyf_path):
     return os.path.join(PYF_RENDER_CACHE_DIR, f'{base}__{digest}.png')
 
 
-def _render_pyf_subprocess(pyf_path, out_path, dpi, timeout=120):
+def _render_pyf_subprocess(pyf_path, out_path, dpi, timeout=120, crop=None):
     """The actual offscreen-Qt-subprocess render call (pyfigures.gui.
     render_headless), shared by _render_pyf_to_png (drop/Add-image flatten,
     cached, with a progress dialog) and _render_pyf_for_print (print-ready
-    export's on-the-fly high-res re-render, no cache, no dialog)."""
-    result = subprocess.run(
-        [sys.executable, '-m', 'pyfigures.gui.render_headless', pyf_path, out_path, '--dpi', str(dpi)],
-        capture_output=True, text=True, timeout=timeout)
+    export's on-the-fly high-res re-render, no cache, no dialog). *crop*
+    (.qpic only): left, top, right, bottom fractions clipped away."""
+    cmd = [sys.executable, '-m', 'pyfigures.gui.render_headless', pyf_path, out_path, '--dpi', str(dpi)]
+    if crop is not None:
+        cmd += ['--crop', ','.join(f'{float(v):.6f}' for v in crop)]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if result.returncode != 0 or not os.path.isfile(out_path):
         raise RuntimeError((result.stderr or result.stdout or 'unknown error').strip())
     return out_path
+
+
+class PictureFigure:
+    """A figure's paint commands (QPicture written by render_headless to a
+    .qpic file), drawn like a QSvgRenderer: render(painter, rect) scales the
+    whole figure into *rect*. Replaying the commands keeps text as text."""
+
+    def __init__(self, path):
+        import json
+        from qtpy.QtGui import QPicture
+        self._picture = QPicture()
+        self._ok = self._picture.load(path)
+        # the figure's size in points and the dpi it was recorded at (the
+        # .json written beside it by the figure's save())
+        try:
+            with open(path + '.json', encoding='utf-8') as f:
+                info = json.load(f)
+            self._w = float(info['width_pt'])
+            self._h = float(info['height_pt'])
+            self._dpi = float(info.get('picture_dpi') or self._picture.logicalDpiX())
+        except Exception:
+            self._ok = False
+            self._w = self._h = 0.0
+            self._dpi = 96.0
+
+    def isValid(self):
+        return self._ok and self._w > 0 and self._h > 0
+
+    def defaultSize(self):
+        from qtpy.QtCore import QSize
+        return QSize(int(round(self._w)), int(round(self._h)))
+
+    def render(self, painter, rect, clip=None):
+        # *clip* is not needed: the poster crop is recorded in the picture
+        # drawPicture scales by (device dpi / picture dpi) on its own: undo it
+        device_dpi = painter.device().logicalDpiX() or self._dpi
+        undo = self._dpi / device_dpi
+        painter.save()
+        painter.translate(rect.left(), rect.top())
+        painter.scale(rect.width() / self._w * undo, rect.height() / self._h * undo)
+        painter.drawPicture(0, 0, self._picture)
+        painter.restore()
+
+
+class SvgFigureEmbed:
+    """Poster SVG export: a figure is not drawn through Qt (its SVG renderer
+    turns text into outlines, its SVG writer drops clips); a placeholder
+    rectangle in a unique colour is drawn instead, and embed_svg_figures()
+    then replaces it, in the written file, with the figure's own SVG: real
+    <text>, under the placeholder's transform, clipped by an SVG clipPath to
+    the poster crop."""
+
+    def __init__(self, svg_path, index):
+        self.svg_path = svg_path
+        self.marker = '#fe%02x%02x' % (1 + index // 250, 1 + index % 250)
+        self.placements = []         # (figure rect, clip rect, opacity), in drawing order
+
+    def isValid(self):
+        return os.path.isfile(self.svg_path)
+
+    def render(self, painter, rect, clip=None):
+        # *clip*: the visible (cropped) part, in the same coordinates as *rect*
+        # (Qt's SVG painter does not report its clip back)
+        self.placements.append((QRectF(rect), QRectF(clip) if clip is not None else QRectF(rect),
+                                painter.opacity()))
+        painter.save()
+        painter.setOpacity(1.0)
+        painter.fillRect(rect, QColor(self.marker))
+        painter.restore()
+
+
+def _svg_inner(svg_text, prefix):
+    """The figure SVG's content (root children, minus title/desc), its
+    viewBox, with every id prefixed so it cannot clash with the poster's."""
+    root = re.search(r'<svg\b[^>]*>', svg_text)
+    vb = re.search(r'viewBox="([^"]+)"', root.group(0))
+    x, y, w, h = (float(v) for v in vb.group(1).replace(',', ' ').split())
+    body = svg_text[root.end():svg_text.rfind('</svg>')]
+    body = re.sub(r'<title>.*?</title>|<desc>.*?</desc>', '', body, flags=re.S)
+    body = re.sub(r'\bid="([^"]+)"', lambda m: f'id="{prefix}{m.group(1)}"', body)
+    body = re.sub(r'url\(#([^)]+)\)', lambda m: f'url(#{prefix}{m.group(1)})', body)
+    body = re.sub(r'(xlink:href|href)="#([^"]+)"', lambda m: f'{m.group(1)}="#{prefix}{m.group(2)}"', body)
+    return body, (x, y, w, h)
+
+
+def embed_svg_figures(text, embeds):
+    """Replace each SvgFigureEmbed placeholder in the poster SVG *text* by its
+    figure (see SvgFigureEmbed); returns the new text. Placements are consumed."""
+    n_clip = 0
+    for k, emb in enumerate(embeds):
+        if not emb.placements:
+            continue
+        with open(emb.svg_path, encoding='utf-8') as f:
+            inner, (vx, vy, vw, vh) = _svg_inner(f.read(), f'pyffig{k}_')
+        pattern = re.compile(r'(<g fill="' + re.escape(emb.marker) + r'"[^>]*>\s*)<rect [^>]*/>', re.I)
+
+        def swap(m):
+            nonlocal n_clip
+            if not emb.placements:
+                return m.group(0)
+            rect, clip, opacity = emb.placements.pop(0)
+            n_clip += 1
+            cid = f'pyfcrop{n_clip}'
+            sx = rect.width() / vw
+            sy = rect.height() / vh
+            op = f' opacity="{opacity:g}"' if opacity < 1 else ''
+            group = re.sub(r'fill="' + re.escape(emb.marker) + '"', 'fill="none"', m.group(1), flags=re.I)
+            return (group
+                    + f'<defs><clipPath id="{cid}"><rect x="{clip.x():g}" y="{clip.y():g}" '
+                      f'width="{clip.width():g}" height="{clip.height():g}"/></clipPath></defs>'
+                    + f'<g clip-path="url(#{cid})"{op}><g fill="#000000" stroke="none" '
+                      f'transform="matrix({sx:g},0,0,{sy:g},{rect.x() - vx * sx:g},{rect.y() - vy * sy:g})">'
+                    + inner + '</g></g>')
+
+        text = pattern.sub(swap, text)
+    return text
 
 
 def _render_pyf_to_png(pyf_path, dpi=PYF_RENDER_DPI, parent=None):
@@ -650,30 +769,50 @@ class PosterCanvas(QWidget):
                     yield shape
 
     @contextlib.contextmanager
-    def _vector_pyf_images(self, pages):
+    def _vector_pyf_images(self, pages, kind='pdf'):
         """Vector (PDF/SVG) export only: every image flattened from a .pyf
-        (PosterImage.source_pyf) is drawn from that figure re-rendered as SVG
-        instead of from its PNG flatten. Text, plots and drawings stay vectors
-        and the micrographs keep their native resolution, exactly as when the
-        figure is exported on its own. Each figure is rendered once per export
-        (in a subprocess, like every other .pyf render here); an image whose
-        render fails keeps its PNG flatten. Nested calls reuse the outer one."""
+        (PosterImage.source_pyf) is drawn from that figure re-rendered instead
+        of from its PNG flatten. Plots and drawings stay vectors and the
+        micrographs keep their native resolution, exactly as when the figure
+        is exported on its own.
+
+        *kind* 'pdf': the figure's paint commands (a QPicture) are replayed,
+        so its text stays real, selectable text in the figure's fonts.
+        *kind* 'svg': the figure's own SVG export is embedded in the written
+        poster SVG (SvgFigureEmbed / embed_svg_figures, run by save()): real
+        <text>, the poster crop as an SVG clipPath.
+
+        Each figure is rendered once per export (in a subprocess, like every
+        other .pyf render here); an image whose render fails keeps its PNG
+        flatten. Nested calls reuse the outer one."""
         if getattr(self, '_vector_export_active', False):
             yield
             return
-        from qtpy.QtSvg import QSvgRenderer
         self._vector_export_active = True
+        self._svg_embeds = []
         tmp_dir = tempfile.mkdtemp(prefix='pyf_poster_vec_')
         rendered = {}
         touched = []
         try:
             for shape in self._pyf_sourced_images(pages):
                 key = os.path.abspath(shape.source_pyf)
+                crop = None
+                if kind == 'pdf':
+                    # the crop is recorded in the picture (see ezfig save):
+                    # one render per figure and crop
+                    crop = (shape.crop_left, shape.crop_top, shape.crop_right, shape.crop_bottom)
+                    if not any(crop):
+                        crop = None
+                    key = (key, crop)
                 if key not in rendered:
-                    out = os.path.join(tmp_dir, f'fig_{len(rendered)}.svg')
+                    out = os.path.join(tmp_dir, f'fig_{len(rendered)}.' + ('qpic' if kind == 'pdf' else 'svg'))
                     try:
-                        _render_pyf_subprocess(key, out, PYF_RENDER_DPI)
-                        renderer = QSvgRenderer(out)
+                        _render_pyf_subprocess(os.path.abspath(shape.source_pyf), out, PYF_RENDER_DPI, crop=crop)
+                        if kind == 'pdf':
+                            renderer = PictureFigure(out)
+                        else:
+                            renderer = SvgFigureEmbed(out, len(self._svg_embeds))
+                            self._svg_embeds.append(renderer)
                         rendered[key] = renderer if renderer.isValid() else None
                     except Exception:
                         rendered[key] = None
@@ -685,6 +824,7 @@ class PosterCanvas(QWidget):
             for shape in touched:
                 shape._vector = None
             self._vector_export_active = False
+            self._svg_embeds = []
             import shutil
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -807,7 +947,8 @@ class PosterCanvas(QWidget):
 
         resolution = contextlib.nullcontext() if filetype in ('pdf', 'svg') \
             else self._high_res_pyf_images(self.pages, dpi)
-        with resolution, self._vector_pyf_images(self.pages if filetype in ('pdf', 'svg') else []):
+        with resolution, self._vector_pyf_images(self.pages if filetype in ('pdf', 'svg') else [],
+                                                 kind='svg' if filetype == 'svg' else 'pdf'):
             if filetype == 'pdf':
                 self.export_album_pdf(out_path, dpi=dpi)
                 return {'mode': 'single_file', 'path': str(out_path), 'page_count': len(self.pages)}
@@ -1868,20 +2009,36 @@ class PosterCanvas(QWidget):
 
         if filetype == 'svg':
             generator = QSvgGenerator()
-            generator.setFileName(str(path))
+            # written to memory: the figures are put in before the file is
+            # written (and QSvgGenerator keeps a file open until it is deleted)
+            svg_buffer = QBuffer()
+            svg_buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+            generator.setOutputDevice(svg_buffer)
+            # the page's real size in mm (Qt's default 72 dpi wrote a 210 mm
+            # page as 437 mm at 150 dpi)
+            generator.setResolution(int(round(dpi)))
             generator.setSize(QSize(page_w_px, page_h_px))
             generator.setViewBox(QRectF(0, 0, page_w_px, page_h_px))
             if title:
                 generator.setTitle(title)
             if description:
                 generator.setDescription(description)
-            with self._vector_pyf_images([self.current_page]):
+            with self._vector_pyf_images([self.current_page], kind='svg'):
                 # Qt's SVG engine ignores drawPixmap source rects (crops)
                 from pyfigures.gui.svg_painter import CroppingPainter
                 painter = CroppingPainter(generator)
                 painter.setRenderHint(QPainter.Antialiasing, True)
                 self._paint_content(painter, mm_to_px)
                 painter.end()
+                svg_text = bytes(svg_buffer.data()).decode('utf-8')
+                svg_buffer.close()
+                # figures drawn as placeholders: put their own SVG in (real text)
+                if getattr(self, '_svg_embeds', None):
+                    svg_text = embed_svg_figures(svg_text, self._svg_embeds)
+                from pyfigures.gui.svg_painter import real_font_families
+                svg_text = real_font_families(svg_text)
+                with open(str(path), 'w', encoding='utf-8') as f:
+                    f.write(svg_text)
         elif filetype == 'pdf':
             writer = QPdfWriter(str(path))
             writer.setPageSize(QPageSize(QSizeF(self.page_width_mm, self.page_height_mm), QPageSize.Millimeter))

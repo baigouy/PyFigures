@@ -98,7 +98,7 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              "tidy_text", "letter_placement", "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
-             "checks", "consolidate", "template", "fill"}
+             "checks", "consolidate", "download_remote", "template", "fill"}
 _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
@@ -502,6 +502,11 @@ def _check_top(recipe, base):
         c = recipe["consolidate"]
         if not isinstance(c, bool) and not (isinstance(c, str) and c.lower().endswith(".pyf")):
             raise RecipeError("'consolidate' must be true or the .pyf to write the bundle to")
+    if "download_remote" in recipe:
+        if not isinstance(recipe["download_remote"], bool):
+            raise RecipeError("'download_remote' must be true or false")
+        if not recipe.get("consolidate"):
+            raise RecipeError("'download_remote' applies to 'consolidate': add consolidate: true")
     if "template" in recipe:
         src = _resolve(base, recipe["template"])
         if not src.lower().endswith(".pyf") or not os.path.isfile(src):
@@ -668,6 +673,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "exports": recipe.get("exports") or [],
         "checks": recipe.get("checks") or [],
         "consolidate": recipe.get("consolidate", False),
+        "download_remote": recipe.get("download_remote", False),
         "template": _resolve(base, recipe["template"]) if "template" in recipe else None,
         "fill": fill,
     }
@@ -1206,8 +1212,11 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
         dest = out if plan["consolidate"] is True else _resolve(base, plan["consolidate"])
         if os.path.dirname(dest):
             os.makedirs(os.path.dirname(dest), exist_ok=True)
-        r = json.loads(_ok(M.consolidate_figure(out, dest), "consolidate"))
+        r = json.loads(_ok(M.consolidate_figure(out, dest, download_remote=plan["download_remote"]),
+                           "consolidate"))
         bundle = r["files_folder"]
+        for miss in r.get("not_downloaded") or []:
+            warnings.append(f"remote image kept as a link (download failed): {miss['url']} ({miss['error']})")
 
     n_rows = len(plan["rows"])
     width_desc = (f"{plan['journal']} ({plan['column']})" if plan["journal"] else

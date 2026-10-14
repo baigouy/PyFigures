@@ -35,7 +35,7 @@ import argparse
 import sys
 
 _RASTER_EXTS = {".png", ".tif", ".tiff", ".jpg", ".jpeg"}
-_VECTOR_EXTS = {".svg", ".pdf"}
+_VECTOR_EXTS = {".svg", ".pdf", ".qpic"}     # .qpic: Qt paint commands (poster PDF export)
 SUPPORTED_EXTS = _RASTER_EXTS | _VECTOR_EXTS
 
 
@@ -55,7 +55,7 @@ def _make_app():
     return app
 
 
-def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None) -> str:
+def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, crop=None) -> str:
     """Render *pyf_path* to *out_path*, returning the absolute output path.
 
     Raises FileNotFoundError if the .pyf does not exist, ValueError for an
@@ -108,7 +108,10 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None) -
         panel.get_dpi = (lambda _dpi=int(dpi): _dpi)
 
         panel.update_size()
-        panel.save(out_path)
+        if crop is not None:
+            panel.save(out_path, crop=crop)
+        else:
+            panel.save(out_path)
     finally:
         # Mark clean and hide (do NOT deleteLater / close: closeEvent runs the
         # save-prompt + os._exit path, and an explicit delete without a running
@@ -135,6 +138,9 @@ def _main(argv=None) -> int:
     ap.add_argument("out_path", help="output image (.png/.tif/.jpg/.svg/.pdf)")
     ap.add_argument("--dpi", type=int, default=300,
                     help="output DPI for raster formats (default 300)")
+    ap.add_argument("--crop", default=None,
+                    help=".qpic only: left,top,right,bottom fractions of the figure to clip away "
+                         "(the poster designer's crop, recorded in the picture)")
     args = ap.parse_args(argv)
     # nothing is ever freed: Python freeing Qt objects (the window, its image
     # loaders) without an event loop crashed the process natively (access
@@ -143,7 +149,8 @@ def _main(argv=None) -> int:
     import gc
     gc.disable()
     try:
-        out = render_pyf(args.pyf_path, args.out_path, dpi=args.dpi, _keep_alive=_KEEP_ALIVE)
+        crop = tuple(float(v) for v in args.crop.split(",")) if args.crop else None
+        out = render_pyf(args.pyf_path, args.out_path, dpi=args.dpi, _keep_alive=_KEEP_ALIVE, crop=crop)
     except Exception as e:
         sys.stderr.write(f"ERROR: {type(e).__name__}: {e}\n")
         return 1

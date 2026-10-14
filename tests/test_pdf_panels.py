@@ -48,6 +48,23 @@ def _orange_fraction(rgb):
     return float(((r > 200) & (g > 90) & (g < 170) & (b < 80)).mean())
 
 
+def _render_svg(svg_text, dpi=100):
+    from qtpy.QtCore import QRectF
+    from qtpy.QtGui import QImage, QPainter, QColor
+    from batoolset.drawings.svg_clip_renderer import ClippingSvgRenderer
+    r = ClippingSvgRenderer(svg_text.encode("utf-8"))
+    vb = r.viewBoxF()
+    w, h = int(round(vb.width() * dpi / 72)), int(round(vb.height() * dpi / 72))
+    img = QImage(w, h, QImage.Format.Format_RGB888)
+    img.fill(QColor("white"))
+    p = QPainter(img)
+    r.render(p, QRectF(0, 0, w, h))
+    p.end()
+    ptr = img.constBits()
+    ptr.setsize(img.sizeInBytes())
+    return np.frombuffer(ptr, np.uint8).reshape(h, img.bytesPerLine())[:, :w * 3].reshape(h, w, 3).copy()
+
+
 def _render(path, dpi=100):
     with fitz.open(path) as doc:
         pix = doc[0].get_pixmap(dpi=dpi, alpha=False)
@@ -79,6 +96,12 @@ def test_pdf_panel_is_clipped_in_every_export(qapp, tmp_path, plot_pdf, ext):
     if ext == "png":
         from PIL import Image
         img = np.asarray(Image.open(out).convert("RGB"))
+    elif ext == "svg":
+        # the PDF page's own SVG is embedded with its clip paths (no image):
+        # rendered with ClippingSvgRenderer, as MuPDF ignores SVG clip paths
+        svg = open(out, encoding="utf-8").read()
+        assert "<clipPath" in svg and "<image" not in svg
+        img = _render_svg(svg, dpi=100)
     else:
         img = _render(out)
     _check_clipped(img)

@@ -14,6 +14,23 @@ from qtpy.QtCore import QPoint, QPointF, QRect, QRectF
 from qtpy.QtGui import QImage, QPainter, QPixmap
 
 
+def real_font_families(svg_text):
+    """Qt's SVG writer names the font that was asked for ("Sans Serif", an
+    alias), not the one Qt drew with: returns *svg_text* with the real family
+    (e.g. Arial), so Illustrator, Inkscape and browsers use the same font."""
+    import re
+    from qtpy.QtGui import QFont, QFontInfo
+    resolved = {}
+
+    def real(m):
+        name = m.group(1)
+        if name not in resolved:
+            resolved[name] = QFontInfo(QFont(name)).family() or name
+        return f'font-family="{resolved[name]}"'
+
+    return re.sub(r'font-family="([^"]+)"', real, svg_text)
+
+
 def _source_rect(src):
     if isinstance(src, QRectF):
         return QRect(int(round(src.x())), int(round(src.y())),

@@ -8,7 +8,7 @@ to this module in a subprocess (keeping the server Qt-free and crash-isolated),
 mirroring pyfigures/gui/render_headless.py.
 
     python -m pyfigures.gui.headless_ops video       <pyf> <out.mp4> [--frame-mode freeze|blank] [--bg R,G,B]
-    python -m pyfigures.gui.headless_ops consolidate <pyf> <out.pyf>
+    python -m pyfigures.gui.headless_ops consolidate <pyf> <out.pyf> [--download-remote]
     python -m pyfigures.gui.headless_ops editable    <pyf> <out.pptx|out.jsx> --format pptx|jsx
 """
 from __future__ import annotations
@@ -164,9 +164,13 @@ def fonts_report(out_json: str) -> str:
     return out_json
 
 
-def consolidate(pyf_path: str, out_pyf: str) -> str:
+def consolidate(pyf_path: str, out_pyf: str, download_remote: bool = False, failed=None) -> str:
     """Copy every referenced image next to *out_pyf* (in a .files folder) and
-    save a self-contained figure — the GUI's Save & Consolidate, headless."""
+    save a self-contained figure — the GUI's Save & Consolidate, headless.
+
+    Remote images (http(s), OME-Zarr URLs, OMERO links) stay links, unless
+    *download_remote*: then they are saved into the bundle too. Downloads that
+    fail keep their link and are appended to *failed* as (url, error)."""
     out_pyf = _os.path.abspath(out_pyf)
     if not out_pyf.lower().endswith(".pyf"):
         raise ValueError("consolidation output must end in .pyf")
@@ -179,8 +183,11 @@ def consolidate(pyf_path: str, out_pyf: str) -> str:
         panel = gui.paint.EZFIG_panel
         names, _imgs = panel.get_full_list_ofimages2D_for_consolidation()
         files_dir = smart_name_parser(out_pyf, "TA") + ".files"
-        names, consolidated = smartly_consolidate_files_to_reduce_dupes(names, files_dir)
-        consolidate_files2(files_dir, names, consolidated)
+        names, consolidated = smartly_consolidate_files_to_reduce_dupes(names, files_dir,
+                                                                        download_remote=download_remote)
+        not_downloaded = consolidate_files2(files_dir, names, consolidated, download_remote=download_remote)
+        if failed is not None:
+            failed.extend(not_downloaded or [])
         gui._save_state_to_file(out_pyf)
         gui.reload_state(out_pyf, append=False, skip_add_to_stack=True)
         # point every panel at its copy (as the GUI's Save & Consolidate does);
@@ -216,6 +223,8 @@ def _main(argv=None) -> int:
     c = sub.add_parser("consolidate")
     c.add_argument("pyf_path")
     c.add_argument("out_path")
+    c.add_argument("--download-remote", action="store_true",
+                   help="also save remote images (http(s), OME-Zarr URLs, OMERO links) into the bundle")
 
     lx = sub.add_parser("latex")
     lx.add_argument("pyf_path")
@@ -248,7 +257,12 @@ def _main(argv=None) -> int:
         elif args.op == "editable":
             out = export_editable(args.pyf_path, args.out_path, args.format)
         else:
-            out = consolidate(args.pyf_path, args.out_path)
+            failed = []
+            out = consolidate(args.pyf_path, args.out_path, download_remote=args.download_remote,
+                              failed=failed)
+            # one line per remote image that stayed a link (read by the MCP tool)
+            for url, err in failed:
+                out += f"\nNOT_DOWNLOADED\t{url}\t{err}"
     except Exception as e:
         sys.stderr.write(f"ERROR: {type(e).__name__}: {e}\n")
         return 1

@@ -168,6 +168,24 @@ logger = TA_logger()
 __DEBUG_SELECTION__ = False
 
 
+def _finish_svg(svg_path, collector=None):
+    """The written SVG: vector panels embedded from their own source
+    (*collector*, svg_embed), and real font families (svg_painter)."""
+    from pyfigures.gui.svg_painter import real_font_families
+    try:
+        with open(svg_path, encoding='utf-8') as f:
+            text = f.read()
+    except OSError:
+        return
+    new = text
+    if collector is not None:
+        new = collector.embed(new)
+    new = real_font_families(new)
+    if new != text:
+        with open(svg_path, 'w', encoding='utf-8') as f:
+            f.write(new)
+
+
 # can I use this also to render offline a drawing on an image --> try it maybe
 # how do I know the size of this stuff ??? --> need update its size according to its content and probably the zoom --> TODO
 
@@ -651,7 +669,10 @@ class MyWidget(QWidget):
         if window is not self and hasattr(window, 'wait_for_images'):
             window.wait_for_images()
 
-    def save(self, path, filetype=None, title=None, description=None, svg_dpi=SVG_INKSCAPE):
+    def save(self, path, filetype=None, title=None, description=None, svg_dpi=SVG_INKSCAPE, crop=None):
+        """*crop* (.qpic only): (left, top, right, bottom) fractions of the
+        figure clipped away in the recording. Replaying a QPicture also
+        replays its clip-state changes, which would undo a clip set around it."""
         if path is None or not isinstance(path, str):
             logger.error('please provide a valide path to save the image "' + str(path) + '"')
             return
@@ -661,11 +682,31 @@ class MyWidget(QWidget):
                 filetype = 'svg'
             elif path.lower().endswith('.pdf'):
                 filetype = 'pdf'
+            elif path.lower().endswith('.qpic'):
+                filetype = 'qpic'
             else:
                 filetype = os.path.splitext(path)[1]
         # dpi = 72  # 300 # inkscape 96 ? check for illustrator --> check
 
-        if filetype in ['svg','pdf']:
+        picture = None
+        if filetype == 'qpic':
+            # the paint commands themselves (QPicture), replayed by the poster
+            # designer into its PDF: text stays text (Qt's SVG renderer turns
+            # it into outlines), images keep their resolution, clips are kept.
+            # 1 unit = 1 pt, like the PDF/SVG exports.
+            import math
+            from qtpy.QtGui import QPicture
+            bounds = self.updateBounds()
+            picture = QPicture()
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            painter = QPainter(picture)
+            if crop is not None:
+                left, top, right, bottom = (float(v) for v in crop)
+                w = float(bounds.width())
+                h = float(bounds.height())
+                painter.setClipRect(QRectF(left * w, top * h, (1 - left - right) * w, (1 - top - bottom) * h))
+            painter.translate(-bounds.x(), -bounds.y())
+        elif filetype in ['svg','pdf']:
             QApplication.setOverrideCursor(Qt.WaitCursor)
             QApplication.processEvents()
             # The page is the figure itself, at its true physical size: canvas
@@ -764,14 +805,35 @@ class MyWidget(QWidget):
         painter.setRenderHint(QPainter.TextAntialiasing)
 
         fig_images = []
+        import contextlib
+        from batoolset.drawings import svg_embed
+        # SVG: vector panels are embedded from their own SVG source (text and
+        # clip paths kept), see batoolset.drawings.svg_embed
+        embedding = svg_embed.collecting() if filetype == 'svg' else contextlib.nullcontext()
         try:
             all_shapes = flatten_iterable(self.shapes_to_draw)
             fig_images = [s for s in all_shapes if hasattr(s, 'enter_export_mode')]
             for img in fig_images:
                 img.enter_export_mode()
-            self.paint(painter)
-            painter.end()
-            if filetype not in ['svg', 'pdf']:
+            with embedding as collector:
+                self.paint(painter)
+                painter.end()
+            if filetype == 'svg':
+                # QSvgGenerator keeps its file open until it is deleted
+                painter = None
+                generator = None
+                _finish_svg(path, collector)
+            if picture is not None:
+                if not picture.save(path):
+                    raise OSError(f'could not write {path}')
+                # QPicture does not save a bounding rect (it recomputes the
+                # drawn extent): the figure's size, and the picture's own dpi
+                # (replaying scales by device dpi / picture dpi), go beside it
+                import json
+                with open(path + '.json', 'w', encoding='utf-8') as f:
+                    json.dump({'width_pt': float(bounds.width()), 'height_pt': float(bounds.height()),
+                               'picture_dpi': picture.logicalDpiX()}, f)
+            elif filetype not in ['svg', 'pdf']:
                 # Try Qt-native save first (requires pyqt6-plugins for TIF support).
                 # Fall back to tifffile for TIF/TIFF if the Qt plugin is unavailable.
                 if not image.save(path) and filetype.lower() in {'.tif', '.tiff'}:

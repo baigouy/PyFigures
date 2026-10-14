@@ -288,10 +288,20 @@ a `.pyf` dropped onto the page is shown from a 300 DPI flatten (see
 
 - **PDF and SVG** (plain export, whole-document PDF and print-ready PDF/SVG)
   draw the figure itself, re-rendered as vectors from its `.pyf`: text,
-  plots, arrows, scale bars and SVG drawings stay vectors (text as outlines)
-  and the micrographs are embedded at their **native resolution**, exactly
-  as when the figure is exported on its own. Crops and rotations made on the
-  poster apply as usual.
+  plots, arrows, scale bars and SVG drawings stay vectors and the
+  micrographs are embedded at their **native resolution**, exactly as when
+  the figure is exported on its own. Crops and rotations made on the poster
+  apply as usual.
+  - In **PDF** the figure's own drawing commands are replayed (a QPicture
+    recorded by `render_headless … out.qpic`), so its text stays **real,
+    selectable and searchable text** in the figure's fonts. A poster crop is
+    recorded into that picture (`--crop`), because replaying a picture also
+    replays its clip changes.
+  - In **SVG** the figure's own SVG export is embedded in the poster file:
+    its text is real `<text>` (in the font actually used, not Qt's alias),
+    placed under the poster's transform, with the poster crop as an SVG
+    `clipPath`. (Qt writes a placeholder rectangle in a unique colour, which
+    `embed_svg_figures` then replaces.)
 - **TIFF/EPS print-ready** export re-renders the figure from its `.pyf` at
   whatever DPI its on-page size needs, if the flatten would otherwise be the
   sharpness ceiling (skipped when it is already sharp enough).

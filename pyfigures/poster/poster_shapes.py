@@ -289,7 +289,7 @@ class PosterImage:
                           img_local.top() - self.crop_top * full_h, full_w, full_h)
             painter.save()
             painter.setClipRect(img_local, Qt.IntersectClip)
-            self._vector.render(painter, full)
+            self._vector.render(painter, full, img_local)
             painter.restore()
         else:
             pm = self.pixmap()

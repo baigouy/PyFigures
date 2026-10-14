@@ -5117,6 +5117,21 @@ class EZFIG_GUI(QMainWindow):
             f"{n} change(s) between {os.path.basename(other)} (old) and the current "
             f"figure (new).\nOpened the visual diff in your browser.")
 
+    def _ask_download_remote(self, n_remote):
+        """Save and Consolidate: also download the figure's remote images? (default: no)"""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle('Remote images')
+        box.setText(f'This figure uses {n_remote} remote image(s) (web links, OME-Zarr or OMERO).\n\n'
+                    'Download them into the bundle too?')
+        box.setInformativeText('No: they stay links (the consolidated figure needs the network, and an '
+                               'OMERO login for private images).\nYes: OMERO and OME-Zarr images are saved '
+                               'as local OME-Zarr (what the panel shows, at full bit depth), other links as '
+                               'the file itself.')
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        return box.exec() == QMessageBox.StandardButton.Yes
+
     def save_and_consolidate(self):
         # TODO add a warning/warnings not to mix and or pick files manually
         # TODO ask for a file out for consolidation
@@ -5136,16 +5151,33 @@ class EZFIG_GUI(QMainWindow):
 
             save_output_folder = smart_name_parser(output_filename, 'TA') + '.files'
 
+            # remote images (URLs, OME-Zarr on a server, OMERO links) stay
+            # links unless the user asks to download them (default: no)
+            download_remote = False
+            n_remote = len({f for f in full_list_of_filenames_to_consolidate
+                            if isinstance(f, str) and f.lower().startswith(('http://', 'https://'))})
+            if n_remote:
+                download_remote = self._ask_download_remote(n_remote)
+
             # full_list_of_filenames_to_consolidate, consolidated_file_list = smartly_consolidate_files_to_reduce_dupes(full_list_of_filenames_to_consolidate,'mock_folder.files')
             full_list_of_filenames_to_consolidate, consolidated_file_list = smartly_consolidate_files_to_reduce_dupes(
-                full_list_of_filenames_to_consolidate, save_output_folder)
+                full_list_of_filenames_to_consolidate, save_output_folder, download_remote=download_remote)
             # print('debug1', len(full_list_of_filenames_to_consolidate) == len(consolidated_file_list))
             # print('debug2', len(full_list_of_filenames_to_consolidate), len(consolidated_file_list))
 
             # for f1, f2 in zip(full_list_of_filenames_to_consolidate, consolidated_file_list):
             #     print(f1, '->', f2)
 
-            consolidate_files2(save_output_folder, full_list_of_filenames_to_consolidate, consolidated_file_list)
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                not_downloaded = consolidate_files2(save_output_folder, full_list_of_filenames_to_consolidate,
+                                                    consolidated_file_list, download_remote=download_remote)
+            finally:
+                QApplication.restoreOverrideCursor()
+            if not_downloaded:
+                QMessageBox.warning(self, 'Some remote images were not downloaded',
+                                    'These images could not be downloaded and stay links:\n\n'
+                                    + '\n'.join(f'{url}\n    {err}' for url, err in not_downloaded))
 
             # clone all and save it as a .pyf file
 
