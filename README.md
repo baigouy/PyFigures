@@ -158,7 +158,7 @@ Alternatively, you can install the software as a standalone executable. This doe
 
 **Supported Macs:** the macOS executables include video support, which needs **macOS 14 (Sonoma) or newer on Apple Silicon** Macs and macOS 11 or newer on Intel Macs. On older Apple Silicon systems the app still opens, but movies cannot be read or exported; older systems are not supported (install with Conda/pip instead, see above).
 
-**First launch on a Mac:** the app is not signed by Apple, so macOS refuses to open it the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once).
+**First launch on a Mac:** the app is not signed by Apple, so macOS refuses to open it the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once). On macOS 14 or older, right-click the app → **Open** → **Open** also works. Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/PyFigures.app`.
 
 # Third party libraries
 

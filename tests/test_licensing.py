@@ -34,6 +34,23 @@ def _collect():
     return mod
 
 
+def test_gnu_texts_fall_back_to_spdx_when_gnu_org_times_out(monkeypatch):
+    C = _collect()
+    asked = []
+
+    def fake_get(url, tries=3, timeout=120):
+        asked.append(url)
+        if "gnu.org" in url:
+            raise OSError("timed out")
+        return b"GNU GENERAL PUBLIC LICENSE Version 3"
+
+    monkeypatch.setattr(C, "_get", fake_get)
+    assert C._gnu_text("GNU GENERAL PUBLIC LICENSE, Version 3").startswith("GNU GENERAL")
+    assert asked == ["https://www.gnu.org/licenses/gpl-3.0.txt",
+                     "https://raw.githubusercontent.com/spdx/license-list-data/main/text/GPL-3.0-only.txt"]
+    assert set(C.GNU_SPDX_IDS) == set(C.GNU_TEXTS)
+
+
 def test_sources_are_packed_per_group_and_deduplicated(tmp_path):
     C = _collect()
     src = tmp_path / "src"

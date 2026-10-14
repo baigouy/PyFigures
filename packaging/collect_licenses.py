@@ -42,6 +42,17 @@ GNU_TEXTS = {
     "GNU GENERAL PUBLIC LICENSE, Version 2": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
     "GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1": "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt",
 }
+AGPL_TITLE = "GNU AFFERO GENERAL PUBLIC LICENSE, Version 3"   # only included if an AGPL component is bundled
+# the same texts from the SPDX licence list, used when gnu.org does not answer
+# (it often times out)
+SPDX_TEXT = "https://raw.githubusercontent.com/spdx/license-list-data/main/text/{id}.txt"
+GNU_SPDX_IDS = {
+    "GNU GENERAL PUBLIC LICENSE, Version 3": "GPL-3.0-only",
+    "GNU AFFERO GENERAL PUBLIC LICENSE, Version 3": "AGPL-3.0-only",
+    "GNU LESSER GENERAL PUBLIC LICENSE, Version 3": "LGPL-3.0-only",
+    "GNU GENERAL PUBLIC LICENSE, Version 2": "GPL-2.0-only",
+    "GNU LESSER GENERAL PUBLIC LICENSE, Version 2.1": "LGPL-2.1-only",
+}
 # PyQt6-Qt6 is a binary-only wheel of Qt: its source is the Qt release itself
 QT_SOURCE = "https://download.qt.io/archive/qt/{mm}/{v}/single/qt-everywhere-src-{v}.tar.xz"
 # PyAV's FFmpeg: PyAV names the pyav-ffmpeg release it links against, and
@@ -75,11 +86,19 @@ def _ssl_context():
         return None
 
 
-def _get(url, tries=3):
+def _gnu_text(title):
+    """Full text of a GNU licence: gnu.org, else the SPDX licence list."""
+    try:
+        return _get(GNU_TEXTS[title], tries=1, timeout=30).decode("utf-8")
+    except Exception:
+        return _get(SPDX_TEXT.format(id=GNU_SPDX_IDS[title])).decode("utf-8")
+
+
+def _get(url, tries=3, timeout=120):
     ctx = _ssl_context() if url.startswith("https:") else None
     for i in range(tries):
         try:
-            with urllib.request.urlopen(url, timeout=120, context=ctx) as r:
+            with urllib.request.urlopen(url, timeout=timeout, context=ctx) as r:
                 return r.read()
         except Exception:
             if i == tries - 1:
@@ -251,8 +270,10 @@ def notices(out_dir):
         for c in ff:
             body.append(f"{c['name']} {c['version']}".strip() + f"  -  {c['license']}  -  {c['source']}")
     texts = []
-    for title, url in GNU_TEXTS.items():
-        texts += ["", "=" * 72, title, "=" * 72, _get(url).decode("utf-8")]
+    for title in GNU_TEXTS:
+        if title == AGPL_TITLE and not agpl:
+            continue
+        texts += ["", "=" * 72, title, "=" * 72, _gnu_text(title)]
     with open(os.path.join(out_dir, "THIRD_PARTY_LICENSES.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(head + body + texts) + "\n")
 
