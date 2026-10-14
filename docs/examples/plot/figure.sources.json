@@ -1,0 +1,17 @@
+{
+ "version": 1,
+ "figure": "figure.pyf",
+ "saved": "2026-10-14T15:09:50",
+ "files": {
+  "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\counts.csv": {
+   "size": 202,
+   "mtime_ns": 1791983287419115500,
+   "sha256": "b851c34c70f8153d18c7fc007d07d40eeeab82234b005eedb05f005873483cdb"
+  },
+  "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\nuclei.tif": {
+   "size": 131328,
+   "mtime_ns": 1791983287377402300,
+   "sha256": "46a6b13594cc58d68c0c9142b9acb9fa59044e4bd1604c857867611c03340125"
+  }
+ }
+}

@@ -1,0 +1,5 @@
+output: figure.pyf
+width_mm: 120
+rows:
+  - - image: ../data/skin.jpg
+      zoom: {box: [700, 380, 160, 120], corner: bottom right, size: 0.42}

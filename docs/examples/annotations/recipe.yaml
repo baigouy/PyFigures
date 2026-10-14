@@ -1,0 +1,11 @@
+output: figure.pyf
+width_mm: 89
+rows:
+  - - image: ../data/mitosis.png
+      crop: {left: 100, right: 156, top: 150, bottom: 106}
+      arrows:                      # (x, y) in the image's own pixels
+        - {at: [334, 271], from: w, color: yellow}
+        - {at: [187, 316], from: nw, color: cyan}
+      rois:
+        - {rect: [206, 268, 34, 34], color: "#ff4040", stroke: 2}
+      text: ["Mitosis", {text: "n = 3", placement: bottom right}]

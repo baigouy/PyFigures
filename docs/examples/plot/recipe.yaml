@@ -1,0 +1,6 @@
+output: figure.pyf
+width_mm: 140
+rows:
+  - - {image: ../data/nuclei.tif, lut: magenta, px_to_unit: 0.29,
+       scale_bar: {units: 20, unit: "µm"}}
+    - {plot: ../data/counts.csv, kind: box, ylabel: "cells / field", title: "Rescue"}

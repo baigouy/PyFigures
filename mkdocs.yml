@@ -1,0 +1,75 @@
+site_name: PyFigures
+site_description: Publication-ready scientific figures and posters, from a window, recipes or an MCP server.
+site_url: https://pyfigures.readthedocs.io/
+repo_url: https://github.com/baigouy/PyFigures
+edit_uri: blob/main/
+docs_dir: docs
+# pages as page.html, so the user guide's relative image paths keep working
+use_directory_urls: false
+
+theme:
+  name: readthedocs
+  navigation_depth: 3
+  collapse_navigation: false
+
+exclude_docs: |
+  capture_screenshots.py
+  __pycache__/
+  examples/build_examples.py
+  pyfigures_user_guide.html
+
+markdown_extensions:
+  - toc:
+      permalink: true
+      # anchors as on GitHub, where the pages' own links were written
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - tables
+  - admonition
+  - attr_list
+  - md_in_html
+  - fenced_code
+  - codehilite:
+      guess_lang: false
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - gen_ref_pages.py
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_root_heading: true
+            show_source: false
+            docstring_style: google
+            members_order: source
+            show_if_no_docstring: false
+
+nav:
+  - Home: index.md
+  - User guide: user_guide.md
+  - Examples:
+      - examples/index.md
+      - examples/basic.md
+      - examples/channels.md
+      - examples/annotations.md
+      - examples/zoom.md
+      - examples/timelapse.md
+      - examples/plot.md
+      - examples/latex.md
+      - examples/poster.md
+  - Recipes (YAML / JSON): RECIPES.md
+  - MCP server: MCP_SERVER.md
+  - Poster designer: poster.md
+  - Review workflow: REVIEW_WORKFLOW.md
+  - Licensing: LICENSING.md
+  - API reference:
+      - api/index.md
+      - Recipes: api/pyfigures.recipe.md
+      - Equations: api/pyfigures.equations.md
+      - Headless rendering: api/pyfigures.gui.render_headless.md

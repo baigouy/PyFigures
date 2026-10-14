@@ -1,0 +1,9 @@
+output: figure.pyf
+width_mm: 180
+rows:
+  - - montage: ../data/transport.tif
+      axis: t
+      frames: "0:15:3"
+      interval: 2
+      unit: min
+      stamps: true

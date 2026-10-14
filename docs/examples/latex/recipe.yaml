@@ -1,0 +1,11 @@
+output: figure.pyf
+width_mm: 150
+rows:
+  - - image: ../data/membrane.tif
+      lut: green
+      text: ['$\Delta F/F_0$ at $t = 12\,\mathrm{min}$']
+    - image: ../data/nuclei.tif
+      lut: magenta
+      text: ['$D = 0.12\,\mu\mathrm{m}^2\,\mathrm{s}^{-1}$']
+  - - equation: '\frac{\Delta F}{F_0} = \frac{F - F_0}{F_0}, \qquad D = \frac{\langle \Delta r^2 \rangle}{4\,\Delta t}, \qquad \tau_{1/2} = \frac{\ln 2}{k_\mathrm{off}}'
+      font_size: 12

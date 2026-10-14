@@ -1,0 +1,11 @@
+output: poster.pyfposter
+page: A4
+render: poster.png
+render_dpi: 100
+images:
+  - {image: ../basic/figure.pyf, x_mm: 15, y_mm: 32, width_mm: 180}
+  - {image: ../data/skin.jpg, x_mm: 15, y_mm: 218, width_mm: 90}
+text:
+  - {html: "<b>Cell division in human cells</b>", style: h1, x_mm: 15, y_mm: 12}
+  - {html: "Nuclei imaged at 0.2 µm per pixel.<br>Left: H&amp;E-stained skin.",
+     style: body, x_mm: 112, y_mm: 240, width_mm: 80}

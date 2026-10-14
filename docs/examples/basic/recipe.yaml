@@ -1,0 +1,9 @@
+output: figure.pyf
+journal: nature
+column: single
+defaults:
+  px_to_unit: 0.2                  # µm per pixel
+  scale_bar: {units: 10, unit: "µm"}
+rows:
+  - - {image: ../data/mitosis.png, crop: {right: 256}}
+    - {image: ../data/mitosis.png, crop: {left: 256}, lut: magenta}

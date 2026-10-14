@@ -1,0 +1,39 @@
+[
+  {
+    "source": "data_plot",
+    "panel_label": null,
+    "csv": "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\counts.csv",
+    "kind": "box",
+    "test": "One-way ANOVA + Tukey HSD",
+    "omnibus": {
+      "stat_name": "F",
+      "stat": 41.73333493904266,
+      "p": 1.2108585196851988e-09
+    },
+    "correction": "Tukey HSD (family-wise)",
+    "normality": "normal",
+    "comparisons": [
+      {
+        "a": "KO",
+        "b": "Rescue",
+        "p": 1.9117361306220104e-06,
+        "stars": "****",
+        "p_text": "p < 0.0001"
+      },
+      {
+        "a": "KO",
+        "b": "WT",
+        "p": 1.1004737121567132e-09,
+        "stars": "****",
+        "p_text": "p < 0.0001"
+      },
+      {
+        "a": "Rescue",
+        "b": "WT",
+        "p": 0.04367638696905063,
+        "stars": "*",
+        "p_text": "p = 0.0437"
+      }
+    ]
+  }
+]

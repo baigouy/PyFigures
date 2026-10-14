@@ -1,0 +1,9 @@
+output: figure.pyf
+width_mm: 180
+rows:
+  - - split: [../data/membrane.tif, ../data/nuclei.tif]
+      names: [Membrane, Nuclei]
+      colors: [green, magenta]
+      merge: true
+      px_to_unit: 0.29
+      scale_bar: {units: 20, unit: "µm"}
