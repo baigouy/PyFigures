@@ -188,6 +188,7 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **Qt** (PyQt6-Qt6)      | The Qt libraries under PyQt6                                | https://www.qt.io/                            | LGPL v3            |
 | **pyqt6-plugins**       | Qt image-format plugins (TIFF, ...)                         | https://pypi.org/project/pyqt6-plugins/       | GPL v3             |
 | **batoolset**           | Image I/O and tools (same author)                           | https://pypi.org/project/batoolset/           | BSD                |
+| **batoolset-gui**       | Qt drawing layer of batoolset (same author)                 | https://pypi.org/project/batoolset-gui/       | BSD                |
 | **elasticdeform**       | Image deformation                                           | https://pypi.org/project/elasticdeform/       | BSD                |
 | **imagecodecs**         | Image compression codecs (TIFF, ...)                        | https://pypi.org/project/imagecodecs/         | BSD 3-Clause       |
 | **prettytable**         | Text tables                                                 | https://pypi.org/project/prettytable/         | BSD 3-Clause       |
