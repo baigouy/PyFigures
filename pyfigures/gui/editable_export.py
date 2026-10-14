@@ -22,7 +22,9 @@ Only ``capture_scene`` needs Qt; parsing and both writers are pure Python.
 Limitation: text *inside* data plots (tick labels, axis titles) arrives as
 glyph outlines — Qt draws the plot's SVG text as paths — so it is exact but
 not editable. Every PyFigures label (letters, channel names, scale-bar text,
-annotations) is real, editable text.
+annotations) is real, editable text. ``$…$`` maths in labels is recorded as
+its TeX source (batoolset math_text markers) and becomes a native PowerPoint
+equation (OMML) inside the label's text box, and Unicode text in Illustrator.
 """
 from __future__ import annotations
 
@@ -84,10 +86,18 @@ def capture_scene(panel) -> dict:
     shapes = flatten_iterable(panel.shapes_to_draw)
     fig_images = [s for s in shapes if hasattr(s, "enter_export_mode")]
     try:
+        from batoolset.drawings import math_text
+    except ImportError:
+        math_text = None
+    try:
         for img in fig_images:
             img.enter_export_mode()
+        if math_text is not None:
+            math_text.SOURCE_MARKERS = True        # $…$ recorded as TeX, not outlines
         panel.paint(painter)
     finally:
+        if math_text is not None:
+            math_text.SOURCE_MARKERS = False
         painter.end()
         for img in fig_images:
             img.exit_export_mode()
@@ -407,6 +417,7 @@ def parse_svg(svg_bytes) -> dict:
             items.append(it)
 
     walk(root, _IDENTITY, {})
+    scene["items"] = merge_math_runs(items)
     return scene
 
 
@@ -452,11 +463,78 @@ def _text_item(el, m, st):
     except ValueError:
         bold = False
     color = _color(st.get("fill", "black")) or (0, 0, 0)
-    return {"kind": "text", "text": text, "x": ax, "y": ay,
-            "size": _float(st.get("font-size", 12), 12.0) * _scale_of(m),
-            "family": portable_family(st.get("font-family", "")),
-            "bold": bold, "italic": str(st.get("font-style", "")).lower() in ("italic", "oblique"),
-            "color": color, "rotation": _angle_of(m)}
+    it = {"kind": "text", "text": text, "x": ax, "y": ay,
+          "size": _float(st.get("font-size", 12), 12.0) * _scale_of(m),
+          "family": portable_family(st.get("font-family", "")),
+          "bold": bold, "italic": str(st.get("font-style", "")).lower() in ("italic", "oblique"),
+          "color": color, "rotation": _angle_of(m)}
+    marker = _parse_math_marker(text.strip())
+    if marker is not None:
+        from pyfigures.office_math import latex_to_unicode
+        tex, width = marker
+        it["math"] = tex
+        it["text"] = latex_to_unicode(tex)
+        it["width"] = width * _scale_of(m)
+    return it
+
+
+def _parse_math_marker(text):
+    """(tex, width) of a $…$ formula recorded by batoolset's math_text, or None."""
+    if not text.startswith("PYFMATH:"):
+        return None
+    try:
+        width, hexed = text[len("PYFMATH:"):].split(":", 1)
+        return bytes.fromhex(hexed.strip()).decode("utf-8"), float(width)
+    except ValueError:
+        return None
+
+
+_RUN_KEYS = ("text", "math", "size", "family", "bold", "italic", "color")
+
+
+def _runs(it):
+    if "runs" in it:
+        return it["runs"]
+    run = {k: it.get(k) for k in _RUN_KEYS}
+    run["width"] = text_width(it)
+    return [run]
+
+
+def _same_line(a, b):
+    """b starts on a's baseline, right after a (allowing for estimated widths)."""
+    if abs(((a["rotation"] - b["rotation"]) + 180) % 360 - 180) > 0.5:
+        return False
+    t = math.radians(a["rotation"])
+    dx = b["x"] - a["x"]
+    dy = b["y"] - a["y"]
+    along = dx * math.cos(t) + dy * math.sin(t)
+    across = -dx * math.sin(t) + dy * math.cos(t)
+    size = max(a["size"], b["size"])
+    return abs(across) < 0.35 * size and -0.5 * size <= along <= 1.5 * text_width(a) + size
+
+
+def merge_math_runs(items):
+    """Join each $…$ formula with the label text around it on the same line into
+    one text item whose 'runs' alternate text and maths (in paint order)."""
+    out = []
+    for it in items:
+        prev = out[-1] if out else None
+        if (it["kind"] == "text" and prev is not None and prev["kind"] == "text"
+                and ("math" in it or any(r.get("math") for r in _runs(prev)))
+                and _same_line(prev, it)):
+            runs = _runs(prev) + _runs(it)
+            merged = dict(prev)
+            merged.pop("math", None)
+            merged["runs"] = runs
+            merged["text"] = "".join(r["text"] for r in runs)
+            merged["width"] = sum(r["width"] for r in runs)
+            out[-1] = merged
+            continue
+        if it["kind"] == "text" and "math" in it:
+            it = dict(it)
+            it["runs"] = _runs(it)
+        out.append(it)
+    return out
 
 
 def portable_family(family):
@@ -509,7 +587,10 @@ def assign_groups(scene, rects):
 
 
 def text_width(item):
-    """Approximate advance width of a text run (Arial-like average 0.56 em)."""
+    """Advance width of a text run: exact for formulas and joined runs, else
+    approximated (Arial-like average 0.56 em)."""
+    if "width" in item:
+        return max(1.0, item["width"])
     return max(1.0, 0.56 * item["size"] * len(item["text"]))
 
 
@@ -629,16 +710,61 @@ def _pptx_text(shapes, it, emu, RGBColor, Pt, MSO_AUTO_SIZE):
     tf.word_wrap = False
     tf.auto_size = MSO_AUTO_SIZE.NONE
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
-    run = tf.paragraphs[0].add_run()
-    run.text = it["text"]
-    f = run.font
-    f.name = it["family"]
-    f.size = Pt(round(it["size"] * 2) / 2)
-    f.bold = it["bold"]
-    f.italic = it["italic"]
-    f.color.rgb = RGBColor(*it["color"])
+    para = tf.paragraphs[0]
+    for r in _runs(it):
+        if r.get("math") and _pptx_equation(para, r):
+            continue
+        run = para.add_run()
+        run.text = r["text"]
+        f = run.font
+        f.name = r["family"]
+        f.size = Pt(round(r["size"] * 2) / 2)
+        f.bold = r["bold"]
+        f.italic = r["italic"]
+        f.color.rgb = RGBColor(*r["color"])
     if abs(it["rotation"]) > 0.01:
         tb.rotation = it["rotation"] % 360
+
+
+_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_A14_NS = "http://schemas.microsoft.com/office/drawing/2010/main"
+_MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+
+def _pptx_equation(para, run):
+    """Append *run*'s formula to the paragraph as a native PowerPoint equation
+    (OMML in an a14:m block, with a plain-text fallback for old readers).
+    False when the formula cannot be converted."""
+    from lxml import etree
+    from pyfigures.office_math import OMML_NS, latex_to_omml
+    omml = latex_to_omml(run["math"])
+    if omml is None:
+        return False
+    sz = str(int(round(run["size"] * 100)))
+    color = "%02X%02X%02X" % tuple(run["color"])
+    a_rpr = ('<a:rPr xmlns:a="%s" lang="en-US" sz="%s" i="1">'
+             '<a:solidFill><a:srgbClr val="%s"/></a:solidFill>'
+             '<a:latin typeface="Cambria Math" panose="02040503050406030204" pitchFamily="18" charset="0"/>'
+             '</a:rPr>') % (_A_NS, sz, color)
+    math_el = etree.fromstring(omml)
+    for r in math_el.iter("{%s}r" % OMML_NS):
+        t = r.find("{%s}t" % OMML_NS)
+        if t is not None:
+            t.addprevious(etree.fromstring(a_rpr))
+    alt = etree.fromstring(
+        '<mc:AlternateContent xmlns:mc="%s" xmlns:a="%s">'
+        '<mc:Choice xmlns:a14="%s" Requires="a14"><a14:m/></mc:Choice>'
+        '<mc:Fallback><a:r>%s<a:t/></a:r></mc:Fallback>'
+        '</mc:AlternateContent>' % (_MC_NS, _A_NS, _A14_NS, a_rpr.replace(' xmlns:a="%s"' % _A_NS, "")))
+    alt.find(".//{%s}m" % _A14_NS).append(math_el)
+    alt.find(".//{%s}t" % _A_NS).text = run["text"]
+    p = para._p
+    end = p.find("{%s}endParaRPr" % _A_NS)
+    if end is not None:
+        end.addprevious(alt)
+    else:
+        p.append(alt)
+    return True
 
 
 # ---------------------------------------------------------------------------

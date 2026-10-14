@@ -85,16 +85,48 @@ def _drop_command(text, name):
         i = _balanced(text, m.end() - 1)
 
 
-def panel_content(body: str) -> str:
-    """The part of a document body shown as a panel (see module docstring)."""
-    m = re.search(r"\\begin\{(figure|table)\*?\}(\[[^\]]*\])?(.*?)\\end\{\1\*?\}", body, re.S)
-    if m:
-        inner = _drop_command(_drop_command(m.group(3), "caption"), "label")
-        return inner.strip()
-    m = re.search(r"\\begin\{tikzpicture\}.*?\\end\{tikzpicture\}", body, re.S)
-    if m:
-        return m.group(0)
-    return body.strip()
+def candidate_parts(body: str):
+    """The parts of a document body that can be a panel, in order: its figure
+    and table environments (without \\caption / \\label), else its
+    tikzpictures. [(short description, LaTeX)]; empty if it has none."""
+    parts = []
+    counts = {}
+    for m in re.finditer(r"\\begin\{(figure|table)\*?\}(\[[^\]]*\])?(.*?)\\end\{\1\*?\}", body, re.S):
+        kind = m.group(1).capitalize()
+        counts[kind] = counts.get(kind, 0) + 1
+        inner = m.group(3)
+        cap = re.search(r"\\caption\*?\s*(\[[^\]]*\])?\s*\{", inner)
+        caption = ""
+        if cap:
+            caption = inner[cap.end():_balanced(inner, cap.end() - 1) - 1]
+            caption = " ".join(re.sub(r"\\[A-Za-z]+\*?|[{}$]", " ", caption).split())[:60]
+        content = _drop_command(_drop_command(inner, "caption"), "label").strip()
+        parts.append((f"{kind} {counts[kind]}" + (f": {caption}" if caption else ""), content))
+    if not parts:
+        for i, m in enumerate(re.finditer(r"\\begin\{tikzpicture\}.*?\\end\{tikzpicture\}", body, re.S)):
+            parts.append((f"TikZ picture {i + 1}", m.group(0)))
+    return parts
+
+
+def panel_content(body: str, part: int | None = None) -> str:
+    """The part of a document body shown as a panel (see module docstring):
+    candidate *part* (1-based; default the first), or the whole body if the
+    document has no figure, table or tikzpicture."""
+    parts = candidate_parts(body)
+    if not parts:
+        return body.strip()
+    index = 1 if part is None else int(part)
+    if not 1 <= index <= len(parts):
+        raise ValueError(f"part must be between 1 and {len(parts)} (the document has "
+                         f"{len(parts)} figure/table/picture(s))")
+    return parts[index - 1][1]
+
+
+def parts_of(tex_path):
+    """[(description, LaTeX)] of the panel candidates of a .tex document."""
+    with open(tex_path, encoding="utf-8", errors="replace") as f:
+        _, body = split_document(f.read())
+    return candidate_parts(body)
 
 
 def split_document(text: str):
@@ -105,27 +137,30 @@ def split_document(text: str):
     return text[:m.start()], m.group(1)
 
 
-def document_pdf_path(pyf_path, tex_path) -> str:
+def document_pdf_path(pyf_path, tex_path, part=None) -> str:
     from pyfigures.equations import equation_dir
     with open(tex_path, "rb") as f:
-        digest = hashlib.sha1(f.read() + os.path.abspath(tex_path).encode("utf-8")).hexdigest()[:12]
+        key = f.read() + os.path.abspath(tex_path).encode("utf-8") + str(part or 1).encode()
+    digest = hashlib.sha1(key).hexdigest()[:12]
     base = os.path.splitext(os.path.basename(tex_path))[0]
     folder = os.path.join(os.path.dirname(equation_dir(pyf_path)), "latex")
     return os.path.join(folder, f"{re.sub(r'[^A-Za-z0-9_-]+', '_', base)}_{digest}.pdf")
 
 
-def compile_document(tex_path: str, out_pdf: str) -> str:
-    """Compile the panel part of the document *tex_path* to *out_pdf*
-    (cropped). Raises ValueError with LaTeX's message on failure."""
+def compile_document(tex_path: str, out_pdf: str, part: int | None = None) -> str:
+    """Compile the panel part (*part*, 1-based; default the first) of the
+    document *tex_path* to *out_pdf* (cropped). Raises ValueError with
+    LaTeX's message on failure."""
     from pyfigures.equations import find_tex_tool
     pdflatex = find_tex_tool("pdflatex")
     if pdflatex is None:
+        from batoolset.tex_install import INSTALL_HINT
         raise ValueError("a .tex document needs a LaTeX installation (pdflatex from TeX Live, "
-                         "MiKTeX or MacTeX)")
+                         f"MiKTeX or MacTeX). {INSTALL_HINT}")
     with open(tex_path, encoding="utf-8", errors="replace") as f:
         text = f.read()
     preamble, body = split_document(text)
-    content = panel_content(body)
+    content = panel_content(body, part)
     doc = "\n".join([
         preamble.rstrip(),
         r"\usepackage{varwidth}",
@@ -145,17 +180,25 @@ def compile_document(tex_path: str, out_pdf: str) -> str:
         with open(job, "w", encoding="utf-8") as f:
             f.write(doc)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        # run in the document's folder: its relative paths (images, \input) resolve there
-        r = subprocess.run([pdflatex, "-interaction=nonstopmode", "-halt-on-error",
-                            f"-output-directory={work}", job],
-                           cwd=src_dir, capture_output=True, text=True, timeout=600,
-                           creationflags=flags)
         pdf = os.path.join(work, "panel.pdf")
-        if r.returncode != 0 or not os.path.isfile(pdf):
+        rounds = 6                     # LaTeX stops at the first missing package
+        for attempt in range(rounds):
+            # run in the document's folder: its relative paths (images, \input) resolve there
+            r = subprocess.run([pdflatex, "-interaction=nonstopmode", "-halt-on-error",
+                                f"-output-directory={work}", job],
+                               cwd=src_dir, capture_output=True, text=True, timeout=600,
+                               creationflags=flags)
             log = ""
             if os.path.isfile(os.path.join(work, "panel.log")):
                 with open(os.path.join(work, "panel.log"), encoding="utf-8", errors="replace") as f:
                     log = f.read()
+            if r.returncode == 0 and os.path.isfile(pdf):
+                break
+            # a package the document uses is missing: TeX Live can add it
+            from batoolset.tex_install import install_missing
+            if attempt == rounds - 1 or not install_missing(log):
+                break
+        if r.returncode != 0 or not os.path.isfile(pdf):
             errors = [ln[1:].strip() for ln in log.splitlines() if ln.startswith("!")]
             detail = "; ".join(errors[:3]) or (r.stdout or r.stderr or "").strip()[-300:]
             raise ValueError(f"LaTeX could not compile {os.path.basename(tex_path)}: {detail}")
@@ -163,32 +206,60 @@ def compile_document(tex_path: str, out_pdf: str) -> str:
         shutil.copyfile(pdf, out_pdf)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    _mark_source(out_pdf, tex_path)
+    _mark_source(out_pdf, tex_path, part)
     return out_pdf
 
 
-def _mark_source(pdf_path, tex_path):
-    """Record the source .tex next to the PDF (<pdf>.source), so the panel can
-    be recompiled from it later."""
+def _mark_source(pdf_path, tex_path, part=None):
+    """Record the source .tex (and part) next to the PDF (<pdf>.source), so
+    the panel can be recompiled from it later."""
+    import json
     try:
         with open(pdf_path + ".source", "w", encoding="utf-8") as f:
-            f.write(os.path.abspath(tex_path))
+            json.dump({"tex": os.path.abspath(tex_path), "part": part}, f)
     except OSError:
         pass
 
 
-def source_of(pdf_path):
-    """The .tex a compiled document panel came from, or None."""
+def _source_record(pdf_path):
+    import json
     try:
         with open(pdf_path + ".source", encoding="utf-8") as f:
-            return f.read().strip() or None
+            text = f.read().strip()
     except OSError:
         return None
+    try:
+        rec = json.loads(text)
+        return rec if isinstance(rec, dict) else None
+    except ValueError:
+        return {"tex": text, "part": None} if text else None
 
 
-def make_document_panel(pyf_path, tex_path) -> str:
-    """Compile *tex_path* (if not already) and return the PDF panel's path."""
-    out = document_pdf_path(pyf_path, tex_path)
+def source_of(pdf_path):
+    """The .tex a compiled document panel came from, or None."""
+    rec = _source_record(pdf_path)
+    return rec.get("tex") if rec else None
+
+
+def part_of(pdf_path):
+    """Which part of its .tex a compiled document panel shows (1-based), or None."""
+    rec = _source_record(pdf_path)
+    return rec.get("part") if rec else None
+
+
+def is_stale(pdf_path) -> bool:
+    """True if the .tex a document panel came from changed after it was compiled."""
+    src = source_of(pdf_path)
+    try:
+        return bool(src) and os.path.getmtime(src) > os.path.getmtime(pdf_path)
+    except OSError:
+        return False
+
+
+def make_document_panel(pyf_path, tex_path, part=None) -> str:
+    """Compile *tex_path* (its *part*; if not already) and return the PDF
+    panel's path."""
+    out = document_pdf_path(pyf_path, tex_path, part)
     if not os.path.isfile(out):
-        compile_document(tex_path, out)
+        compile_document(tex_path, out, part)
     return out

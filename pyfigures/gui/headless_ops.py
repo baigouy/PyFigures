@@ -241,9 +241,16 @@ def _main(argv=None) -> int:
     fo = sub.add_parser("fonts")
     fo.add_argument("out_json")
 
+    sub.add_parser("install-latex",
+                   help="download TinyTeX (a small TeX Live) and the packages PyFigures uses")
+
     args = ap.parse_args(argv)
     try:
-        if args.op == "fonts":
+        if args.op == "install-latex":
+            from batoolset import tex_install
+            out = "TinyTeX: " + tex_install.install(
+                progress=lambda f, m: sys.stderr.write(f"[{f * 100:3.0f}%] {m}\n"))
+        elif args.op == "fonts":
             out = fonts_report(args.out_json)
         elif args.op == "video":
             bg = tuple(int(x) for x in args.bg.split(","))

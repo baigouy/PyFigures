@@ -105,7 +105,7 @@ _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "corner_labels", "rois", "inset", "zoom", "brackets", "properties",
                "page"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
-              "annotate_stats", "only_significant", "label"}
+              "annotate_stats", "only_significant", "label", "latex"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
@@ -116,7 +116,7 @@ _MERGE_KEYS = {"colors", "mode", "label", "label_placement", "normalization"}
 _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels",
                   "panel_label"}
 _SCRIPT_KEYS = {"label"}
-_EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble"}
+_EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 # a montage / split / merge also takes a scale bar (on its LAST panel only)
 _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit"}
 # panel-local extras that make no sense repeated on every glob match
@@ -614,8 +614,9 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                 if engine not in _eq.ENGINES:
                     raise RecipeError(f"{where}: engine must be one of {', '.join(_eq.ENGINES)}")
                 if engine == "latex" and not _eq.latex_available():
+                    from batoolset.tex_install import INSTALL_HINT
                     raise RecipeError(f"{where}: engine: latex needs a LaTeX installation (latex and "
-                                      "dvisvgm from TeX Live, MiKTeX or MacTeX)")
+                                      f"dvisvgm from TeX Live, MiKTeX or MacTeX). {INSTALL_HINT}")
                 if eq.strip().lower().endswith(".tex"):
                     eq = _resolve(base, eq.strip())
                     if not os.path.isfile(eq):
@@ -1059,7 +1060,7 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
             if kind == "plot":
                 kw = {k: opts[k] for k in ("kind", "error", "ylabel", "xlabel", "title",
                                            "stats_mode", "annotate_stats",
-                                           "only_significant", "label") if k in opts}
+                                           "only_significant", "label", "latex") if k in opts}
                 warnings += _check(M.add_data_plot(out, gp, path, **kw), step)
                 n_plots += 1
                 i += 1
@@ -1114,7 +1115,7 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
                 n_other += 1
                 continue
             if kind == "equation":
-                kw = {k: opts[k] for k in ("font_size", "color", "fontset", "engine", "preamble")
+                kw = {k: opts[k] for k in ("font_size", "color", "fontset", "engine", "preamble", "font")
                       if k in opts}
                 if opts.get("label"):
                     kw["label"] = _label_html(str(opts["label"]))

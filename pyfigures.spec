@@ -17,6 +17,7 @@ datas += collect_data_files('matplotlib')
 datas += collect_data_files('skimage')
 datas += collect_data_files('sklearn')
 datas += collect_data_files('pptx')               # default.pptx template + XML parts
+datas += collect_data_files('latex2mathml')       # unimathsymbols.txt ($…$ -> PowerPoint equations)
 # Licence texts + where the corresponding source is (GPLv3: the bundle includes
 # PyQt6, Qt and FFmpeg/x264); made by packaging/collect_licenses.py, shown by
 # Help > About
@@ -48,6 +49,8 @@ hiddenimports += collect_submodules('numcodecs')
 # native PDFium library. PyMuPDF (vector PDF panels) is AGPL and is left out
 # of the apps (excluded below); pip users can add it with pyfigures[pdf].
 hiddenimports += collect_submodules('pypdfium2')
+hiddenimports += collect_submodules('pylatexenc')     # imported lazily (Illustrator maths)
+hiddenimports += ['latex2mathml.converter', 'mathml2omml']
 hiddenimports += collect_submodules('pypdfium2_raw')
 datas += collect_data_files('pypdfium2_raw')         # version.json
 binaries = collect_dynamic_libs('pypdfium2_raw')

@@ -230,7 +230,7 @@ _DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped")
 
 def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
                            only_significant: bool, title: str, ylabel: str,
-                           xlabel: str, stats_mode: str = "auto") -> str:
+                           xlabel: str, stats_mode: str = "auto", latex: bool = False) -> str:
     """Return a custom_loading_script that renders a data-plot panel from a CSV
     via staplot's UI-free api. Soft dependency: if staplot is not importable the
     panel shows an install hint instead of crashing the figure. The panel is
@@ -253,12 +253,24 @@ except Exception as _e:
             ha='center', va='center', fontsize=8, wrap=True)
     self.img = fig
 else:
+    import matplotlib as _mpl
+    _rc = {{}}
+    if {bool(latex)!r}:
+        # every text typeset by LaTeX (when installed): the plot keeps its settings,
+        # applied again whenever it is rendered (Image2D._toBuffer)
+        try:
+            from batoolset.latex_tools import matplotlib_rc as _latex_rc
+            _rc = _latex_rc()
+        except Exception:
+            _rc = {{}}
     _tbl = _api.{builder}(_csv)
-    fig, _rec = _api.plot(_tbl, kind={kind!r}, error={error!r},
-                          annotate={bool(annotate)!r},
-                          only_significant={bool(only_significant)!r},
-                          stats_mode={stats_mode!r},
-                          title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r})
+    with _mpl.rc_context(_rc):
+        fig, _rec = _api.plot(_tbl, kind={kind!r}, error={error!r},
+                              annotate={bool(annotate)!r},
+                              only_significant={bool(only_significant)!r},
+                              stats_mode={stats_mode!r},
+                              title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r})
+    fig._pyf_rc = _rc
     self.img = fig
 """
 
@@ -278,6 +290,7 @@ def add_data_plot(
     ylabel: str = "",
     xlabel: str = "",
     stats_mode: str = "auto",
+    latex: bool = False,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -309,6 +322,10 @@ def add_data_plot(
       check — default), "parametric", or "nonparametric". Applies to bar/box/
       violin group comparisons; scatter always uses correlation and grouped uses
       two-way ANOVA.
+    *latex*: typeset all the plot's text (axis labels, ticks, title) with the
+      computer's LaTeX (TeX Live / MiKTeX / MacTeX): full LaTeX in labels, e.g.
+      ``ylabel="$D$ (\\si{\\micro\\metre\\squared\\per\\second})"``, sans-serif to
+      match the figure. Ignored without a LaTeX installation.
 
     For *kind="scatter"* the correlation (r, R^2, p) of the first two columns is
     shown in the legend and recorded; for *kind="grouped"* a two-way ANOVA (main
@@ -334,7 +351,7 @@ def add_data_plot(
 
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
-                                    stats_mode)
+                                    stats_mode, latex=latex)
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)

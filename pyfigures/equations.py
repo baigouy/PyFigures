@@ -72,21 +72,30 @@ def _latex_body(latex):
     return f"$\\displaystyle {text}$"
 
 
-def _render_svg_latex(latex, out_path, font_size, color, preamble):
+def _render_svg_latex(latex, out_path, font_size, color, preamble, font=None):
     from matplotlib.colors import to_hex
-    tex = find_tex_tool("latex")
+    from batoolset.latex_tools import font_files_for, font_preamble
+    font_files = font_files_for(font) if font else None
+    if font and font_files is None:
+        raise ValueError(f"font {font!r} not found on this computer")
+    engine = "xelatex" if font_files else "latex"
+    tex = find_tex_tool(engine)
     dvisvgm = find_tex_tool("dvisvgm")
     if tex is None or dvisvgm is None:
-        raise ValueError("the LaTeX engine needs a LaTeX installation with latex and dvisvgm "
-                         "(TeX Live, MiKTeX or MacTeX)")
+        from batoolset.tex_install import INSTALL_HINT
+        raise ValueError(f"the LaTeX engine needs a LaTeX installation with {engine} and dvisvgm "
+                         f"(TeX Live, MiKTeX or MacTeX). {INSTALL_HINT}")
     rgb = to_hex(color)[1:].upper()
     size = float(font_size)
+    if font_files:
+        # XeLaTeX: the text font, and the maths letters / digits / Greek in it
+        fonts = [r"\usepackage{xcolor}", preamble or ""] + font_preamble(font_files)
+    else:
+        fonts = [r"\usepackage{lmodern}", r"\usepackage[T1]{fontenc}", r"\usepackage{xcolor}",
+                 preamble or ""]
     doc = "\n".join([
         r"\documentclass[varwidth=\maxdimen,border=0.5pt]{standalone}",
-        r"\usepackage{lmodern}",
-        r"\usepackage[T1]{fontenc}",
-        r"\usepackage{xcolor}",
-        preamble or "",
+        *fonts,
         r"\begin{document}",
         f"\\fontsize{{{size:g}}}{{{size * 1.2:g}}}\\selectfont\\color[HTML]{{{rgb}}}%",
         _latex_body(latex),
@@ -97,20 +106,30 @@ def _render_svg_latex(latex, out_path, font_size, color, preamble):
         with open(os.path.join(work, "eq.tex"), "w", encoding="utf-8") as f:
             f.write(doc)
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        r = subprocess.run([tex, "-interaction=nonstopmode", "-halt-on-error", "eq.tex"],
-                           cwd=work, capture_output=True, text=True, timeout=300,
-                           creationflags=flags)
-        dvi = os.path.join(work, "eq.dvi")
-        if r.returncode != 0 or not os.path.isfile(dvi):
+        cmd = [tex, "-interaction=nonstopmode", "-halt-on-error"]
+        if engine == "xelatex":
+            cmd.append("-no-pdf")
+        dvi = os.path.join(work, "eq.xdv" if engine == "xelatex" else "eq.dvi")
+        rounds = 4                     # LaTeX stops at the first missing package
+        for attempt in range(rounds):
+            r = subprocess.run(cmd + ["eq.tex"], cwd=work, capture_output=True, text=True,
+                               timeout=600, creationflags=flags)
             log = ""
             if os.path.isfile(os.path.join(work, "eq.log")):
                 with open(os.path.join(work, "eq.log"), encoding="utf-8", errors="replace") as f:
                     log = f.read()
+            if r.returncode == 0 and os.path.isfile(dvi):
+                break
+            # a package the preamble asks for is missing: TeX Live can add it
+            from batoolset.tex_install import install_missing
+            if attempt == rounds - 1 or not install_missing(log):
+                break
+        if r.returncode != 0 or not os.path.isfile(dvi):
             errors = [ln[1:].strip() for ln in log.splitlines() if ln.startswith("!")]
             detail = "; ".join(errors[:3]) or (r.stdout or r.stderr or "").strip()[-300:]
             raise ValueError(f"LaTeX could not typeset the equation: {detail}")
         svg = os.path.join(work, "eq.svg")
-        r = subprocess.run([dvisvgm, "--no-fonts", "--exact-bbox", "eq.dvi", "-o", "eq.svg"],
+        r = subprocess.run([dvisvgm, "--no-fonts", "--exact-bbox", os.path.basename(dvi), "-o", "eq.svg"],
                            cwd=work, capture_output=True, text=True, timeout=300,
                            creationflags=flags)
         if not os.path.isfile(svg):
@@ -185,13 +204,16 @@ def check(latex: str, fontset: str = "cm") -> None:
 
 
 def render_svg(latex: str, out_path: str, font_size: float = 12.0, color: str = "black",
-               fontset: str = "cm", engine: str = "mathtext", preamble: str | None = None) -> str:
+               fontset: str = "cm", engine: str = "mathtext", preamble: str | None = None,
+               font: str | None = None) -> str:
     """Typeset *latex* to an SVG file at *out_path* (glyphs as outlines, tight box,
     transparent background). Returns *out_path*.
 
     *engine*: "mathtext" (Matplotlib, no TeX needed; *fontset* applies) or
     "latex" (the LaTeX installation: full LaTeX; *preamble* adds packages,
-    default DEFAULT_PREAMBLE)."""
+    default DEFAULT_PREAMBLE). *font* ("latex" only): an installed font family
+    (e.g. "Arial") for the text and for the maths letters, digits and Greek
+    (XeLaTeX + unicode-math), to match the figure's labels; default Latin Modern."""
     import matplotlib
     from matplotlib.backends.backend_svg import FigureCanvasSVG
     from matplotlib.colors import to_hex
@@ -210,7 +232,10 @@ def render_svg(latex: str, out_path: str, font_size: float = 12.0, color: str = 
         preamble = DEFAULT_PREAMBLE if preamble is None else preamble
         settings = {"latex": latex.strip(), "font_size": float(font_size), "color": color,
                     "fontset": fontset, "engine": "latex", "preamble": preamble}
-        svg = _with_settings(_render_svg_latex(latex, out_path, font_size, color, preamble), settings)
+        if font:
+            settings["font"] = font
+        svg = _with_settings(_render_svg_latex(latex, out_path, font_size, color, preamble, font),
+                             settings)
         os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(svg)
@@ -260,18 +285,20 @@ def equation_dir(pyf_path: str | None) -> str:
 
 
 def equation_path(pyf_path, latex, font_size=12.0, color="black", fontset="cm",
-                  engine="mathtext", preamble=None) -> str:
+                  engine="mathtext", preamble=None, font=None) -> str:
     parts = [latex.strip(), float(font_size), color, fontset]
     if engine == "latex":                       # (mathtext keys unchanged: existing files reused)
         parts += ["latex", DEFAULT_PREAMBLE if preamble is None else preamble]
+        if font:
+            parts.append(font)
     digest = hashlib.sha1(json.dumps(parts).encode("utf-8")).hexdigest()[:12]
     return os.path.join(equation_dir(pyf_path), f"eq_{digest}.svg")
 
 
 def make_equation(pyf_path, latex, font_size=12.0, color="black", fontset="cm",
-                  engine="mathtext", preamble=None) -> str:
+                  engine="mathtext", preamble=None, font=None) -> str:
     """Write the equation's SVG (if not already there) and return its path."""
-    out = equation_path(pyf_path, latex, font_size, color, fontset, engine, preamble)
+    out = equation_path(pyf_path, latex, font_size, color, fontset, engine, preamble, font)
     if not os.path.isfile(out):
-        render_svg(latex, out, font_size, color, fontset, engine, preamble)
+        render_svg(latex, out, font_size, color, fontset, engine, preamble, font)
     return out

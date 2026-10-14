@@ -775,7 +775,9 @@ whole text is a formula; with `$…$`, text outside the dollars is plain text.
 Keys: `font_size` (pt, 12), `color` (`black`), `fontset` (`cm` = Computer
 Modern, the LaTeX look; `stix`, `stixsans`, `dejavusans`, `dejavuserif`),
 `label`, `engine` (`mathtext`, the default, or `latex`), `preamble` (for
-`engine: latex`; default `\usepackage{amsmath,amssymb,bm,siunitx}`). The
+`engine: latex`; default `\usepackage{amsmath,amssymb,bm,siunitx}`), `font`
+(for `engine: latex`: an installed font such as `Arial` for the text and the
+maths letters, digits and Greek, to match the figure; needs XeLaTeX). The
 equation is written as an SVG in an `equations` folder next to the figure; like
 any panel it is scaled with its row. Quote the formula with single quotes in
 YAML so that backslashes are kept. A formula that cannot be typeset is reported
@@ -789,20 +791,37 @@ also be a `.tex` file (its document body is used):
 ```yaml
 - - {equation: '\begin{aligned} D &= \SI{0.12}{\micro\metre\squared\per\second} \\ \bm{F} &= -\nabla U \end{aligned}', engine: latex}
   - {equation: maxwell.tex, engine: latex, preamble: '\usepackage{physics}'}
+  - {equation: '\alpha v = \SI{3}{\micro\metre\per\second}', engine: latex, font: Arial}
 ```
 
 **Maths in labels** — in any `label`, `annotations` text or text row, `$…$` is
 typeset as maths (`\$` is a literal dollar), on screen and in every export: by
 LaTeX itself when it is installed (full LaTeX; the formulas are kept in
 `equations/labels/` next to the figure, so it looks the same on computers
-without TeX), else by Matplotlib's mathtext in the label's own font.
+without TeX), in the label's own font when XeLaTeX is installed, else by
+Matplotlib's mathtext in the label's own font. The `pptx` export turns them into
+native PowerPoint equations, the `illustrator` export into Unicode text.
+
+**Data plots typeset by LaTeX** — `latex: true` on a `plot:` panel typesets its
+axis labels, ticks and title with LaTeX (sans-serif):
+
+```yaml
+- - {plot: diffusion.csv, latex: true, ylabel: '$D$ (\si{\micro\metre\squared\per\second})'}
+```
 
 **LaTeX documents** — `image: plot.tex` (or `equation: plot.tex`) with a whole
 document (`\documentclass…`: a TikZ / pgfplots picture, a figure with
 `\includegraphics`, a table) compiles its first figure/table environment (else
 its first TikZ picture, else its body; caption left out) with its own preamble,
 in its own folder, into a cropped vector PDF panel kept in `latex/` next to the
-figure. Needs `pdflatex` (TeX Live, MiKTeX or MacTeX).
+figure. Needs `pdflatex` (TeX Live, MiKTeX or MacTeX). `page: 2` picks the
+second figure/table (or TikZ picture, when the document has no figure or
+table environment). The panel remembers its `.tex`: the GUI offers to recompile
+it when the `.tex` changed, and the MCP tool `update_latex_panels` does it.
+
+```yaml
+- - {image: paper.tex, page: 2}
+```
 
 ---
 

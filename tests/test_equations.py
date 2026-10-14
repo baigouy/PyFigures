@@ -95,7 +95,7 @@ def test_dialog_preview_and_errors(qapp):
     dlg.latex_edit.setPlainText("x^2")
     dlg.update_preview()
     assert dlg.values() == {"latex": "x^2", "font_size": 16.0, "color": "black", "fontset": "stix",
-                            "engine": "mathtext", "preamble": E.DEFAULT_PREAMBLE}
+                            "engine": "mathtext", "preamble": E.DEFAULT_PREAMBLE, "font": None}
 
 
 def test_gui_add_and_edit_equation(qapp, tmp_path, monkeypatch):

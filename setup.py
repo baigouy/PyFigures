@@ -63,6 +63,9 @@ setuptools.setup(
         "imagecodecs",
         "psutil",
         "python-pptx",     # editable PowerPoint export
+        "latex2mathml",    # $…$ label maths -> native PowerPoint equations (MIT)
+        "mathml2omml",     # (MIT)
+        "pylatexenc",      # $…$ label maths -> Unicode text for Illustrator (MIT)
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
     ],
     extras_require={

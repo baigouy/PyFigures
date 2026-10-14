@@ -535,9 +535,10 @@ def add_image(
     A **.tex** file works too: a whole LaTeX document (\\documentclass…: a
     TikZ / pgfplots picture, a figure with \\includegraphics, a table) is
     compiled by the computer's LaTeX (its first figure/table environment, else
-    its first tikzpicture, else its body; captions dropped) into a vector PDF
-    panel kept in a ``latex`` folder next to the figure; a snippet is an
-    equation (see add_equation).
+    its first tikzpicture, else its body; captions dropped; *page* = which
+    figure/table/picture, 1 = the first) into a vector PDF panel kept in a
+    ``latex`` folder next to the figure (update_latex_panels recompiles it
+    after the .tex changed); a snippet is an equation (see add_equation).
     """
     if str(filename).lower().endswith(".tex") and os.path.isfile(str(filename)):
         from pyfigures import latex_document as LD
@@ -549,7 +550,8 @@ def add_image(
                 return add_equation(pyf_path, group_path, filename, label=label,
                                     label_placement=label_placement,
                                     engine="latex" if E.latex_available() else "mathtext")
-            filename = LD.make_document_panel(pyf_path, filename)
+            filename = LD.make_document_panel(pyf_path, filename, part=page)
+            page = None                     # (for a .tex: which figure/table/picture)
         except (OSError, ValueError) as e:
             return f"ERROR: {e}"
     tree, root = _load(pyf_path)
@@ -596,8 +598,13 @@ def add_equation(
     label_placement: str = "top left",
     engine: str = "mathtext",
     preamble: str | None = None,
+    font: str | None = None,
 ) -> str:
     """Add a typeset equation as a vector panel.
+
+    *font* (with engine="latex"): an installed font family (e.g. "Arial") used
+    for the text and for the maths letters, digits and Greek (XeLaTeX +
+    unicode-math), to match the figure's labels; default Latin Modern.
 
     *latex*: LaTeX mathematics, e.g. ``\\Delta F/F_0 = \\frac{F-F_0}{F_0}`` (with or
       without surrounding $…$; text outside $…$ is set as plain text), or the
@@ -623,7 +630,8 @@ def add_equation(
         return f"ERROR: engine must be one of {', '.join(E.ENGINES)}"
     if engine == "latex" and not E.latex_available():
         return ("ERROR: engine='latex' needs a LaTeX installation (latex and dvisvgm from TeX Live, "
-                "MiKTeX or MacTeX); use engine='mathtext' otherwise")
+                "MiKTeX or MacTeX); install it with the install_latex tool (TinyTeX, ~75 MB), "
+                "or use engine='mathtext'")
     if str(latex).strip().lower().endswith(".tex") and os.path.isfile(str(latex).strip()):
         from pyfigures import latex_document as LD
         with open(str(latex).strip(), encoding="utf-8", errors="replace") as f:
@@ -638,7 +646,8 @@ def add_equation(
         if engine == "mathtext":
             latex = E.mathtext_formula(latex)
     try:
-        svg = E.make_equation(pyf_path, latex, font_size, color, fontset, engine, preamble)
+        svg = E.make_equation(pyf_path, latex, font_size, color, fontset, engine, preamble,
+                              font if engine == "latex" else None)
     except ValueError as e:
         return f"ERROR: {e}"
     res = add_image(pyf_path, group_path, svg, label=label, label_placement=label_placement)
@@ -646,6 +655,71 @@ def add_equation(
         return res
     shown = E.normalize(latex) if engine == "mathtext" else " ".join(latex.split())
     return res.replace(Path(svg).name, f"equation {shown}") + f" (file: {svg})"
+
+
+@mcp.tool()
+def update_latex_panels(pyf_path: str, force: bool = False) -> str:
+    """Recompile the panels made from LaTeX documents (.tex added with
+    add_image / dropped / recipe ``image: x.tex``) whose .tex changed since they
+    were compiled (*force*: all of them). GUI: right-click → Recompile from
+    .tex (and an offer when the figure is opened). Returns JSON: the panels
+    updated, and any that failed (missing .tex, LaTeX errors)."""
+    from pyfigures import latex_document as LD
+    if not os.path.isfile(pyf_path):
+        return f"ERROR: no such figure: {pyf_path}"
+    tree, root = _load(pyf_path)
+    updated, failed = [], []
+    for img in root.iter("Image2D"):
+        el = img.find("filename")
+        fn = (el.text or "").strip().strip('"') if el is not None else ""
+        src = LD.source_of(fn) if fn else None
+        if not src or not (force or LD.is_stale(fn)):
+            continue
+        if not os.path.isfile(src):
+            failed.append({"panel": fn, "error": f".tex not found: {src}"})
+            continue
+        try:
+            part = LD.part_of(fn)
+            new = LD.document_pdf_path(pyf_path, src, part)
+            if os.path.isfile(new):
+                os.remove(new)
+            new = LD.make_document_panel(pyf_path, src, part)
+        except (OSError, ValueError) as e:
+            failed.append({"panel": fn, "error": str(e)})
+            continue
+        from .core import _set_child_text
+        _set_child_text(img, "filename", _encode_str(new))
+        updated.append({"tex": src, "panel": new})
+    if updated:
+        _save(tree, pyf_path, recompute=True)
+    return json.dumps({"updated": updated, "failed": failed}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def install_latex(check_only: bool = False) -> str:
+    """Install LaTeX for PyFigures: TinyTeX (a small TeX Live, ~75 MB to download,
+    ~400 MB on disk) in the user's folder (%APPDATA%\\TinyTeX, ~/Library/TinyTeX
+    or ~/.TinyTeX; no admin rights, the PATH is not changed), plus the packages
+    PyFigures uses. Needed for engine="latex" equations, .tex documents as
+    panels, LaTeX label maths and LaTeX data plots; figures made with it open
+    anywhere. Packages a document needs later are added automatically.
+    *check_only*: only report which LaTeX tools are found (nothing downloaded).
+    GUI: Help → Install LaTeX for PyFigures… (also offered when needed)."""
+    from batoolset import latex_tools as LT
+    from batoolset import tex_install as TI
+    status = {t: LT.find_tex_tool(t) for t in ("latex", "pdflatex", "xelatex", "dvisvgm", "tlmgr")}
+    if check_only:
+        return json.dumps({"tools": status, "latex_available": LT.latex_available(),
+                           "tinytex_dir": TI.install_dir(),
+                           "tinytex_installed": TI.is_installed()}, indent=2)
+    steps = []
+    try:
+        root = TI.install(progress=lambda f, m: steps.append(m))
+    except Exception as e:
+        return f"ERROR: LaTeX could not be installed: {e}"
+    LT.ensure_on_path()
+    return json.dumps({"installed_in": root, "latex_available": LT.latex_available(),
+                       "steps": [s for s in steps if not s.startswith("Downloading")]}, indent=2)
 
 
 @mcp.tool()

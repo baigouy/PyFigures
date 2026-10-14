@@ -2285,6 +2285,13 @@ class MyWidget(QWidget):
                         _eq_shape = self.selected_shape
                         edit_eq = self.contextMenu.addAction("Edit equation…")
                         edit_eq.triggered.connect(lambda: gui.edit_equation(_eq_shape))
+                    from pyfigures.latex_document import source_of
+                    _fn = getattr(self.selected_shape, 'filename', None)
+                    if isinstance(_fn, str) and source_of(_fn) and hasattr(gui, 'recompile_latex_panel'):
+                        _doc_shape = self.selected_shape
+                        recompile = self.contextMenu.addAction("Recompile from .tex")
+                        recompile.setToolTip(source_of(_fn))
+                        recompile.triggered.connect(lambda: gui.recompile_latex_panel(_doc_shape))
             if isinstance(top_parent_of_sel, Group) and top_parent_of_sel.isText:
                 edit_text_row = self.contextMenu.addAction("Edit text row")
                 edit_text_row.triggered.connect(lambda: self.edit_text_row_content(top_parent_of_sel))

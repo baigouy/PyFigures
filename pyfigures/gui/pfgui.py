@@ -1319,6 +1319,12 @@ class EZFIG_GUI(QMainWindow):
         user_guide_action.triggered.connect(self.show_user_guide)
         help_menu.addAction(user_guide_action)
 
+        install_latex = QAction('Install LaTeX for PyFigures…', self)
+        install_latex.setToolTip('Download TinyTeX (a small TeX Live) for full-LaTeX equations, '
+                                 '.tex documents and LaTeX data plots')
+        install_latex.triggered.connect(self.install_latex_action)
+        help_menu.addAction(install_latex)
+
         help_menu.addSeparator()
         beginner_tuto_action = QAction('▶  Beginner Tutorial', self)
         beginner_tuto_action.triggered.connect(self.start_beginner_tutorial)
@@ -2410,8 +2416,10 @@ class EZFIG_GUI(QMainWindow):
         from pyfigures import equations as E
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
+            engine = v.get('engine', 'mathtext')
             return E.make_equation(self.current_file, v['latex'], v['font_size'], v['color'],
-                                   v['fontset'], v.get('engine', 'mathtext'), v.get('preamble'))
+                                   v['fontset'], engine, v.get('preamble'),
+                                   v.get('font') if engine == 'latex' else None)
         except ValueError as e:
             QApplication.restoreOverrideCursor()
             QMessageBox.warning(self, 'Cannot typeset the equation', str(e))
@@ -2435,9 +2443,28 @@ class EZFIG_GUI(QMainWindow):
             QMessageBox.warning(self, 'Cannot read the .tex file', str(e))
             return None
         if full:
+            if E.find_tex_tool('pdflatex') is None:
+                from pyfigures.gui.latex_support import offer_latex_install
+                if not offer_latex_install(self, 'A .tex document is compiled by LaTeX'):
+                    return None
+            part = None
+            try:
+                parts = LD.parts_of(tex_path)
+            except (OSError, ValueError):
+                parts = []
+            if len(parts) > 1:
+                # several figures / tables / pictures: which one?
+                names = [d for d, _ in parts]
+                choice, ok = QInputDialog.getItem(
+                    self, 'LaTeX document',
+                    f'{os.path.basename(tex_path)} has {len(parts)} parts. Which one is the panel?',
+                    names, 0, False)
+                if not ok:
+                    return None
+                part = names.index(choice) + 1
             QApplication.setOverrideCursor(Qt.WaitCursor)
             try:
-                return LD.make_document_panel(self.current_file, tex_path)
+                return LD.make_document_panel(self.current_file, tex_path, part)
             except ValueError as e:
                 QApplication.restoreOverrideCursor()
                 QMessageBox.warning(self, 'Cannot compile the .tex document', str(e))
@@ -4160,6 +4187,77 @@ class EZFIG_GUI(QMainWindow):
                 self, 'Source files changed',
                 text + '\n\nThe figure shows the current files. Saving accepts them as '
                        'the new reference (QC → Check for changed source files).')
+        self._offer_to_recompile_latex_panels()
+
+    def _stale_latex_panels(self):
+        """Panels compiled from a .tex document that changed since."""
+        from pyfigures.latex_document import is_stale
+        try:
+            _, images = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(
+                exclude_images_without_filename=False, include_insets=True)
+        except Exception:
+            return []
+        return [im for im in images if isinstance(getattr(im, 'filename', None), str)
+                and is_stale(im.filename)]
+
+    def _offer_to_recompile_latex_panels(self):
+        stale = self._stale_latex_panels()
+        if not stale:
+            return
+        answer = QMessageBox.question(
+            self, 'LaTeX documents changed',
+            f'{len(stale)} panel(s) come from .tex documents that changed since they were '
+            'compiled. Recompile them now?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes)
+        if answer == QMessageBox.StandardButton.Yes:
+            for shape in stale:
+                self.recompile_latex_panel(shape, quiet=True)
+
+    def recompile_latex_panel(self, shape, quiet=False):
+        """Right-click → Recompile from .tex: compile the panel's .tex document
+        again (pyfigures.latex_document) and show the new version in place."""
+        from pyfigures import latex_document as LD
+        src = LD.source_of(getattr(shape, 'filename', '') or '')
+        if not src or not os.path.isfile(src):
+            if not quiet:
+                QMessageBox.warning(self, 'Cannot recompile',
+                                    f'The .tex document of this panel was not found:\n{src}')
+            return False
+        part = LD.part_of(shape.filename)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            path = LD.document_pdf_path(self.current_file, src, part)
+            if os.path.isfile(path):
+                os.remove(path)                       # compile again, whatever the reason
+            path = LD.make_document_panel(self.current_file, src, part)
+        except (OSError, ValueError) as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, 'Cannot compile the .tex document', str(e))
+            return False
+        finally:
+            if QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
+        self._replace_panel_file(shape, path)
+        return True
+
+    def _replace_panel_file(self, shape, path):
+        """Show *path* in the panel *shape* instead of its file, at the same
+        displayed height, then reflow so every row keeps its width."""
+        shown_height = shape.height()
+        shape.filename = path
+        shape.setFigure(path)
+        size = shape.renderer.defaultSize() if getattr(shape, 'renderer', None) is not None else None
+        if size is not None and size.width() > 0:
+            shape.setWidth(size.width())
+            shape.setHeight(size.height())
+        if shown_height > 0:
+            shape.setToHeight(shown_height)
+        self._lazy_size_drift = True
+        self._reflow_after_lazy_load()
+        self.paint.EZFIG_panel.update_size()
+        self.paint.EZFIG_panel.update()
+        self._mark_dirty()
 
     def check_source_changes_action(self):
         """Report source files changed since the last save; offer to re-read
@@ -4271,6 +4369,11 @@ class EZFIG_GUI(QMainWindow):
             return
         self.statusBar().showMessage('Alt text saved beside the .pyf.')
 
+    def install_latex_action(self, *_):
+        """Help → Install LaTeX for PyFigures… (TinyTeX; MCP: install_latex)."""
+        from pyfigures.gui.latex_support import install_latex_action
+        return install_latex_action(self)
+
     def add_data_plot_action(self):
         """Pick a CSV + plot options, then add a live data-plot panel
         (MCP: add_data_plot — a scripted, re-rendering panel with auto-stats)."""
@@ -4317,6 +4420,27 @@ class EZFIG_GUI(QMainWindow):
         label_edit = QLineEdit('', frame)
         grid.addWidget(label_edit, 6, 1)
 
+        from batoolset.latex_tools import latex_available
+        latex_cb = QCheckBox('Typeset the text with LaTeX (axis labels, ticks, title)', frame)
+        latex_cb.setEnabled(latex_available())
+        latex_cb.setToolTip('Full LaTeX in the labels, e.g. $D$ (\\si{\\micro\\metre\\squared\\per\\second})'
+                            if latex_available() else
+                            'Needs a LaTeX installation (TeX Live, MiKTeX or MacTeX)')
+        grid.addWidget(latex_cb, 7, 0, 1, 2)
+        if not latex_available():
+            install_btn = QPushButton('Install LaTeX…', frame)
+            install_btn.setToolTip('Download TinyTeX (a small TeX Live, about 75 MB)')
+
+            def _install(*_):
+                from pyfigures.gui.latex_support import offer_latex_install
+                if offer_latex_install(self, 'LaTeX text in plots needs LaTeX'):
+                    latex_cb.setEnabled(True)
+                    latex_cb.setChecked(True)
+                    latex_cb.setToolTip('')
+                    install_btn.hide()
+            install_btn.clicked.connect(_install)
+            grid.addWidget(install_btn, 8, 0, 1, 2)
+
         cd = CustomDialog(
             title="Add data plot from CSV",
             message=(f"{os.path.basename(csv_path)} — columns are groups (wide) or "
@@ -4338,6 +4462,7 @@ class EZFIG_GUI(QMainWindow):
             stats_mode=stats_combo.currentText(),
             ylabel=ylabel_edit.text().strip(),
             label=label_edit.text().strip() or None,
+            latex=latex_cb.isChecked(),
         )
 
     # ------------------------------------------------------------------
