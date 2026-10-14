@@ -2697,6 +2697,7 @@ class EZFIG_GUI(QMainWindow):
             # print(properties)
             objects = create_object(list.__name__, properties)
 
+            gui_params = None
             for elm in reversed(objects):
                 # if there is a font parameter in the xml --> we get it and remove it from the rest of the list
                 if isinstance(elm, SerializableQFont):
@@ -2709,12 +2710,14 @@ class EZFIG_GUI(QMainWindow):
                     self.paint.EZFIG_panel.space = elm.space
                     self.main_space_spinner.blockSignals(False)
                     self._set_page_background(getattr(elm, 'background', None))
+                    gui_params = elm
                     objects.remove(elm)
 
             if append:
                 self.paint.EZFIG_panel.shapes_to_draw.extend(objects)
             else:
                 self.paint.EZFIG_panel.shapes_to_draw = objects
+                self._restore_lettering(gui_params)
 
             self.paint.EZFIG_panel.set_current_selection(
                 None)  # need empty the selection because the chance that it works is limited
@@ -3165,6 +3168,7 @@ class EZFIG_GUI(QMainWindow):
 
     def _apply_pyf_objects(self, objects):
         """Apply pre-parsed .pyf objects to the canvas (runs on main thread)."""
+        gui_params = None
         for elm in reversed(list(objects)):
             if isinstance(elm, SerializableQFont):
                 self.serializable_font = elm
@@ -3175,8 +3179,12 @@ class EZFIG_GUI(QMainWindow):
                 self.paint.EZFIG_panel.space = elm.space
                 self.main_space_spinner.blockSignals(False)
                 self._set_page_background(getattr(elm, 'background', None))
+                gui_params = elm
                 objects.remove(elm)
+        fresh = not self.paint.EZFIG_panel.shapes_to_draw
         self.paint.EZFIG_panel.shapes_to_draw.extend(objects)
+        if fresh:                       # (merging into a figure keeps its lettering)
+            self._restore_lettering(gui_params)
         self.paint.EZFIG_panel.set_current_selection(None)
         self.arrange_text_rows()
         self.paint.EZFIG_panel.update_size()
@@ -3544,7 +3552,9 @@ class EZFIG_GUI(QMainWindow):
         neo_list.append(self.serializable_font)
         neo_list.append(SerializableGUIparameters(
             space=self.main_space_spinner.value(),
-            background=self.paint.EZFIG_panel.page_background))  # add GUI parameters
+            background=self.paint.EZFIG_panel.page_background,
+            first_letter=self.letter_line_edit.text() or None,
+            auto_lettering=self.auto_lettering_checkbox.isChecked()))  # add GUI parameters
         xml_string = object_to_xml(neo_list, is_list=True)
         write_string_to_file(file, xml_string)
         if popup:
@@ -4781,6 +4791,40 @@ class EZFIG_GUI(QMainWindow):
                                    'deficiency.',
                            main_widget=frame, options=['Ok'], parent=self)
         dlg.exec_()
+
+    def _restore_lettering(self, gui_params=None):
+        """After opening a figure: its own lettering (first letter and on/off),
+        not the toolbar's defaults (which re-lettered every opened figure "a,
+        b…", and lettered figures built without letters). Saved with the
+        figure since 2026-10; for older files (and figures written by recipes
+        or the MCP server) it is read from the letters the panels carry."""
+        first = getattr(gui_params, 'first_letter', None) if gui_params is not None else None
+        auto = getattr(gui_params, 'auto_lettering', None) if gui_params is not None else None
+        if first is None or auto is None:
+            try:
+                _, images = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(
+                    exclude_images_without_filename=False, include_insets=False)
+            except Exception:
+                images = []
+            images = [im for im in images if not getattr(im, 'isText', False)]
+            letters = [a.getPlainText().strip() for im in images for a in (im.annotations or [])
+                       if isinstance(a, TAText2D) and a.is_letter]
+            letters = [l for l in letters if len(l) == 1 and l.isalpha()]
+            if images:
+                if auto is None:
+                    auto = bool(letters)
+                if first is None and letters:
+                    first = min(letters)
+        self.letter_line_edit.blockSignals(True)
+        self.auto_lettering_checkbox.blockSignals(True)
+        try:
+            if first:
+                self.letter_line_edit.setText(str(first)[:1])
+            if auto is not None:
+                self.auto_lettering_checkbox.setChecked(bool(auto))
+        finally:
+            self.letter_line_edit.blockSignals(False)
+            self.auto_lettering_checkbox.blockSignals(False)
 
     def update_letters(self):
         letter = self.letter_line_edit.text()
