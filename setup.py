@@ -58,6 +58,7 @@ setuptools.setup(
         "Deprecated",
         "Requests",
         f"batoolset>={__VERSION__}",
+        f"batoolset-gui>={__VERSION__}",   # batoolset.drawings / figure / luts / pyqts (Qt layer)
         "pyautogui",
         "imagecodecs",
         "psutil",
