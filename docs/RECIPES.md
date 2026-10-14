@@ -792,8 +792,17 @@ also be a `.tex` file (its document body is used):
 ```
 
 **Maths in labels** — in any `label`, `annotations` text or text row, `$…$` is
-typeset as maths (Matplotlib's mathtext, in the label's own font; `\$` is a
-literal dollar), on screen and in every export.
+typeset as maths (`\$` is a literal dollar), on screen and in every export: by
+LaTeX itself when it is installed (full LaTeX; the formulas are kept in
+`equations/labels/` next to the figure, so it looks the same on computers
+without TeX), else by Matplotlib's mathtext in the label's own font.
+
+**LaTeX documents** — `image: plot.tex` (or `equation: plot.tex`) with a whole
+document (`\documentclass…`: a TikZ / pgfplots picture, a figure with
+`\includegraphics`, a table) compiles its first figure/table environment (else
+its first TikZ picture, else its body; caption left out) with its own preamble,
+in its own folder, into a cropped vector PDF panel kept in `latex/` next to the
+figure. Needs `pdflatex` (TeX Live, MiKTeX or MacTeX).
 
 ---
 

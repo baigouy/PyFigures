@@ -532,7 +532,26 @@ def add_image(
     *page*: for a multi-page **PDF**, the page to show (1 = first page; the
       default). Stored as the panel's series (configure_image serie_to_open is
       the same, 0-based).
+    A **.tex** file works too: a whole LaTeX document (\\documentclass…: a
+    TikZ / pgfplots picture, a figure with \\includegraphics, a table) is
+    compiled by the computer's LaTeX (its first figure/table environment, else
+    its first tikzpicture, else its body; captions dropped) into a vector PDF
+    panel kept in a ``latex`` folder next to the figure; a snippet is an
+    equation (see add_equation).
     """
+    if str(filename).lower().endswith(".tex") and os.path.isfile(str(filename)):
+        from pyfigures import latex_document as LD
+        try:
+            with open(filename, encoding="utf-8", errors="replace") as f:
+                full = LD.is_full_document(f.read())
+            if not full:
+                from pyfigures import equations as E
+                return add_equation(pyf_path, group_path, filename, label=label,
+                                    label_placement=label_placement,
+                                    engine="latex" if E.latex_available() else "mathtext")
+            filename = LD.make_document_panel(pyf_path, filename)
+        except (OSError, ValueError) as e:
+            return f"ERROR: {e}"
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
@@ -606,6 +625,12 @@ def add_equation(
         return ("ERROR: engine='latex' needs a LaTeX installation (latex and dvisvgm from TeX Live, "
                 "MiKTeX or MacTeX); use engine='mathtext' otherwise")
     if str(latex).strip().lower().endswith(".tex") and os.path.isfile(str(latex).strip()):
+        from pyfigures import latex_document as LD
+        with open(str(latex).strip(), encoding="utf-8", errors="replace") as f:
+            if LD.is_full_document(f.read()):
+                # a whole document (figure, TikZ…): a compiled PDF panel
+                return add_image(pyf_path, group_path, str(latex).strip(), label=label,
+                                 label_placement=label_placement)
         try:
             latex = E.read_tex_file(str(latex).strip())
         except (OSError, ValueError) as e:

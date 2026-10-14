@@ -21,7 +21,6 @@ equation and its settings, so the same equation is written only once.
 """
 from __future__ import annotations
 
-import glob
 import hashlib
 import html
 import json
@@ -29,7 +28,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 
 FONTSETS = ("cm", "stix", "stixsans", "dejavusans", "dejavuserif")
@@ -41,34 +39,11 @@ _MARKER = "pyfigures-equation:"
 # ---------------------------------------------------------------------------
 # the LaTeX installation
 # ---------------------------------------------------------------------------
-def _tex_bin_dirs():
-    """Folders where TeX distributions put latex/dvisvgm when not on the PATH."""
-    dirs = []
-    if os.environ.get("PYFIGURES_TEX_BIN"):
-        dirs.append(os.environ["PYFIGURES_TEX_BIN"])
-    if sys.platform.startswith("win"):
-        for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("ProgramFiles")):
-            if base:
-                dirs.append(os.path.join(base, "Programs", "MiKTeX", "miktex", "bin", "x64"))
-                dirs.append(os.path.join(base, "MiKTeX", "miktex", "bin", "x64"))
-        dirs += sorted(glob.glob(r"C:\texlive\*\bin\win*"), reverse=True)
-    else:
-        dirs += ["/Library/TeX/texbin", "/usr/local/texlive/bin", "/usr/bin", "/usr/local/bin"]
-        dirs += sorted(glob.glob("/usr/local/texlive/*/bin/*"), reverse=True)
-    return dirs
-
-
 def find_tex_tool(name):
-    """Full path of a TeX program (latex, dvisvgm), or None."""
-    found = shutil.which(name)
-    if found:
-        return found
-    exe = name + (".exe" if sys.platform.startswith("win") else "")
-    for d in _tex_bin_dirs():
-        p = os.path.join(d, exe)
-        if os.path.isfile(p):
-            return p
-    return None
+    """Full path of a TeX program (latex, pdflatex, dvisvgm), or None
+    (batoolset.latex_tools.find_tex_tool)."""
+    from batoolset.latex_tools import find_tex_tool as _find
+    return _find(name)
 
 
 def latex_available() -> bool:

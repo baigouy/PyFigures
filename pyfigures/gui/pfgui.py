@@ -2421,10 +2421,30 @@ class EZFIG_GUI(QMainWindow):
                 QApplication.restoreOverrideCursor()
 
     def _equation_from_tex(self, tex_path):
-        """A dropped .tex file -> the path of its equation SVG (or None): typeset
-        with the LaTeX installation if there is one (full LaTeX), else its first
-        formula with Matplotlib's mathtext."""
+        """A dropped .tex file -> the path of its panel (or None). A whole
+        document (\\documentclass…: TikZ, a figure with \\includegraphics, a
+        table) is compiled by LaTeX into a PDF panel (pyfigures.latex_document);
+        a snippet is an equation, typeset with the LaTeX installation if there
+        is one (full LaTeX), else its first formula with Matplotlib's mathtext."""
         from pyfigures import equations as E
+        from pyfigures import latex_document as LD
+        try:
+            with open(tex_path, encoding='utf-8', errors='replace') as f:
+                full = LD.is_full_document(f.read())
+        except OSError as e:
+            QMessageBox.warning(self, 'Cannot read the .tex file', str(e))
+            return None
+        if full:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                return LD.make_document_panel(self.current_file, tex_path)
+            except ValueError as e:
+                QApplication.restoreOverrideCursor()
+                QMessageBox.warning(self, 'Cannot compile the .tex document', str(e))
+                return None
+            finally:
+                if QApplication.overrideCursor() is not None:
+                    QApplication.restoreOverrideCursor()
         try:
             latex = E.read_tex_file(tex_path)
         except (OSError, ValueError) as e:
@@ -2718,6 +2738,7 @@ class EZFIG_GUI(QMainWindow):
             else:
                 self.paint.EZFIG_panel.shapes_to_draw = objects
                 self._restore_lettering(gui_params)
+                self._bind_label_maths(path_to_xml_file)
 
             self.paint.EZFIG_panel.set_current_selection(
                 None)  # need empty the selection because the chance that it works is limited
@@ -2815,6 +2836,8 @@ class EZFIG_GUI(QMainWindow):
         # when a single .pyf fully replaces the figure, remember it so Save writes
         # back to it (instead of prompting for a new filename)
         self._pyf_single_source = pyf_list[0] if (len(pyf_list) == 1 and not append) else None
+        if not append:
+            self._bind_label_maths(self._pyf_single_source)
         self.statusBar().showMessage('Loading .pyf file(s), please wait...')
         QApplication.setOverrideCursor(Qt.WaitCursor)
         thread = QThread(self)
@@ -3557,6 +3580,12 @@ class EZFIG_GUI(QMainWindow):
             auto_lettering=self.auto_lettering_checkbox.isChecked()))  # add GUI parameters
         xml_string = object_to_xml(neo_list, is_list=True)
         write_string_to_file(file, xml_string)
+        # the LaTeX-typeset maths of its labels go with it (equations/labels)
+        try:
+            from batoolset.latex_tools import save_used
+            save_used(file)
+        except Exception:
+            logger.error('could not save the typeset label maths:\n' + traceback.format_exc())
         if popup:
             self.show_popup(popup)
 
@@ -3568,6 +3597,7 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.shapes_to_draw = []
         self.paint.EZFIG_panel.set_current_selection(None)
         self._set_page_background(None)
+        self._bind_label_maths(None)
         self.paint.EZFIG_panel.update_size()
         self.paint.EZFIG_panel.update()
         self.paint.EZFIG_panel.undo_redo_save_required.emit()
@@ -4351,6 +4381,17 @@ class EZFIG_GUI(QMainWindow):
                 except OSError:
                     logger.error('could not copy sidecar ' + src + ':\n'
                                  + traceback.format_exc())
+        if exts is None:
+            # the LaTeX-typeset label maths kept next to the figure
+            from batoolset.latex_tools import labels_dir_for
+            src_dir = labels_dir_for(src_base + '.pyf')
+            dst_dir = labels_dir_for(dst_base + '.pyf')
+            if os.path.isdir(src_dir) and os.path.normcase(src_dir) != os.path.normcase(dst_dir):
+                try:
+                    shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
+                except OSError:
+                    logger.error('could not copy the label maths ' + src_dir + ':\n'
+                                 + traceback.format_exc())
 
     def _save_current_to_temp_pyf(self):
         """Save the current figure (plus its sidecars) to a fresh temp folder for
@@ -4791,6 +4832,16 @@ class EZFIG_GUI(QMainWindow):
                                    'deficiency.',
                            main_widget=frame, options=['Ok'], parent=self)
         dlg.exec_()
+
+    def _bind_label_maths(self, pyf_path):
+        """Label maths typeset by LaTeX is looked up (and kept) next to the
+        figure first (batoolset.latex_tools): it travels with the figure."""
+        try:
+            from batoolset.latex_tools import bind_figure
+            bind_figure(pyf_path if isinstance(pyf_path, str) and pyf_path.lower().endswith('.pyf')
+                        and os.path.isfile(pyf_path) else None)
+        except Exception:
+            pass
 
     def _restore_lettering(self, gui_params=None):
         """After opening a figure: its own lettering (first letter and on/off),
