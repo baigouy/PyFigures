@@ -94,6 +94,17 @@ def test_split_merge_label(built):
     assert "Overlay" in plain and {"Ch1", "Ch2", "Ch3"} <= set(plain)
 
 
+def test_split_merge_option_is_not_a_merge_panel():
+    """`merge: true/false` on a split (documented) used to be read as a second
+    panel kind ("a panel needs exactly one of ...")."""
+    from pyfigures.recipe import _panel_kind, RecipeError
+    assert _panel_kind({"split": ["a.tif", "b.tif"], "merge": True}, "p") == "split"
+    assert _panel_kind({"split": "rgb.tif", "merge": False}, "p") == "split"
+    assert _panel_kind({"merge": ["a.tif", "b.tif"]}, "p") == "merge"
+    with pytest.raises(RecipeError, match="exactly one"):
+        _panel_kind({"split": "rgb.tif", "merge": ["a.tif", "b.tif"]}, "p")
+
+
 def test_kymograph_options(built):
     _res, root = built
     kymo = next(s for s in _scripts(root) if s.startswith("# pyfigures:kymograph"))

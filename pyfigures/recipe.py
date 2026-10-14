@@ -214,6 +214,9 @@ def _panel_kind(panel, where):
     if not isinstance(panel, dict):
         raise RecipeError(f"{where}: a panel must be a mapping, got {panel!r}")
     kinds = [k for k in _PANEL_KINDS if k in panel]
+    # `merge: true/false` on a split is its option (merged panel or not), not a merge panel
+    if "split" in panel and isinstance(panel.get("merge"), bool) and "merge" in kinds:
+        kinds.remove("merge")
     if len(kinds) != 1:
         raise RecipeError(f"{where}: a panel needs exactly one of "
                           + " / ".join(_PANEL_KINDS))
