@@ -55,7 +55,7 @@ def _make_app():
     return app
 
 
-def render_pyf(pyf_path: str, out_path: str, dpi: int = 300) -> str:
+def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None) -> str:
     """Render *pyf_path* to *out_path*, returning the absolute output path.
 
     Raises FileNotFoundError if the .pyf does not exist, ValueError for an
@@ -115,12 +115,17 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300) -> str:
         # event loop can crash PyQt6 natively). The process exits right after.
         gui._dirty = False
         gui.hide()
+        if _keep_alive is not None:
+            _keep_alive.append(gui)
 
     if not _os.path.isfile(out_path) or _os.path.getsize(out_path) == 0:
         raise RuntimeError(
             f"rendering produced no output at {out_path} (check that the "
             "figure's image files exist and are readable)")
     return out_path
+
+
+_KEEP_ALIVE = []
 
 
 def _main(argv=None) -> int:
@@ -131,8 +136,14 @@ def _main(argv=None) -> int:
     ap.add_argument("--dpi", type=int, default=300,
                     help="output DPI for raster formats (default 300)")
     args = ap.parse_args(argv)
+    # nothing is ever freed: Python freeing Qt objects (the window, its image
+    # loaders) without an event loop crashed the process natively (access
+    # violation) in about 1 run out of 20, after the output was written. This
+    # process is short-lived: no cyclic GC, and it ends with os._exit.
+    import gc
+    gc.disable()
     try:
-        out = render_pyf(args.pyf_path, args.out_path, dpi=args.dpi)
+        out = render_pyf(args.pyf_path, args.out_path, dpi=args.dpi, _keep_alive=_KEEP_ALIVE)
     except Exception as e:
         sys.stderr.write(f"ERROR: {type(e).__name__}: {e}\n")
         return 1
@@ -141,4 +152,7 @@ def _main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    code = _main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    _os._exit(code)
