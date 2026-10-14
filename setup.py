@@ -62,6 +62,7 @@ setuptools.setup(
         "imagecodecs",
         "psutil",
         "python-pptx",     # editable PowerPoint export
+        "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
     ],
     extras_require={
         'ai': [
@@ -77,7 +78,7 @@ setuptools.setup(
             "zarr",          # OME-Zarr images, local or from a URL (read over http with requests)
         ],
         'pdf': [
-            "pymupdf",       # PDF files as vector panels (AGPL v3)
+            "pymupdf",       # PDF files as vector panels (AGPL v3; not in the standalone apps)
         ],
         # raw (16-bit) pixels from OMERO; without it OMERO images are read
         # through OMERO.web with 256 levels per channel. Left out of the "all"

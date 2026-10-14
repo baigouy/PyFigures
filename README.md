@@ -121,13 +121,13 @@ Perform the following steps **only once** to set up your environment:
 
     (Linux and macOS: Glencoe also publishes zeroc-ice wheels; otherwise pip compiles it.) Not included in the standalone apps.
 
-9. **Optional: PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
+9. **Optional: vector PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
 
     ```sh
     pip install -U pyfigures[pdf]
     ```
 
-    A PDF dropped onto the canvas becomes a **vector panel**, like an SVG file: it is laid out like an image and stays vector, clipping included, in PDF and SVG exports. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Uses PyMuPDF (AGPL v3). The standalone apps already include it.
+    A PDF dropped onto the canvas becomes a panel, laid out like an image. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Out of the box (and in the standalone apps), the page is rendered with pypdfium2 as a 600 dpi image. With this extra (PyMuPDF, AGPL v3) it stays a **vector panel**, like an SVG file, clipping included, in PDF and SVG exports.
 
 **Equations** need nothing extra: *File → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel) typesets LaTeX mathematics with Matplotlib — no TeX installation — as a vector panel; right-click it to edit it.
 
@@ -197,6 +197,7 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **Deprecated**          | Deprecation warnings                                        | https://pypi.org/project/Deprecated/          | MIT                |
 | **Requests**            | Downloads                                                   | https://pypi.org/project/requests/            | Apache 2.0         |
 | **python-pptx**         | Editable PowerPoint export (with lxml and XlsxWriter)       | https://pypi.org/project/python-pptx/         | MIT                |
+| **pypdfium2** (with PDFium) | PDF files as panels, rendered as images                 | https://pypi.org/project/pypdfium2/           | Apache 2.0 / BSD 3-Clause |
 
 Optional (installed only if you ask for them):
 
@@ -206,7 +207,7 @@ Optional (installed only if you ask for them):
 | **FFmpeg** (inside PyAV) | Video codecs; this build includes **x264 and x265** (GPL v2+) and LGPL/BSD codec libraries | https://ffmpeg.org/ | **GPL v3** as built |
 | **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
 | **zarr** (`pyfigures[zarr]`) | OME-Zarr images (with numcodecs)                       | https://pypi.org/project/zarr/                | MIT                |
-| **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels                            | https://pypi.org/project/PyMuPDF/             | **AGPL v3**        |
+| **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not in the standalone apps) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
 | **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
@@ -215,7 +216,7 @@ Optional (installed only if you ask for them):
 ### Licence of PyFigures and of the standalone executables
 
 - **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6, read-lif and pyqt6-plugins are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
-- **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. They also include PyMuPDF/MuPDF (PDF panels), which keeps its **GNU Affero GPL v3** licence (GPL v3 section 13 allows the combination). Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built. [docs/LICENSING.md](docs/LICENSING.md) explains the reasoning.
+- **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. They read PDFs with pypdfium2 (Apache/BSD); PyMuPDF (AGPL) is not included. Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built. [docs/LICENSING.md](docs/LICENSING.md) explains the reasoning.
 
 # Other Figure-Making Software
 

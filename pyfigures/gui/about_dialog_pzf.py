@@ -7,13 +7,11 @@ from qtpy.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QPushButt
 from qtpy.QtCore import Qt, QUrl
 from qtpy.QtGui import QDesktopServices
 
-# The standalone app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265) and
-# AGPL code (PyMuPDF/MuPDF), so as a whole it is distributed under the GPLv3;
-# installed with pip, PyFigures itself is BSD-2-Clause and only uses those
-# libraries. See docs/LICENSING.md.
+# The standalone app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so
+# as a whole it is distributed under the GPLv3; installed with pip, PyFigures
+# itself is BSD-2-Clause and only uses those libraries. See docs/LICENSING.md.
 LICENSE_FROZEN = ("This application is distributed under the GNU General Public License v3, "
-                  "because it includes PyQt6, Qt and FFmpeg; it also includes PyMuPDF/MuPDF "
-                  "under the GNU Affero GPL v3. PyFigures' own source code is "
+                  "because it includes PyQt6, Qt and FFmpeg. PyFigures' own source code is "
                   "BSD-2-Clause. It comes with ABSOLUTELY NO WARRANTY.")
 LICENSE_PIP = ("PyFigures is BSD-2-Clause licensed. It uses PyQt6 (GPL v3) and Qt (LGPL v3). "
                "It comes with ABSOLUTELY NO WARRANTY.")

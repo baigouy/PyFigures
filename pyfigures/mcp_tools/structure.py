@@ -542,9 +542,8 @@ def add_image(
         if not str(filename).lower().endswith(".pdf"):
             return "ERROR: page applies to PDF files only"
         try:
-            import fitz
-            with fitz.open(filename) as doc:
-                n_pages = doc.page_count
+            from batoolset.img import pdf_page_count
+            n_pages = pdf_page_count(filename)
         except Exception as e:
             return f"ERROR: cannot read {filename}: {e}"
         if not 1 <= int(page) <= n_pages:

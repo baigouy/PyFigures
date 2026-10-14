@@ -40,10 +40,10 @@ jobs:
           pip install pyinstaller pyinstaller-hooks-contrib
 
       - name: Install pyfigures and its dependencies
-        run: pip install ".[video,zarr,pdf]"
+        # no [pdf] extra: PyMuPDF is AGPL; the apps read PDFs with pypdfium2
+        run: pip install ".[video,zarr]"
 
-      # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265) and AGPL
-      # code (PyMuPDF/MuPDF, combined under GPLv3 section 13), so it is
+      # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the
       # corresponding source is attached to the release (see the release job).
       - name: Collect licence notices

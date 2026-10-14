@@ -162,6 +162,37 @@ def test_pdf_pages_as_series(qapp, tmp_path, three_pages):
     assert add_image(pyf, [], str(tmp_path / "x.svg"), page=1).startswith("ERROR: page applies to PDF")
 
 
+def test_pdf_pages_without_pymupdf_use_pypdfium2(qapp, tmp_path, three_pages, monkeypatch):
+    # the standalone apps have no PyMuPDF (AGPL): pages are rendered as images
+    pytest.importorskip("pypdfium2")
+    import sys
+    from batoolset.img import get_series_info
+    from batoolset.drawings.shapes.image2d import Image2D, pdf_to_svg_bytes
+    from pyfigures.mcp_server import create_figure, add_image, export_figure
+    monkeypatch.setitem(sys.modules, "fitz", None)                  # import fitz -> ImportError
+    assert get_series_info(three_pages) == (3, ["Page 1", "Page 2", "Page 3"])
+    assert b"<image" in pdf_to_svg_bytes(three_pages, page=1)
+    im = Image2D(three_pages, serie_to_open=2)
+    assert im.renderer.defaultSize().height() == 200                        # page 3's own size, in points
+    pyf = str(tmp_path / "f.pyf")
+    create_figure(pyf, mode="canvas")
+    assert "page 2" in add_image(pyf, [], three_pages, page=2)
+    assert add_image(pyf, [], three_pages, page=4).startswith("ERROR: page must be between 1 and 3")
+    # drawn into a PDF, the page is one image at 600 dpi, not at screen resolution
+    from qtpy.QtCore import QRectF, QSizeF
+    from qtpy.QtGui import QPainter, QPdfWriter, QPageSize
+    out = str(tmp_path / "o.pdf")
+    writer = QPdfWriter(out)
+    writer.setPageSize(QPageSize(QSizeF(200, 200), QPageSize.Unit.Point))
+    p = QPainter(writer)
+    im.renderer.render(p, QRectF(0, 0, 200, 200))
+    p.end()
+    monkeypatch.delitem(sys.modules, "fitz")
+    with fitz.open(out) as doc:
+        (xref, *_), = doc[0].get_images()
+        assert doc.extract_image(xref)["width"] >= 200 * 600 / 72 - 1
+
+
 def test_recipe_page(qapp, tmp_path, three_pages):
     from pyfigures.recipe import build_figure_from_recipe
     out = str(tmp_path / "r.pyf")

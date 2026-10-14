@@ -9,9 +9,9 @@ licences, not legal advice.
 | What is distributed | Licence | Why |
 |---|---|---|
 | PyFigures' own source code (GitHub, PyPI) | **BSD 2-Clause** | It is your code; you choose its licence. |
-| `pip install pyfigures` | **BSD 2-Clause** | You distribute only your code. pip installs the dependencies (PyQt6, PyMuPDF, ...) on the user's machine, each under its own licence. |
+| `pip install pyfigures` | **BSD 2-Clause** | You distribute only your code. pip installs the dependencies (PyQt6, pypdfium2, optionally PyMuPDF, ...) on the user's machine, each under its own licence. |
 | The standalone apps (Windows / macOS executables) | **GNU GPL v3** as a whole | They *contain* GPL code (PyQt6, read-lif, pyqt6-plugins, FFmpeg built with x264/x265). Distributing a combined work that includes GPL code means distributing the whole under the GPL. |
-| PyMuPDF / MuPDF inside the apps | **GNU AGPL v3** (keeps its own licence) | GPL v3 section 13 (and the same section of the AGPL v3) explicitly allows combining the two; each part keeps its terms. |
+| PyMuPDF | not in the apps | AGPL v3; pip-only optional extra (`pyfigures[pdf]`). The apps read PDFs with pypdfium2 (Apache/BSD) instead. |
 
 As the copyright holder you can license your own code differently in different
 forms: it is BSD everywhere, and only the *combined* executable has to follow
@@ -27,24 +27,29 @@ AGPL v3 are compatible with each other through their section 13. The LGPL
 (used by Qt) only asks that the library can be replaced, which dynamic linking
 satisfies.
 
-## What PyMuPDF does here
+## PDF panels: PyMuPDF or pypdfium2
 
-PyMuPDF (AGPL v3, or a paid commercial licence from Artifex) has one job in
-PyFigures: it converts a PDF dropped onto the canvas into SVG so the PDF
-becomes a **vector panel** (`pdf_to_svg_bytes` in
-`batoolset/drawings/shapes/image2d.py`; drawn by
-`batoolset/drawings/pdf_svg_renderer.py`). Nothing else depends on it.
-Permissive alternatives (pypdfium2) can only rasterise PDFs, which defeats the
-point; Poppler is GPL and would need an external program.
+Reading a PDF dropped onto the canvas is the only thing either library does
+(`pdf_to_svg_bytes` in `batoolset/drawings/shapes/image2d.py`; page counts in
+`pdf_page_count`, `batoolset/img.py`). Nothing else depends on them.
 
-- With pip it is optional: `pip install pyfigures[pdf]`. Without it, PDF
-  panels are unavailable and everything else works.
-- The standalone apps bundle it (`pyfigures.spec`, CI installs
-  `.[video,zarr,pdf]`).
+- **PyMuPDF** (AGPL v3, or a paid commercial licence from Artifex) converts
+  the page to SVG, so the PDF stays a **vector panel** (drawn by
+  `batoolset/drawings/pdf_svg_renderer.py`). Optional with pip:
+  `pip install pyfigures[pdf]`. Used whenever it is installed.
+- **pypdfium2** (Apache 2.0 / BSD-3, Google's PDFium) is a normal dependency.
+  Without PyMuPDF the page is rendered as an image at 600 dpi (at most 25
+  megapixels per page) and placed like a vector panel. Sharp in print, but
+  not vector.
+- **The standalone apps** bundle pypdfium2 and exclude PyMuPDF
+  (`pyfigures.spec`, CI installs `.[video,zarr]`), so no AGPL code is in them.
+  Decided 2026-10-14 to keep the apps' licence story to GPL v3 only.
 
 The AGPL's extra clause concerns software that users interact with **over a
 network**: whoever runs a *modified* version as a network service must offer
-its source to those users. A desktop application is not affected.
+its source to those users. A desktop application is not affected, so bundling
+PyMuPDF would have been legal (GPL v3 section 13); it was left out for
+simplicity.
 
 ## omero-py (raw pixels from OMERO)
 
@@ -62,12 +67,12 @@ nothing extra.
 
 1. **The licence texts and notices** of everything inside the bundle:
    `THIRD_PARTY_LICENSES.txt`, shown by *Help → About → Third-party licences*
-   (GPL v3, AGPL v3, LGPL v3, GPL v2, LGPL v2.1 texts included).
+   (GPL v3, LGPL v3, GPL v2, LGPL v2.1 texts included, and the AGPL v3 if an
+   AGPL component were ever bundled).
 2. **The complete corresponding source code** of every bundled component,
    offered from the same place as the executables (GPL v3 section 6(d)):
-   `corresponding-source-*.tar` attached to the GitHub release. PyMuPDF's
-   source archive on PyPI contains the MuPDF source; Qt's and FFmpeg's sources
-   are fetched from their own releases.
+   `corresponding-source-*.tar` attached to the GitHub release. Qt's and
+   FFmpeg's sources are fetched from their own releases.
 3. **No extra restrictions** on users (no licence keys, no "non-commercial"
    clause on the executables).
 
@@ -89,5 +94,5 @@ the executables are built (`.github/workflows/build.yml`), and checked by
   the GPL as long as they pass on the same rights (source + licence). They
   cannot make it closed source.
 - **If you ever want a non-GPL app**: you would need PySide6 (LGPL) instead of
-  PyQt6, an LGPL-only FFmpeg build (no x264/x265), and no PyMuPDF (or
-  Artifex's commercial licence).
+  PyQt6 and an LGPL-only FFmpeg build (no x264/x265). PDF reading is already
+  permissive (pypdfium2).

@@ -86,14 +86,11 @@ def test_licence_metadata_and_files_are_found():
         lif = None
     if lif is not None:                   # its metadata states no licence
         assert "GPL" in C._license_of(lif)
-    try:
-        mu = md.distribution("PyMuPDF")
-    except md.PackageNotFoundError:
-        mu = None
-    if mu is not None:                    # bundled in the app: its AGPL must be recognised
-        assert "AFFERO" in C._license_of(mu).upper()
-        assert C._license_texts(mu)
-    assert "GNU AFFERO GENERAL PUBLIC LICENSE, Version 3" in C.GNU_TEXTS
+    # bundled in the app instead of PyMuPDF (AGPL): permissive, with PDFium's notices
+    pdfium = md.distribution("pypdfium2")
+    assert "GPL" not in C._license_of(pdfium)
+    names = [name for name, _ in C._license_texts(pdfium)]
+    assert any("Apache" in n for n in names) and any("pdfium" in n.lower() for n in names)
     av = pytest.importorskip("av")
     texts = C._license_texts(md.distribution("av"))
     assert any(name.upper().startswith("LICENSE") for name, _ in texts)
@@ -121,7 +118,7 @@ def test_about_dialog_states_the_licence(qapp, monkeypatch, tmp_path):
     d = A.AboutDialog()
     texts = " ".join(lbl.text() for lbl in d.findChildren(QLabel))
     assert "GNU General Public License v3" in texts and "FFmpeg" in texts
-    assert "Affero" in texts and "PyMuPDF" in texts
+    assert "Affero" not in texts and "PyMuPDF" not in texts
     (button,) = [b for b in d.findChildren(QPushButton) if "licences" in b.text()]
     button.click()
     assert opened and os.path.samefile(opened[0].toLocalFile(), str(lic))

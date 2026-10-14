@@ -44,11 +44,13 @@ hiddenimports += collect_submodules('imagecodecs')
 hiddenimports += collect_submodules('av')
 hiddenimports += collect_submodules('zarr')          # OME-Zarr reading
 hiddenimports += collect_submodules('numcodecs')
-# PyMuPDF (pyfigures[pdf], AGPLv3): PDF files as vector panels, with its
-# native MuPDF libraries (collected explicitly, see `binaries` below)
-hiddenimports += collect_submodules('pymupdf')
-hiddenimports += ['fitz']
-binaries = collect_dynamic_libs('pymupdf')
+# pypdfium2 (Apache/BSD): PDF files as panels, rendered as images, with its
+# native PDFium library. PyMuPDF (vector PDF panels) is AGPL and is left out
+# of the apps (excluded below); pip users can add it with pyfigures[pdf].
+hiddenimports += collect_submodules('pypdfium2')
+hiddenimports += collect_submodules('pypdfium2_raw')
+datas += collect_data_files('pypdfium2_raw')         # version.json
+binaries = collect_dynamic_libs('pypdfium2_raw')
 hiddenimports += [
     # PyQt6 / Qt
     'PyQt6',
@@ -111,6 +113,8 @@ a = Analysis(
     excludes=[
         'tkinter',
         '_tkinter',
+        'fitz',         # PyMuPDF: AGPL, never bundled
+        'pymupdf',
     ],
     noarchive=False,
 )

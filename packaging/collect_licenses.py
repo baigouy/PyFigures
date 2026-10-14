@@ -2,8 +2,9 @@
 
 PyFigures' own code is BSD-2-Clause, but the standalone executables bundle
 copyleft code: PyQt6, read-lif and pyqt6-plugins (GPLv3), Qt (LGPLv3),
-PyAV's FFmpeg, built with --enable-version3 and x264/x265 (GPLv3 as a whole),
-and PyMuPDF with MuPDF (AGPLv3; its PyPI source archive contains MuPDF's).
+and PyAV's FFmpeg, built with --enable-version3 and x264/x265 (GPLv3 as a
+whole). PyMuPDF (AGPLv3) is not bundled; AGPL components would be listed
+separately if one ever were.
 Each executable is therefore distributed under the GNU GPL version 3, and must
 come with (1) the licence texts and notices of everything inside it and (2)
 access to the complete corresponding source, offered from the same place as
@@ -36,7 +37,6 @@ import urllib.request
 PYPI_JSON = "https://pypi.org/pypi/{name}/{version}/json"
 GNU_TEXTS = {
     "GNU GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/gpl-3.0.txt",
-    # PyMuPDF / MuPDF (PDF files as vector panels)
     "GNU AFFERO GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/agpl-3.0.txt",
     "GNU LESSER GENERAL PUBLIC LICENSE, Version 3": "https://www.gnu.org/licenses/lgpl-3.0.txt",
     "GNU GENERAL PUBLIC LICENSE, Version 2": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
@@ -108,10 +108,16 @@ def _license_texts(dist):
     out = []
     for f in dist.files or []:
         p = str(f).replace("\\", "/")
-        if ".dist-info/" in p and LICENSE_FILE.search(p) and not p.endswith((".py", ".pyc")):
+        if ".dist-info/" not in p or p.endswith((".py", ".pyc")):
+            continue
+        # PEP 639: every file under .dist-info/licenses/ is a licence file,
+        # whatever its name (pypdfium2: LICENSES/Apache-2.0.txt, .../pdfium.txt)
+        in_licenses_dir = re.search(r"\.dist-info/licenses/(.+)$", p, re.I)
+        if in_licenses_dir or LICENSE_FILE.search(p):
+            name = in_licenses_dir.group(1) if in_licenses_dir else p.split("/")[-1]
             try:
                 with open(f.locate(), encoding="utf-8", errors="replace") as fh:
-                    out.append((p.split("/")[-1], fh.read()))
+                    out.append((name, fh.read()))
             except OSError:
                 pass
     return out
@@ -215,7 +221,7 @@ def notices(out_dir):
         "libraries inside this bundle with your own (modified) build.",
         "",
     ] + ([
-        f"{', '.join(agpl)} (PDF files as vector panels, with the MuPDF library) is",
+        f"{', '.join(agpl)} is",
         "licensed under the GNU Affero General Public License version 3 (full text",
         "below), which section 13 of the GPL v3 allows to be combined with it; those",
         "components keep the AGPL terms.",
