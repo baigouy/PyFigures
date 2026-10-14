@@ -55,6 +55,15 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller pyfigures.spec
 
+      # the built app checks its own contents (Qt SVG, PDF panels with
+      # pypdfium2 and no PyMuPDF, H.264 encoder, zarr); fails the build if not
+      - name: Self-test of the built app
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then APP="dist/PyFigures/PyFigures.exe"; else APP="dist/PyFigures.app/Contents/MacOS/PyFigures"; fi
+          QT_QPA_PLATFORM=offscreen "$APP" --self-test self_test.json || { cat self_test.json; exit 1; }
+          cat self_test.json
+
       - name: Licence files next to the executable too (Windows)
         if: runner.os == 'Windows'
         shell: bash

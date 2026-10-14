@@ -83,7 +83,7 @@ hiddenimports += [
     'psutil',
     'requests',
     'urllib3',
-    'Markdown',
+    'markdown',     # import name of the Markdown package
     'deprecated',
     'tqdm',
     'pandas',

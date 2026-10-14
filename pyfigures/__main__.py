@@ -307,6 +307,13 @@ def requested_tool(argv, executable):
 
 
 if __name__ == '__main__':
+    if '--self-test' in sys.argv:
+        # build check: PyFigures --self-test report.json (see pyfigures/self_test.py)
+        from pyfigures.self_test import run as run_self_test
+        args = sys.argv[sys.argv.index('--self-test') + 1:]
+        code = run_self_test(args[0] if args else 'pyfigures_self_test.json')
+        sys.stdout.flush()
+        os._exit(code)
     tool = requested_tool(sys.argv[1:], sys.executable if getattr(sys, 'frozen', False) else '')
     if tool is not None:
         from pyfigures.poster.__main__ import run_poster_designer
