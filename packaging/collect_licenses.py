@@ -161,12 +161,17 @@ def _pypi_sdist(name, version):
     return None
 
 
+# installed in the build environment but not put in the app (PyInstaller itself
+# stays listed: its bootloader is inside every executable)
+BUILD_ONLY = {"pip", "pyinstaller-hooks-contrib", "altgraph", "pefile", "pywin32-ctypes", "macholib"}
+
+
 def _python_components():
     comps = []
     seen = set()
     for dist in sorted(md.distributions(), key=lambda d: (d.metadata["Name"] or "").lower()):
         name = dist.metadata["Name"]
-        if not name or name.lower() in seen:
+        if not name or name.lower() in seen or name.lower() in BUILD_ONLY:
             continue
         seen.add(name.lower())
         version = dist.version
