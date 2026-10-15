@@ -472,24 +472,33 @@ class MyWidget(QWidget):
             # Draw the ruler lines
 
 
-            for i in range(0, int(self.width()/self.scale), 10):
+            # ticks are drawn from the padding on, so they stop one padding before
+            # the edge, and a label that would be cut by the edge is not drawn
+            # (the last one used to be clipped, e.g. "5" for 500)
+            fm = painter.fontMetrics()
+            visible_w = self.width() / self.scale
+            visible_h = self.height() / self.scale
+            for i in range(0, int(visible_w), 10):
                 if SKIP_ZERO and i == 0:
                     continue
                 if i % 50 == 0: # we only keep the main ticks
-                    painter.drawLine(EXTRA_SPACE_FOR_RULER+i, 15, EXTRA_SPACE_FOR_RULER+i, 0)
-                    painter.drawText(EXTRA_SPACE_FOR_RULER+i - 5, 30, str(i)) # this stuff is not centered -> I need get size of text to center it!!! --> TODO
-                # elif i % 10 == 0:
-                #     painter.drawLine(i, 30, i, 0)
-                # else:
-                #     painter.drawLine(i, 20, i, 0)
+                    label = str(i)
+                    x = EXTRA_SPACE_FOR_RULER + i
+                    half = fm.horizontalAdvance(label) / 2
+                    if x + half > visible_w:
+                        break
+                    painter.drawLine(x, 15, x, 0)
+                    painter.drawText(int(x - half), 30, label)  # centred on its tick
 
-                # Draw the ruler lines
-            for i in range(0, int(self.height()/self.scale), 10):
+            for i in range(0, int(visible_h), 10):
                 if SKIP_ZERO and i==0:
                     continue
                 if i % 50 == 0:
-                    painter.drawLine(0, EXTRA_SPACE_FOR_RULER+i, 10, EXTRA_SPACE_FOR_RULER+i)
-                    painter.drawText(12, EXTRA_SPACE_FOR_RULER+i + 5, str(i))
+                    y = EXTRA_SPACE_FOR_RULER + i
+                    if y + fm.ascent() / 2 > visible_h:
+                        break
+                    painter.drawLine(0, y, 10, y)
+                    painter.drawText(12, int(y + fm.ascent() / 2 - 1), str(i))
                 # elif i % 10 == 0:
                 #     painter.drawLine(0, i, 30, i)
                 # else:
