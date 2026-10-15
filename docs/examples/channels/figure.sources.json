@@ -1,16 +1,16 @@
 {
  "version": 1,
  "figure": "figure.pyf",
- "saved": "2026-10-14T15:08:17",
+ "saved": "2026-10-15T14:09:50",
  "files": {
   "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\membrane.tif": {
    "size": 131328,
-   "mtime_ns": 1791983287375496600,
+   "mtime_ns": 1792066178909703200,
    "sha256": "6dad0508f0044e46437bba18bdcea0d10c0e039c991f12f9388ed11d5c0fc958"
   },
   "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\nuclei.tif": {
    "size": 131328,
-   "mtime_ns": 1791983287377402300,
+   "mtime_ns": 1792066178912288700,
    "sha256": "46a6b13594cc58d68c0c9142b9acb9fa59044e4bd1604c857867611c03340125"
   }
  }

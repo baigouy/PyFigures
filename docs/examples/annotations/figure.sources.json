@@ -1,11 +1,11 @@
 {
  "version": 1,
  "figure": "figure.pyf",
- "saved": "2026-10-14T15:09:01",
+ "saved": "2026-10-15T14:10:00",
  "files": {
   "C:\\Users\\aigouy\\OneDrive\\mon_prog\\Python\\pyfigures_pkg\\docs\\examples\\data\\mitosis.png": {
    "size": 105180,
-   "mtime_ns": 1791983287323238700,
+   "mtime_ns": 1792066178299880800,
    "sha256": "40b323f8d2b24a1723d71a545302a31627b460d3e25712e17d8e54b54dde3a92"
   }
  }
