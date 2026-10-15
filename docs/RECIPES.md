@@ -208,6 +208,7 @@ Every panel is a mapping with **exactly one** *kind* key naming its source:
 | `colorbar` | a LUT name | a calibration bar for that LUT (§18) |
 | `script` | Python code | a generated panel, e.g. a matplotlib model (§18) |
 | `equation` | LaTeX mathematics | a typeset equation, as a vector panel (§18) |
+| `tex` | LaTeX code | a TikZ / pgfplots picture, a table or a document, compiled into a vector panel (§18) |
 
 A row can also be a mapping with its own options (§19):
 
@@ -823,6 +824,22 @@ it when the `.tex` changed, and the MCP tool `update_latex_panels` does it.
 - - {image: paper.tex, page: 2}
 ```
 
+**LaTeX code panels** — `tex:` holds LaTeX code itself: a TikZ / pgfplots
+picture, a tabular, maths, or a whole document (`\documentclass…`). A snippet
+gets amsmath, amssymb, bm, siunitx, graphicx, booktabs, xcolor, tikz and
+pgfplots; `preamble:` adds more. The compiled PDF is kept in
+`equations/labels/` next to the figure. Keys: `label`, `preamble`.
+
+```yaml
+- - tex: |
+      \begin{tikzpicture}
+        \begin{axis}[width=6cm, xlabel={$t$ (s)}]
+          \addplot[blue, thick, domain=0:5] {exp(-x)};
+        \end{axis}
+      \end{tikzpicture}
+    label: A
+```
+
 ---
 
 ## 19. Row options — columns, spacing, label rows, side labels
@@ -1281,6 +1298,7 @@ server, and edited afterwards in either.
 | `colorbar` | Annotations → Add LUT colour bar… | `add_lut_calibration_bar` |
 | `script` | Edit Image → Script tab (on an empty image) | `add_scripted_image`, `set_script` |
 | `equation` | File → Add equation (LaTeX)…; right-click → Edit equation… | `add_equation` |
+| `tex` | File → Add LaTeX code panel…; right-click → Edit LaTeX code… | `add_latex_code` |
 | row `orientation`, `spacing` | drop → To column; right-click → Change space between elements | `add_group`, `set_orientation`, `set_spacing` |
 | row `labels`, `side_label` | right-click → Add labels ▶ | `add_label_row`, `add_side_label` |
 | `width_*`, `dpi` | Figure width box in the toolbar | `resize_figure` |

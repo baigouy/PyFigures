@@ -445,7 +445,8 @@ Normalisation dict examples:
 
 | Tool | Description |
 |------|-------------|
-| `add_scripted_image(pyf_path, group_path, script, label, ...)` | **Add a new matplotlib/numpy panel in one step** — preferred over add_image + set_script |
+| `add_scripted_image(pyf_path, group_path, script, label, ...)` | **Add a new matplotlib/numpy panel in one step** — preferred over add_image + set_script. Scripts can also call `latex(code)` (returns a vector panel from LaTeX code), or be LaTeX code themselves |
+| `add_latex_code(pyf_path, group_path, code, preamble, label, label_placement)` | Add a **LaTeX code panel**: TikZ / pgfplots picture, tabular, maths or a whole document, compiled into a vector panel; the code stays editable (GUI right-click → Edit LaTeX code…) and the PDF is kept in `equations/labels` so the figure opens without TeX. Compile errors are returned at once |
 | `get_script(pyf_path, group_path, image_index)` | Read the Python script on a panel |
 | `set_script(pyf_path, group_path, image_index, script)` | Replace the script on an existing panel |
 

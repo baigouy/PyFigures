@@ -16,10 +16,15 @@ installation and adds the result as a (vector) PDF panel:
   recorded beside it (``<pdf>.source``), so the panel can be recompiled later.
 
 A .tex file without \\documentclass is an equation (pyfigures.equations).
+
+LaTeX *code panels* (``latex_code_pdf``): a panel whose script is LaTeX code
+(a TikZ picture, a table, a whole document…) instead of Python, or a Python
+script calling ``latex(code)``; compiled the same way.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -151,16 +156,27 @@ def compile_document(tex_path: str, out_pdf: str, part: int | None = None) -> st
     """Compile the panel part (*part*, 1-based; default the first) of the
     document *tex_path* to *out_pdf* (cropped). Raises ValueError with
     LaTeX's message on failure."""
+    with open(tex_path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    compile_text(text, out_pdf, os.path.dirname(os.path.abspath(tex_path)),
+                 os.path.basename(tex_path), part)
+    _mark_source(out_pdf, tex_path, part)
+    return out_pdf
+
+
+def compile_text(text: str, out_pdf: str, src_dir: str, name: str = "the LaTeX code",
+                 part: int | None = None, whole_body: bool = False) -> str:
+    """Compile the LaTeX document *text* (its panel part, or its whole body
+    with *whole_body*) to *out_pdf*, cropped, running in *src_dir* (relative
+    paths resolve there). Raises ValueError with LaTeX's message on failure."""
     from pyfigures.equations import find_tex_tool
     pdflatex = find_tex_tool("pdflatex")
     if pdflatex is None:
         from batoolset.tex_install import INSTALL_HINT
-        raise ValueError("a .tex document needs a LaTeX installation (pdflatex from TeX Live, "
+        raise ValueError("LaTeX code needs a LaTeX installation (pdflatex from TeX Live, "
                          f"MiKTeX or MacTeX). {INSTALL_HINT}")
-    with open(tex_path, encoding="utf-8", errors="replace") as f:
-        text = f.read()
     preamble, body = split_document(text)
-    content = panel_content(body, part)
+    content = body.strip() if whole_body else panel_content(body, part)
     doc = "\n".join([
         preamble.rstrip(),
         r"\usepackage{varwidth}",
@@ -173,7 +189,6 @@ def compile_document(tex_path: str, out_pdf: str, part: int | None = None) -> st
         r"\end{varwidth}\end{preview}",
         r"\end{document}",
         ""])
-    src_dir = os.path.dirname(os.path.abspath(tex_path))
     work = tempfile.mkdtemp(prefix="pyf_texdoc_")
     try:
         job = os.path.join(work, "panel.tex")
@@ -201,13 +216,99 @@ def compile_document(tex_path: str, out_pdf: str, part: int | None = None) -> st
         if r.returncode != 0 or not os.path.isfile(pdf):
             errors = [ln[1:].strip() for ln in log.splitlines() if ln.startswith("!")]
             detail = "; ".join(errors[:3]) or (r.stdout or r.stderr or "").strip()[-300:]
-            raise ValueError(f"LaTeX could not compile {os.path.basename(tex_path)}: {detail}")
+            raise ValueError(f"LaTeX could not compile {name}: {detail}")
         os.makedirs(os.path.dirname(os.path.abspath(out_pdf)) or ".", exist_ok=True)
         shutil.copyfile(pdf, out_pdf)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    _mark_source(out_pdf, tex_path, part)
     return out_pdf
+
+
+# ---------------------------------------------------------------------------
+# LaTeX code panels: a panel whose script is LaTeX code (or a Python script
+# calling latex(...)); compiled to a PDF kept with the figure's typeset maths
+# (batoolset.latex_tools caches), so it opens on computers without TeX
+# ---------------------------------------------------------------------------
+CODE_PREAMBLE = "\n".join([
+    r"\documentclass{article}",
+    r"\usepackage{amsmath,amssymb,bm,siunitx,graphicx,booktabs,xcolor}",
+    r"\usepackage{tikz}",
+    r"\usepackage{pgfplots}",
+    r"\pgfplotsset{compat=1.18}",
+])
+CODE_VERSION = 1             # bumped if CODE_PREAMBLE / the wrapping changes
+
+
+def is_latex_code(script) -> bool:
+    """True if a panel script is LaTeX rather than Python (Python code never
+    starts with a backslash or a % comment)."""
+    return isinstance(script, str) and script.lstrip().startswith(("\\", "%"))
+
+
+def code_document(code: str, preamble: str | None = None):
+    """(full document text, whole_body) for LaTeX *code*: a whole document is
+    used as it is (its panel part); a snippet (TikZ, pgfplots, a table,
+    maths…) is wrapped in CODE_PREAMBLE (+ *preamble*) and shown whole."""
+    if is_full_document(code):
+        return code, False
+    head = CODE_PREAMBLE + ("\n" + preamble if preamble else "")
+    return head + "\n\\begin{document}\n" + code.strip() + "\n\\end{document}\n", True
+
+
+def _code_key(code, preamble):
+    raw = json.dumps([CODE_VERSION, code.strip(), preamble or ""])
+    return "code_" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def latex_code_pdf(code: str, preamble: str | None = None, cache_dirs=None, cwd=None) -> str:
+    """The PDF of LaTeX *code* (see code_document): from the caches (the
+    figure's ``equations/labels`` folder, then the user's), else compiled —
+    in *cwd* (default: the figure's folder) so relative \\includegraphics
+    paths work. Raises ValueError (LaTeX's message, or how to install LaTeX)."""
+    from batoolset import latex_tools as LT
+    key = _code_key(code, preamble)
+    dirs = list(LT.CACHE_DIRS if cache_dirs is None else cache_dirs) + [LT.user_cache_dir()]
+    for d in dirs:
+        pdf = os.path.join(d, key + ".pdf")
+        if os.path.isfile(pdf):
+            LT.USED.add(key)
+            if dirs[0] != d and cache_dirs is None and LT.CACHE_DIRS:
+                _store_code(pdf, key, code, preamble, [LT.CACHE_DIRS[0]])
+            return pdf
+    text, whole = code_document(code, preamble)
+    if cwd is None:
+        cwd = LT.FIGURE_DIR[0] if LT.FIGURE_DIR else os.getcwd()
+    tmp = tempfile.mkdtemp(prefix="pyf_code_")
+    try:
+        out = compile_text(text, os.path.join(tmp, key + ".pdf"), cwd, "the LaTeX code",
+                           whole_body=whole)
+        stored = _store_code(out, key, code, preamble, dirs)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    LT.USED.add(key)
+    if stored is None:
+        raise ValueError("could not store the compiled LaTeX code")
+    return stored
+
+
+def _store_code(pdf, key, code, preamble, dirs):
+    """Copy *pdf* (+ a .json with its code) into the first writable of *dirs*
+    and the user cache; returns the first copy."""
+    from batoolset import latex_tools as LT
+    first = None
+    for d in list(dirs[:1]) + [LT.user_cache_dir()]:
+        try:
+            os.makedirs(d, exist_ok=True)
+            dest = os.path.join(d, key + ".pdf")
+            if os.path.abspath(dest) != os.path.abspath(pdf):
+                shutil.copyfile(pdf, dest)
+            with open(os.path.join(d, key + ".json"), "w", encoding="utf-8") as f:
+                json.dump({"code": code, "preamble": preamble}, f)
+            if first is None:
+                first = dest
+        except OSError:
+            continue
+    return first
 
 
 def _mark_source(pdf_path, tex_path, part=None):

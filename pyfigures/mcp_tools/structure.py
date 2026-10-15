@@ -658,6 +658,60 @@ def add_equation(
 
 
 @mcp.tool()
+def add_latex_code(
+    pyf_path: str,
+    group_path: list[int],
+    code: str,
+    preamble: str | None = None,
+    label: str = "",
+    label_placement: str = "top left",
+) -> str:
+    """Add a **LaTeX code panel**: the panel's script is LaTeX code — a TikZ or
+    pgfplots picture, a tabular, maths, or a whole document (\\documentclass…:
+    its own preamble; its first figure/table/picture is shown) — compiled by
+    LaTeX into a vector panel. A snippet gets amsmath, amssymb, bm, siunitx,
+    graphicx, booktabs, xcolor, tikz and pgfplots, plus *preamble*. Relative
+    \\includegraphics paths start at the figure's folder.
+
+    The code stays editable (GUI: right-click → Edit LaTeX code…, or the
+    panel's script) and the compiled PDF is kept in ``equations/labels`` next
+    to the figure, so it opens on computers without TeX. A Python panel
+    script can also call ``latex(code)`` (e.g. a table built from data).
+    Needs LaTeX (install_latex installs it)."""
+    from batoolset import latex_tools as LT
+    from pyfigures import latex_document as LD
+    if not os.path.isfile(pyf_path):
+        return f"ERROR: no such figure: {pyf_path}"
+    if not str(code).strip():
+        return "ERROR: empty LaTeX code"
+    try:
+        LD.latex_code_pdf(code, preamble, cache_dirs=[LT.labels_dir_for(pyf_path)],
+                          cwd=os.path.dirname(os.path.abspath(pyf_path)))
+    except ValueError as e:
+        return f"ERROR: {e}"
+    if preamble or not LD.is_latex_code(code):
+        script = f"self.img = latex({code!r}, {preamble!r})"
+    else:
+        script = code
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    img = _new_image2d("__latex_code__")
+    img.find("filename").text = "None"
+    from .core import _set_child_text
+    _set_child_text(img, "custom_loading_script", _encode_str(script))
+    if label:
+        img.find("annotations").append(_new_tatext2d(label, label_placement))
+    _append_image(container, img, is_root=(not group_path))
+    _save(tree, pyf_path, recompute=True)
+    n = len([c for c in container if c.tag == "Image2D"]) - 1
+    loc = "canvas" if not group_path else f"group {group_path}"
+    suffix = f' with label "{label}"' if label else ""
+    return f"Added a LaTeX code panel as image {n} in {loc}{suffix}."
+
+
+@mcp.tool()
 def update_latex_panels(pyf_path: str, force: bool = False) -> str:
     """Recompile the panels made from LaTeX documents (.tex added with
     add_image / dropped / recipe ``image: x.tex``) whose .tex changed since they

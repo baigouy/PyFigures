@@ -943,6 +943,13 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(equation_action)
         equation_action.triggered.connect(self.add_equation_action)
 
+        latex_code_action = QAction("Add LaTeX code panel…", self)
+        latex_code_action.setToolTip("Write LaTeX code (a TikZ / pgfplots picture, a table, a whole "
+                                     "document): compiled into a vector panel that stays editable "
+                                     "(right-click → Edit LaTeX code…). Needs LaTeX.")
+        file_menu.addAction(latex_code_action)
+        latex_code_action.triggered.connect(self.add_latex_code_action)
+
         draft_action = QAction("Draft figure from folder…", self)
         draft_action.setToolTip("Auto-assemble a first-pass figure from a folder of "
                                 "images and CSVs: grid layout, data plots, scale bars, "
@@ -2521,6 +2528,63 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.update_size()
         self.paint.EZFIG_panel.update()
         self._mark_dirty()
+
+    def _latex_code_dialog(self, code=""):
+        """Run the LaTeX code dialog until the code compiles (or it is
+        cancelled); returns (code, pdf) or None."""
+        from pyfigures.gui.latex_code_dialog import LatexCodeDialog
+        from pyfigures.gui.latex_support import offer_latex_install
+        if not offer_latex_install(self, 'A LaTeX code panel is compiled by LaTeX') and not code:
+            return None
+        dlg = LatexCodeDialog(self, code)
+        while dlg.exec() == QDialog.DialogCode.Accepted:
+            if not dlg.update_preview():
+                continue                          # show the error, let the user fix it
+            from pyfigures.latex_document import latex_code_pdf
+            return dlg.code(), latex_code_pdf(dlg.code())
+        return None
+
+    def add_latex_code_action(self, *_):
+        """File > Add LaTeX code panel…: a panel whose script is LaTeX code
+        (MCP: add_latex_code), added as a new row."""
+        res = self._latex_code_dialog()
+        if not res:
+            return None
+        code, _ = res
+        img2d = Image2D(custom_loading_script=code)
+        if img2d.renderer is None:
+            QMessageBox.warning(self, 'LaTeX code', img2d.script_log or 'The code could not be compiled.')
+            return None
+        panel = self.paint.EZFIG_panel
+        panel._add_as_new_group([img2d], orientation='X', remove_from_parents=False)
+        panel.update_size()
+        panel.update()
+        panel.set_current_selection(img2d)
+        panel.update_letters_required.emit()
+        panel.undo_redo_save_required.emit()
+        self._mark_dirty()
+        return img2d
+
+    def edit_latex_code(self, shape):
+        """Right-click > Edit LaTeX code…: change a LaTeX code panel's code and
+        show the new result in place (same displayed height)."""
+        res = self._latex_code_dialog(shape.custom_loading_script or '')
+        if not res:
+            return False
+        code, pdf = res
+        if code == shape.custom_loading_script:
+            return False
+        shown_height = shape.height()
+        shape.custom_loading_script = code
+        shape._show_script_file(pdf)
+        if shown_height > 0:
+            shape.setToHeight(shown_height)
+        self._lazy_size_drift = True
+        self._reflow_after_lazy_load()
+        self.paint.EZFIG_panel.update_size()
+        self.paint.EZFIG_panel.update()
+        self._mark_dirty()
+        return True
 
     def add_images_to_new_row(self, lst):
         self._load_images_then_callback(lst,

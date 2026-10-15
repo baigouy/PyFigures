@@ -2285,7 +2285,12 @@ class MyWidget(QWidget):
                         _eq_shape = self.selected_shape
                         edit_eq = self.contextMenu.addAction("Edit equation…")
                         edit_eq.triggered.connect(lambda: gui.edit_equation(_eq_shape))
-                    from pyfigures.latex_document import source_of
+                    from pyfigures.latex_document import source_of, is_latex_code
+                    if is_latex_code(getattr(self.selected_shape, 'custom_loading_script', None)) \
+                            and hasattr(gui, 'edit_latex_code'):
+                        _code_shape = self.selected_shape
+                        edit_code = self.contextMenu.addAction("Edit LaTeX code…")
+                        edit_code.triggered.connect(lambda: gui.edit_latex_code(_code_shape))
                     _fn = getattr(self.selected_shape, 'filename', None)
                     if isinstance(_fn, str) and source_of(_fn) and hasattr(gui, 'recompile_latex_panel'):
                         _doc_shape = self.selected_shape
