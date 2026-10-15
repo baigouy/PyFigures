@@ -566,6 +566,14 @@ def add_zoom_callout(
     _set_child_text(inset, "border_size", str(int(inset_border)) if inset_border else "None")
     _set_child_text(inset, "border_color", str(bc))
     if inset_filename is None:   # magnify the parent's own source region via crop
+        # shown like the parent (same LUTs, channels, series…), also after later
+        # changes to the parent: follow_parent_display (it used to show grey)
+        for tag in ("LUTs", "channels", "normalization", "projection", "projection_z_start",
+                    "projection_z_end", "dimensions", "serie_to_open"):
+            value = parent_img.findtext(tag)
+            if value is not None:
+                _set_child_text(inset, tag, value)
+        _set_child_text(inset, "follow_parent_display", "True")
         _set_child_text(inset, "crop_left",   str(int(source_x)))
         _set_child_text(inset, "crop_top",    str(int(source_y)))
         _set_child_text(inset, "crop_right",  str(int(max(0, parent_width - (source_x + source_w)))))

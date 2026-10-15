@@ -71,6 +71,24 @@ def test_figure_without_letters_stays_without(gui, qapp, tmp_path):
     assert _letters(gui, qapp) == [] and not gui.auto_lettering_checkbox.isChecked()
 
 
+def test_montage_keeps_one_letter_when_opened(gui, qapp, tmp_path):
+    """A montage is one figure panel: recipes letter its first frame only, and
+    the window used to re-letter every frame (A, B, C, D… instead of A, B)."""
+    import tifffile
+    from pyfigures.recipe import build_figure_from_recipe
+    from PIL import Image
+    Image.fromarray(np.full((40, 60), 120, np.uint8)).save(tmp_path / "a.png")
+    tifffile.imwrite(tmp_path / "movie.tif", np.random.default_rng(0).integers(
+        0, 255, (4, 30, 30), dtype=np.uint8), photometric="minisblack", metadata={"axes": "TYX"})
+    out = str(tmp_path / "montage.pyf")
+    path = tmp_path / "montage.json"
+    path.write_text(json.dumps({"output": out, "rows": [
+        [{"montage": "movie.tif", "axis": "t"}], ["a.png"]]}), encoding="utf-8")
+    build_figure_from_recipe(str(path))
+    gui.reload_state(out, append=False)
+    assert _letters(gui, qapp) == ["A", "B"]
+
+
 def test_lettering_saved_with_the_figure(gui, qapp, tmp_path):
     pyf = _recipe_figure(tmp_path, "saved")
     gui.reload_state(pyf, append=False)

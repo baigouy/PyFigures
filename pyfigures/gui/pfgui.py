@@ -5081,6 +5081,18 @@ class EZFIG_GUI(QMainWindow):
             # TODO --> A FAIRE
             if elm.isText:  # do not label text labels
                 continue
+            # as in recipes and the MCP server (_finalize_draft): a montage / channel
+            # split is ONE figure panel (lettered on its first member only), and a
+            # LUT calibration bar belongs to the panel next to it (opening a recipe
+            # figure used to re-letter every frame A, B, C…)
+            comment = str(getattr(elm, 'user_comments', '') or '')
+            script = str(getattr(elm, 'custom_loading_script', '') or '')
+            if (comment.startswith('[series ') and not comment.startswith('[series 1/')) \
+                    or 'ColorbarBase(' in script:
+                if elm.annotations:
+                    for l in [l for l in elm.annotations if isinstance(l, TAText2D) and l.is_letter]:
+                        elm.annotations.remove(l)
+                continue
             # reuse the existing letter annotation when possible: recreating a
             # QTextDocument-backed TAText2D per image on every refresh is expensive
             existing = None
