@@ -233,7 +233,7 @@ model browser — without it the model will ignore tool calls entirely.
 | Limitation | Details |
 |------------|---------|
 | **Context window** | Large files returned by `get_xml` may exceed smaller models' context. Prefer `describe_figure`. |
-| **Tool reliability** | Models < 7B sometimes skip tool calls or pass wrong types. Use 7B+. |
+| **Tool reliability** | Measured on the requests of the paper's Figure 3 plus three revisions (October 2026): a 28B model (Muse-Glimmer) completed all six with no error, by recipe or by individual tools; a 20B model completed four; an 8B vision model (Qwen3-VL-8B) made figures that were wrong (unsplit RGB channels, wrong colours) although its calls succeeded. Prefer models of ~20B parameters or more, ask them for a recipe (`build_figure_from_recipe`), and always look at `render_preview`. |
 | **Multi-step plans** | May need explicit prompting: "first call describe_figure, then add scale bars". |
 | **Speed** | Each tool call is a round-trip; CPU-only inference can be slow for complex edits. |
 
@@ -513,6 +513,15 @@ together.
 |------|-------------|
 | `check_source_changes(pyf_path, accept)` | List source images / CSVs changed or missing since the figure was last saved; `accept=True` makes the current files the reference. GUI: QC → Check for changed source files… (and a notice when a figure opens) |
 | `copy_style(source_pyf, target_pyf, aspects, dry_run)` | Give a figure the look of another (e.g. an accepted one): `fonts`, `letters` (size/weight/colour/corner/case), `scale_bars` (colour, corner, label style), `spacing` (per nesting level), `plots` (chart font size, line widths). Content untouched. GUI: File → Copy style from another figure… |
+| `list_history(pyf_path, last)` | Every MCP call made on the figure, newest last: tool, arguments, status, whether it changed the figure, whether it was undone. GUI: QC → MCP call history / undo…; command line: `python -m pyfigures.history fig.pyf` |
+| `undo_last(pyf_path, steps, force)` | Put the figure (`.pyf` and sidecars) back as it was before the last *steps* changing MCP calls; refused when the figure was changed since outside the server (GUI…) unless `force=True`. GUI: the same dialog; command line: `python -m pyfigures.history fig.pyf --undo 2` |
+
+**Call history.** Every tool call that reaches the server and names a figure
+(any `.pyf` argument, or a recipe's `output`) is appended to
+`<figure>.history/log.jsonl` beside it, with the figure as it was before each
+changing call (the last 100 are kept). Calls made from Python — the GUI, a
+recipe's internal steps — are not logged one by one; a recipe build is one
+logged call.
 
 ### Typography & font tools
 

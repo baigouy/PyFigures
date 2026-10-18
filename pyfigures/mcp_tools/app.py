@@ -103,12 +103,54 @@ mcp = FastMCP(
         "the recipe and build again. Use the individual tools for small edits. "
         "Good practice: after building or editing, look at render_preview and "
         "compare what was asked with what is there; a reply starting with ERROR "
-        "means nothing (or not everything) was changed. Never invent pixel sizes, "
+        "means nothing (or not everything) was changed. Every call is logged beside "
+        "the figure: list_history shows them, undo_last reverts the last change(s). "
+        "Never invent pixel sizes, "
         "units or statistics design: ask the user or read the image metadata."
     ),
 )
 
 _fastmcp_tool = mcp.tool
+
+
+_NOT_LOGGED = {"list_history", "undo_last"}     # they read / write the log themselves
+
+
+def _figures_of_call(fn, args, kwargs) -> list[str]:
+    """The .pyf files a tool call names (any argument ending in .pyf, and a
+    recipe's output), for the call history."""
+    if fn.__name__ in _NOT_LOGGED:
+        return []
+    try:
+        import inspect
+        bound = inspect.signature(fn).bind_partial(*args, **kwargs).arguments
+    except TypeError:
+        return []
+    found = []
+    for value in bound.values():
+        for v in (value if isinstance(value, (list, tuple)) else [value]):
+            if isinstance(v, str) and v.lower().endswith(".pyf"):
+                found.append(os.path.abspath(v))
+    if fn.__name__ == "build_figure_from_recipe":
+        try:
+            from pyfigures.recipe import _resolve
+            text = bound.get("recipe_text")
+            path = bound.get("recipe_path") or ""
+            if text is None and os.path.isfile(path):
+                with open(path, encoding="utf-8") as f:
+                    text = f.read()
+            if text:
+                if path.lower().endswith(".json"):
+                    data = json.loads(text)
+                else:
+                    import yaml
+                    data = yaml.safe_load(text)
+                out = data.get("output") if isinstance(data, dict) else None
+                if isinstance(out, str):
+                    found.append(_resolve(os.path.dirname(os.path.abspath(path)), out))
+        except Exception:
+            pass
+    return list(dict.fromkeys(found))
 
 
 def _tool_with_warnings(*t_args, **t_kwargs):
@@ -140,16 +182,45 @@ def _tool_with_warnings(*t_args, **t_kwargs):
         # MCP clients see a refused request as a tool error (isError=true), not
         # as a successful reply that happens to start with "ERROR:" — models
         # took those for completed edits. Python callers keep the string.
+        # every call a client makes on a figure is logged beside it, with the
+        # figure as it was before a changing call, so it can be undone
+        # (pyfigures/history.py). Python callers — recipes building through
+        # these functions, the GUI — are not logged call by call.
         @functools.wraps(fn)
         def over_mcp(*args, **kwargs):
-            res = inner(*args, **kwargs)
+            figures = _figures_of_call(fn, args, kwargs)
+            before = {}
+            if figures:
+                from pyfigures import history
+                before = {p: history.capture(p) for p in figures}
+            try:
+                res = inner(*args, **kwargs)
+            except Exception as e:
+                res = f"ERROR: {type(e).__name__}: {e}"
+                _log_calls(fn, args, kwargs, figures, before, res)
+                raise
+            _log_calls(fn, args, kwargs, figures, before, res)
             if isinstance(res, str) and res.lstrip().startswith("ERROR"):
                 from mcp.server.fastmcp.exceptions import ToolError
                 raise ToolError(res.strip())
             return res
         register(over_mcp)
         return inner
+
     return deco
+
+
+def _log_calls(fn, args, kwargs, figures, before, res):
+    if figures:
+        from pyfigures import history
+        try:
+            import inspect
+            bound = inspect.signature(fn).bind_partial(*args, **kwargs)
+            for p in figures:
+                history.record(p, fn.__name__, dict(bound.arguments), res, before[p])
+        except Exception as e:     # the log never blocks a tool
+            print(f"pyfigures-mcp: call history skipped ({type(e).__name__}: {e})",
+                  file=sys.stderr)
 
 
 mcp.tool = _tool_with_warnings

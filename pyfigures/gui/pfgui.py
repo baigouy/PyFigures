@@ -1235,6 +1235,12 @@ class EZFIG_GUI(QMainWindow):
         qc_menu.addAction(enforce_font_action)
         enforce_font_action.triggered.connect(self.enforce_min_font_action)
         qc_menu.addSeparator()
+        mcp_history_action = QAction("MCP call history / undo…", self)
+        mcp_history_action.setToolTip("Every call the MCP server made on this figure, and undo "
+                                      "of the last changes it made.")
+        qc_menu.addAction(mcp_history_action)
+        mcp_history_action.triggered.connect(self.mcp_history_dialog)
+        qc_menu.addSeparator()
         integrity_action = QAction("Check image integrity (duplicates / clones)…", self)
         integrity_action.setToolTip("Screen panels for reused, flipped/rotated or "
                                     "internally cloned images before submission.")
@@ -4677,6 +4683,58 @@ class EZFIG_GUI(QMainWindow):
         dlg = CustomDialog(title=title, message="", main_widget=frame,
                            options=['Ok'], parent=self)
         dlg.exec_()
+
+    def mcp_history_dialog(self):
+        """Show the MCP calls logged for the saved figure, with an 'Undo last
+        MCP change' button (pyfigures/history.py — same as the list_history /
+        undo_last tools and python -m pyfigures.history)."""
+        from pyfigures import history
+        path = getattr(self, 'current_file', None)
+        if not path or not os.path.isfile(path):
+            QMessageBox.information(self, 'MCP call history',
+                                    'Save or open a figure first: the history is kept beside the file.')
+            return
+        frame = QFrame(self)
+        lay = QVBoxLayout(frame)
+        view = QTextBrowser(frame)
+        view.setPlainText(history.describe(path, last=200))
+        view.setMinimumSize(640, 420)
+        lay.addWidget(view)
+        dlg = CustomDialog(title='MCP call history', message=os.path.basename(path),
+                           main_widget=frame, options=['Undo last MCP change', 'Close'], parent=self)
+        dlg.exec_()
+        if getattr(dlg, 'selected_option', None) == 'Undo last MCP change':
+            self.undo_last_mcp_change()
+
+    def undo_last_mcp_change(self, force=False):
+        """Undo the last change the MCP server made to the saved figure and
+        reload it. Unsaved edits in the window are not touched without asking."""
+        from pyfigures import history
+        path = getattr(self, 'current_file', None)
+        if not path or not os.path.isfile(path):
+            return None
+        if getattr(self, '_dirty', False):
+            QMessageBox.warning(self, 'Unsaved changes',
+                                'Save or discard the changes in the window first: the undo '
+                                'restores the file as the MCP server left it before its last change.')
+            return None
+        res = history.undo_last(path, 1, force)
+        if res.startswith('ERROR') and 'force=True' in res and not force:
+            answer = QMessageBox.question(
+                self, 'Undo anyway?',
+                res[len('ERROR: '):].replace('Pass force=True to restore', 'Restore')
+                + '?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if answer != QMessageBox.StandardButton.Yes:
+                return res
+            return self.undo_last_mcp_change(force=True)
+        if res.startswith('ERROR'):
+            QMessageBox.warning(self, 'Nothing undone', res)
+            return res
+        self.reload_state(path, append=False)
+        self.current_file = path
+        self._mark_clean()
+        self.statusBar().showMessage(res)
+        return res
 
     def _run_mcp_mutation(self, func, success_msg, **kwargs):
         """Run a mutating MCP function on a temp copy, then reload the result."""

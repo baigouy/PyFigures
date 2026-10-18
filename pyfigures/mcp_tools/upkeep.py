@@ -549,3 +549,32 @@ def read_alt_text(pyf_path: str) -> dict | None:
         return d if isinstance(d, dict) else None
     except (OSError, ValueError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# call history and undo (pyfigures/history.py)
+# ---------------------------------------------------------------------------
+@mcp.tool()
+def list_history(pyf_path: str, last: int = 20) -> str:
+    """List the MCP calls made on a figure, newest last: tool, arguments,
+    status, whether it changed the figure and whether it was undone.
+
+    Every MCP call that names a figure is logged beside it (in
+    <figure>.history/), with the figure as it was before each changing call,
+    so the user can see what was done and undo it (undo_last). Read-only."""
+    from pyfigures import history
+    return history.describe(pyf_path, last)
+
+
+@mcp.tool()
+def undo_last(pyf_path: str, steps: int = 1, force: bool = False) -> str:
+    """Undo the last *steps* changing MCP calls on a figure: the .pyf and its
+    sidecars (caption, statistics, alt text, target) go back to their state
+    before those calls. The undo is logged too.
+
+    Refused when the figure was changed since by something that is not logged
+    (the GUI, another program), because restoring would drop that change; pass
+    force=True only if the user agrees to lose it. Use list_history first to
+    see what will be undone."""
+    from pyfigures import history
+    return history.undo_last(pyf_path, steps, force)
