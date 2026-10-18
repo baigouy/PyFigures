@@ -307,7 +307,7 @@ def _bool_key(recipe, key, default):
     return v
 
 
-def _check_crop(crop, where):
+def _check_crop(crop, where, source=None):
     # the error shows what was given and the right form: language models kept
     # resending the same list after a bare "must be a mapping"
     if not isinstance(crop, dict) or set(crop) - _CROP_KEYS:
@@ -316,6 +316,20 @@ def _check_crop(crop, where):
     for k, v in crop.items():
         if not _is_int(v) or v < 0:
             raise RecipeError(f"{where}: crop.{k} must be a non-negative integer (pixels), got {v!r}")
+    if source:
+        # before anything is built (the build used to stop half way at this panel)
+        from pyfigures.mcp_tools.core import _raw_size_from_file
+        size = _raw_size_from_file(source)
+        if size:
+            w, h = size
+            lr = crop.get("left", 0) + crop.get("right", 0)
+            tb = crop.get("top", 0) + crop.get("bottom", 0)
+            if lr >= w or tb >= h:
+                raise RecipeError(
+                    f"{where}: crop {crop!r} removes the whole image ({os.path.basename(source)} is "
+                    f"{w} x {h} px; left + right = {lr}, top + bottom = {tb}). Crop values are "
+                    f"pixels removed from each side, not coordinates. To show a small region "
+                    f"magnified, keep the image and add zoom: {{box: [x, y, width, height]}}.")
 
 
 def _check_scale_bar(sb, where):
@@ -323,6 +337,36 @@ def _check_scale_bar(sb, where):
         raise RecipeError(f"{where}: scale_bar must be a mapping with 'units' "
                           f"(allowed keys: {sorted(_SCALE_BAR_KEYS)}) — e.g. "
                           f"scale_bar: {{units: 10, unit: µm}} — got {sb!r}")
+
+
+def _normalise_panel_opts(opts, where):
+    """Accept two natural ways of writing a panel (a local model rewrote the
+    recipe dozens of times against these refusals):
+
+    - the pixel size inside the scale bar, ``scale_bar: {units: 10,
+      px_to_unit: 0.1}`` = ``px_to_unit: 0.1`` beside it;
+    - ``inset_fraction`` (the MCP tool's name) for a zoom's ``size``, which
+      must be a fraction of the panel width."""
+    sb = opts.get("scale_bar")
+    if isinstance(sb, dict) and "px_to_unit" in sb:
+        sb = dict(sb)                      # may be shared with 'defaults'
+        px = sb.pop("px_to_unit")
+        if "px_to_unit" in opts and opts["px_to_unit"] != px:
+            raise RecipeError(f"{where}: two pixel sizes, px_to_unit: {opts['px_to_unit']!r} "
+                              f"and scale_bar px_to_unit: {px!r}")
+        opts["px_to_unit"] = px
+        opts["scale_bar"] = sb
+    if "zoom" in opts:
+        zooms = []
+        for k, z in enumerate(_as_list(opts["zoom"])):
+            if isinstance(z, dict) and "inset_fraction" in z and "size" not in z:
+                z = dict(z)
+                z["size"] = z.pop("inset_fraction")
+            if isinstance(z, dict) and "size" in z and not (_is_num(z["size"]) and 0 < z["size"] <= 1):
+                raise RecipeError(f"{where}: zoom {k + 1} size is the inset width as a fraction "
+                                  f"of the panel width (0 < size <= 1, e.g. size: 0.4), got {z['size']!r}")
+            zooms.append(z)
+        opts["zoom"] = zooms if isinstance(opts["zoom"], list) else zooms[0]
 
 
 def _check_mapping(value, allowed, required, where, name):
@@ -619,7 +663,17 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
     base = os.path.dirname(os.path.abspath(recipe_path))
     unknown = set(recipe) - _TOP_KEYS
     if unknown:
-        raise RecipeError(f"unknown top-level key(s): {sorted(unknown)} "
+        # a panel key at the top (a local model repeated 'scale_bar:' there 46
+        # times): say where it goes rather than only listing what is allowed
+        panel_keys = sorted(k for k in unknown if k in _DEFAULT_KEYS)
+        hint = ""
+        if panel_keys:
+            k = panel_keys[0]
+            example = json.dumps(recipe[k], ensure_ascii=False, default=str)
+            hint = (f" — {panel_keys} {'is a panel key' if len(panel_keys) == 1 else 'are panel keys'}: "
+                    f"for every panel put it under 'defaults' (defaults: {{{k}: {example}}}), "
+                    f"or on the panels that need it")
+        raise RecipeError(f"unknown top-level key(s): {sorted(unknown)}{hint} "
                           f"(allowed: {sorted(_TOP_KEYS)})")
     if "output" not in recipe:
         raise RecipeError("'output' (the .pyf to write) is required")
@@ -677,8 +731,11 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             kind = _panel_kind(panel, where)
             merged = {k: v for k, v in defaults.items() if k in _KIND_KEYS[kind]}
             merged.update({k: v for k, v in panel.items() if k != kind})
+            _normalise_panel_opts(merged, where)
             if "crop" in merged:
-                _check_crop(merged["crop"], where)
+                src = panel.get(kind) if kind in ("image", "split", "montage") else None
+                _check_crop(merged["crop"], where,
+                            _resolve(base, src) if isinstance(src, str) else None)
             if merged.get("scale_bar_panels", "last") not in ("last", "all"):
                 raise RecipeError(f"{where}: scale_bar_panels must be 'last' or 'all', "
                                   f"got {merged['scale_bar_panels']!r}")

@@ -676,7 +676,7 @@ that region in a corner, and leader lines joining them (or a list of them).
 |---|---|---|
 | `box` | **required** | `[x, y, w, h]` of the region, in raw pixels. |
 | `corner` | `top right` | Where the magnified view goes. |
-| `size` | `0.4` | Magnified view width as a fraction of the panel width. |
+| `size` | `0.4` | Magnified view width as a fraction of the panel width (0 < size ≤ 1; `inset_fraction` is accepted too). |
 | `color` / `line_color` | `yellow` | Box and leader-line colours. |
 | `stroke` | `1.5` | Line width. |
 | `connectors` | `2` | Leader lines: 0, 1 or 2. |
@@ -1007,6 +1007,7 @@ px_to_unit: 0.1
 | `color` | `white` | Colour of the bar **and** its label. |
 | `placement` | `bottom right` | `bottom right`, `bottom left`, `top right`, `top left`. |
 | `label` | `"<units> <unit>"` | Custom text (`""` = bar only — then state the size in the caption). |
+| `px_to_unit` | | The pixel size may also be given here; it is the panel's `px_to_unit`. |
 
 The bar's length on screen is `units ÷ px_to_unit` pixels of the raw image, so
 give **`px_to_unit`** (the pixel size, in the same unit) — usually once, in

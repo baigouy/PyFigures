@@ -25,8 +25,11 @@ from .core import (
     _append_image,
     _append_stats_entry,
     _child_text,
+    _channel_count_from_file,
     _color_to_int,
+    _crop_fit_error,
     _encode_str,
+    _first_filename,
     _get_container,
     _load,
     _new_image2d,
@@ -175,7 +178,8 @@ def add_channel_merge(
                           colors=["green", "magenta"], label="Merge")
     """
     if mode not in ("sum", "max"):
-        return "ERROR: mode must be 'sum' or 'max'."
+        return (f"ERROR: mode must be 'sum' (additive blend) or 'max' (brightest channel "
+                f"wins), not {mode!r}; channel colours go in 'colors'.")
     if normalization not in _MERGE_NORMALIZATIONS:
         return "ERROR: normalization must be 'per_channel' or 'none'."
     if not channel_files or len(channel_files) < 1:
@@ -219,9 +223,21 @@ def add_channel_merge(
     idx = len([c for c in container if c.tag == "Image2D"]) - 1
     loc = "canvas" if not group_path else f"group {group_path}"
     pairs = ", ".join(f"{os.path.basename(f)}→{c}" for f, c in zip(channel_files, colors))
+    # a merge of one RGB file three times (a local model's way of asking for a
+    # magenta/green merge) shows nothing useful: say so
+    warnings = []
+    if len({os.path.abspath(f) for f in channel_files}) < n:
+        warnings.append("the same file is used for several channels")
+    multi = [os.path.basename(f) for f in channel_files if (_channel_count_from_file(f) or 1) > 1]
+    if multi:
+        warnings.append(f"{', '.join(multi)} already has several colour channels (a merge "
+                        f"expects one single-channel image per channel); to show or recolour "
+                        f"the channels of one image use add_channel_split (recipe: split: with "
+                        f"colors / merge: true)")
+    warning = f" WARNING: {'; '.join(warnings)}." if warnings else ""
     return (
         f"Channel-merge panel added as index {idx} in {loc} ({n} channels, {mode}): "
-        f"{pairs}. Reopen the figure in PyFigures to render it."
+        f"{pairs}. Reopen the figure in PyFigures to render it.{warning}"
     )
 
 
@@ -344,7 +360,9 @@ def add_data_plot(
     if error not in ("sem", "sd", "ci95", "none"):
         return "ERROR: error must be 'sem', 'sd', 'ci95' or 'none'."
     if stats_mode not in ("auto", "parametric", "nonparametric"):
-        return "ERROR: stats_mode must be 'auto', 'parametric' or 'nonparametric'."
+        return (f"ERROR: stats_mode must be 'auto', 'parametric' or 'nonparametric', not "
+                f"{stats_mode!r}: the test itself is chosen from the data (t-test / ANOVA "
+                f"are 'parametric', Mann-Whitney / Kruskal-Wallis 'nonparametric').")
     if not os.path.isfile(csv_path):
         return f"ERROR: no such CSV file: {csv_path}"
     csv_abs = os.path.abspath(csv_path)
@@ -546,6 +564,11 @@ def transform_image(
     if crop_bottom is not None:
         _set_child_text(img, "crop_bottom", str(int(crop_bottom)))
         changed.append(f"crop_bottom={crop_bottom}")
+    if any(c is not None and c < 0 for c in (crop_left, crop_right, crop_top, crop_bottom)):
+        return "ERROR: crop values are pixels removed from each side and cannot be negative."
+    crop_err = _crop_fit_error(img)
+    if crop_err:
+        return f"ERROR: {crop_err} Nothing was changed."
     if opacity is not None:
         _set_child_text(img, "opacity", str(float(opacity)))
         changed.append(f"opacity={opacity}")
@@ -690,6 +713,15 @@ def set_lut(
         return "ERROR: " + "; ".join(unknown)
     _set_child_text(img, "LUTs", repr(luts_encoded))
     changed.append(f"LUTs={luts_encoded}")
+    warning = ""
+    n_channels = _channel_count_from_file(_first_filename(img))
+    if n_channels and n_channels > 1 and len(luts) == 1:
+        # 'lut: red' on an RGB image changed nothing visible (a local model
+        # expected it to show one channel)
+        warning = (f" WARNING: the image has {n_channels} channels and one LUT colours "
+                   f"only the first (RED on an RGB image changes nothing); to show the "
+                   f"channels separately use "
+                   f"add_channel_split (recipe: split:), or give one LUT per channel.")
 
     if normalization is not None:
         # Store as the raw string — PyFigures evals it via ast.literal_eval
@@ -700,7 +732,7 @@ def set_lut(
 
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Image {image_index} in {loc}: {', '.join(changed)}."
+    return f"Image {image_index} in {loc}: {', '.join(changed)}.{warning}"
 
 
 @mcp.tool()

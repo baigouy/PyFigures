@@ -303,6 +303,57 @@ def _raw_size_from_file(filename) -> tuple[int, int] | None:
         return None
 
 
+def _channel_count_from_file(filename) -> int | None:
+    """Number of colour channels of an image file (3 for RGB, the C axis of a
+    TIFF), read from the header; None when unknown."""
+    if not isinstance(filename, str) or not os.path.isfile(filename):
+        return None
+    if filename.lower().endswith((".tif", ".tiff")):
+        try:
+            import tifffile as _tf
+            with _tf.TiffFile(filename) as t:
+                s = t.series[0]
+                for ax in ("C", "S"):
+                    if ax in s.axes:
+                        return int(s.shape[s.axes.index(ax)])
+                return 1
+        except Exception:
+            return None
+    try:
+        from PIL import Image as _PI
+        with _PI.open(filename) as im:
+            return len([b for b in im.getbands() if b != "A"])
+    except Exception:
+        return None
+
+
+def _crop_fit_error(img: ET.Element) -> str | None:
+    """An error when the stored crop removes the whole image (a local model
+    cropped 430 px from each side of a 512 px image: the panel was built from
+    nothing and drawn stretched), else None."""
+    size = _raw_size_from_file(_first_filename(img))
+    if not size:
+        return None
+
+    def _c(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    w, h = size
+    lr = _c("crop_left") + _c("crop_right")
+    tb = _c("crop_top") + _c("crop_bottom")
+    if lr >= w or tb >= h:
+        return (f"the crop removes the whole image: the source is {w} x {h} px and the crop "
+                f"takes {lr} px across (left + right) and {tb} px down (top + bottom). "
+                f"Crop values are pixels removed from each side (not coordinates), e.g. "
+                f"crop_bottom=24 removes a 24 px strip at the bottom. To show a small "
+                f"region magnified, keep the image and add a zoom callout "
+                f"(add_zoom_callout; recipe: zoom: {{box: [x, y, width, height]}}).")
+    return None
+
+
 def _first_filename(img: ET.Element) -> str | None:
     """The (first) source file of an Image2D element, or None."""
     import ast

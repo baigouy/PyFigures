@@ -57,6 +57,81 @@ def test_bad_journal_is_refused_before_building(images, qapp, bad, message):
     assert not (images / "bad.pyf").exists()
 
 
+def test_panel_key_at_the_top_says_to_use_defaults(images):
+    """A local model put 'scale_bar:' at the top of the recipe 46 times in a
+    row: the error only listed the allowed keys."""
+    res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
+        "output: f.pyf\nscale_bar: {units: 10}\nrows:\n  - [a.png, b.png]\n"))
+    assert res.startswith("ERROR") and "defaults: {scale_bar: {\"units\": 10}}" in res, res
+    assert not (images / "f.pyf").exists()
+
+
+def test_pixel_size_inside_the_scale_bar_and_zoom_inset_fraction(images, qapp):
+    """scale_bar: {units, px_to_unit} and zoom inset_fraction were refused (a
+    local model retried them ~50 times); they are natural, so accepted."""
+    import xml.etree.ElementTree as ET
+    from PIL import Image
+    Image.new("L", (400, 300), 120).save(images / "big.png")
+    res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
+        "output: f.pyf\n"
+        "defaults: {scale_bar: {units: 10, unit: um, px_to_unit: 0.1}}\n"
+        "rows:\n"
+        "  - - {image: big.png, zoom: {box: [100, 100, 40, 40], inset_fraction: 0.3}}\n"
+        "    - a.png\n"))
+    assert not res.startswith("ERROR"), res
+    root = ET.parse(images / "f.pyf").getroot()
+    assert len(list(root.iter("ScaleBar"))) >= 2
+    bad = M.build_figure_from_recipe(str(images / "g.yaml"), recipe_text=(
+        "output: g.pyf\nrows:\n  - - {image: big.png, zoom: {box: [100, 100, 40, 40], size: 1.5}}\n"))
+    assert bad.startswith("ERROR") and "fraction" in bad and "1.5" in bad, bad
+    two = M.build_figure_from_recipe(str(images / "h.yaml"), recipe_text=(
+        "output: h.pyf\nrows:\n  - - {image: a.png, px_to_unit: 0.2, "
+        "scale_bar: {units: 1, px_to_unit: 0.1}}\n"))
+    assert two.startswith("ERROR") and "two pixel sizes" in two, two
+
+
+def test_misuses_of_an_rgb_image_are_refused_or_warned(tmp_path, qapp):
+    """From a local model's final figure: a crop larger than the image was
+    drawn stretched; 'lut: red' on an RGB image and a merge of the same RGB file
+    three times changed nothing, silently."""
+    import xml.etree.ElementTree as ET
+    from PIL import Image
+    rgb = tmp_path / "rgb.png"
+    Image.new("RGB", (512, 400), (30, 60, 90)).save(rgb)
+    pyf = tmp_path / "f.pyf"
+    M.create_figure(str(pyf), num_groups=1)
+    M.add_image(str(pyf), [0], str(rgb))
+    before = pyf.read_bytes()
+    res = M.transform_image(str(pyf), [0], 0, crop_left=430, crop_right=430)
+    assert res.startswith("ERROR") and "512 x 400" in res and "860" in res, res
+    assert pyf.read_bytes() == before
+    assert M.transform_image(str(pyf), [0], 0, crop_bottom=-3).startswith("ERROR")
+    assert not M.transform_image(str(pyf), [0], 0, crop_bottom=24).startswith("ERROR")
+    assert "WARNING" in M.set_lut(str(pyf), [0], 0, ["RED"])
+    assert "WARNING" not in M.set_lut(str(pyf), [0], 0, ["MAGENTA", "GREEN", "BLUE"])
+    res = M.add_channel_merge(str(pyf), [0], [str(rgb)] * 3, colors=["red", "green", "blue"])
+    assert "WARNING" in res and "same file" in res and "add_channel_split" in res
+    grey = tmp_path / "g.png"
+    Image.new("L", (64, 64), 50).save(grey)
+    grey2 = tmp_path / "g2.png"
+    Image.new("L", (64, 64), 90).save(grey2)
+    assert "WARNING" not in M.add_channel_merge(str(pyf), [0], [str(grey), str(grey2)])
+    bad = M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {image: rgb.png, crop: {left: 430, right: 430}}\n"))
+    assert bad.startswith("ERROR") and "removes the whole image" in bad and "zoom" in bad, bad
+    assert not (tmp_path / "r.pyf").exists()            # refused before building
+    ET.parse(pyf)                                       # the figure stays valid
+
+
+def test_bad_stats_mode_says_what_it_got(tmp_path, qapp):
+    csv = tmp_path / "d.csv"
+    csv.write_text("A,B\n1,2\n2,3\n3,4\n", encoding="utf-8")
+    pyf = tmp_path / "f.pyf"
+    M.create_figure(str(pyf), num_groups=1)
+    res = M.add_data_plot(str(pyf), [0], str(csv), kind="box", stats_mode="t-test")
+    assert "'t-test'" in res and "'parametric'" in res
+
+
 def test_invalid_recipe_text_is_refused(images):
     res = M.build_figure_from_recipe(str(images / "x.yaml"), recipe_text="- just\n- a list\n")
     assert res.startswith("ERROR")
