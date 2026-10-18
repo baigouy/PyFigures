@@ -28,6 +28,7 @@ from .core import (
     _channel_count_from_file,
     _color_to_int,
     _crop_fit_error,
+    _raw_size_from_file,
     _encode_str,
     _first_filename,
     _get_container,
@@ -234,7 +235,15 @@ def add_channel_merge(
                         f"expects one single-channel image per channel); to show or recolour "
                         f"the channels of one image use add_channel_split (recipe: split: with "
                         f"colors / merge: true)")
-    warning = f" WARNING: {'; '.join(warnings)}." if warnings else ""
+    sizes = {os.path.basename(f): _raw_size_from_file(f) for f in channel_files}
+    known = {s for s in sizes.values() if s}
+    if len(known) > 1:
+        warnings.append("the channel files differ in size ("
+                        + ", ".join(f"{k} {s[0]}×{s[1]}" for k, s in sizes.items() if s)
+                        + "): they are stretched to the first one's size, so the channels "
+                        "are probably not aligned")
+    # on lines of their own, so recipes (and the GUI) report them
+    warning = "".join(f"\nWARNING: {w}." for w in warnings)
     return (
         f"Channel-merge panel added as index {idx} in {loc} ({n} channels, {mode}): "
         f"{pairs}. Reopen the figure in PyFigures to render it.{warning}"
@@ -289,6 +298,32 @@ else:
     fig._pyf_rc = _rc
     self.img = fig
 """
+
+
+def _csv_number_count(path: str) -> int:
+    """How many finite numbers a CSV holds (0 for an empty file or a header
+    alone: the plot would be an empty frame)."""
+    import csv
+    n = 0
+    try:
+        with open(path, newline="", encoding="utf-8-sig", errors="replace") as f:
+            sample = f.read(4096)
+            f.seek(0)
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+            except csv.Error:
+                dialect = csv.excel
+            for row in csv.reader(f, dialect):
+                for cell in row:
+                    try:
+                        v = float(cell)
+                    except ValueError:
+                        continue
+                    if math.isfinite(v):
+                        n += 1
+    except OSError:
+        return 0
+    return n
 
 
 @mcp.tool()
@@ -366,6 +401,9 @@ def add_data_plot(
     if not os.path.isfile(csv_path):
         return f"ERROR: no such CSV file: {csv_path}"
     csv_abs = os.path.abspath(csv_path)
+    if not _csv_number_count(csv_abs):
+        return (f"ERROR: {csv_path} holds no numbers to plot (empty, or a header without "
+                f"values); nothing was added.")
 
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
@@ -718,7 +756,7 @@ def set_lut(
     if n_channels and n_channels > 1 and len(luts) == 1:
         # 'lut: red' on an RGB image changed nothing visible (a local model
         # expected it to show one channel)
-        warning = (f" WARNING: the image has {n_channels} channels and one LUT colours "
+        warning = (f"\nWARNING: the image has {n_channels} channels and one LUT colours "
                    f"only the first (RED on an RGB image changes nothing); to show the "
                    f"channels separately use "
                    f"add_channel_split (recipe: split:), or give one LUT per channel.")

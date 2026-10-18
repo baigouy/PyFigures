@@ -639,9 +639,15 @@ def write_pptx(scene, out_path):
     def emu(v):
         return Emu(int(round(v * EMU_PER_PT)))
 
+    # PowerPoint slides are 1 to 56 inches on a side: a smaller figure sits
+    # at the top left of a 1-inch slide; a larger one cannot be a slide
+    longest = max(scene["width"], scene["height"])
+    if longest > 56 * 72:
+        raise RuntimeError(f"the figure is {longest / 72:.0f} inches on its longest side; "
+                           f"PowerPoint slides are at most 56 inches: resize the figure first")
     prs = Presentation()
-    prs.slide_width = emu(scene["width"])
-    prs.slide_height = emu(scene["height"])
+    prs.slide_width = emu(max(scene["width"], 72))
+    prs.slide_height = emu(max(scene["height"], 72))
     slide = prs.slides.add_slide(prs.slide_layouts[6])        # blank layout
     for g, items in _grouped(scene):
         target = slide.shapes

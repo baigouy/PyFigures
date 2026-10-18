@@ -477,7 +477,6 @@ def _auto_recompute(pyf_path: str) -> str:
         top_groups = [o for o in objects if isinstance(o, _Group)]
         if not top_groups:
             return ""  # free-canvas figure — nothing to recompute
-
         for grp in top_groups:
             try:
                 w = float(getattr(grp, "size", 0) or 0)
@@ -501,13 +500,98 @@ def _auto_recompute(pyf_path: str) -> str:
             _pack2(space, "Y", False, *drawables)
 
         new_xml = _sanitize_recomputed_xml(_to_xml(objects, is_list=True))
+        if new_xml is not None:
+            # the engine drops an object it cannot rebuild (a whole group
+            # when its layout raised): never write a figure that lost panels
+            def _count(text):
+                r = ET.fromstring(text)
+                return sum(1 for _ in r.iter("Image2D")), sum(1 for _ in r.iter("Group"))
+            if _count(new_xml) != _count(xml_content):
+                return ("the layout engine could not rebuild every panel; kept the figure as "
+                        "saved (nothing was lost)")
         if new_xml is None:
+            # an empty sub-group (just added, to be filled) has no extent and
+            # the engine cannot lay out its parents: nothing visible changed,
+            # the layout is redone when a panel goes into it
+            if any(g.find(".//Image2D") is None
+                   for g in ET.fromstring(xml_content).iter("Group")):
+                return ""
             return ("layout engine produced non-finite geometry; kept the "
                     "positions as saved")
         _atomic_write_text(pyf_path, new_xml)
+        squeezed = _squeezed_panels(top_groups, _Image2D)
+        if squeezed:
+            _warn(squeezed)
+        for msg in _failed_scripts(objects, _Image2D):
+            _warn(msg)
         return ""
     except Exception as exc:
         return f"layout recompute failed: {type(exc).__name__}: {exc}"
+
+
+def _failed_scripts(objects, image_cls) -> list[str]:
+    """Warnings for panel scripts run by this layout pass (new scripted
+    panels) that raised or set no image: the panel is otherwise just empty."""
+    out = []
+
+    def walk(items):
+        for o in items:
+            if isinstance(o, image_cls):
+                if not getattr(o, "custom_loading_script", None):
+                    continue
+                log = getattr(o, "script_log", "") or ""
+                if "An error occurred" in log:
+                    first = log.split("An error occurred:", 1)[1].strip().splitlines()[0]
+                    out.append(f"a panel script failed ({first}); the panel is empty.")
+                elif getattr(o, "img", None) is None and log:
+                    out.append("a panel script did not set self.img; the panel is empty.")
+            walk(getattr(o, "content", []) or [])
+
+    walk(objects)
+    return out
+
+
+_MIN_PANEL_PX = 4
+
+
+def _squeezed_panels(groups, image_cls) -> str:
+    """A warning when the layout left panels only a few pixels wide or high —
+    a figure too narrow for its panels and gaps (200 frames in one row, a
+    width of 5 px): they render as nothing."""
+    small = []
+    worst = None
+
+    def walk(obj, parent):
+        nonlocal worst
+        for c in getattr(obj, "content", []) or []:
+            if isinstance(c, image_cls):
+                # shown size = raw size / scale (the engine gives a negative
+                # scale when the gaps alone are wider than the figure)
+                try:
+                    w, h = c.get_raw_size()
+                    side = min(float(w), float(h)) / float(c.scale)
+                except Exception:
+                    continue
+                if not math.isfinite(side):
+                    continue
+                if side < _MIN_PANEL_PX:
+                    small.append(c)
+                    if worst is None or side < worst[0]:
+                        worst = (side, parent if parent is not None else obj)
+            else:
+                walk(c, obj)
+
+    for g in groups:
+        walk(g, None)
+    if not small:
+        return ""
+    side, grp = worst
+    n = len(getattr(grp, "content", []) or [])
+    smallest = "no room at all" if side <= 0 else f"the smallest {side:.1f} px"
+    return (f"{len(small)} panel(s) are less than {_MIN_PANEL_PX} px on a side ({smallest}, "
+            f"in a group of {n}): the figure is too narrow for its panels and "
+            f"the gaps between them, and they will not show. Wrap the row (columns=…), "
+            f"show fewer panels, reduce the spacing or widen the figure.")
 
 
 _GEOM_TAGS = ("x", "y", "width", "height")
@@ -754,7 +838,13 @@ def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
                             px_to_unit: float | None, unit: str = "µm") -> str | None:
     """An error when the bar would be as wide as the (cropped) image or wider —
     it was drawn clipped to the panel, i.e. at a wrong length (a model asked for
-    100 µm at 0.1 µm/px on a 512 px image). None when fine or unknown."""
+    100 µm at 0.1 µm/px on a 512 px image), or when the length or the pixel
+    size is not a positive number. None when fine or unknown."""
+    if px_to_unit is not None and not px_to_unit > 0:
+        return (f"px_to_unit must be the pixel size, a positive number of {unit} per pixel "
+                f"(got {px_to_unit}).")
+    if not bar_width_in_units > 0:
+        return f"the scale bar length must be a positive number of {unit} (got {bar_width_in_units})."
     px = px_to_unit
     if px is None:
         try:
@@ -922,6 +1012,78 @@ def _group_summary(grp: ET.Element, label: str, depth: int = 0) -> list[str]:
 # ---------------------------------------------------------------------------
 # Element factories (used by the creation/mutation tools below)
 # ---------------------------------------------------------------------------
+
+_ORIENTATIONS = {"x": "X", "row": "X", "horizontal": "X", "h": "X", "side by side": "X",
+                 "y": "Y", "column": "Y", "col": "Y", "vertical": "Y", "v": "Y", "stacked": "Y"}
+
+
+def _orientation(value) -> str | None:
+    """'X' / 'Y' from the words people use (row / column, horizontal /
+    vertical…), or None."""
+    return _ORIENTATIONS.get(str(value).strip().lower())
+
+
+_PLACEMENT_WORDS = {"top", "bottom", "left", "right", "center", "centre", "middle"}
+
+
+def _placement_error(placement) -> str | None:
+    """Why *placement* is not a corner/side/centre ('top left', 'bottom-right',
+    'center'…), or None."""
+    words = [w for w in re.split(r"[\s\-_]+", str(placement).strip().lower()) if w]
+    if words and len(words) <= 2 and set(words) <= _PLACEMENT_WORDS:
+        return None
+    return (f"placement must be a corner or side such as 'top left', 'top right', "
+            f"'bottom left', 'bottom right' or 'center', not {placement!r}")
+
+
+_PIL_CHECKED = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
+
+
+def _unreadable_image(filename: str) -> str | None:
+    """Why a local image file cannot be used, or None. Only cheap checks:
+    missing, a folder, empty, or a PNG/JPEG/BMP/GIF/WebP/TIFF whose header is
+    not an image (a text file renamed .png); other formats are left to their
+    readers."""
+    name = str(filename)
+    if name.lower().startswith(("http://", "https://", "omero:")) \
+            or "#" in os.path.basename(name).split(".")[-1] or name in ("None", "@template@"):
+        return None
+    if ".zarr" in name.lower():           # OME-Zarr: a folder, read by its own reader
+        return None
+    if os.path.isdir(name):
+        return f"{name} is a folder, not an image (create_figure_from_folder takes a folder)"
+    if not os.path.isfile(name):
+        # a file not there (yet) is allowed — a layout made before the data,
+        # files on another computer — but said (_missing_image_note)
+        return None
+    if os.path.getsize(name) == 0:
+        return f"{name} is empty (0 bytes)"
+    ext = os.path.splitext(name)[1].lower()
+    try:
+        if ext in _PIL_CHECKED:
+            from PIL import Image
+            with Image.open(name) as im:
+                im.verify()
+        elif ext in (".tif", ".tiff"):
+            import tifffile
+            with tifffile.TiffFile(name) as t:
+                if not t.pages:
+                    return f"{name} holds no image"
+    except Exception as e:
+        return f"{name} cannot be read as an image ({type(e).__name__}: {e})"
+    return None
+
+
+def _missing_image_note(filename: str) -> str:
+    """A warning line when *filename* does not exist (yet): the panel stays
+    empty until it does, or until remap_paths points it to the file."""
+    from pyfigures.path_resolution import source_exists
+    name = str(filename)
+    if name in ("None", "@template@") or name.lower().startswith("omero:") or source_exists(name):
+        return ""
+    return (f"\nWARNING: {name} does not exist (yet): the panel stays empty until it does — "
+            f"or point the figure at the file with remap_paths / set_image_filename.")
+
 
 def _new_image2d(filename: str) -> ET.Element:
     """Create an Image2D element matching the current PyFigures schema.
@@ -1195,6 +1357,9 @@ def _navigate_group(root: ET.Element, group_path: list[int]) -> tuple[ET.Element
     """
     if not group_path:
         return None, "group_path must not be empty"
+    if any(int(i) < 0 for i in group_path):
+        # Python would count -1 from the end: a group the caller did not name
+        return None, f"group_path {list(group_path)} has a negative index; indices start at 0"
     tops = _top_groups(root)
     if group_path[0] >= len(tops):
         return None, f"top-level group index {group_path[0]} out of range ({len(tops)} groups)"
@@ -1514,6 +1679,21 @@ def _new_free_text(html: str, x: float, y: float) -> ET.Element:
     return ta
 
 
+def _roi_outside_note(img, xs, ys) -> str:
+    """A warning line when a shape lies entirely outside its image (it is
+    then drawn off the panel, i.e. not at all); '' otherwise or when the image
+    size is unknown. *xs*, *ys*: the shape's coordinates in raw pixels."""
+    size = _raw_size_from_file(_first_filename(img)) if img is not None else None
+    if not size or not xs or not ys:
+        return ""
+    w, h = size
+    if max(xs) < 0 or max(ys) < 0 or min(xs) > w or min(ys) > h:
+        return (f"\nWARNING: the shape ({min(xs):g}..{max(xs):g}, {min(ys):g}..{max(ys):g}) is "
+                f"entirely outside the {w}×{h} px image, so it will not show; coordinates "
+                f"are raw image pixels from the top-left corner.")
+    return ""
+
+
 def _get_annots_for_roi(root, group_path, image_index):
     """Return (tree, annots_el, err) for a ROI-add operation."""
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -1716,8 +1896,81 @@ def _run_headless_op(args: list[str], timeout: int = 600):
     except subprocess.TimeoutExpired:
         return False, f"operation timed out after {timeout}s"
     if proc.returncode != 0:
-        return False, (proc.stderr or proc.stdout or "operation failed").strip()
+        from .export import _render_error_message
+        return False, _render_error_message((proc.stderr or proc.stdout or "operation failed").strip())
     return True, (proc.stdout or "").strip()
+
+
+def _restyle_html_batch(htmls: list[str], **attrs) -> list[str] | str:
+    """Merge font attributes (font_family, font_size, bold, italic, underline,
+    color) over each rich text, keeping its own formatting — in one Qt
+    subprocess for all of them. Returns the new texts, or an error string."""
+    if not htmls:
+        return []
+    workdir = tempfile.mkdtemp(prefix="pyf_style_")
+    params_path = os.path.join(workdir, "params.json")
+    out_path = os.path.join(workdir, "out.json")
+    with open(params_path, "w", encoding="utf-8") as f:
+        json.dump({"htmls": list(htmls), **attrs}, f)
+    env = dict(os.environ)
+    env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    env.setdefault("QT_API", "pyqt6")
+    try:
+        proc = subprocess.run([sys.executable, "-m", "pyfigures.gui.style_text_headless",
+                               params_path, out_path], capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, env=env, timeout=300)
+    except subprocess.TimeoutExpired:
+        return "styling timed out"
+    if proc.returncode != 0 or not os.path.isfile(out_path):
+        return (proc.stderr or proc.stdout or "styling failed").strip()
+    with open(out_path, encoding="utf-8") as f:
+        res = json.load(f)
+    fam = attrs.get("font_family")
+    if fam and res.get("font_installed") is False:
+        _warn(f"the font {fam!r} is not installed here: the text is shown in a fallback font "
+              f"(list_fonts lists what is available).")
+    return res["htmls"]
+
+
+def _figure_font(root: ET.Element) -> dict:
+    """The figure font set with set_figure_properties (font_family,
+    font_size, italic), {} when none was set."""
+    el = root.find("SerializableQFont")
+    if el is None:
+        return {}
+    out = {}
+    fam = _decode(el.findtext("family"))
+    if fam and fam != "None":
+        out["font_family"] = fam
+    try:
+        size = float(el.findtext("size") or "")
+        if size > 0:
+            out["font_size"] = size
+    except ValueError:
+        pass
+    if (el.findtext("italic") or "") == "True":
+        out["italic"] = True
+    return out
+
+
+def _restyle_letters(root: ET.Element, **attrs) -> tuple[int, str | None]:
+    """Give every panel letter (A, B, C…) the figure font. (count, error)."""
+    letters = []
+    for img in _iter_panel_elements(root):
+        annots = img.find("annotations")
+        if annots is None:
+            continue
+        letters += [ta for ta in annots.findall("TAText2D")
+                    if (ta.findtext("is_letter") or "") in ("True", "b'True'")]
+    attrs = {k: v for k, v in attrs.items() if v is not None}
+    if not letters or not attrs:
+        return 0, None
+    new = _restyle_html_batch([_decode(ta.findtext("text")) or "" for ta in letters], **attrs)
+    if isinstance(new, str):
+        return 0, new
+    for ta, html in zip(letters, new):
+        _set_child_text(ta, "text", _encode_str(html))
+    return len(letters), None
 
 
 def _iter_panel_elements(root: ET.Element):

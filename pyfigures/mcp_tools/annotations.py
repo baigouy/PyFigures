@@ -20,8 +20,11 @@ from textwrap import indent
 from mcp.server.fastmcp import FastMCP, Image
 from .app import (
     mcp,
+    _warn,
 )
 from .core import (
+    _roi_outside_note,
+    _restyle_letters,
     _append_image,
     _append_stats_entry,
     _child_text,
@@ -91,8 +94,10 @@ def add_roi_rect(
         add_roi_rect("fig.pyf", [0], 1, x=50, y=50, width=100, height=60,
                      color="red", fill_color="red", opacity=0.3)
     """
+    if not (width > 0 and height > 0):
+        return f"ERROR: width and height must be positive (got {width} × {height})."
     tree, root = _load(pyf_path)
-    _, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
         return f"ERROR: {err}"
     c = _color_to_int(color)
@@ -103,6 +108,7 @@ def add_roi_rect(
     return (
         f"Rectangle2D ROI added to image {image_index} in {loc}: "
         f"({x},{y}) {width}×{height} px, color={color}, stroke={stroke}."
+        + _roi_outside_note(img, [x, x + width], [y, y + height])
     )
 
 
@@ -141,8 +147,10 @@ def add_roi_ellipse(
         add_roi_ellipse("fig.pyf", [0], 0, x=50, y=50, width=120, height=80,
                         color="magenta", fill_color="magenta", opacity=0.25)
     """
+    if not (width > 0 and height > 0):
+        return f"ERROR: width and height must be positive (got {width} × {height})."
     tree, root = _load(pyf_path)
-    _, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
         return f"ERROR: {err}"
     c = _color_to_int(color)
@@ -153,6 +161,7 @@ def add_roi_ellipse(
     return (
         f"Ellipse2D ROI added to image {image_index} in {loc}: "
         f"bbox ({x},{y}) {width}×{height} px, color={color}, stroke={stroke}."
+        + _roi_outside_note(img, [x, x + width], [y, y + height])
     )
 
 
@@ -193,7 +202,7 @@ def add_roi_line(
                      color="yellow", stroke=2.5, arrow=True)
     """
     tree, root = _load(pyf_path)
-    _, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
         return f"ERROR: {err}"
     c = _color_to_int(color)
@@ -204,6 +213,7 @@ def add_roi_line(
     return (
         f"Line2D ROI{suffix} added to image {image_index} in {loc}: "
         f"({x1},{y1})→({x2},{y2}), color={color}, stroke={stroke}."
+        + _roi_outside_note(img, [x1, x2], [y1, y2])
     )
 
 
@@ -617,7 +627,7 @@ def add_roi_polygon(
         return "ERROR: need at least 2 points (4 coordinate values)."
 
     tree, root = _load(pyf_path)
-    _, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
         return f"ERROR: {err}"
     c = _color_to_int(color)
@@ -629,6 +639,7 @@ def add_roi_polygon(
     return (
         f"{_style_map[style]} ROI added to image {image_index} in {loc}: "
         f"{n_pts} points, color={color}, stroke={stroke}."
+        + _roi_outside_note(img, flat[0::2], flat[1::2])
     )
 
 
@@ -1020,6 +1031,14 @@ def set_figure_properties(
 
     if not changed:
         return "Nothing changed — supply at least one parameter to modify."
+    # the panel letters already in the figure take the new font (it used to
+    # be stored only, so a figure font never showed on MCP-built letters)
+    n_letters, err = _restyle_letters(root, font_family=font_family, font_size=font_size,
+                                      italic=font_italic)
+    if err:
+        _warn(f"the panel letters kept their font ({err}).")
+    elif n_letters:
+        changed.append(f"{n_letters} panel letter(s) restyled")
     _save(tree, pyf_path)
     return "Updated: " + ", ".join(changed) + "."
 

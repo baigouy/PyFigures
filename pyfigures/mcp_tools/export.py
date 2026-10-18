@@ -65,6 +65,25 @@ _RENDER_VECTOR_EXTS = {".svg", ".pdf"}
 _RENDER_EXTS = _RENDER_RASTER_EXTS | _RENDER_VECTOR_EXTS
 
 
+def _render_error_message(msg: str) -> str:
+    """The renderer's stderr as one clear sentence: the files it could not
+    load (with what to do), or its last ERROR line — not log lines and a
+    traceback."""
+    missing = list(dict.fromkeys(
+        m.strip() for m in re.findall(r"could not load image (.+?)\s*$", msg, re.M)))
+    if missing:
+        return ("could not load image file(s): " + ", ".join(missing[:5])
+                + (f" and {len(missing) - 5} more" if len(missing) > 5 else "")
+                + " — if they moved, remap_paths (or the GUI's relink) points the figure "
+                  "at their new place")
+    lines = [ln.strip() for ln in msg.splitlines() if ln.strip()]
+    errors = [ln for ln in lines if ln.startswith("ERROR:")]
+    text = errors[-1] if errors else (lines[-1] if lines else msg)
+    while text.startswith("ERROR:"):            # the caller adds its own prefix
+        text = text[len("ERROR:"):].lstrip()
+    return text
+
+
 def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
     """Render *pyf_path* -> *out_path* in a subprocess. Returns (ok, message)."""
     cmd = [sys.executable, "-m", "pyfigures.gui.render_headless",
@@ -80,7 +99,7 @@ def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
     if proc.returncode != 0:
         msg = (proc.stderr or proc.stdout or "").strip() or \
             f"renderer exited with code {proc.returncode}"
-        return False, msg
+        return False, _render_error_message(msg)
     if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
         return False, "renderer reported success but wrote no output"
     return True, out_path
@@ -147,8 +166,14 @@ def render_preview(pyf_path: str, dpi: int = 100, max_dimension: int = 1400) -> 
         im.load()
         if max(im.size) > max_dimension:
             im.thumbnail((max_dimension, max_dimension), PILImage.LANCZOS)
+        # flattened on white, like the page it will be printed on: a viewer
+        # showing transparency as black hid black text (equations, plot
+        # labels, colour-bar ticks) from the model looking at the preview
+        im = im.convert("RGBA")
+        page = PILImage.new("RGBA", im.size, (255, 255, 255, 255))
+        page.alpha_composite(im)
         buf = io.BytesIO()
-        im.convert("RGBA").save(buf, format="PNG")
+        page.convert("RGB").save(buf, format="PNG")
         data = buf.getvalue()
     except Exception:
         with open(tmp, "rb") as f:

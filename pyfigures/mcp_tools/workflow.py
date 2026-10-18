@@ -22,6 +22,8 @@ from .app import (
     mcp,
 )
 from .core import (
+    _figure_font,
+    _restyle_letters,
     _apply_scalebar_to_img,
     _child_text,
     _decode,
@@ -405,17 +407,24 @@ def create_figure_from_folder(
         return result
 
     total_added = 0
+    skipped = []
     for g_idx, (_lbl, group_files) in enumerate(groups):
         for img_path in group_files:
             lbl = Path(img_path).stem if label_from_filename else ""
-            add_image(pyf_path, [g_idx], img_path, label=lbl)
-            total_added += 1
+            res = add_image(pyf_path, [g_idx], img_path, label=lbl)
+            if res.startswith("ERROR"):
+                skipped.append(f"{Path(img_path).name} ({res[len('ERROR: '):].split(' (')[0]})")
+            else:
+                total_added += 1
 
     # ---- Summary ----------------------------------------------------------
     lines = [
         f"Created {pyf_path}",
         f"  {len(groups)} group(s), {total_added} image(s) from {folder}",
     ]
+    if skipped:
+        lines.append(f"WARNING: {len(skipped)} file(s) skipped: " + "; ".join(skipped[:10])
+                     + (" …" if len(skipped) > 10 else ""))
     if group_by != "none":
         lines.append(f"  Grouped by: {group_by}")
         for lbl, gf in groups:
@@ -510,6 +519,10 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
                 lettered += 1
         if not series_tail:
             i += 1
+    if lettered:
+        font = _figure_font(root)           # new letters in the figure's own font
+        if font:
+            _restyle_letters(root, **font)
     _save(tree, pyf_path)
     return lettered, bars
 

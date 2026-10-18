@@ -113,6 +113,37 @@ mcp = FastMCP(
 _fastmcp_tool = mcp.tool
 
 
+def _keep_text_arguments_as_text():
+    """FastMCP parses a string argument as JSON when the parameter is not
+    annotated exactly ``str`` — so ``recipe_text: str | None`` given a JSON
+    recipe arrived as a dict and was refused ("Input should be a valid
+    string"), and a text "null" became None. Text parameters (str, or str |
+    None) keep the text they were given."""
+    import typing
+    from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata
+    original = FuncMetadata.pre_parse_json
+    if getattr(original, "_pyfigures", False):
+        return
+
+    def is_text(annotation):
+        args = typing.get_args(annotation)
+        return annotation is str or (bool(args) and set(args) <= {str, type(None)})
+
+    def pre_parse_json(self, data):
+        text = {k: v for k, v in data.items() if isinstance(v, str)
+                and k in self.arg_model.model_fields
+                and is_text(self.arg_model.model_fields[k].annotation)}
+        parsed = original(self, data)
+        parsed.update(text)
+        return parsed
+
+    pre_parse_json._pyfigures = True
+    FuncMetadata.pre_parse_json = pre_parse_json
+
+
+_keep_text_arguments_as_text()
+
+
 _NOT_LOGGED = {"list_history", "undo_last"}     # they read / write the log themselves
 
 

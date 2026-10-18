@@ -23,6 +23,10 @@ from .app import (
     mcp,
 )
 from .core import (
+    _missing_image_note,
+    _placement_error,
+    _orientation,
+    _unreadable_image,
     _JOURNAL_ALIASES,
     _JOURNAL_PRESETS,
     _ROI_PROTECTED,
@@ -256,6 +260,8 @@ def set_spacing(pyf_path: str, group_path: list[int], spacing: int) -> str:
     (Free-canvas mode has no groups, so group_path=[] is not valid here.)
     Use describe_figure() to find the right path.
     """
+    if int(spacing) < 0:
+        return f"ERROR: spacing must be 0 or more pixels (got {spacing})."
     tree, root = _load(pyf_path)
     if not group_path:
         return "ERROR: set_spacing requires a group (group_path cannot be [])."
@@ -273,9 +279,11 @@ def set_orientation(pyf_path: str, group_path: list[int], orientation: str) -> s
 
     *group_path*: [0] for top-level group 0, [0,1] for a sub-group.
     """
-    orientation = orientation.upper().strip()
-    if orientation not in ("X", "Y"):
-        return "ERROR: orientation must be 'X' or 'Y'."
+    o = _orientation(orientation)
+    if o is None:
+        return (f"ERROR: orientation must be 'X' (a row: side by side) or 'Y' (a column: "
+                f"stacked), not {orientation!r}.")
+    orientation = o
     tree, root = _load(pyf_path)
     if not group_path:
         return "ERROR: set_orientation requires a group (group_path cannot be [])."
@@ -455,6 +463,12 @@ def create_figure(
     *spacing*: pixels between children.
     *num_groups*: number of empty groups to create (1–20, groups mode only).
     """
+    if not str(pyf_path).lower().endswith(".pyf"):
+        return f"ERROR: a figure file must end in .pyf (got {os.path.basename(str(pyf_path))!r})."
+    if num_groups is not None and num_groups < 0:
+        return f"ERROR: num_groups must be 0 or more (got {num_groups})."
+    if int(spacing) < 0:
+        return f"ERROR: spacing must be 0 or more pixels (got {spacing})."
     if mode is None:
         mode = "groups" if num_groups and num_groups > 0 else "canvas"
     mode = mode.lower().strip()
@@ -463,9 +477,11 @@ def create_figure(
     if mode == "canvas" and num_groups and num_groups > 0:
         return ("ERROR: num_groups only applies to mode='groups' "
                 "(omit mode, or pass mode='groups').")
-    orientation = orientation.upper().strip()
-    if orientation not in ("X", "Y"):
-        return "ERROR: orientation must be 'X' or 'Y'."
+    o = _orientation(orientation)
+    if o is None:
+        return (f"ERROR: orientation must be 'X' (a row: side by side) or 'Y' (a column: "
+                f"stacked), not {orientation!r}.")
+    orientation = o
 
     root = ET.Element("list")
 
@@ -561,6 +577,9 @@ def add_image(
             page = None                     # (for a .tex: which figure/table/picture)
         except (OSError, ValueError) as e:
             return f"ERROR: {e}"
+    bad = _unreadable_image(filename)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
@@ -590,7 +609,7 @@ def add_image(
     # a URL (OMERO link, OME-Zarr, http image) is named in full: its last
     # path part can be meaningless ("?show=image-1")
     shown = filename if str(filename).lower().startswith(("http://", "https://")) else Path(filename).name
-    return f"Added {shown} as image {n} in {loc}{suffix}."
+    return f"Added {shown} as image {n} in {loc}{suffix}." + _missing_image_note(filename)
 
 
 @mcp.tool()
@@ -818,6 +837,9 @@ def add_annotation(
     *text*: label text — plain or Qt HTML (e.g. "<b>A</b>", "DAPI").
     *placement*: "top left" | "top right" | "bottom left" | "bottom right" | "center".
     """
+    bad = _placement_error(placement)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path)
     if err:
@@ -974,9 +996,11 @@ def add_group(
 
     Returns the new group's path and ID.
     """
-    orientation = orientation.upper().strip()
-    if orientation not in ("X", "Y"):
-        return "ERROR: orientation must be 'X' or 'Y'."
+    o = _orientation(orientation)
+    if o is None:
+        return (f"ERROR: orientation must be 'X' (a row: side by side) or 'Y' (a column: "
+                f"stacked), not {orientation!r}.")
+    orientation = o
     tree, root = _load(pyf_path)
     new_id = _next_group_id(root)
     grp = _new_group_elem(orientation, spacing, group_id=new_id)
@@ -1087,11 +1111,22 @@ def set_size(
         targets = [grp]
 
     # Apply set_to_width — this computes all x/y/w/h/scale values in place
-    for grp in targets:
-        _stw(grp, width_px)
+    try:
+        for grp in targets:
+            _stw(grp, width_px)
+    except ArithmeticError:
+        return (f"ERROR: at {width_px:g} px there is no room for the panels: the gaps of "
+                f"the nested groups take the whole width (very deep nesting or large "
+                f"spacing). Widen the figure, reduce the spacing or nest fewer groups. "
+                f"Nothing was changed.")
 
     # Re-serialise back to .pyf XML using PyFigures' own serialiser
     new_xml = _to_xml(objects, is_list=True)
+    old = ET.fromstring(Path(pyf_path).read_text(encoding="utf-8"))
+    new = ET.fromstring(new_xml)
+    if sum(1 for _ in new.iter("Image2D")) != sum(1 for _ in old.iter("Image2D")):
+        return ("ERROR: the layout engine could not rebuild every panel of the figure; "
+                "nothing was changed.")
     _atomic_write_text(pyf_path, new_xml)
     # then re-stack the rows at their new heights (set_to_width only lays out
     # each group internally: rows kept their old y and overlapped when the
@@ -1280,9 +1315,10 @@ def layout_canvas(
     *spacing_px*: gap between images (pixels).
     *direction*: 'Y' = stack images top-to-bottom (default), 'X' = side by side.
     """
-    direction = direction.upper().strip()
-    if direction not in ("X", "Y"):
-        return "ERROR: direction must be 'X' or 'Y'."
+    d = _orientation(direction)
+    if d is None:
+        return f"ERROR: direction must be 'X' (side by side) or 'Y' (stacked), not {direction!r}."
+    direction = d
     if not width_px or width_px <= 0:
         return "ERROR: width_px must be positive."
     if spacing_px < 0:
@@ -1384,6 +1420,9 @@ def set_image_filename(
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0, 1] for sub-group.
     *image_index*: 0-based index among Image2D elements at that location.
     """
+    bad = _unreadable_image(new_filename)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
@@ -1471,6 +1510,9 @@ def fill_template(
         for slot, path in zip(slots, my_file_list):
             fill_template(f, slot["group_path"], slot["image_index"], path)
     """
+    bad = _unreadable_image(filename)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:

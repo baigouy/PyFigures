@@ -79,10 +79,13 @@ class TestOverflowRegressions:
         assert r[1, 0] == 0
         assert r[1, 1] == 128
 
-    def test_non_finite_display_range_returns_black(self):
+    def test_non_finite_display_range_uses_the_finite_pixels(self):
+        # a NaN / inf bound (from NaN or inf pixels) used to give a black image
         a = np.array([[0.0, 1.0]], dtype=np.float32)
-        assert _normalize_to_uint8(a, 0.0, np.inf).max() == 0
-        assert _normalize_to_uint8(a, np.nan, 1.0).max() == 0
+        assert _normalize_to_uint8(a, 0.0, np.inf).tolist() == [[0, 255]]
+        assert _normalize_to_uint8(a, np.nan, 1.0).tolist() == [[0, 255]]
+        # nothing finite at all: black, no crash
+        assert _normalize_to_uint8(np.array([[np.nan]], np.float32), np.nan, np.nan).max() == 0
 
     def test_inverted_or_flat_range_returns_black(self):
         a = np.array([[0.0, 1.0]], dtype=np.float32)

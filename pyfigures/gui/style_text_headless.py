@@ -22,7 +22,9 @@ where params.json is UTF-8 JSON with keys:
     underline   (bool|None)
     color       (str|None)      any Qt colour string, e.g. "#ff0000" / "red"
 
-The restyled HTML is written (UTF-8) to <out.html>.
+The restyled HTML is written (UTF-8) to <out.html>. With ``htmls`` (a list)
+instead of ``html``, every text gets the same attributes and <out.html> holds
+JSON: {"htmls": [the results], "font_installed": true/false/null}.
 """
 from __future__ import annotations
 
@@ -83,15 +85,16 @@ def _main(argv=None) -> int:
     try:
         with open(params_path, "r", encoding="utf-8") as f:
             p = json.load(f)
-        out = restyle_html(
-            p.get("html", ""),
-            font_family=p.get("font_family"),
-            font_size=p.get("font_size"),
-            bold=p.get("bold"),
-            italic=p.get("italic"),
-            underline=p.get("underline"),
-            color=p.get("color"),
-        )
+        attrs = {k: p.get(k) for k in ("font_family", "font_size", "bold", "italic",
+                                        "underline", "color")}
+        if "htmls" in p:            # several texts at once: JSON out
+            from qtpy.QtGui import QFontDatabase
+            fam = attrs.get("font_family")
+            out = json.dumps({"htmls": [restyle_html(h, **attrs) for h in p["htmls"]],
+                              "font_installed": (None if not fam else
+                                                 fam in QFontDatabase.families())})
+        else:
+            out = restyle_html(p.get("html", ""), **attrs)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(out)
     except Exception as e:

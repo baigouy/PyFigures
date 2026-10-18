@@ -861,7 +861,7 @@ rows:
 | Key | Default | Meaning |
 |---|---|---|
 | `panels` | **required** | The panels, as in a plain row. |
-| `orientation` | `X` | `X` / `row`, or `Y` / `column`. |
+| `orientation` | `X` | `X` / `row` / `horizontal`, or `Y` / `column` / `vertical`. |
 | `spacing` | the figure's `spacing` | Gap inside this row. |
 | `labels` | none | Column headers: a list (one per panel) or one text across the row. |
 | `labels_position` | `above` | `above` or `below`. |

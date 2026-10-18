@@ -1395,9 +1395,17 @@ class TestCreateFigureFromFolder:
     def _make_folder(self, tmp_path, n=6, names=None):
         folder = tmp_path / "imgs"
         folder.mkdir()
+        import numpy as np
+        import tifffile
         for name in (names or [f"img{i:02d}.tif" for i in range(n)]):
-            (folder / name).write_bytes(b"")
+            tifffile.imwrite(folder / name, np.zeros((4, 4), np.uint8))   # an empty file is refused
         return str(folder)
+
+    def test_unreadable_files_are_reported(self, tmp_path):
+        folder = self._make_folder(tmp_path, 2)
+        (Path(folder) / "broken.tif").write_bytes(b"")
+        res = create_figure_from_folder(str(tmp_path / "fig.pyf"), folder)
+        assert "2 image(s)" in res and "skipped: broken.tif" in res
 
     def test_creates_pyf_file(self, tmp_path):
         folder = self._make_folder(tmp_path, 4)

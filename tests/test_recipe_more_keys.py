@@ -50,7 +50,7 @@ rows:
           - {polygon: [[1, 1], [30, 2], [15, 25]]}
           - {circle: [30, 30, 6], color: magenta}
           - {square: [40, 20, 8]}
-          - {points: [[5, 40], [12, 44]], color: red, size: 4}
+          - {points: [[5, 30], [12, 34]], color: red, size: 4}
         brackets: [{x1: 5, x2: 40, y: 8, label: "**"}]
       - image: rgb.tif
         channels: [true, false, true]
@@ -145,7 +145,7 @@ def test_text_corner_labels_rois_brackets(built):
     assert kinds.count("Rectangle2D") == 2     # rect + square
     ell = [a for a in mine if a["type"] == "Ellipse2D"]
     assert any((a["x"], a["y"], a["width"], a["height"]) == (24, 24, 12, 12) for a in ell), ell
-    assert any((a["x"], a["y"], a["width"], a["height"]) == (3, 38, 4, 4) for a in ell), ell
+    assert any((a["x"], a["y"], a["width"], a["height"]) == (3, 28, 4, 4) for a in ell), ell
     rec = [a for a in mine if a["type"] == "Rectangle2D"]
     assert any((a["x"], a["y"], a["width"], a["height"]) == (36, 16, 8, 8) for a in rec), rec
     placements = {str(a.get("text")): a.get("placement") for a in mine if a["type"] == "TAText2D"}

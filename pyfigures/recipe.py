@@ -531,8 +531,11 @@ def _rows_of(recipe):
 
 
 def _check_row_opts(opts, n_panels, where):
-    if "orientation" in opts and opts["orientation"] not in ("X", "Y", "row", "column"):
-        raise RecipeError(f"{where}: orientation must be X (row) or Y (column)")
+    if "orientation" in opts:
+        from pyfigures.mcp_tools.core import _orientation
+        if _orientation(opts["orientation"]) is None:
+            raise RecipeError(f"{where}: orientation must be X (a row: side by side) or Y "
+                              f"(a column: stacked), not {opts['orientation']!r}")
     if "spacing" in opts and (not _is_int(opts["spacing"]) or opts["spacing"] < 0):
         raise RecipeError(f"{where}: spacing must be a non-negative integer (pixels)")
     if "labels" in opts:
@@ -851,10 +854,18 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
 # build
 # ---------------------------------------------------------------------------
 
+def _strip_error(text: str) -> str:
+    """'ERROR: ERROR: x' -> 'x' (the caller adds its own single prefix)."""
+    text = text.strip()
+    while text.upper().startswith("ERROR"):
+        text = text[5:].lstrip(" :")
+    return text
+
+
 def _check(result, step):
     """Fail loudly on an ERROR from a tool; return any WARNING lines."""
     if isinstance(result, str) and result.startswith("ERROR"):
-        raise RecipeError(f"{step}: {result}")
+        raise RecipeError(f"{step}: {_strip_error(result)}")
     if isinstance(result, str):
         return [ln[len("WARNING: "):] for ln in result.splitlines()
                 if ln.startswith("WARNING: ")]
@@ -1163,7 +1174,7 @@ def _run_check(M, out, spec, plan):
 def _ok(result, step):
     """The result of a read-only tool, or RecipeError if it refused."""
     if isinstance(result, str) and result.startswith("ERROR"):
-        raise RecipeError(f"{step}: {result}")
+        raise RecipeError(f"{step}: {_strip_error(result)}")
     return result
 
 
@@ -1190,10 +1201,24 @@ def _fill_template(M, out, template, files):
 
 def build_figure_from_recipe(recipe_path: str) -> dict:
     """Build the figure described by *recipe_path*; returns a summary dict.
-    Raises RecipeError on any invalid input or failed step."""
+    Raises RecipeError on any invalid input or failed step. A build that fails
+    half-way leaves the output as it was (absent, or the previous figure);
+    only a failed ``checks`` entry keeps the new figure, as documented."""
+    from pyfigures import history
+    plan = _plan(load_recipe(recipe_path), recipe_path)
+    before = history.capture(plan["output"])
+    try:
+        return _build_plan(plan, recipe_path)
+    except RecipeChecksFailed:
+        raise
+    except BaseException:
+        history.restore(before)
+        raise
+
+
+def _build_plan(plan: dict, recipe_path: str) -> dict:
     from pyfigures import mcp_server as M
     from pyfigures.mcp_tools.workflow import _finalize_draft, _caption_stub
-    plan = _plan(load_recipe(recipe_path), recipe_path)
     out = plan["output"]
     base = plan["base"]
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -1234,8 +1259,8 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
 
     # pass 1: every panel, in order
     for r, (row_opts, row) in enumerate(plan["rows"]):
-        orientation = {"row": "X", "column": "Y"}.get(row_opts.get("orientation"),
-                                                      row_opts.get("orientation", "X"))
+        from pyfigures.mcp_tools.core import _orientation
+        orientation = _orientation(row_opts.get("orientation", "X"))
         row_spacing = row_opts.get("spacing", plan["spacing"])
         warnings += _check(M.add_group(out, orientation=orientation, spacing=row_spacing),
                            f"row {r + 1}")

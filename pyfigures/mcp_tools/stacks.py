@@ -248,6 +248,9 @@ def add_stack_montage(
     n = sizes[axis_l]
     try:
         idx = parse_frames(frames if not isinstance(frames, str) or frames.strip() else None, n)
+        if isinstance(frames, int) and not isinstance(frames, bool) and frames > n:
+            _warn(f"{frames} frames asked for, but the stack has {n} along "
+                  f"{'time' if axis_l == 't' else 'Z'}: all {n} are shown.")
         proj = _projection_for(info, axis_l, projection)
         nch = sizes.get("c", 1)
         chans = None

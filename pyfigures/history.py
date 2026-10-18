@@ -57,6 +57,20 @@ def capture(pyf_path: str) -> dict:
     return state
 
 
+def restore(state: dict) -> None:
+    """Put back a state from capture(): files rewritten, files absent then
+    removed."""
+    for path, data in state.items():
+        if data is None:
+            if os.path.isfile(path):
+                os.remove(path)
+        else:
+            tmp = path + ".restore_tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+
+
 def _digest(state: dict) -> str:
     """One fingerprint of the figure and its sidecars (a caption typed in the
     GUI changes only its sidecar)."""
