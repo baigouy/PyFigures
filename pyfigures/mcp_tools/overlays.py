@@ -23,6 +23,8 @@ from .app import (
 )
 from .core import (
     _apply_scalebar_to_img,
+    _first_filename,
+    _scale_bar_length_error,
     _atomic_write_text,
     _caption_sidecar_path,
     _check_property_value,
@@ -235,6 +237,9 @@ def set_scale_bar(
     imgs = [c for c in container if c.tag == "Image2D"]
     if image_index >= len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit)
+    if too_long:
+        return f"ERROR: {too_long} Nothing was changed."
 
     action = _apply_scalebar_to_img(
         imgs[image_index], bar_width_in_units, legend_html,
@@ -327,6 +332,7 @@ def set_scale_bar_all(
     added = 0
     updated = 0
     skipped = 0
+    too_long: list[str] = []
 
     def _process_img(img: ET.Element):
         nonlocal added, updated, skipped
@@ -334,6 +340,10 @@ def set_scale_bar_all(
         script = _decode(img.findtext("custom_loading_script")) or ""
         if "from staplot import api" in script or "ColorbarBase(" in script:
             skipped += 1
+            return
+        err = _scale_bar_length_error(img, bar_width_in_units, px_to_unit, unit)
+        if err:
+            too_long.append(f"{os.path.basename(str(_first_filename(img)))}: {err}")
             return
         action = _apply_scalebar_to_img(
             img, bar_width_in_units, legend_html,
@@ -362,6 +372,8 @@ def set_scale_bar_all(
     for grp in _top_groups(root):
         _walk(grp)
 
+    if too_long:
+        return "ERROR: " + " | ".join(too_long[:3]) + " Nothing was changed."
     total = added + updated
     if total == 0:
         return "No images found in this figure."
@@ -532,6 +544,18 @@ def add_zoom_callout(
         return "ERROR: parent_width and parent_height must be positive."
     if connectors not in (0, 1, 2):
         return "ERROR: connectors must be 0, 1 or 2."
+    if source_x < 0 or source_y < 0 or source_x + source_w > parent_width + 0.5 \
+            or source_y + source_h > parent_height + 0.5:
+        # a box beyond the image magnified a smear of edge pixels (a model gave
+        # x1, y1, x2, y2 where x, y, width, height is expected)
+        hint = ""
+        if source_w > source_x and source_h > source_y and source_w <= parent_width \
+                and source_h <= parent_height:
+            hint = (f" If {source_w:g}, {source_h:g} are the opposite corner, the size is "
+                    f"{source_w - source_x:g} x {source_h - source_y:g}.")
+        return (f"ERROR: the zoom box (x={source_x:g}, y={source_y:g}, width={source_w:g}, "
+                f"height={source_h:g}) goes outside the {parent_width:g} x {parent_height:g} px "
+                f"image; the box is x, y, width, height in image pixels.{hint}")
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)

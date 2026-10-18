@@ -23,6 +23,7 @@ from .app import (
 )
 from .core import (
     _apply_scalebar_to_img,
+    _child_text,
     _decode,
     _iter_panel_elements,
     _load,
@@ -432,15 +433,36 @@ def _caption_stub(pyf_path: str) -> str:
     """'Figure. (A) wt; (B) ko; (C) data plot. [Describe …]' for the panels of
     a figure, in panel order (used by draft_figure and recipes)."""
     import string
+    from .stacks import SERIES_MARK
+    from .export import _panel_label_texts
     _, root = _load(pyf_path)
     letters = string.ascii_uppercase
-    parts = []
-    for idx, img in enumerate(_iter_panel_elements(root)):
+    parent = {c: p for p in root.iter() for c in p}
+    # one entry per lettered panel: a montage / channel split is ONE panel
+    # (lettered on its first frame) — the stub listed every frame, (A)-(F) for
+    # a figure lettered A-C; text panels carry no letter
+    entries: list[list] = []
+    series_entry: dict = {}
+    for img in _iter_panel_elements(root):
+        if _child_text(img, "isText") is True:
+            continue
         fn = _decode(img.findtext("filename"))
         base = (os.path.splitext(os.path.basename(str(fn)))[0]
                 if fn and fn not in ("None", "@template@") else "data plot")
+        if str(_decode(img.findtext("user_comments")) or "").startswith(SERIES_MARK):
+            key = parent.get(img)
+            names = [t for t in _panel_label_texts(img) if not (len(t) <= 2 and t.isalpha() and t.isupper())]
+            if key in series_entry:
+                series_entry[key][1].extend(names)
+                continue
+            series_entry[key] = [base, list(names)]
+            entries.append(series_entry[key])
+        else:
+            entries.append([base, []])
+    parts = []
+    for idx, (base, names) in enumerate(entries):
         L = letters[idx] if idx < 26 else f"P{idx}"
-        parts.append(f"({L}) {base}")
+        parts.append(f"({L}) {base}" + (f" ({', '.join(names)})" if names else ""))
     return ("Figure. " + "; ".join(parts)
             + ". [Describe the experiment, scale bars and statistics here.]")
 

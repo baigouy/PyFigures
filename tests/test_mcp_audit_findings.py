@@ -105,7 +105,7 @@ def test_automatic_scale_bar_label_is_si_style(tmp_path, qapp):
     import json
     from PIL import Image
     src = tmp_path / "i.png"
-    Image.new("L", (100, 80), 99).save(src)
+    Image.new("L", (400, 300), 99).save(src)
     pyf = tmp_path / "f.pyf"
     M.create_figure(str(pyf), num_groups=1)
     M.add_image(str(pyf), [0], str(src))

@@ -738,6 +738,55 @@ def _new_scalebar_elem(
     return sb
 
 
+def _nice_bar_length(max_units: float) -> float:
+    """Largest 1/2/5 x 10^k not above *max_units* (a readable bar length)."""
+    import math
+    if max_units <= 0:
+        return 0.0
+    k = math.floor(math.log10(max_units))
+    for m in (5, 2, 1):
+        if m * 10 ** k <= max_units:
+            return float(m * 10 ** k)
+    return float(10 ** k)
+
+
+def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
+                            px_to_unit: float | None, unit: str = "µm") -> str | None:
+    """An error when the bar would be as wide as the (cropped) image or wider —
+    it was drawn clipped to the panel, i.e. at a wrong length (a model asked for
+    100 µm at 0.1 µm/px on a 512 px image). None when fine or unknown."""
+    px = px_to_unit
+    if px is None:
+        try:
+            px = float(_child_text(img, "px_to_unit_conversion_factor") or 0)
+        except (TypeError, ValueError):
+            px = 0
+    if not px or px <= 0 or bar_width_in_units <= 0:
+        return None
+    size = _raw_size_from_file(_first_filename(img))
+    if not size:
+        return None
+
+    def _c(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    visible = size[0] - _c("crop_left") - _c("crop_right")
+    if visible <= 0:
+        return None
+    bar_px = bar_width_in_units / px
+    if bar_px < visible:
+        return None
+    width_units = visible * px
+    suggestion = _nice_bar_length(width_units * 0.25)
+    return (f"a {bar_width_in_units:g} {unit} bar is {bar_px:.0f} px at {px:g} {unit}/px, but the "
+            f"image is only {visible} px ({width_units:g} {unit}) wide — it would be cut to "
+            f"the panel and show a wrong length. Use a shorter bar, e.g. {suggestion:g} {unit}"
+            f" (about a quarter of the width), or check px_to_unit (the pixel size).")
+
+
 def _apply_scalebar_to_img(
     img: ET.Element,
     bar_width_in_units: float,

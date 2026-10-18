@@ -74,7 +74,7 @@ def test_pixel_size_inside_the_scale_bar_and_zoom_inset_fraction(images, qapp):
     Image.new("L", (400, 300), 120).save(images / "big.png")
     res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
         "output: f.pyf\n"
-        "defaults: {scale_bar: {units: 10, unit: um, px_to_unit: 0.1}}\n"
+        "defaults: {scale_bar: {units: 2, unit: um, px_to_unit: 0.1}}\n"
         "rows:\n"
         "  - - {image: big.png, zoom: {box: [100, 100, 40, 40], inset_fraction: 0.3}}\n"
         "    - a.png\n"))
@@ -121,6 +121,54 @@ def test_misuses_of_an_rgb_image_are_refused_or_warned(tmp_path, qapp):
     assert bad.startswith("ERROR") and "removes the whole image" in bad and "zoom" in bad, bad
     assert not (tmp_path / "r.pyf").exists()            # refused before building
     ET.parse(pyf)                                       # the figure stays valid
+
+
+def test_bar_longer_than_the_image_and_zoom_box_outside_are_refused(tmp_path, qapp):
+    """From a 28B model's final figure: a 100 µm bar at 0.1 µm/px (1000 px) on
+    512 / 672 px images was drawn cut to the panel (a wrong length), and a zoom
+    box given as x1, y1, x2, y2 ran past the image and magnified a smear."""
+    from PIL import Image
+    src = tmp_path / "i.png"
+    Image.new("L", (512, 400), 90).save(src)
+    pyf = tmp_path / "f.pyf"
+    M.create_figure(str(pyf), num_groups=1)
+    M.add_image(str(pyf), [0], str(src))
+    before = pyf.read_bytes()
+    res = M.set_scale_bar(str(pyf), [0], 0, 100, px_to_unit=0.1)
+    assert res.startswith("ERROR") and "1000 px" in res and "512 px" in res and "10 µm" in res, res
+    assert pyf.read_bytes() == before
+    assert M.set_scale_bar_all(str(pyf), 100, px_to_unit=0.1).startswith("ERROR")
+    assert not M.set_scale_bar(str(pyf), [0], 0, 10, px_to_unit=0.1).startswith("ERROR")
+    res = M.add_zoom_callout(str(pyf), [0], 0, 400, 250, 460, 350,
+                             parent_width=512, parent_height=400)
+    assert res.startswith("ERROR") and "outside" in res, res
+    assert not M.add_zoom_callout(str(pyf), [0], 0, 400, 250, 60, 100,
+                                  parent_width=512, parent_height=400).startswith("ERROR")
+    bad = M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\ndefaults: {px_to_unit: 0.1, scale_bar: {units: 100}}\n"
+        "rows:\n  - [i.png]\n"))
+    assert bad.startswith("ERROR") and "shorter bar" in bad, bad
+
+
+def test_caption_stub_matches_the_panel_letters(tmp_path, qapp):
+    """A channel split is one lettered panel: the stub listed (A)-(F) for a
+    figure lettered A-C."""
+    import numpy as np
+    import tifffile
+    from pyfigures.mcp_tools.workflow import _caption_stub
+    stack = tmp_path / "cells.tif"
+    tifffile.imwrite(str(stack), np.zeros((2, 40, 50), np.uint8), imagej=True, metadata={"axes": "CYX"})
+    csv = tmp_path / "d.csv"
+    csv.write_text("A,B\n1,2\n2,3\n3,4\n", encoding="utf-8")
+    from PIL import Image
+    Image.new("L", (50, 40), 90).save(tmp_path / "i.png")
+    res = M.build_figure_from_recipe(str(tmp_path / "f.yaml"), recipe_text=(
+        "output: f.pyf\nrows:\n  - - {split: cells.tif, names: [GFP, RFP]}\n"
+        "  - - i.png\n    - {plot: d.csv, kind: box}\n"))
+    assert not res.startswith("ERROR"), res
+    stub = _caption_stub(str(tmp_path / "f.pyf"))
+    assert "(A) cells (GFP, RFP" in stub and "(B) i" in stub and "(C) data plot" in stub, stub
+    assert "(D)" not in stub
 
 
 def test_bad_stats_mode_says_what_it_got(tmp_path, qapp):

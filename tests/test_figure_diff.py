@@ -32,7 +32,7 @@ def _base_figure(d):
     create_figure(pyf, mode="canvas")
     add_image(pyf, [], a, label="A")
     add_image(pyf, [], b, label="B")
-    set_scale_bar(pyf, [], 0, 10, unit="um", px_to_unit=0.1)
+    set_scale_bar(pyf, [], 0, 2, unit="um", px_to_unit=0.1)    # 20 px of a 60 px image
     set_figure_caption(pyf, "Original caption.", title="Figure 1")
     return pyf
 
