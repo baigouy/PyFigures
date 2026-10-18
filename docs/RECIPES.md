@@ -867,7 +867,7 @@ rows:
 | `labels_position` | `above` | `above` or `below`. |
 | `labels_orientation` | `horizontal` | `horizontal`, `vertical`, `vertical_flipped`. |
 | `side_label` | none | A label at the side of the row (e.g. a condition name). |
-| `side_label_position` | `left` | `left`, `right`, `top`, `bottom`. |
+| `side_label_position` | `left` | `left`, `right`, `top`, `bottom`. A label sits at an end of its row: for a column (`orientation: Y`), `left` / `top` put it above and `right` / `bottom` below. Side labels and label rows are dark text (white on a dark `background` / `label_background`). |
 
 ---
 

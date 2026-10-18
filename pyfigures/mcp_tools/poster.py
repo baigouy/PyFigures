@@ -41,8 +41,9 @@ def _run_poster_op(op_args: list[str], timeout: int = 120):
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
+    env["PYTHONIOENCODING"] = "utf-8"     # read back as UTF-8 (accents, µ, —)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                               env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"poster operation timed out after {timeout}s"

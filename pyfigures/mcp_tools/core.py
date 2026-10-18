@@ -1890,14 +1890,19 @@ def _run_headless_op(args: list[str], timeout: int = 600):
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
+    env["PYTHONIOENCODING"] = "utf-8"     # read back as UTF-8 (accents, µ, —)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                               env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"operation timed out after {timeout}s"
     if proc.returncode != 0:
         from .export import _render_error_message
-        return False, _render_error_message((proc.stderr or proc.stdout or "operation failed").strip())
+        text = (proc.stderr or proc.stdout or "").strip()
+        if not text:            # a native crash says nothing
+            return False, (f"the {args[0]} process stopped unexpectedly (exit code "
+                           f"{proc.returncode}); try again")
+        return False, _render_error_message(text)
     return True, (proc.stdout or "").strip()
 
 
@@ -1915,9 +1920,10 @@ def _restyle_html_batch(htmls: list[str], **attrs) -> list[str] | str:
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
+    env["PYTHONIOENCODING"] = "utf-8"     # read back as UTF-8 (accents, µ, —)
     try:
         proc = subprocess.run([sys.executable, "-m", "pyfigures.gui.style_text_headless",
-                               params_path, out_path], capture_output=True, text=True,
+                               params_path, out_path], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               stdin=subprocess.DEVNULL, env=env, timeout=300)
     except subprocess.TimeoutExpired:
         return "styling timed out"

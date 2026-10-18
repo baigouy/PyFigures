@@ -64,7 +64,11 @@ def capture_scene(panel) -> dict:
     bounds = panel.updateBounds()
     width = float(bounds.width())
     height = float(bounds.height())
-    if width <= 0 or height <= 0:
+    if width < 1 or height < 1:
+        if getattr(panel, "shapes_to_draw", None):
+            raise RuntimeError(f"the figure is {width:.1f} x {height:.1f} pt: its panels have no "
+                               f"room (too narrow for its panels and the gaps between them) — "
+                               f"widen the figure, wrap the rows or reduce the spacing")
         raise RuntimeError("the figure contains no panels to export")
     # the figure's own top-left corner (not a fixed margin: free-canvas
     # figures can start anywhere)

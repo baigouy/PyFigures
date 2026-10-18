@@ -234,6 +234,73 @@ def test_figure_with_no_room_still_opens_whole(tmp_path, qapp):
     assert open(pyf, encoding="utf-8").read().count("<Image2D>") == 14
 
 
+def test_side_label_in_a_row_without_spacing(tmp_path, qapp):
+    """The label cell started 512 px wide: it took the whole row and, with
+    spacing 0, the layout divided by zero."""
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf)
+    M.add_group(pyf, orientation="X", spacing=0)
+    M.add_image(pyf, [0], _png(tmp_path / "a.png"))
+    M.add_image(pyf, [0], _png(tmp_path / "b.png"))
+    res = M.add_side_label(pyf, [0], "WT")
+    assert "WARNING" not in res, res
+
+
+def test_no_room_and_non_ascii_errors_are_clear(tmp_path, qapp):
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], _png(tmp_path / "a.png"))
+    M.add_image(pyf, [0], _png(tmp_path / "b.png"))
+    M.set_size(pyf, 4)
+    res = M.export_figure(pyf, str(tmp_path / "f.png"), 72)
+    assert res.startswith("ERROR") and "no room" in res and "—" in res        # UTF-8 read back
+    assert "no room" in M.export_pptx(pyf, str(tmp_path / "f.pptx"))
+
+
+def test_label_rows_and_side_labels_show_on_the_page(tmp_path, qapp):
+    """They were white text on the (white) page: invisible."""
+    _png(tmp_path / "a.png")
+    _recipe(tmp_path, "output: f.pyf\nrows:\n  - {panels: [a.png, a.png], side_label: WT, "
+                      "labels: [one, two]}\n")
+    text = open(tmp_path / "f.pyf", encoding="utf-8").read()
+    import re
+
+    def white(label, t):
+        return re.search(r"#ffffff[^<]{0,12}&gt;" + label + "&lt;", t) is not None
+    assert "WT" in text and "one" in text
+    assert not white("WT", text) and not white("one", text)
+    _recipe(tmp_path, "output: g.pyf\nbackground: black\nrows:\n  - {panels: [a.png], side_label: KO}\n")
+    assert white("KO", open(tmp_path / "g.pyf", encoding="utf-8").read())
+
+
+def test_undo_right_after_an_edit_keeps_redo(tmp_path, qapp, monkeypatch):
+    """The spacing spinner records its undo checkpoint 0.8 s later: an Undo
+    pressed sooner was followed by that checkpoint, which re-applied the edit
+    and wiped Redo."""
+    import time
+    from qtpy.QtWidgets import QMessageBox
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    EZFIG_GUI.show_tips = lambda self: None
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], _png(tmp_path / "a.png"))
+    g = EZFIG_GUI()
+    g.reload_state(pyf, append=False)
+    g.activate_or_reset_undo_redo()
+    g.save_state(show_popup=False)
+    start = g.paint.EZFIG_panel.space
+    g.main_space_spinner.setValue(start + 7)        # timer pending, no checkpoint yet
+    g.undo()
+    for _ in range(30):                              # let any late timer fire
+        qapp.processEvents()
+        time.sleep(0.05)
+    assert g.paint.EZFIG_panel.space == start
+    g.redo()
+    assert g.paint.EZFIG_panel.space == start + 7
+    g._dirty = False
+
+
 def test_merge_of_different_sizes_and_rois_outside_warn(tmp_path, qapp):
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf, num_groups=1)

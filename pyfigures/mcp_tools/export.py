@@ -91,8 +91,9 @@ def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
+    env["PYTHONIOENCODING"] = "utf-8"     # read back as UTF-8 (accents, µ, —)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                               env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"rendering timed out after {timeout}s"
@@ -631,8 +632,9 @@ def style_annotation(
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
+    env["PYTHONIOENCODING"] = "utf-8"     # read back as UTF-8 (accents, µ, —)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                               env=env, timeout=120)
     except subprocess.TimeoutExpired:
         return "ERROR: styling timed out"
@@ -1614,8 +1616,9 @@ def check_image_integrity(
            "--block", str(block), "--min-clones", str(min_clones)]
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    env["PYTHONIOENCODING"] = "utf-8"
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                               env=env, timeout=600)
     except subprocess.TimeoutExpired:
         return "ERROR: integrity analysis timed out after 600s"

@@ -1082,6 +1082,11 @@ def add_side_label(
         return f"ERROR: text_orientation must be one of {list(_TEXT_ORIENT_MAP)} or 'auto'."
 
     label_img = _new_text_label_image2d(label, resolved_orient)
+    # a side label is a narrow strip beside the panels, not a 512 x 256 cell:
+    # with that placeholder the label took the whole row width and, with no
+    # spacing to absorb the rounding, the layout divided by zero
+    across = "width" if resolved_orient.startswith("vertical") else "height"
+    _set_child_text(label_img, across, "15.0")
 
     if position in ("left", "top"):
         container.insert(0, label_img)

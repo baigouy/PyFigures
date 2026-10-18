@@ -108,6 +108,15 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, c
         panel.get_dpi = (lambda _dpi=int(dpi): _dpi)
 
         panel.update_size()
+        try:
+            b = panel.updateBounds()
+            bw, bh = float(b.width()), float(b.height())
+        except Exception:
+            bw = bh = 1.0
+        if bw < 1 or bh < 1:
+            raise RuntimeError(f"the figure is {bw:.1f} x {bh:.1f} px: its panels have no room "
+                               f"(too narrow for its panels and the gaps between them) — widen "
+                               f"the figure, wrap the rows or reduce the spacing")
         if crop is not None:
             panel.save(out_path, crop=crop)
         else:

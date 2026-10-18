@@ -173,6 +173,18 @@ def test_gui_search_library_action(qapp, monkeypatch, tmp_path):
     opened = {}
     monkeypatch.setattr(EZFIG_GUI, "reload_state",
                         lambda self, path, append=False: opened.update(path=path))
+    g.undo_stack = ["previous_figure_state.xml"]          # history of the figure open before
+    g.current_index = 1
+    g._dirty = False
     g.search_library_action()
     assert opened.get("path", "").endswith(".pyf") and "proj" in opened["path"]
+    # like File > Open: a fresh undo history (Undo walked back into the previous
+    # figure), the opened file is the current one and nothing is unsaved
+    assert g.undo_stack == [] and g.current_file == opened["path"] and not g._dirty
+    # unsaved changes in the window: the user may cancel and nothing is opened
+    opened.clear()
+    g._dirty = True
+    monkeypatch.setattr(EZFIG_GUI, "_maybe_save_before_discard", lambda self, *a: False)
+    g.search_library_action()
+    assert not opened
     g._dirty = False

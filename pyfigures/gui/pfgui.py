@@ -2748,7 +2748,22 @@ class EZFIG_GUI(QMainWindow):
 
         # print('save state called', self.undo_stack)
 
+    def _flush_pending_checkpoints(self):
+        """An edit made less than 0.8 s ago (spacing spinner, a move) is still
+        waiting for its debounced undo checkpoint. Record it now: otherwise the
+        checkpoint landed AFTER the undo/redo, re-applied the edit and wiped
+        the redo history."""
+        spin_timer = getattr(self, 'main_space_spinner_changed_timer', None)
+        if spin_timer is not None and spin_timer.isActive():
+            spin_timer.stop()
+            self.update_space_and_paint()
+        panel_timer = getattr(self.paint.EZFIG_panel, 'timer', None)
+        if panel_timer is not None and panel_timer.isActive():
+            panel_timer.stop()
+            self.paint.EZFIG_panel.emit_undo_redo_save_required()
+
     def undo(self):
+        self._flush_pending_checkpoints()
         recall_required = False
         if not (self.undo_stack and 0 < self.current_index <= len(self.undo_stack)):
             self.update_button_state()
@@ -2787,6 +2802,7 @@ class EZFIG_GUI(QMainWindow):
             self.paint.EZFIG_panel.selected_shape = None
 
     def redo(self):
+        self._flush_pending_checkpoints()
         recall_required = False
         if not self.redo_stack:
             self.update_button_state()
@@ -5554,8 +5570,14 @@ class EZFIG_GUI(QMainWindow):
         row = listw.currentRow()
         if 0 <= row < len(results):
             path = results[row]["path"]
+            # like File > Open: offer to save, and start a fresh undo history
+            # (Undo used to walk back into the previous figure)
+            if not self._maybe_save_before_discard('opening another figure'):
+                return
             self.reload_state(path, append=False)
+            self.activate_or_reset_undo_redo()
             self.current_file = path
+            self._mark_clean()
 
     def compare_version_action(self):
         """Visually diff the current figure against another .pyf

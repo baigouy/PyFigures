@@ -883,6 +883,27 @@ def _label_html(label: str) -> str:
     return f"<font color=#ffffff>{html.escape(label, quote=False)}</font>"
 
 
+def _page_label_html(label: str, plan: dict) -> str:
+    """Side labels and label rows sit on the page, not on an image: dark text
+    (white vanished on a white page), white on a dark page or label box."""
+    if _HTML_TAG.search(label):
+        return label
+    behind = plan.get("label_background")
+    if behind is None:
+        behind = plan.get("background")
+    dark = False
+    if behind is not None and str(behind).lower() not in ("none", "transparent"):
+        from pyfigures.mcp_tools.core import _color_to_int
+        try:
+            c = _color_to_int(behind)
+            dark = (0.299 * (c >> 16 & 255) + 0.587 * (c >> 8 & 255) + 0.114 * (c & 255)) < 128
+        except ValueError:
+            pass
+    if dark:
+        return f"<font color=#ffffff>{html.escape(label, quote=False)}</font>"
+    return html.escape(label, quote=False)
+
+
 def _series_panels(pyf, group_path):
     """[(group_path, image_index)] of every panel of the montage / split group
     at *group_path*, nested row groups included."""
@@ -1385,11 +1406,12 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
         row_opts = plan["rows"][r][0]
         if row_opts.get("side_label"):
             warnings += _check(M.add_side_label(
-                out, [r], _label_html(row_opts["side_label"]),
+                out, [r], _page_label_html(row_opts["side_label"], plan),
                 position=row_opts.get("side_label_position", "left")), f"row {r + 1} side label")
         if "labels" in row_opts:
             labels = row_opts["labels"]
-            labels = [_label_html(x) for x in labels] if isinstance(labels, list) else _label_html(labels)
+            labels = ([_page_label_html(x, plan) for x in labels] if isinstance(labels, list)
+                      else _page_label_html(labels, plan))
             warnings += _check(M.add_label_row(
                 out, [r], labels, position=row_opts.get("labels_position", "above"),
                 text_orientation=row_opts.get("labels_orientation", "horizontal")),
