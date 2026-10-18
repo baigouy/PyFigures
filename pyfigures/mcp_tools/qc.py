@@ -29,6 +29,7 @@ from .core import (
     _load,
     _load_objects_lazy,
     _resolve_target_mm,
+    _resolve_target_for,
     _save,
     _set_child_text,
     _top_groups,
@@ -43,6 +44,23 @@ from .annotations import (
 from .overlays import (
     set_scale_bar_all,
 )
+
+def _is_raster_panel(img) -> bool:
+    """A panel made of pixels (it has a print resolution and a pixel scale):
+    not text, not an SVG/PDF, and not a data plot / colour bar, which are drawn
+    as vectors (a box plot was rated at ~70 DPI and models then blamed the plot).
+    Image-like script panels (channel merges) mark themselves as images."""
+    if getattr(img, "isText", False):
+        return False
+    fn = img.filename
+    if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
+        return False
+    script = getattr(img, "custom_loading_script", None)
+    if isinstance(script, str) and ("staplot" in script or "ColorbarBase(" in script) \
+            and "_pyfigures_image_panel" not in script:
+        return False
+    return True
+
 
 def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
     """Return one dict per raster panel describing its effective print resolution
@@ -59,13 +77,7 @@ def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
                 out.extend(_imgs_in(c))
         return out
 
-    def _is_real_raster(img):
-        if getattr(img, "isText", False):
-            return False
-        fn = img.filename
-        if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
-            return False
-        return True
+    _is_real_raster = _is_raster_panel
 
     def _one(img, denom_w, letter):
         try:
@@ -106,6 +118,38 @@ def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
     return results
 
 
+def _micrographs_without_bar(root) -> tuple[list, int]:
+    """(panel elements still needing a scale bar, number of micrographs).
+
+    Micrographs are real image panels: not text labels, not inset images, not
+    scripted panels (data plots, colour bars, equations). The panels of one
+    montage / channel split are ONE micrograph — the usual convention is one bar
+    per series (on its last panel), which the recipes and tools follow; counting
+    each panel reported such figures as missing most of their bars. A series
+    without any bar is reported by its last panel."""
+    from .stacks import SERIES_MARK
+    from .core import _iter_panel_elements
+    parent = {c: p for p in root.iter() for c in p}
+    units: dict = {}
+    for img in _iter_panel_elements(root):
+        if _child_text(img, "isText") is not False:
+            continue
+        script = _child_text(img, "custom_loading_script")
+        if isinstance(script, str) and script not in ("", "None"):
+            continue
+        comment = str(_decode(img.findtext("user_comments")) or "")
+        key = parent.get(img) if comment.startswith(SERIES_MARK) else img
+        has_bar, _ = units.get(key, (False, None))
+        units[key] = (has_bar or _find_scale_bar(img) is not None, img)
+    return [img for has_bar, img in units.values() if not has_bar], len(units)
+
+
+def _scale_bar_coverage(root) -> tuple[int, int]:
+    """(micrographs with a scale bar, micrographs) for the scale-bar rule."""
+    missing, n = _micrographs_without_bar(root)
+    return n - len(missing), n
+
+
 @mcp.tool()
 def check_resolution(
     pyf_path: str,
@@ -133,7 +177,7 @@ def check_resolution(
         check_resolution("fig.pyf", min_dpi=300, journal="nature", column="single")
     """
     try:
-        target_mm, src = _resolve_target_mm(journal, column, width_mm, width_cm, width_in)
+        target_mm, src = _resolve_target_for(pyf_path, journal, column, width_mm, width_cm, width_in)
     except ValueError as e:
         return f"ERROR: {e}"
     try:
@@ -161,8 +205,9 @@ def check_resolution(
     lines.append(
         f"Summary: {len(panels) - n_bad}/{len(panels)} panel(s) meet {min_dpi} DPI."
         if n_bad == 0 else
-        f"Summary: {n_bad}/{len(panels)} panel(s) BELOW {min_dpi} DPI — reduce their "
-        f"display size, use a higher-resolution source, or print the figure wider."
+        f"Summary: {n_bad}/{len(panels)} panel(s) BELOW {min_dpi} DPI — show them "
+        f"smaller (e.g. more panels per row or a narrower figure) or use a "
+        f"higher-resolution source. Do not upsample the image: it adds no detail."
     )
     return "\n".join(lines)
 
@@ -222,13 +267,7 @@ def _scale_consistency_panels(pyf_path: str) -> list[dict]:
                 out.extend(_imgs_in(c))
         return out
 
-    def _is_real_raster(img):
-        if getattr(img, "isText", False):
-            return False
-        fn = img.filename
-        if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
-            return False
-        return True
+    _is_real_raster = _is_raster_panel
 
     def _one(img, letter):
         # True source-pixel width from the file header (cheap, and correct even in
@@ -479,7 +518,7 @@ def check_journal_compliance(
     matching parameters (journal preset or explicit width, dpi, min_font_pt, …).
     """
     try:
-        target_mm, wsrc = _resolve_target_mm(journal, column, width_mm, width_cm, width_in)
+        target_mm, wsrc = _resolve_target_for(pyf_path, journal, column, width_mm, width_cm, width_in)
     except ValueError as e:
         return f"ERROR: {e}"
 
@@ -563,11 +602,10 @@ def check_journal_compliance(
 
     # ── scale bars ─────────────────────────────────────────────────────────────
     if require_scale_bars:
-        # real image panels only (isText is decoded to a bool: False = a real image)
-        all_imgs = [i for i in root.iter("Image2D") if _child_text(i, "isText") is False]
-        with_sb = [i for i in all_imgs if _find_scale_bar(i) is not None]
-        results.append(("scale bars", bool(all_imgs) and len(with_sb) == len(all_imgs),
-                        f"{len(with_sb)}/{len(all_imgs)} image(s) have a scale bar"))
+        n_ok, n_units = _scale_bar_coverage(root)
+        results.append(("scale bars", n_units > 0 and n_ok == n_units,
+                        f"{n_ok}/{n_units} micrograph(s) have a scale bar (a montage or "
+                        "channel split counts once; plots are not counted)"))
 
     # ── panel labels ───────────────────────────────────────────────────────────
     if require_panel_labels:

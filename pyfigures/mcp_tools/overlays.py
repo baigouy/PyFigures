@@ -25,6 +25,7 @@ from .core import (
     _apply_scalebar_to_img,
     _atomic_write_text,
     _caption_sidecar_path,
+    _check_property_value,
     _child_text,
     _color_to_int,
     _decode,
@@ -41,12 +42,27 @@ from .core import (
     _new_tatext2d,
     _next_group_id,
     _read_caption,
+    _resolve_image_property,
     _save,
     _scale_bar_legend_html,
     _scalebar_info,
     _set_child_text,
+    _stored_image_property,
     _top_groups,
 )
+
+def _default_bar_label(units, unit) -> str:
+    """'10 µm': the number without a trailing '.0' and a space before the unit
+    (SI style; it read '10.0µm')."""
+    try:
+        number = f"{float(units):g}"
+    except (TypeError, ValueError):
+        number = str(units)
+    unit = (unit or "").strip()
+    # "um" is the ASCII stand-in for µm (and models type it): print the real unit
+    unit = {"um": "µm", "micron": "µm", "microns": "µm", "μm": "µm"}.get(unit.lower(), unit)
+    return f"{number} {unit}" if unit else number
+
 
 @mcp.tool()
 def set_figure_caption(pyf_path: str, caption: str, title: str | None = None) -> str:
@@ -183,7 +199,7 @@ def set_scale_bar(
     *image_index*: 0-based index among Image2D elements at that location.
     *bar_width_in_units*: numeric width of the bar in physical units (e.g. 10).
     *label*: text shown next to the bar. If omitted, auto-generated as
-             "10µm" (combining bar_width_in_units and unit).
+             "10 µm" (combining bar_width_in_units and unit).
     *unit*: physical unit appended to the auto-label (default "µm").
             Ignored if *label* is supplied explicitly.
     *placement*: "bottom right" | "bottom left" | "top right" | "top left"
@@ -209,7 +225,7 @@ def set_scale_bar(
     except ValueError as e:
         return f"ERROR: {e}"
 
-    text = label if label is not None else f"{bar_width_in_units}{unit}"
+    text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
     legend_html = _scale_bar_legend_html(text, label_color_int)
 
     tree, root = _load(pyf_path)
@@ -303,7 +319,7 @@ def set_scale_bar_all(
     except ValueError as e:
         return f"ERROR: {e}"
 
-    text = label if label is not None else f"{bar_width_in_units}{unit}"
+    text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
     legend_html = _scale_bar_legend_html(text, label_color_int)
 
     tree, root = _load(pyf_path)
@@ -586,7 +602,39 @@ def add_zoom_callout(
         f"Zoom callout added to image {image_index} in {loc}: source "
         f"({source_x:g},{source_y:g}) {source_w:g}×{source_h:g}px → {int(inset_fraction*100)}% "
         f"inset at {inset_corner}, {connectors} leader line(s), box/line color={box_color}."
+        + _zoom_overlap_warning(source_x, source_y, source_w, source_h,
+                                parent_width, parent_height, inset_fraction, inset_corner)
     )
+
+
+def _zoom_fraction_limit(box, parent_w, parent_h, corner) -> float:
+    """Largest inset fraction (of the parent width) at *corner* that leaves the
+    zoomed box visible: the inset must clear the box horizontally OR vertically,
+    and stay inside the image."""
+    bx1, by1, bx2, by2 = box
+    aspect = (by2 - by1) / (bx2 - bx1)
+    free_x = (parent_w - bx2) if "right" in corner else bx1
+    free_y = by1 if "top" in corner else (parent_h - by2)
+    fit_h = parent_h / (parent_w * aspect)            # inset taller than the image
+    return max(0.0, min(1.0, fit_h, max(free_x / parent_w, free_y / (parent_w * aspect))))
+
+
+def _zoom_overlap_warning(sx, sy, sw, sh, parent_w, parent_h, fraction, corner) -> str:
+    """A warning (with the largest fraction / a better corner) when the inset
+    covers the zoomed region: the box and leader lines disappear under it, and
+    the reader no longer sees where the detail comes from."""
+    box = (sx, sy, sx + sw, sy + sh)
+    limit = _zoom_fraction_limit(box, parent_w, parent_h, corner)
+    if fraction <= limit + 1e-9:
+        return ""
+    best = max(("top right", "top left", "bottom right", "bottom left"),
+               key=lambda c: _zoom_fraction_limit(box, parent_w, parent_h, c))
+    best_limit = _zoom_fraction_limit(box, parent_w, parent_h, best)
+    hint = f"use inset_fraction <= {limit:.2f} at {corner}"
+    if best != corner and best_limit > limit + 0.02:
+        hint += f", or inset_corner='{best}' (up to {best_limit:.2f})"
+    return (f"\nWARNING: the inset ({fraction:.2f} of the width) covers the zoomed region, so "
+            f"the box and its leader lines are hidden — {hint}; or enlarge the whole panel instead.")
 
 
 @mcp.tool()
@@ -689,7 +737,7 @@ def set_inset_property(
     ┌──────────────────────────────────────────────┬──────────────────────────┐
     │ property_name                                │ example value            │
     ├──────────────────────────────────────────────┼──────────────────────────┤
-    │ fraction_of_parent_image_width_if_image_is_inset │ "0.3"            │
+    │ size_fraction (inset width / parent width)   │ "0.3"  (0 < f <= 1)      │
     │ placement                                    │ "bottom left"            │
     │ border_size                                  │ "5"                      │
     │ border_color                                 │ "16776960"  (yellow)     │
@@ -703,10 +751,13 @@ def set_inset_property(
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *image_index*: 0-based index of the parent panel.
     *inset_index*: 0-based index among the insets (from list_insets()).
-    *property_name*: exact XML tag name.
+    *property_name*: a field name as returned by list_insets() (e.g.
+    size_fraction) or the exact XML tag name. An unknown name is rejected and
+    nothing is changed.
     *value*: new value as a string — auto-encoded (see set_image_property docs).
 
-    The change is saved immediately; reopen in PyFigures to see the result.
+    The change is saved immediately; the reply gives the value read back from
+    the saved file.
     """
     _LAYOUT_FIELDS = {"x", "y", "width", "height", "scale",
                       "__init_called__", "__version__", "extra_user_translation"}
@@ -727,6 +778,14 @@ def set_inset_property(
     insets = _get_insets(imgs[image_index])
     if inset_index >= len(insets):
         return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
+    property_name, err = _resolve_image_property(insets[inset_index], property_name)
+    if err:
+        return err
+    if property_name in _LAYOUT_FIELDS:
+        return (
+            f"ERROR: '{property_name}' is a layout field managed by PyFigures — "
+            "do not set it directly on an inset."
+        )
 
     # placement is a Position object — serialised by PyFigures as a plain string
     # (no ""..."" wrapping).  filename always needs the double-quote wrapping.
@@ -737,12 +796,17 @@ def set_inset_property(
         raw = _encode_str(value)
     else:
         raw = _encode_value(value)
+    err = _check_property_value(property_name, raw)
+    if err:
+        return err
     _set_child_text(insets[inset_index], property_name, raw)
     _save(tree, pyf_path)
+    stored = _stored_image_property(pyf_path, group_path, image_index, property_name,
+                                    inset_index=inset_index)
     loc = "canvas" if not group_path else f"group {group_path}"
     return (
         f"Inset {inset_index} on image {image_index} in {loc}: "
-        f"{property_name} = {raw}"
+        f"{property_name} = {stored} (read back from the saved file)"
     )
 
 

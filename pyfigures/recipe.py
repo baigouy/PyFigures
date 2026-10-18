@@ -119,7 +119,12 @@ _SCRIPT_KEYS = {"label"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
 # a montage / split / merge also takes a scale bar (on its LAST panel only)
-_SERIES_BAR_KEYS = {"scale_bar", "px_to_unit"}
+_SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
+                    # ... and a crop, applied to EVERY panel it makes (e.g. text
+                    # burned into the image's bottom rows)
+                    "crop",
+                    # scale_bar_panels: all -> a bar on every panel, not only the last
+                    "scale_bar_panels"}
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
                       "rois", "inset", "zoom", "brackets"}
@@ -208,7 +213,62 @@ def load_recipe(path: str) -> dict:
             raise RecipeError(f"invalid JSON in {path}: {e}") from None
     if not isinstance(data, dict):
         raise RecipeError("a recipe must be a mapping (key: value) at the top level")
-    return data
+    return _fix_missing_spaces(data)
+
+
+_KEY_VALUE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):(\S.*)$")
+
+
+def _fix_missing_spaces(data):
+    """YAML reads ``{bottom:24}`` (no space after the colon) as a key
+    'bottom:24' with no value. A missing space is an easy slip (language models
+    made it over and over), so such keys become ``bottom: 24``."""
+    if isinstance(data, list):
+        return [_fix_missing_spaces(v) for v in data]
+    if not isinstance(data, dict):
+        return data
+    fixed = {}
+    for k, v in data.items():
+        m = _KEY_VALUE.match(k) if isinstance(k, str) and v is None else None
+        if m:
+            try:
+                import yaml
+                v = yaml.safe_load(m.group(2))
+            except Exception:
+                v = m.group(2)
+            k = m.group(1)
+        fixed[k] = _fix_missing_spaces(v)
+    return fixed
+
+
+def save_recipe_text(text: str, recipe_path: str) -> str:
+    """Check that *text* is a valid YAML/JSON recipe mapping, then write it to
+    *recipe_path* (.yaml/.yml/.json) so the figure stays reproducible; relative
+    paths in the recipe are relative to that file. Returns the absolute path."""
+    if not recipe_path.lower().endswith((".yaml", ".yml", ".json")):
+        raise RecipeError("the recipe file must end in .yaml, .yml or .json")
+    if recipe_path.lower().endswith(".json"):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise RecipeError(f"invalid JSON recipe: {e}") from None
+    else:
+        try:
+            import yaml
+        except ImportError:
+            raise RecipeError("YAML recipes need PyYAML (pip install pyyaml); "
+                              "or give the recipe as JSON with a .json file name") from None
+        try:
+            data = yaml.safe_load(text)       # JSON is valid YAML too
+        except yaml.YAMLError as e:
+            raise RecipeError(f"invalid YAML recipe: {e}") from None
+    if not isinstance(data, dict):
+        raise RecipeError("a recipe must be a mapping (key: value) at the top level")
+    recipe_path = os.path.abspath(recipe_path)
+    os.makedirs(os.path.dirname(recipe_path), exist_ok=True)
+    with open(recipe_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return recipe_path
 
 
 def _panel_kind(panel, where):
@@ -225,7 +285,8 @@ def _panel_kind(panel, where):
     unknown = set(panel) - {kind} - _KIND_KEYS[kind]
     if unknown:
         raise RecipeError(f"{where}: unknown key(s) for a {kind} panel: {sorted(unknown)} "
-                          f"(allowed: {sorted(_KIND_KEYS[kind])})")
+                          f"(allowed: {sorted(_KIND_KEYS[kind])}; recipe_reference() "
+                          "lists every key)")
     return kind
 
 
@@ -247,24 +308,35 @@ def _bool_key(recipe, key, default):
 
 
 def _check_crop(crop, where):
+    # the error shows what was given and the right form: language models kept
+    # resending the same list after a bare "must be a mapping"
     if not isinstance(crop, dict) or set(crop) - _CROP_KEYS:
-        raise RecipeError(f"{where}: crop must be a mapping with keys {sorted(_CROP_KEYS)}")
+        raise RecipeError(f"{where}: crop must be a mapping of pixels to remove per side, "
+                          f"keys {sorted(_CROP_KEYS)} — e.g. crop: {{bottom: 24}} — got {crop!r}")
     for k, v in crop.items():
         if not _is_int(v) or v < 0:
-            raise RecipeError(f"{where}: crop.{k} must be a non-negative integer (pixels)")
+            raise RecipeError(f"{where}: crop.{k} must be a non-negative integer (pixels), got {v!r}")
 
 
 def _check_scale_bar(sb, where):
     if not isinstance(sb, dict) or "units" not in sb or set(sb) - _SCALE_BAR_KEYS:
         raise RecipeError(f"{where}: scale_bar must be a mapping with 'units' "
-                          f"(allowed keys: {sorted(_SCALE_BAR_KEYS)})")
+                          f"(allowed keys: {sorted(_SCALE_BAR_KEYS)}) — e.g. "
+                          f"scale_bar: {{units: 10, unit: µm}} — got {sb!r}")
 
 
 def _check_mapping(value, allowed, required, where, name):
     if not isinstance(value, dict) or set(value) - allowed or not set(required) <= set(value):
+        problem = ""
+        if isinstance(value, dict):
+            extra = sorted(set(value) - allowed)
+            missing = sorted(set(required) - set(value))
+            problem = ((f"; unknown {extra}" if extra else "")
+                       + (f"; missing {missing}" if missing else ""))
         raise RecipeError(f"{where}: {name} must be a mapping with "
                           + (f"{sorted(required)} and " if required else "")
-                          + f"optional keys {sorted(set(allowed) - set(required))}")
+                          + f"optional keys {sorted(set(allowed) - set(required))} — got {value!r}"
+                          + problem)
 
 
 def _check_point(v, n, where, name):
@@ -440,6 +512,20 @@ def _check_row_opts(opts, n_panels, where):
 
 def _check_top(recipe, base):
     """Figure-level finishing keys."""
+    if recipe.get("journal") is not None:
+        # checked before anything is built (`journal: true` used to crash
+        # half-way, after the figure was saved)
+        from pyfigures.mcp_tools.core import _width_mm_for_journal
+        column = recipe.get("column", "single")
+        if isinstance(column, (int, float)) and not isinstance(column, bool):
+            column = f"{column:g}"
+        if not isinstance(recipe["journal"], str) or not isinstance(column, str):
+            raise RecipeError("'journal' must be a journal name (e.g. nature) and 'column' "
+                              "single, 1.5 or double")
+        try:
+            _width_mm_for_journal(recipe["journal"], column)
+        except ValueError as e:
+            raise RecipeError(str(e)) from None
     widths = [k for k in ("width_mm", "width_cm", "width_in", "width_px") if k in recipe]
     if len(widths) > 1:
         raise RecipeError(f"give one figure width, not {widths}")
@@ -593,6 +679,9 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             merged.update({k: v for k, v in panel.items() if k != kind})
             if "crop" in merged:
                 _check_crop(merged["crop"], where)
+            if merged.get("scale_bar_panels", "last") not in ("last", "all"):
+                raise RecipeError(f"{where}: scale_bar_panels must be 'last' or 'all', "
+                                  f"got {merged['scale_bar_panels']!r}")
             if "scale_bar" in merged:
                 _check_scale_bar(merged["scale_bar"], where)
             if kind in ("image", "glob"):
@@ -724,6 +813,34 @@ def _label_html(label: str) -> str:
     if _HTML_TAG.search(label):
         return label
     return f"<font color=#ffffff>{html.escape(label, quote=False)}</font>"
+
+
+def _series_panels(pyf, group_path):
+    """[(group_path, image_index)] of every panel of the montage / split group
+    at *group_path*, nested row groups included."""
+    import xml.etree.ElementTree as ET
+    from pyfigures.mcp_tools.core import _navigate_group
+    grp, err = _navigate_group(ET.parse(pyf).getroot(), group_path)
+    if err:
+        raise RecipeError(err)
+    found = []
+
+    def walk(g, path):
+        content = g.find("content")
+        if content is None:
+            return
+        n_img = n_grp = 0
+        for child in content:
+            if child.tag == "Image2D":
+                if child.findtext("isText", "False") != "True":
+                    found.append((list(path), n_img))
+                n_img += 1
+            elif child.tag == "Group":
+                walk(child, path + [n_grp])
+                n_grp += 1
+
+    walk(grp, list(group_path))
+    return found
 
 
 def _last_series_panel(pyf, group_path):
@@ -999,7 +1116,7 @@ def _fill_template(M, out, template, files):
     import shutil
     shutil.copyfile(template, out)
     # drop the sidecars of a previous build (as create_figure does)
-    for ext in (".caption.json", ".stats.json", ".alttext.json", ".sources.json"):
+    for ext in (".caption.json", ".stats.json", ".alttext.json", ".sources.json", ".target.json"):
         if os.path.isfile(os.path.splitext(out)[0] + ext):
             os.remove(os.path.splitext(out)[0] + ext)
     slots = [s for s in json.loads(M.list_images(out)) if s["is_template"]]
@@ -1034,6 +1151,19 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
             bar_color=sb.get("color", "white"),
             label_color=sb.get("color", "white"),
             px_to_unit=px), step + " scale bar")
+
+    def series_finish(group_path, opts, step):
+        """Scale bar of a montage / split group: on the last panel (or on all
+        with scale_bar_panels: all)."""
+        w = []
+        if opts.get("scale_bar"):
+            if opts.get("scale_bar_panels", "last") == "all":
+                targets = _series_panels(out, group_path)
+            else:
+                targets = [_last_series_panel(out, group_path)]
+            for sp, si in targets:
+                w += scale_bar(sp, si, opts["scale_bar"], opts.get("px_to_unit"), step)
+        return w
 
     # create_figure also drops the statistics record / alt text of a previous
     # build, so Methods text never lists tests of panels no longer in the recipe
@@ -1072,27 +1202,23 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
                 i += 1
                 continue
             if kind == "montage":
-                kw = {k: opts[k] for k in _MONTAGE_KEYS if k in opts}
+                kw = {k: opts[k] for k in _MONTAGE_KEYS | {"crop"} if k in opts}
                 warnings += _check(M.add_stack_montage(out, path, parent_group_path=gp,
                                                        spacing=row_spacing, **kw), step)
-                if opts.get("scale_bar"):
-                    sp, si = _last_series_panel(out, gp + [n_sub])
-                    warnings += scale_bar(sp, si, opts["scale_bar"], opts.get("px_to_unit"), step)
+                warnings += series_finish(gp + [n_sub], opts, step)
                 n_sub += 1
                 n_series += 1
                 continue
             if kind == "split":
                 kw = {k: opts[k] for k in ("names", "colors", "gray", "merge_label",
                                            "projection", "frame", "series",
-                                           "label_placement") if k in opts}
+                                           "label_placement", "crop") if k in opts}
                 if "merge" in opts:
                     kw["include_merge"] = bool(opts["merge"])
                 src = {"channel_files": path} if isinstance(path, list) else {"stack_path": path}
                 warnings += _check(M.add_channel_split(out, parent_group_path=gp,
                                                        spacing=row_spacing, **src, **kw), step)
-                if opts.get("scale_bar"):
-                    sp, si = _last_series_panel(out, gp + [n_sub])
-                    warnings += scale_bar(sp, si, opts["scale_bar"], opts.get("px_to_unit"), step)
+                warnings += series_finish(gp + [n_sub], opts, step)
                 n_sub += 1
                 n_series += 1
                 continue
@@ -1103,6 +1229,9 @@ def build_figure_from_recipe(recipe_path: str) -> dict:
                     kw["label"] = _label_html(str(opts["label"]))
                 warnings += _check(M.add_channel_merge(out, gp, path, **kw), step)
                 i += 1
+                if opts.get("crop"):
+                    tf = {f"crop_{k}": v for k, v in opts["crop"].items()}
+                    warnings += _check(M.transform_image(out, gp, i, **tf), step + " crop")
                 if opts.get("scale_bar"):
                     warnings += scale_bar(gp, i, opts["scale_bar"], opts.get("px_to_unit"), step)
                 n_other += 1

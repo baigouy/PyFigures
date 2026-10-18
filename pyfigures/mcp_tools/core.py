@@ -113,6 +113,101 @@ def _encode_value(value: str) -> str:
     return _encode_str(v)
 
 
+# Friendly names a model (or a user) is likely to use, mapped to the stored
+# tag. list_insets reports "size_fraction", so set_inset_property must accept it.
+_IMAGE_PROPERTY_ALIASES = {
+    "size_fraction": "fraction_of_parent_image_width_if_image_is_inset",
+    "inset_size_fraction": "fraction_of_parent_image_width_if_image_is_inset",
+    "fraction_of_parent_width": "fraction_of_parent_image_width_if_image_is_inset",
+    "rotation": "theta",
+    "angle": "theta",
+    "luts": "LUTs",
+    "lut": "LUTs",
+    "comments": "user_comments",
+    "pixel_size": "px_to_unit_conversion_factor",
+}
+
+# Stored fields that are not Image2D.__init__ arguments
+_IMAGE_EXTRA_FIELDS = {"color", "fill_color", "stroke", "line_style", "immutable", "isSet",
+                       "incompressible_width", "incompressible_height", "translation",
+                       "lower_indices", "upper_indices", "lower_values", "upper_values"}
+_IMAGE_FIELDS_CACHE: set[str] = set()
+
+
+def _image_field_names() -> set[str]:
+    """Every property name an Image2D stores."""
+    if not _IMAGE_FIELDS_CACHE:
+        import inspect
+        from batoolset.drawings.shapes.image2d import Image2D as _Image2D
+        params = inspect.signature(_Image2D.__init__).parameters
+        _IMAGE_FIELDS_CACHE.update(k for k in params if k not in ("self", "args", "kwargs"))
+        _IMAGE_FIELDS_CACHE.update(_IMAGE_EXTRA_FIELDS)
+    return _IMAGE_FIELDS_CACHE
+
+
+def _resolve_image_property(elem: ET.Element, name: str) -> tuple[str | None, str | None]:
+    """(stored tag, None) for a known Image2D property name or alias, else
+    (None, error message). An unknown name used to be written as a new,
+    ignored XML field while the tool reported success."""
+    name = (name or "").strip()
+    known = _image_field_names() | {c.tag for c in elem}
+    if name in known:
+        return name, None
+    alias = _IMAGE_PROPERTY_ALIASES.get(name.lower())
+    if alias:
+        return alias, None
+    lower = {k.lower(): k for k in known}
+    if name.lower() in lower:
+        return lower[name.lower()], None
+    import difflib
+    close = difflib.get_close_matches(name, sorted(known | set(_IMAGE_PROPERTY_ALIASES)), n=3)
+    hint = f" Did you mean: {', '.join(close)}?" if close else ""
+    return None, (f"ERROR: unknown property '{name}' — nothing was changed.{hint} "
+                  "Use list_image_properties() / list_insets() for the valid names.")
+
+
+def _stored_image_property(pyf_path: str, group_path: list[int], image_index: int,
+                           tag: str, inset_index: int | None = None) -> str:
+    """The value of *tag* as it is in the saved file (after the save's own
+    processing), so a tool reports what was really stored, not the request."""
+    _, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return "?"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if image_index >= len(imgs):
+        return "?"
+    elem = imgs[image_index]
+    if inset_index is not None:
+        annots = elem.find("annotations")
+        insets = [] if annots is None else [c for c in annots if c.tag == "Image2D"]
+        if inset_index >= len(insets):
+            return "?"
+        elem = insets[inset_index]
+    child = elem.find(tag)
+    return "(not stored)" if child is None else str(child.text)
+
+
+def _check_property_value(tag: str, raw: str) -> str | None:
+    """Range checks for the properties where a bad value silently breaks the
+    render. Returns an error message, or None when the value is acceptable."""
+    if tag == "fraction_of_parent_image_width_if_image_is_inset":
+        try:
+            v = float(raw)
+        except ValueError:
+            return f"ERROR: {tag} must be a number between 0 (exclusive) and 1."
+        if not (0.0 < v <= 1.0):
+            return f"ERROR: {tag} must be between 0 (exclusive) and 1, got {v}."
+    if tag == "opacity":
+        try:
+            v = float(raw)
+        except ValueError:
+            return "ERROR: opacity must be a number between 0 and 1."
+        if not (0.0 <= v <= 1.0):
+            return f"ERROR: opacity must be between 0 and 1, got {v}."
+    return None
+
+
 def _child_text(elem: ET.Element, tag: str):
     child = elem.find(tag)
     return _decode(child.text) if child is not None else None
@@ -813,6 +908,113 @@ def _looks_like_panel_letter(text: str) -> bool:
     return len(core) == 1 or (len(core) == 2 and core[0].lower() == core[1].lower())
 
 
+def _corner_brightness(img: ET.Element, placement: str) -> float | None:
+    """corner_brightness() for a panel element of a .pyf file."""
+    import ast
+    fn = _child_text(img, "filename")
+    if not isinstance(fn, str) or fn.startswith("["):
+        return None                         # channel merge: fluorescence-like
+    luts = _child_text(img, "LUTs")
+    if isinstance(luts, str) and luts not in ("", "None", "[]"):
+        try:
+            luts = ast.literal_eval(luts)
+        except Exception:
+            pass
+
+    def _crop(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    crop = tuple(_crop(n) for n in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
+    return corner_brightness(_first_filename(img), placement, crop, luts)
+
+
+def corner_brightness(path, placement: str = "top left", crop=(0, 0, 0, 0),
+                      luts=None) -> float | None:
+    """Mean brightness (0 dark … 1 bright) of the displayed corner of image
+    file *path* where a label at *placement* goes (the outer ~20 % x 15 % of
+    the area left by *crop* = (left, right, top, bottom) pixels), or None when
+    the pixels cannot be read cheaply (stacks with a coloured LUT, URLs,
+    vector files). Shared by the MCP tools and the GUI lettering."""
+    if not isinstance(path, str) or not os.path.isfile(path) \
+            or path.lower().endswith((".svg", ".pdf")):
+        return None
+    if luts and luts not in ("None", "[]") and not (
+            isinstance(luts, (list, tuple)) and all(str(l).lower() in ("gray", "grey", "none") for l in luts)):
+        return None                         # coloured LUT on a dark background
+    try:
+        stamp = os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+    key = (os.path.abspath(path), stamp, str(placement).lower(), tuple(int(c or 0) for c in crop))
+    if key not in _CORNER_CACHE:            # the GUI re-letters on every refresh
+        if len(_CORNER_CACHE) > 512:
+            _CORNER_CACHE.clear()
+        _CORNER_CACHE[key] = _read_corner_brightness(path, str(placement).lower(), key[3])
+    return _CORNER_CACHE[key]
+
+
+_CORNER_CACHE: dict = {}
+
+
+def _read_corner_brightness(path, placement, crop):
+    import numpy as np
+    try:
+        if path.lower().endswith((".tif", ".tiff")):
+            import tifffile as _tf
+            with _tf.TiffFile(path) as t:
+                arr = t.pages[0].asarray()
+        else:
+            from PIL import Image as _PI
+            with _PI.open(path) as im:
+                arr = np.asarray(im.convert("RGB") if im.mode not in ("L", "I;16", "I", "F") else im)
+    except Exception:
+        return None
+    arr = np.asarray(arr, dtype=np.float64)
+    if arr.ndim == 3 and arr.shape[-1] in (3, 4):
+        arr = arr[..., :3].mean(axis=-1)
+    if arr.ndim != 2 or arr.size == 0:
+        return None
+    h, w = arr.shape
+    left, right, top, bottom = (max(0, int(c or 0)) for c in crop)
+    view = arr[top:h - bottom if bottom else h, left:w - right if right else w]
+    if view.size == 0:
+        view = arr
+    if arr.max() > 255:
+        lo, hi = np.percentile(view, (1, 99))   # 16-bit: displayed with auto contrast
+    else:
+        lo, hi = 0.0, 255.0
+    vh, vw = view.shape
+    ch, cw = max(1, int(vh * 0.15)), max(1, int(vw * 0.2))
+    rows = slice(0, ch) if "top" in placement else (slice(vh - ch, vh) if "bottom" in placement
+                                                    else slice((vh - ch) // 2, (vh + ch) // 2))
+    cols = slice(0, cw) if "left" in placement else (slice(vw - cw, vw) if "right" in placement
+                                                     else slice((vw - cw) // 2, (vw + cw) // 2))
+    corner = view[rows, cols]
+    if hi <= lo:
+        return 0.0
+    return float(np.clip((corner.mean() - lo) / (hi - lo), 0, 1))
+
+
+def _label_color_for(img: ET.Element, text: str, placement: str = "top left") -> int | None:
+    """Default colour of a plain-text label on *img*: white on a dark corner
+    (fluorescence: the black default was nearly invisible), black on a bright
+    one (bright field, white backgrounds), white when the pixels cannot be
+    read; the default (black) on a plot / scripted panel; None for HTML text,
+    which carries its own colour."""
+    if re.search(r"<\s*/?\s*[A-Za-z][^>]*>", text or ""):
+        return None
+    script = _child_text(img, "custom_loading_script")
+    if isinstance(script, str) and script not in ("", "None"):
+        return None
+    bright = _corner_brightness(img, placement or "top left")
+    if bright is not None and bright > 0.6:
+        return 0x000000
+    return 0xFFFFFF
+
+
 def _new_tatext2d(text: str, placement: str = "top left",
                   is_letter: bool | None = None,
                   color: int | None = None) -> ET.Element:
@@ -1023,14 +1225,21 @@ def _describe_roi(el: ET.Element, idx: int) -> dict:
 # ---------------------------------------------------------------------------
 # Journal presets  (width in mm: single / 1.5-column / double)
 # ---------------------------------------------------------------------------
+# Checked against the journals' own author pages in October 2026 (Nature final
+# artwork 89/183, intermediate 120-136; Nature Communications 88/180; Nature
+# Methods/Medicine/Cell Biology: 180 maximum; Science 57/121/184 for 1/2/3
+# columns; Cell Press two-column formats 85/114/174; EMBO Journal 87-180).
+# The others are publishers' usual sizes: always check the current guide.
 _JOURNAL_PRESETS: dict[str, dict[str, float]] = {
     # key        single   1.5-col   double
     "nature":    {"single": 89,  "1.5": 136, "double": 183},
-    "science":   {"single": 55,  "1.5": 114, "double": 168},
-    "cell":      {"single": 85,  "1.5": 128, "double": 170},
+    "nature communications": {"single": 88, "1.5": 136, "double": 180},
+    "nature methods": {"single": 89, "1.5": 136, "double": 180},
+    "science":   {"single": 57,  "1.5": 121, "double": 184},
+    "cell":      {"single": 85,  "1.5": 114, "double": 174},
     "plos":      {"single": 83,  "1.5": 129, "double": 174},
     "elife":     {"single": 85,  "1.5": 132, "double": 178},
-    "embo":      {"single": 82,  "1.5": 127, "double": 172},
+    "embo":      {"single": 87,  "1.5": 127, "double": 172},
     "elsevier":  {"single": 90,  "1.5": 140, "double": 190},
     "springer":  {"single": 84,  "1.5": 129, "double": 174},
     "wiley":     {"single": 86,  "1.5": 132, "double": 178},
@@ -1040,10 +1249,9 @@ _JOURNAL_PRESETS: dict[str, dict[str, float]] = {
 
 # Normalise aliases
 _JOURNAL_ALIASES = {
-    "nature communications": "nature",
-    "nature methods": "nature",
-    "nature cell biology": "nature",
-    "nature medicine": "nature",
+    "ncomms": "nature communications",
+    "nature cell biology": "nature methods",
+    "nature medicine": "nature methods",
     "science advances": "science",
     "cell reports": "cell",
     "current biology": "cell",
@@ -1278,7 +1486,7 @@ def _clear_derived_sidecars(pyf_path: str) -> list[str]:
     (author prose) is kept. Returns the removed paths."""
     removed = []
     stem = os.path.splitext(pyf_path)[0]
-    for p in (_stats_sidecar_path(pyf_path), stem + ".alttext.json"):
+    for p in (_stats_sidecar_path(pyf_path), stem + ".alttext.json", stem + ".target.json"):
         if os.path.isfile(p):
             os.remove(p)
             removed.append(p)
@@ -1304,6 +1512,47 @@ def _auto_test_via_staplot(columns: dict):
 # ---------------------------------------------------------------------------
 
 _MCP_QAPP = None  # module-level hold for the QApplication (must not be GC'd)
+
+
+def _target_sidecar_path(pyf_path: str) -> str:
+    """The figure's size target (journal + column, or a width) — what it was
+    last sized for, so a later "is it ready for submission?" checks THAT target
+    instead of a guess. A sidecar, like the caption: unknown fields in the .pyf
+    XML break its GUI deserialization."""
+    return os.path.splitext(pyf_path)[0] + ".target.json"
+
+
+def _store_target(pyf_path: str, journal: str | None, column: str, width_mm: float) -> None:
+    data = {"width_mm": round(float(width_mm), 3)}
+    if journal:
+        data.update(journal=journal, column=column)
+    try:
+        _atomic_write_text(_target_sidecar_path(pyf_path), json.dumps(data, indent=2))
+    except OSError:
+        pass
+
+
+def _stored_target(pyf_path: str) -> dict | None:
+    try:
+        with open(_target_sidecar_path(pyf_path), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) and data.get("width_mm") else None
+    except (OSError, ValueError):
+        return None
+
+
+def _resolve_target_for(pyf_path, journal, column, width_mm, width_cm, width_in):
+    """_resolve_target_mm, falling back on the figure's stored target when no
+    target is given."""
+    if journal is None and width_mm is None and width_cm is None and width_in is None:
+        stored = _stored_target(pyf_path)
+        if stored:
+            if stored.get("journal"):
+                mm, src = _resolve_target_mm(stored["journal"], stored.get("column", "single"),
+                                             None, None, None)
+                return mm, src + " (the figure's stored target)"
+            return float(stored["width_mm"]), f"{stored['width_mm']}mm (the figure's stored target)"
+    return _resolve_target_mm(journal, column, width_mm, width_cm, width_in)
 
 
 def _resolve_target_mm(
@@ -1362,7 +1611,7 @@ def _run_headless_op(args: list[str], timeout: int = 600):
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                               env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"operation timed out after {timeout}s"

@@ -14,7 +14,7 @@ set_UI()
 import math
 
 from qtpy.QtCore import QRectF, QPointF, Qt
-from qtpy.QtGui import QPixmap, QTransform, QPolygonF, QPainter, QColor, QPen, QTextDocument
+from qtpy.QtGui import QPixmap, QTransform, QPolygonF, QPainter, QColor, QPen, QTextDocument, QFontMetricsF
 
 TEMPLATE_SENTINEL = '@template@'
 # Same sentinel string/idea as the main editor's Image2D template slots
@@ -301,11 +301,22 @@ class PosterImage:
 
         if self.frame == 'polaroid' and self.caption:
             font = painter.font()
-            font.setPointSizeF(max(6.0, outer_local.height() * 0.09))
-            painter.setFont(font)
-            painter.setPen(QColor(60, 60, 60))
+            # sized in this card's own units: a point size is converted with the
+            # DEVICE's dpi, so the same caption was ~12x larger in a 1200 dpi
+            # PDF than on screen / in a PNG (96 dpi) and was cut off
+            device = painter.device()
+            dpi = device.logicalDpiY() if device is not None and device.logicalDpiY() > 0 else 96
+            size_local = max(6.0, outer_local.height() * 0.09) * 96.0 / 72.0
             caption_rect = QRectF(outer_local.left(), img_local.bottom(),
                                   outer_local.width(), outer_local.bottom() - img_local.bottom())
+            font.setPointSizeF(size_local * 72.0 / dpi)
+            # a long caption shrinks to fit the strip instead of being cut
+            width = QFontMetricsF(font, device).horizontalAdvance(self.caption)
+            avail = caption_rect.width() * 0.92
+            if width > avail > 0:
+                font.setPointSizeF(font.pointSizeF() * avail / width)
+            painter.setFont(font)
+            painter.setPen(QColor(60, 60, 60))
             painter.drawText(caption_rect, Qt.AlignCenter, self.caption)
 
         painter.restore()

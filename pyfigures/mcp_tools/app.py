@@ -96,8 +96,15 @@ mcp = FastMCP(
         "check_source_changes (sources changed since the last save), copy_style "
         "(fonts / letters / scale bars / spacing from another figure). Backgrounds: "
         "set_figure_properties(page_background=...) colours the whole figure behind "
-        "the panels (the gaps); set_label_background boxes the labels. Recipes "
-        "(build_figure_from_recipe) are documented in docs/RECIPES.md."
+        "the panels (the gaps); set_label_background boxes the labels. "
+        "WHOLE FIGURES: the simplest route is a recipe — read recipe_reference, write "
+        "the figure as one YAML/JSON recipe and build it with "
+        "build_figure_from_recipe(recipe_path, recipe_text=...); to change it, edit "
+        "the recipe and build again. Use the individual tools for small edits. "
+        "Good practice: after building or editing, look at render_preview and "
+        "compare what was asked with what is there; a reply starting with ERROR "
+        "means nothing (or not everything) was changed. Never invent pixel sizes, "
+        "units or statistics design: ask the user or read the image metadata."
     ),
 )
 
@@ -116,13 +123,31 @@ def _tool_with_warnings(*t_args, **t_kwargs):
         @functools.wraps(fn)
         def inner(*args, **kwargs):
             _TOOL_WARNINGS.clear()
-            res = fn(*args, **kwargs)
+            try:
+                res = fn(*args, **kwargs)
+            except FileNotFoundError as e:
+                # a clear answer instead of a raw "[Errno 2]" traceback text
+                missing = e.filename or str(e)
+                hint = (" — create it first with create_figure (or build_figure_from_recipe)"
+                        if str(missing).lower().endswith(".pyf") else "")
+                res = f"ERROR: file not found: {missing}{hint}."
             if _TOOL_WARNINGS and isinstance(res, str) \
                     and not res.lstrip().startswith(("{", "[")):
                 res = res + "\n" + "\n".join("WARNING: " + w for w in _TOOL_WARNINGS)
             _TOOL_WARNINGS.clear()
             return res
-        register(inner)
+
+        # MCP clients see a refused request as a tool error (isError=true), not
+        # as a successful reply that happens to start with "ERROR:" — models
+        # took those for completed edits. Python callers keep the string.
+        @functools.wraps(fn)
+        def over_mcp(*args, **kwargs):
+            res = inner(*args, **kwargs)
+            if isinstance(res, str) and res.lstrip().startswith("ERROR"):
+                from mcp.server.fastmcp.exceptions import ToolError
+                raise ToolError(res.strip())
+            return res
+        register(over_mcp)
         return inner
     return deco
 

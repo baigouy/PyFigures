@@ -24,6 +24,7 @@ from .app import (
 from .core import (
     _atomic_write_text,
     _caption_sidecar_path,
+    _stored_target,
     _decode,
     _encode_str,
     _get_container,
@@ -72,7 +73,7 @@ def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                               env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"rendering timed out after {timeout}s"
@@ -182,8 +183,10 @@ def audit_figure(pyf_path: str) -> str:
     For each Image2D panel (across all groups) reports: its filename, location
     (group_path + image_index), whether it has a scale bar, and the text labels
     on it (letter labels, channel names, etc.). Then a summary lists the panels
-    with NO scale bar and the panels with NO text label — the two things
-    reviewers most often ask to add.
+    still needing a scale bar and the panels with NO text label — the two things
+    reviewers most often ask to add. Only micrographs need a bar (not plots or
+    text), and a montage / channel split needs one for the whole series (it is
+    listed by its last panel), the rule check_journal_compliance applies.
 
     Read-only. Use this after building a figure to catch panels you forgot to
     label or scale-bar, then fix them with set_scale_bar / add_annotation /
@@ -191,9 +194,11 @@ def audit_figure(pyf_path: str) -> str:
     """
     _, root = _load(pyf_path)
     panels: list[dict] = []
+    elems: list = []
 
     def _collect(container, path):
         for ii, img in enumerate(c for c in container if c.tag == "Image2D"):
+            elems.append(img)
             children = _annot_children(img)
             has_bar = any(c.tag == "ScaleBar" for c in children)
             labels = _panel_label_texts(img)
@@ -219,9 +224,13 @@ def audit_figure(pyf_path: str) -> str:
     for gi, g in enumerate(c for c in root if c.tag == "Group"):
         _walk(g, [gi])
 
+    # only micrographs need a bar (not plots / text), and a montage or channel
+    # split needs one for the series — the rule check_journal_compliance uses
+    from .qc import _micrographs_without_bar
+    needing = set(_micrographs_without_bar(root)[0])
     missing_bar = [{"group_path": p["group_path"], "image_index": p["image_index"],
                     "filename": p["filename"]}
-                   for p in panels if not p["scale_bar"]]
+                   for p, el in zip(panels, elems) if el in needing]
     missing_label = [{"group_path": p["group_path"], "image_index": p["image_index"],
                       "filename": p["filename"]}
                      for p in panels if p["n_labels"] == 0]
@@ -302,7 +311,7 @@ def figure_review_brief(pyf_path: str, journal: str | None = None,
         "image_integrity": _run(check_image_integrity, pyf_path),
         "fonts": _run(list_fonts),
     }
-    if journal:
+    if journal or _stored_target(pyf_path):     # else the size it was last fitted to
         checks["journal_compliance"] = _run(check_journal_compliance, pyf_path,
                                             journal=journal, column=column)
         checks["resolution"] = _run(check_resolution, pyf_path,
@@ -598,7 +607,7 @@ def style_annotation(
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True,
+        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                               env=env, timeout=120)
     except subprocess.TimeoutExpired:
         return "ERROR: styling timed out"
@@ -917,8 +926,9 @@ def export_pptx(pyf_path: str, out_path: str) -> str:
     picture(s) plus native PowerPoint objects: the panel letters, channel names,
     labels and scale-bar text are editable text boxes; scale bars, ROIs, arrows,
     brackets and vector plots are editable shapes. Cropped / rotated panels keep
-    their crop and rotation. Text inside data plots (tick labels) is exported as
-    exact outlines, not editable text.
+    their crop and rotation. Text inside Matplotlib data plots (tick labels, axis
+    titles, significance stars) is editable text too; text inside imported
+    SVG/PDF graphics and LaTeX-typeset plots stays exact outlines.
 
     Returns JSON: path, size in points, number of images / shapes / text boxes
     and panel groups. Needs the ``python-pptx`` package.
@@ -1580,7 +1590,8 @@ def check_image_integrity(
     env = dict(os.environ)
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=600)
+        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                              env=env, timeout=600)
     except subprocess.TimeoutExpired:
         return "ERROR: integrity analysis timed out after 600s"
     if proc.returncode != 0 or not os.path.isfile(out_json):

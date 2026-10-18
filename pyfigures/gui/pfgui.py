@@ -333,8 +333,9 @@ class _JournalDialog(QFrame):
     """Pick a journal (or a custom column width) + options for the journal
     compliance / apply-guidelines / resolution tools."""
 
-    _JOURNALS = ["nature", "science", "cell", "elife", "embo", "jcb", "plos",
-                 "pnas", "elsevier", "springer", "wiley"]
+    from pyfigures.mcp_tools.core import _JOURNAL_PRESETS
+    _JOURNALS = list(_JOURNAL_PRESETS)
+    del _JOURNAL_PRESETS
 
     def __init__(self, parent=None, with_apply_options=False):
         super().__init__(parent)
@@ -349,7 +350,7 @@ class _JournalDialog(QFrame):
         grid.addWidget(self.journal_combo, r, 1); r += 1
 
         self.column_combo = QComboBox(self)
-        self.column_combo.addItems(["single", "double"])
+        self.column_combo.addItems(["single", "1.5", "double"])
         grid.addWidget(QLabel("Column:", self), r, 0)
         grid.addWidget(self.column_combo, r, 1); r += 1
 
@@ -357,6 +358,7 @@ class _JournalDialog(QFrame):
         self.width_mm_edit.setPlaceholderText("only if journal = custom, e.g. 85")
         grid.addWidget(QLabel("Custom width (mm):", self), r, 0)
         grid.addWidget(self.width_mm_edit, r, 1); r += 1
+        self._select_stored_target(getattr(parent, 'current_file', None))
 
         self.min_dpi_edit = QLineEdit("300", self)
         grid.addWidget(QLabel("Min DPI:", self), r, 0)
@@ -370,6 +372,22 @@ class _JournalDialog(QFrame):
         if with_apply_options:
             self.panel_labels_check = QCheckBox("Add panel letters (a, b, c…)", self)
             grid.addWidget(self.panel_labels_check, r, 0, 1, 2); r += 1
+
+    def _select_stored_target(self, pyf_path):
+        """Open on the target the figure was last sized for (journal + column,
+        or a custom width), as the MCP checks do."""
+        if not pyf_path:
+            return
+        from pyfigures.mcp_tools.core import _stored_target
+        target = _stored_target(pyf_path)
+        if not target:
+            return
+        if target.get("journal") in self._JOURNALS:
+            self.journal_combo.setCurrentText(target["journal"])
+            self.column_combo.setCurrentText(str(target.get("column", "single")))
+        else:
+            self.journal_combo.setCurrentText("(custom width)")
+            self.width_mm_edit.setText(f"{float(target['width_mm']):g}")
 
     def values(self) -> dict:
         journal = self.journal_combo.currentText()
@@ -4070,6 +4088,9 @@ class EZFIG_GUI(QMainWindow):
         stamps = QCheckBox('Stamp each frame (0 min, 2 min…)', frame)
         stamps.setChecked(True)
         grid.addWidget(stamps, 6, 0, 1, 2)
+        keep_crop = self._keep_crop_checkbox(frame, sel)
+        if keep_crop is not None:
+            grid.addWidget(keep_crop, 7, 0, 1, 2)
         cd = CustomDialog(title="Stack montage",
                           message="Adds a new row showing several frames of the stack.",
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self)
@@ -4086,6 +4107,8 @@ class EZFIG_GUI(QMainWindow):
         if ax == 't' and interval.value() > 0:
             kw['interval'] = interval.value()
             kw['unit'] = unit.text().strip() or None
+        if keep_crop is not None and keep_crop.isChecked():
+            kw['crop'] = self._panel_crop(sel)
         from pyfigures.mcp_server import add_stack_montage
         self._run_mcp_mutation(add_stack_montage, "Montage added as a new row.", **kw)
 
@@ -4139,6 +4162,9 @@ class EZFIG_GUI(QMainWindow):
         merge.setChecked(True)
         grid.addWidget(gray, n + 1, 0, 1, 2)
         grid.addWidget(merge, n + 2, 0, 1, 2)
+        keep_crop = self._keep_crop_checkbox(frame, sel) if stack_path else None
+        if keep_crop is not None:
+            grid.addWidget(keep_crop, n + 3, 0, 1, 2)
         cd = CustomDialog(title="Channel split", message="Adds a new row: each channel, then the merge.",
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self)
         if cd.exec_() != QDialog.Accepted:
@@ -4152,7 +4178,30 @@ class EZFIG_GUI(QMainWindow):
             kw['series'] = getattr(sel, 'serie_to_open', None)
         else:
             kw['channel_files'] = files
+        if keep_crop is not None and keep_crop.isChecked():
+            kw['crop'] = self._panel_crop(sel)
         self._run_mcp_mutation(add_channel_split, "Channel split added as a new row.", **kw)
+
+    @staticmethod
+    def _panel_crop(panel):
+        """The panel's crop as {side: pixels} (non-zero sides only)."""
+        crop = {}
+        for side in ('left', 'right', 'top', 'bottom'):
+            v = int(round(float(getattr(panel, 'crop_' + side, 0) or 0)))
+            if v > 0:
+                crop[side] = v
+        return crop
+
+    def _keep_crop_checkbox(self, parent, panel):
+        """'Keep this panel's crop' option of the split / montage dialogs (e.g.
+        text burned into the image's bottom rows), or None if it is not cropped."""
+        crop = self._panel_crop(panel)
+        if not crop:
+            return None
+        box = QCheckBox('Crop every new panel like this one ('
+                        + ', '.join(f'{k} {v} px' for k, v in crop.items()) + ')', parent)
+        box.setChecked(True)
+        return box
 
     def add_kymograph_action(self):
         found = self._selected_image_panel('add the kymograph')
@@ -4537,10 +4586,10 @@ class EZFIG_GUI(QMainWindow):
     # Figure-level data the MCP tools keep in files beside the .pyf (caption,
     # statistics). The GUI hands MCP tools a temp copy of the figure, so these
     # must travel with that copy and any new ones must come back.
-    _SIDECAR_EXTS = ('.caption.json', '.stats.json', '.alttext.json', '.sources.json')
+    _SIDECAR_EXTS = ('.caption.json', '.stats.json', '.alttext.json', '.sources.json', '.target.json')
     # the source snapshot describes the SAVED figure: it goes to the temp copy
     # (so MCP tools can report changes) but never comes back from it
-    _SIDECAR_EXTS_BACK = ('.caption.json', '.stats.json', '.alttext.json')
+    _SIDECAR_EXTS_BACK = ('.caption.json', '.stats.json', '.alttext.json', '.target.json')
 
     def _sidecar_base(self):
         """Path prefix (no extension) of the current figure's sidecars: beside
@@ -4641,6 +4690,11 @@ class EZFIG_GUI(QMainWindow):
             self.reload_state(p, append=False)
             self.paint.EZFIG_panel.undo_redo_save_required.emit()
             self.statusBar().showMessage(success_msg)
+            # done, but the tool has a remark (e.g. a zoom inset hiding its box)
+            notes = [ln[len('WARNING: '):] for ln in str(res).splitlines()
+                     if ln.startswith('WARNING: ')] if isinstance(res, str) else []
+            if notes:
+                QMessageBox.information(self, 'Done, with a remark', '\n\n'.join(notes))
         except Exception:
             logger.error('QC action failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Action failed',
@@ -5124,15 +5178,17 @@ class EZFIG_GUI(QMainWindow):
     def _letter_colour_override(self, elm):
         """Black letters on chart panels (matplotlib figures / SVGs have a white
         background) when the figure's letter colour is light — otherwise a white
-        letter is invisible on a data plot. None = use the figure font colour."""
+        letter is invisible on a data plot. On a micrograph the colour follows
+        the corner the letter sits on, as for the MCP tools / recipes: black on
+        a bright corner (bright field), white on a dark one (fluorescence, where
+        a black letter is invisible). None = use the figure font colour."""
         fg = getattr(self.serializable_font, 'foreground', None)
         if fg is None:
             return None
         rgb = int(fg) & 0xFFFFFF
         luminance = (0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF)
                      + 0.114 * (rgb & 0xFF))
-        if luminance < 160:
-            return None  # already a dark colour
+        light = luminance >= 160
         from qtpy.QtSvg import QSvgRenderer
         img = getattr(elm, 'img', None)
         if isinstance(img, plt.Figure):
@@ -5141,7 +5197,28 @@ class EZFIG_GUI(QMainWindow):
         else:
             is_chart = isinstance(getattr(elm, 'renderer', None), QSvgRenderer) \
                 and not isinstance(img, np.ndarray)
-        return 0x000000 if is_chart else None
+        if is_chart:
+            return 0x000000 if light else None
+        fn = getattr(elm, 'filename', None)
+        if not isinstance(fn, str) or getattr(elm, 'custom_loading_script', None):
+            return None  # merges (fluorescence) and scripted panels keep the font colour
+        placement = getattr(self.serializable_font, 'placement', None)
+        if isinstance(placement, Position):
+            placement = ' '.join(placement.get_position())
+        try:
+            from pyfigures.mcp_tools.core import corner_brightness
+            bright = corner_brightness(fn, str(placement or 'top left'),
+                                       (elm.crop_left, elm.crop_right, elm.crop_top, elm.crop_bottom),
+                                       getattr(elm, 'LUTs', None))
+        except Exception:
+            bright = None
+        if bright is None:
+            return None
+        if light and bright > 0.6:
+            return 0x000000
+        if not light and bright < 0.4:
+            return 0xFFFFFF
+        return None
 
     # def remove_all_annotations(self):
     #     print('remove all annotations called')
@@ -5236,7 +5313,7 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)
         journal_combo = QComboBox(frame)
-        journal_combo.addItems(['(none)', 'nature', 'science', 'cell', 'plos', 'embo'])
+        journal_combo.addItems(['(none)'] + _JournalDialog._JOURNALS)
         grid.addWidget(journal_combo, 1, 1)
         grid.addWidget(QLabel('Column:', frame), 2, 0)
         column_combo = QComboBox(frame)

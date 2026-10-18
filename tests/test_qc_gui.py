@@ -72,6 +72,19 @@ def _images(gui):
             if isinstance(s, Image2D)]
 
 
+def test_tool_warnings_are_shown_after_an_action(gui, monkeypatch):
+    """A tool that did its job but has a remark (e.g. a zoom inset hiding its
+    box): the GUI used to drop the WARNING lines silently."""
+    from qtpy.QtWidgets import QMessageBox
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: shown.append(a)))
+    gui._run_mcp_mutation(lambda p: "Done.\nWARNING: the inset covers the zoomed region", "ok")
+    assert shown and "covers the zoomed region" in shown[0][2]
+    shown.clear()
+    gui._run_mcp_mutation(lambda p: "Done.", "ok")
+    assert not shown
+
+
 def test_audit_report(gui):
     captured = {}
     gui._show_report = lambda title, text: captured.setdefault(title, text)
@@ -159,6 +172,23 @@ def test_journal_dialog_requires_width_when_custom(qapp):
     d.journal_combo.setCurrentText("(custom width)")
     with pytest.raises(ValueError):
         d.values()
+
+
+def test_journal_dialog_opens_on_the_stored_target(qapp, tmp_path):
+    """The dialog starts on the target the figure was sized for (as the MCP
+    checks use it), e.g. Nature Communications 1.5 column."""
+    from qtpy.QtWidgets import QFrame
+    from pyfigures.gui.pfgui import _JournalDialog
+    from pyfigures.mcp_tools.core import _store_target
+    pyf = str(tmp_path / "f.pyf")
+    _store_target(pyf, "nature communications", "1.5", 136)
+    parent = QFrame()
+    parent.current_file = pyf
+    v = _JournalDialog(parent).values()
+    assert v["journal"] == "nature communications" and v["column"] == "1.5"
+    _store_target(pyf, None, "single", 120)
+    v = _JournalDialog(parent).values()
+    assert v["width_mm"] == 120.0
 
 
 def test_remap_dialog_requires_old_prefix(qapp):

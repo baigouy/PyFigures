@@ -35,6 +35,7 @@ from .core import (
     _describe_roi,
     _encode_str,
     _encode_value,
+    _first_filename,
     _get_container,
     _group_summary,
     _image_summary,
@@ -43,6 +44,12 @@ from .core import (
     _navigate_group,
     _new_group_elem,
     _new_image2d,
+    _raw_size_from_file,
+    _label_color_for,
+    _store_target,
+    _check_property_value,
+    _resolve_image_property,
+    _stored_image_property,
     _new_tatext2d,
     _next_group_id,
     _roi_children,
@@ -821,7 +828,7 @@ def add_annotation(
     annots = imgs[image_index].find("annotations")
     if annots is None:
         annots = ET.SubElement(imgs[image_index], "annotations")
-    annots.append(_new_tatext2d(text, placement))
+    annots.append(_new_tatext2d(text, placement, color=_label_color_for(imgs[image_index], text, placement)))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return f"Added annotation '{text}' ({placement}) to image {image_index} in {loc}."
@@ -894,7 +901,7 @@ def add_corner_labels(
         if not texts:
             continue
         for text in texts:
-            annots.append(_new_tatext2d(text, placement))
+            annots.append(_new_tatext2d(text, placement, color=_label_color_for(img, text, placement)))
             added.append(f"'{text}' @ {placement}")
 
     _save(tree, pyf_path)
@@ -1176,11 +1183,14 @@ def resize_figure(
     | Journal  | Single (mm) | Double (mm) | Single px@300 |
     |----------|-------------|-------------|---------------|
     | Nature   | 89          | 183         | 1051          |
-    | Science  | 55          | 168         | 650           |
-    | Cell     | 85          | 170         | 1004          |
+    | Nat Comm | 88          | 180         | 1039          |
+    | Science  | 57          | 184         | 673           |
+    | Cell     | 85          | 174         | 1004          |
     | PLOS ONE | 83          | 174         | 980           |
     | eLife    | 85          | 178         | 1004          |
-    | EMBO     | 82          | 172         | 969           |
+    | EMBO     | 87          | 172         | 1028          |
+
+    list_journal_presets() gives every accepted name.
 
     Examples::
 
@@ -1241,6 +1251,8 @@ def resize_figure(
     result = set_size(pyf_path, canvas_units, group_path)   # also re-stacks the rows
     if result.startswith("ERROR"):
         return result
+    if group_path is None:          # the whole figure: remembered for the checks
+        _store_target(pyf_path, journal, column, target_in * 25.4)
 
     return (
         f"Figure resized to {target_in * 25.4:.1f}mm wide = {canvas_units:.1f} canvas pt; "
@@ -1271,55 +1283,55 @@ def layout_canvas(
     direction = direction.upper().strip()
     if direction not in ("X", "Y"):
         return "ERROR: direction must be 'X' or 'Y'."
-
-    # Lazy import — uses PyFigures' own image reader so format support is identical.
-    try:
-        from batoolset.settings.global_settings import set_UI as _set_UI
-        _set_UI()
-        from batoolset.drawings.shapes.image2d import Image2D as _Image2D
-    except ImportError as e:
-        return f"ERROR: could not import PyFigures image reader — {e}"
+    if not width_px or width_px <= 0:
+        return "ERROR: width_px must be positive."
+    if spacing_px < 0:
+        return "ERROR: spacing_px must not be negative."
 
     tree, root = _load(pyf_path)
     canvas_imgs = [c for c in root if c.tag == "Image2D"]
     if not canvas_imgs:
         return "ERROR: figure has no free-canvas images. Use set_size() for group-based figures."
 
+    # width/height must stay the SOURCE size (saving re-syncs them from the
+    # file); the displayed size is (raw size - crop) / scale, so the target
+    # width is reached through scale. Writing the scaled size into width/height
+    # was undone by the save, and every panel came back at its raw size.
     updated = 0
     cursor = 0  # running position along the packing axis
     for img_el in canvas_imgs:
-        fname = _child_text(img_el, "filename") or ""
-        # Try to get actual dimensions via PyFigures Image2D (handles TIF, PNG, etc.)
-        raw_w, raw_h = None, None
-        if fname and Path(fname).exists():
+        raw = _raw_size_from_file(_first_filename(img_el))
+        if raw is None:
             try:
-                obj = _Image2D(fname)
-                raw_w, raw_h = obj.get_raw_size()
-            except Exception:
-                pass
-        if raw_w is None or raw_h is None or raw_w == 0:
-            # Fall back to stored width/height, or a safe default
-            raw_w = _child_text(img_el, "width") or width_px
-            raw_h = _child_text(img_el, "height") or width_px
-            raw_w = float(raw_w) if raw_w else width_px
-            raw_h = float(raw_h) if raw_h else width_px
+                raw = (float(_child_text(img_el, "width")), float(_child_text(img_el, "height")))
+            except (TypeError, ValueError):
+                raw = (float(width_px), float(width_px))
+        raw_w, raw_h = raw
+        crops = {}
+        for side in ("left", "right", "top", "bottom"):
+            try:
+                crops[side] = float(_child_text(img_el, "crop_" + side) or 0)
+            except (TypeError, ValueError):
+                crops[side] = 0.0
+        visible_w = raw_w - crops["left"] - crops["right"]
+        visible_h = raw_h - crops["top"] - crops["bottom"]
+        if visible_w <= 0 or visible_h <= 0:
+            return f"ERROR: the crop of panel {updated} removes the whole image."
 
-        scale = width_px / raw_w
-        scaled_w = width_px
-        scaled_h = raw_h * scale
+        scale = visible_w / width_px
+        scaled_h = visible_h / scale
+        _set_child_text(img_el, "width", str(float(raw_w)))
+        _set_child_text(img_el, "height", str(float(raw_h)))
+        _set_child_text(img_el, "scale", str(float(scale)))
 
         if direction == "Y":
             _set_child_text(img_el, "x", "0.0")
             _set_child_text(img_el, "y", str(float(cursor)))
-            _set_child_text(img_el, "width",  str(float(scaled_w)))
-            _set_child_text(img_el, "height", str(float(scaled_h)))
             cursor += scaled_h + spacing_px
         else:  # X
             _set_child_text(img_el, "x", str(float(cursor)))
             _set_child_text(img_el, "y", "0.0")
-            _set_child_text(img_el, "width",  str(float(scaled_w)))
-            _set_child_text(img_el, "height", str(float(scaled_h)))
-            cursor += scaled_w + spacing_px
+            cursor += width_px + spacing_px
 
         updated += 1
 
@@ -1638,6 +1650,14 @@ def set_image_property(
     imgs = [c for c in container if c.tag == "Image2D"]
     if image_index >= len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    property_name, err = _resolve_image_property(imgs[image_index], property_name)
+    if err:
+        return err
+    if property_name in _READONLY:
+        return (
+            f"ERROR: '{property_name}' is a layout/internal field managed by "
+            "set_size() / layout_canvas() — do not set it directly."
+        )
 
     # placement is a Position object — serialised as plain text by PyFigures,
     # no ""..."" wrapping.  Everything else uses the smart encoder.
@@ -1645,10 +1665,14 @@ def set_image_property(
         raw = value.strip()
     else:
         raw = _encode_value(value)
+    err = _check_property_value(property_name, raw)
+    if err:
+        return err
     _set_child_text(imgs[image_index], property_name, raw)
     _save(tree, pyf_path)
+    stored = _stored_image_property(pyf_path, group_path, image_index, property_name)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Image {image_index} in {loc}: {property_name} = {raw}"
+    return f"Image {image_index} in {loc}: {property_name} = {stored} (read back from the saved file)"
 
 
 @mcp.tool()

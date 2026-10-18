@@ -928,7 +928,7 @@ journal: nature
 checks:
   - integrity                              # duplicated / flipped / cloned panels
   - scale                                  # same displayed µm per pixel everywhere
-  - scale_bars                             # every image panel has a scale bar
+  - scale_bars                             # every micrograph has a scale bar (a montage / split counts once, plots are not counted)
   - labels                                 # every image panel has a letter or label
   - {check: resolution, min_dpi: 300}      # at the printed size
   - {check: journal, fail: false}          # width, fonts, resolution: report only
@@ -1013,7 +1013,9 @@ give **`px_to_unit`** (the pixel size, in the same unit) — usually once, in
 `defaults`. Montage, split, kymograph and orthogonal panels read the pixel size
 from the file automatically (a `px_to_unit` you give overrides it). A
 `scale_bar` on a montage or split — set on the panel or in `defaults` — is drawn
-on its last panel.
+on its last panel (`scale_bar_panels: all` puts one on every panel). A `crop` on a montage, split or merge applies to every panel
+it makes — e.g. `{split: hela.png, names: [Lamp1, Mito, DNA], crop: {bottom: 24}}`
+removes text burned into the image's bottom rows from all channels and the merge.
 
 A common convention: scale bar on one panel per row, same length everywhere,
 and "Scale bars, 10 µm." in the caption.
@@ -1122,12 +1124,14 @@ Wherever a colour is asked (`color`, `stamp_color`, `line_color`,
 
 | Journal | single | 1.5 | double | Also accepted |
 |---|---|---|---|---|
-| `nature` | 89 | 136 | 183 | nature communications, nature methods, nature cell biology, nature medicine |
-| `science` | 55 | 114 | 168 | science advances |
-| `cell` | 85 | 128 | 170 | cell reports, current biology, developmental cell |
+| `nature` | 89 | 136 | 183 | |
+| `nature communications` | 88 | 136 | 180 | ncomms |
+| `nature methods` | 89 | 136 | 180 | nature cell biology, nature medicine |
+| `science` | 57 | 121 | 184 | science advances |
+| `cell` | 85 | 114 | 174 | cell reports, current biology, developmental cell |
 | `plos` | 83 | 129 | 174 | plos biology, plos genetics, plos one |
 | `elife` | 85 | 132 | 178 | |
-| `embo` | 82 | 127 | 172 | |
+| `embo` | 87 | 127 | 172 | |
 | `elsevier` | 90 | 140 | 190 | |
 | `springer` | 84 | 129 | 174 | |
 | `wiley` | 86 | 132 | 178 | |

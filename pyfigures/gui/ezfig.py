@@ -843,6 +843,13 @@ class MyWidget(QWidget):
                     json.dump({'width_pt': float(bounds.width()), 'height_pt': float(bounds.height()),
                                'picture_dpi': picture.logicalDpiX()}, f)
             elif filetype not in ['svg', 'pdf']:
+                # record the export resolution in the file (it said 96 DPI, so a
+                # 300 DPI export looked 3x too large to journals and layout
+                # programs). Set only now: the image's DPI also sizes the text
+                # while painting.
+                dots_per_meter = int(round(dpi / 0.0254))
+                image.setDotsPerMeterX(dots_per_meter)
+                image.setDotsPerMeterY(dots_per_meter)
                 # Try Qt-native save first (requires pyqt6-plugins for TIF support).
                 # Fall back to tifffile for TIF/TIFF if the Qt plugin is unavailable.
                 if not image.save(path) and filetype.lower() in {'.tif', '.tiff'}:
@@ -854,7 +861,7 @@ class MyWidget(QWidget):
                         ptr.setsize(n_bytes)
                         arr = np.frombuffer(ptr, dtype=np.uint8).reshape(
                             image.height(), image.width(), 4)
-                        tifffile.imwrite(path, arr)
+                        tifffile.imwrite(path, arr, resolution=(dpi, dpi), resolutionunit='INCH')
                     except Exception:
                         traceback.print_exc()
         finally:

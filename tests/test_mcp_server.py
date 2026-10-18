@@ -1184,17 +1184,22 @@ class TestResizeFigurePresets:
         ("nature",  "single",  89),
         ("nature",  "double", 183),
         ("cell",    "single",  85),
-        ("science", "single",  55),
+        ("science", "single",  57),
+        ("science", "double", 184),
+        ("cell",    "double", 174),
         ("plos",    "double", 174),
         ("pnas",    "single",  87),
         ("jcb",     "single",  85),
+        ("nature communications", "single", 88),
+        ("nature communications", "double", 180),
+        ("nature medicine", "double", 180),
     ])
     def test_journal_mm_values(self, journal, column, expected_mm):
         assert _width_mm_for_journal(journal, column) == pytest.approx(expected_mm)
 
     @pytest.mark.parametrize("alias,canonical", [
-        ("nature methods",          "nature"),
-        ("nature communications",   "nature"),
+        ("nature cell biology",     "nature methods"),
+        ("ncomms",                  "nature communications"),
         ("plos one",                "plos"),
         ("cell reports",            "cell"),
         ("journal of cell biology", "jcb"),

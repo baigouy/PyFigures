@@ -89,6 +89,38 @@ def test_stack_view_actions(qapp, monkeypatch, tmp_path):
     g._dirty = False
 
 
+def test_split_and_montage_keep_the_panel_crop(qapp, monkeypatch, tmp_path):
+    """A cropped source panel (e.g. text burned into its bottom rows): the
+    split / montage made from it crops every new panel the same way."""
+    stack = _hyperstack(str(tmp_path / "h.tif"))
+    g = _gui(qapp, monkeypatch, tmp_path, [stack])
+    shapes = lambda: g.paint.EZFIG_panel.shapes_to_draw
+    shapes()[0].content[0].crop_bottom = 5
+    _select(g, 0)
+    g.add_channel_split_action()
+    _select(g, 0)
+    g.add_stack_montage_action()
+    split, montage = shapes()[1].content, shapes()[2].content
+    assert [p.crop_bottom for p in split] == [5] * len(split)
+    assert [p.crop_bottom for p in montage] == [5] * len(montage)
+    g._dirty = False
+
+
+def test_mcp_split_and_montage_crop(tmp_path):
+    import xml.etree.ElementTree as ET
+    from pyfigures.mcp_server import create_figure, add_channel_split, add_stack_montage
+    stack = _hyperstack(str(tmp_path / "h.tif"))
+    pyf = str(tmp_path / "f.pyf")
+    create_figure(pyf)
+    assert not add_channel_split(pyf, stack_path=stack, crop={"bottom": 4}).startswith("ERROR")
+    assert not add_stack_montage(pyf, stack, crop={"left": 2, "bottom": 4}).startswith("ERROR")
+    crops = [(e.findtext("crop_left"), e.findtext("crop_bottom"))
+             for e in ET.parse(pyf).getroot().iter("Image2D")]
+    assert crops[:3] == [(c[0], "4") for c in crops[:3]]
+    assert all(c == ("2", "4") for c in crops[3:])
+    assert add_channel_split(pyf, stack_path=stack, crop=[0, 0, 0, 4]).startswith("ERROR")
+
+
 def test_stack_actions_refuse_flat_images(qapp, monkeypatch, tmp_path):
     g = _gui(qapp, monkeypatch, tmp_path, [_png(str(tmp_path / "a.png"))])
     before = open(g.current_file, encoding="utf-8").read()

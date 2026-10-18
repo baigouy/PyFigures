@@ -550,6 +550,13 @@ def draft_figure(
     out_pyf = os.path.abspath(out_pyf)
 
     images = _collect_image_files(folder, pattern)
+    if group_by == "subfolder":
+        # images may live only in the condition sub-folders (one row each);
+        # counting the top level alone drafted a figure with no images at all
+        for entry in sorted(os.listdir(folder)):
+            sub_path = os.path.join(folder, entry)
+            if os.path.isdir(sub_path):
+                images += _collect_image_files(sub_path, pattern)
     csvs = sorted([str(p) for ext in ("*.csv", "*.tsv") for p in Path(folder).glob(ext)])
     if not images and not csvs:
         return f"ERROR: no image or CSV files found in {folder!r}."
@@ -742,9 +749,63 @@ def auto_configure_images(
 
 
 @mcp.tool()
-def build_figure_from_recipe(recipe_path: str) -> str:
-    """Build a figure from a declarative **recipe** file (YAML or JSON) — the
-    reproducible, git-diffable description of a figure.
+def recipe_reference() -> str:
+    """The recipe grammar: an annotated example plus EVERY accepted key, per
+    panel kind, with the journal names and export formats — read this before
+    writing a recipe for build_figure_from_recipe. Generated from the recipe
+    code itself, so it is always complete and current (the long-form guide with
+    explanations is docs/RECIPES.md)."""
+    from .. import recipe as R
+    from .core import _JOURNAL_ALIASES, _JOURNAL_PRESETS
+    ref = {
+        "overview": R.__doc__.strip(),
+        "top_level_keys": sorted(R._TOP_KEYS),
+        "panel_kinds": "a panel is a bare file name (an image) or a mapping whose kind key "
+                       "holds the source: " + ", ".join(R._PANEL_KINDS),
+        "keys_per_panel_kind": {k: sorted(v) for k, v in R._KIND_KEYS.items()},
+        "defaults_keys": sorted(R._DEFAULT_KEYS),
+        "row_mapping_keys": sorted(R._ROW_KEYS),
+        "sub_keys": {
+            "crop": sorted(R._CROP_KEYS), "scale_bar": sorted(R._SCALE_BAR_KEYS),
+            "arrows[]": sorted(R._ARROW_KEYS), "kymograph": sorted(R._KYMO_KEYS),
+            "orthogonal": sorted(R._ORTHO_KEYS), "text[]": sorted(R._TEXT_KEYS),
+            "corner_labels": list(R._CORNERS), "rois[]": sorted(R._ROI_KEYS),
+            "inset": sorted(R._INSET_KEYS), "zoom": sorted(R._ZOOM_KEYS),
+            "brackets[]": sorted(R._BRACKET_KEYS), "font": sorted(R._FONT_KEYS),
+            "auto_configure": sorted(R._AUTO_KEYS), "exports[] (mapping form)": sorted(R._EXPORT_KEYS),
+        },
+        "roi_values": {k: f"{n} numbers" for k, n in R._ROI_ARITY.items()},
+        "flip": sorted(R._FLIPS),
+        "exports": sorted(R._EXPORTS),
+        "checks": {k: sorted(v) for k, v in R._CHECKS.items()},
+        "journals": sorted(_JOURNAL_PRESETS) + sorted(_JOURNAL_ALIASES),
+        "column": ["single", "1.5", "double"],
+        "notes": [
+            "Paths are relative to the recipe file.",
+            "px_to_unit is the pixel size (units per pixel), e.g. 0.1 for 0.1 um/pixel; "
+            "never invent it: ask the user or read it from the image metadata "
+            "(auto_configure: true).",
+            "Give either journal (+ column) or one explicit width, not both.",
+            "Build with build_figure_from_recipe(recipe_path, recipe_text=...), then check "
+            "the result with render_preview; to change the figure, edit the recipe and build again.",
+        ],
+    }
+    return json.dumps(ref, ensure_ascii=False, indent=1)
+
+
+@mcp.tool()
+def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -> str:
+    """Build a figure from a declarative **recipe** (YAML or JSON) — the
+    reproducible, git-diffable description of a figure. Often the simplest way
+    to make a whole figure: call recipe_reference() FIRST for every accepted
+    key, write the recipe, build it in one call, check render_preview, then
+    edit the recipe and build again.
+
+    *recipe_path*: the recipe file (.yaml/.yml/.json). With *recipe_text* (the
+    recipe itself, YAML or JSON), the text is checked, written to recipe_path
+    (so you need no file-writing tool and the figure stays reproducible) and
+    built; relative paths in it are relative to recipe_path's folder.
+    Invalid recipes are refused before anything is built.
 
     The recipe lists rows of panels (``image`` / ``glob`` / ``plot`` / ``montage``
     / ``split`` / ``merge`` / ``colorbar`` / ``script``) with LUTs, crops,
@@ -782,8 +843,10 @@ def build_figure_from_recipe(recipe_path: str) -> str:
     or an ERROR string (missing file, unknown key,
     invalid value) — nothing is half-built silently.
     """
-    from ..recipe import build_figure_from_recipe as _build, RecipeError
+    from ..recipe import build_figure_from_recipe as _build, RecipeError, save_recipe_text
     try:
+        if recipe_text:
+            recipe_path = save_recipe_text(recipe_text, recipe_path)
         return json.dumps(_build(recipe_path), ensure_ascii=False, indent=2)
     except RecipeError as e:
         return f"ERROR: {e}"

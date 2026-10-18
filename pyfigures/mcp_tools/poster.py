@@ -42,7 +42,8 @@ def _run_poster_op(op_args: list[str], timeout: int = 120):
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("QT_API", "pyqt6")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout)
+        proc = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                              env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"poster operation timed out after {timeout}s"
     if proc.returncode != 0:

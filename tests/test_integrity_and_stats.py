@@ -109,7 +109,7 @@ def test_list_journal_presets():
     nat = data["journals"]["nature"]["widths_mm"]
     assert nat["single"] == 89 and nat["double"] == 183
     # aliases resolve
-    assert any("nature communications" in v["aliases"]
+    assert any("nature medicine" in v["aliases"]
                for v in data["journals"].values())
 
 

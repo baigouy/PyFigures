@@ -38,6 +38,34 @@ from .core import (
 )
 from .content import _canonical_lut_names, _make_channel_merge_script
 
+
+_CROP_SIDES = ("left", "right", "top", "bottom")
+
+
+def _check_crop(crop):
+    """Error message for a bad crop mapping, else None."""
+    if crop is None:
+        return None
+    if not isinstance(crop, dict) or set(crop) - set(_CROP_SIDES):
+        return (f"ERROR: crop must be a mapping with keys {list(_CROP_SIDES)}, "
+                f'e.g. {{"bottom": 24}} — got {crop!r}')
+    for k, v in crop.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0 or v != int(v):
+            return f"ERROR: crop {k} must be a non-negative whole number of pixels, got {v!r}"
+    return None
+
+
+def _crop_panels(images, crop):
+    """Set the same crop on every panel made by a split / montage (not on the
+    panels' own annotations, e.g. inset images)."""
+    if not crop:
+        return
+    for img in list(images):
+        if img.findtext("isText", "False") == "True":
+            continue
+        for side, v in crop.items():
+            _set_child_text(img, "crop_" + side, str(int(v)))
+
 SERIES_MARK = "[series "          # user_comments prefix of montage / split members
 
 # colour name -> PyFigures LUT key, for tinting a channel natively
@@ -167,9 +195,13 @@ def add_stack_montage(
     stamp_color: str | int = "white",
     series: int | None = None,
     spacing: int = 3,
+    crop: dict[str, int] | None = None,
 ) -> str:
     """Show several frames of ONE stack side by side — a time-lapse or Z-series
     montage with time / depth stamps ("0 min, 2 min, 4 min…").
+
+    *crop*: pixels to remove on every frame panel, e.g. {"bottom": 24}
+      (keys left/right/top/bottom).
 
     Opt-in: add_image shows a stack as a single image; use this only when the
     figure should show the frames.
@@ -201,6 +233,9 @@ def add_stack_montage(
     axis_l = {"t": "t", "time": "t", "z": "d", "d": "d", "depth": "d"}.get(str(axis).lower())
     if axis_l is None:
         return "ERROR: axis must be 't' or 'z'."
+    err = _check_crop(crop)
+    if err:
+        return err
     info, err = _stack(stack_path, series)
     if err:
         return f"ERROR: {err}"
@@ -271,6 +306,7 @@ def add_stack_montage(
                 img.find("annotations").append(
                     _new_tatext2d(stamp(f), stamp_placement, is_letter=False, color=scol))
             grp.find("content").append(img)
+    _crop_panels(outer.iter("Image2D"), crop)
     _save(tree, pyf_path, recompute=True)
     stamps_note = ""
     if stamps:
@@ -301,9 +337,13 @@ def add_channel_split(
     series: int | None = None,
     spacing: int = 3,
     label_placement: str = "top right",
+    crop: dict[str, int] | None = None,
 ) -> str:
     """The classic channel-split row: each channel on its own panel, then the
     merge, with the channel names on the panels.
+
+    *crop*: pixels to remove on every panel, e.g. {"bottom": 24} to cut text
+      burned into the bottom rows of the image (keys left/right/top/bottom).
 
     Give EITHER *stack_path* (one multi-channel image/stack) OR *channel_files*
     (one single-channel image per channel).
@@ -326,6 +366,9 @@ def add_channel_split(
     """
     if bool(stack_path) == bool(channel_files):
         return "ERROR: give either stack_path or channel_files (not both)."
+    err = _check_crop(crop)
+    if err:
+        return err
     base_comment = os.path.basename(stack_path) if stack_path else "channel files"
     info = None
     if stack_path:
@@ -409,6 +452,7 @@ def add_channel_split(
             img.find("annotations").append(
                 _new_tatext2d(merge_label, label_placement, is_letter=False, color=0xFFFFFF))
         content.append(img)
+    _crop_panels(content.iter("Image2D"), crop)
     _save(tree, pyf_path, recompute=True)
     return (f"Channel split of {base_comment} added at group {path}: "
             + ", ".join(f"{nm} ({c})" for nm, c in zip(names, colors))

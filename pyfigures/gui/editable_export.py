@@ -19,10 +19,12 @@ and the scene is written out:
 
 Only ``capture_scene`` needs Qt; parsing and both writers are pure Python.
 
-Limitation: text *inside* data plots (tick labels, axis titles) arrives as
-glyph outlines — Qt draws the plot's SVG text as paths — so it is exact but
-not editable. Every PyFigures label (letters, channel names, scale-bar text,
-annotations) is real, editable text. ``$…$`` maths in labels is recorded as
+Text *inside* Matplotlib data plots (tick labels, axis titles, stars) is real
+text as well: during the capture plots are rendered with svg.fonttype 'none'
+and their text drawn with drawText (batoolset.drawings.svg_text_renderer) —
+Qt alone would draw it as glyph outlines. Text inside imported SVG/PDF
+graphics and LaTeX-typeset plots stays outlines. Every PyFigures label
+(letters, channel names, scale-bar text, annotations) is real, editable text. ``$…$`` maths in labels is recorded as
 its TeX source (batoolset math_text markers) and becomes a native PowerPoint
 equation (OMML) inside the label's text box, and Unicode text in Illustrator.
 """
@@ -89,7 +91,9 @@ def capture_scene(panel) -> dict:
         from batoolset.drawings import math_text
     except ImportError:
         math_text = None
+    from batoolset.drawings.shapes.image2d import Image2D
     try:
+        Image2D._export_editable_text = True       # plot text as text, not outlines
         for img in fig_images:
             img.enter_export_mode()
         if math_text is not None:
@@ -101,6 +105,7 @@ def capture_scene(panel) -> dict:
         painter.end()
         for img in fig_images:
             img.exit_export_mode()
+        Image2D._export_editable_text = False
         buf.close()
 
     rects = []
