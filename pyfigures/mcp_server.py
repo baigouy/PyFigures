@@ -6,15 +6,11 @@ No Qt / GUI dependency: all tools operate on the XML directly.
 Run standalone (stdio transport, used by Claude Code):
     python -m pyfigures.mcp_server
 
-Register with Claude Code — add to ~/.claude/settings.json:
-    {
-      "mcpServers": {
-        "pyfigures": {
-          "command": "python",
-          "args": ["-m", "pyfigures.mcp_server"]
-        }
-      }
-    }
+Over HTTP (clients that connect to http://127.0.0.1:8765/mcp):
+    python -m pyfigures.mcp_server --transport http --port 8765
+
+Register it with Claude Desktop / Claude Code / LM Studio, or start and stop
+the HTTP server: GUI Tools > MCP server…, or python -m pyfigures.mcp_control.
 """
 
 # The tools live in the pyfigures.mcp_tools package, one module per area:
@@ -92,5 +88,80 @@ def run_stdio(server=None):
     anyio.run(_run_stdio_async, server or mcp)
 
 
+def _children_die_with_me():
+    """Windows: put the server in a job object closed (and its processes
+    killed) when the server ends, so a renderer, LaTeX or ffmpeg started by a
+    tool never outlives a server that its client killed. Elsewhere, and if
+    Windows refuses, nothing is done."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    class _IoCounters(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_ulonglong) for n in
+                    ("ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+                     "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+    class _BasicLimits(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_longlong),
+                    ("PerJobUserTimeLimit", ctypes.c_longlong),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class _ExtendedLimits(ctypes.Structure):
+        _fields_ = [("BasicLimitInformation", _BasicLimits),
+                    ("IoInfo", _IoCounters),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    k32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                            wintypes.DWORD]
+    k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+    job = k32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    info = _ExtendedLimits()
+    info.BasicLimitInformation.LimitFlags = 0x2000 | 0x800   # KILL_ON_JOB_CLOSE | BREAKAWAY_OK
+    if not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):
+        return None
+    if not k32.AssignProcessToJobObject(job, k32.GetCurrentProcess()):
+        return None
+    return job          # kept open for the life of the process
+
+
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m pyfigures.mcp_server",
+                                 description="The PyFigures MCP server. MCP clients start it "
+                                             "over stdio; --transport http serves it at "
+                                             "http://HOST:PORT/mcp (see pyfigures.mcp_control).")
+    ap.add_argument("--transport", choices=["stdio", "http", "sse"], default="stdio")
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8765)
+    a = ap.parse_args(argv)
+    global _JOB
+    _JOB = _children_die_with_me()
+    if a.transport == "stdio":
+        run_stdio()
+        return
+    mcp.settings.host = a.host
+    mcp.settings.port = a.port
+    mcp.run(transport="streamable-http" if a.transport == "http" else "sse")
+
+
+_JOB = None
+
 if __name__ == "__main__":
-    run_stdio()
+    main()

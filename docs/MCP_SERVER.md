@@ -12,6 +12,7 @@ read and edit `.pyf` figure files through natural language — no GUI required.
 
 ## Table of Contents
 
+0. [Starting, stopping and registering the server](#starting-stopping-and-registering-the-server)
 1. [Quick start — Claude Code (Claude AI)](#1-quick-start--claude-code-claude-ai)
 2. [Quick start — Claude Desktop (Claude AI)](#2-quick-start--claude-desktop-claude-ai)
 3. [Quick start — LM Studio (local models)](#3-quick-start--lm-studio-local-models)
@@ -21,6 +22,48 @@ read and edit `.pyf` figure files through natural language — no GUI required.
 7. [Troubleshooting](#7-troubleshooting)
 
 ---
+
+## Starting, stopping and registering the server
+
+You do not start the server yourself for most clients: once **registered**, the
+client (Claude Code, Claude Desktop, LM Studio, Codex, AnythingLLM, Cursor,
+Gemini CLI…) starts `python -m pyfigures.mcp_server` when it needs the tools and
+stops it when it quits. Nothing runs in between and nothing needs to start at
+login. On Windows, the processes the server starts (renderers, LaTeX, ffmpeg)
+end with it.
+
+Register or remove it in one click: **GUI → Tools → MCP server…**, or
+
+```bash
+python -m pyfigures.mcp_control status
+python -m pyfigures.mcp_control register lm_studio   # claude_code, claude_desktop, codex, anythingllm, cursor, gemini_cli
+python -m pyfigures.mcp_control unregister lm_studio
+```
+
+The client's configuration file is edited in place (every other entry, and in
+Codex's TOML the comments, are kept; the previous file goes to
+`~/.pyfigures/backups`); restart the client afterwards. Claude Code and the Code
+side of Claude Desktop share `~/.claude.json`. A server switched off in the
+client or with MCP Commander shows as "switched off".
+
+Other clients: the dialog's buttons (or `snippet --format json|codex|hermes|url`)
+copy the `mcpServers` JSON most clients read, the YAML of Hermes Agent
+(`~/.hermes/config.yaml`; in WSL the Windows Python is started through
+`/mnt/c/…`), or the HTTP server's URL.
+
+**HTTP server** — for clients that connect to a URL instead of starting a
+program: Start / Stop in the same dialog (optionally started when PyFigures
+opens and stopped when it closes), or
+
+```bash
+python -m pyfigures.mcp_control start --port 8765   # http://127.0.0.1:8765/mcp
+python -m pyfigures.mcp_control stop                # stops it and every process it started
+```
+
+It listens on this computer only. ChatGPT on the web or in its desktop app only
+connects to servers on the public internet; use Codex (registered as above) for
+OpenAI models on this computer. The MCP tool `mcp_server_info` reports this set-up
+(read-only).
 
 ## 1. Quick start — Claude Code (Claude AI)
 
@@ -36,7 +79,10 @@ pip install "mcp[cli]"         # MCP SDK for Python
 
 ### Register with Claude Code
 
-Add the server to `~/.claude/.mcp.json` (create the file if it doesn't exist):
+Use **Tools → MCP server…** in the GUI, `python -m pyfigures.mcp_control register
+claude_code`, or `claude mcp add --scope user pyfigures -- python -m
+pyfigures.mcp_server`. By hand, the entry goes under `mcpServers` in
+`~/.claude.json` (user scope) or in a project's `.mcp.json`:
 
 ```json
 {
@@ -149,13 +195,12 @@ is being used — use the full interpreter path in Step 2.
 
 ### Step 2 — register the MCP server in LM Studio
 
-**Via the config file** — LM Studio stores its MCP config at:
+**In one click** — GUI **Tools → MCP server… → LM Studio: Register**, or
+`python -m pyfigures.mcp_control register lm_studio` (it writes the full path of
+the Python running PyFigures).
 
-| OS      | Path |
-|---------|------|
-| Windows | `%APPDATA%\LM Studio\mcp_config.json` |
-| macOS   | `~/.lmstudio/mcp_config.json` |
-| Linux   | `~/.lmstudio/mcp_config.json` |
+**Via the config file** — LM Studio stores its MCP config in
+`~/.lmstudio/mcp.json` (Windows: `C:\Users\<you>\.lmstudio\mcp.json`).
 
 Always use the **full path** to the Python interpreter — never just `"python"`,
 because LM Studio may resolve a different system Python that doesn't have
@@ -251,17 +296,22 @@ python -m pyfigures.mcp_server
 # Server starts on stdin/stdout (MCP stdio transport)
 ```
 
-For HTTP/SSE transport (useful for web-based clients or remote connections):
+For clients that connect to a URL (streamable HTTP at `http://127.0.0.1:8765/mcp`,
+or the older SSE transport):
 
 ```bash
+python -m pyfigures.mcp_server --transport http --port 8765
 python -m pyfigures.mcp_server --transport sse --port 8765
 ```
+
+`python -m pyfigures.mcp_control start` does the same in the background and
+`stop` ends it (see "Starting, stopping and registering the server").
 
 ---
 
 ## 5. Available tools reference
 
-The server currently exposes **147 tools** (113 figure tools + 34 poster tools).
+The server currently exposes **154 tools** (about a fifth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -515,6 +565,8 @@ together.
 | `copy_style(source_pyf, target_pyf, aspects, dry_run)` | Give a figure the look of another (e.g. an accepted one): `fonts`, `letters` (size/weight/colour/corner/case), `scale_bars` (colour, corner, label style), `spacing` (per nesting level), `plots` (chart font size, line widths). Content untouched. GUI: File → Copy style from another figure… |
 | `list_history(pyf_path, last)` | Every MCP call made on the figure, newest last: tool, arguments, status, whether it changed the figure, whether it was undone. GUI: QC → MCP call history / undo…; command line: `python -m pyfigures.history fig.pyf` |
 | `undo_last(pyf_path, steps, force)` | Put the figure (`.pyf` and sidecars) back as it was before the last *steps* changing MCP calls; refused when the figure was changed since outside the server (GUI…) unless `force=True`. GUI: the same dialog; command line: `python -m pyfigures.history fig.pyf --undo 2` |
+
+| `mcp_server_info()` | The Python running the server, the number of tools, which MCP clients have it registered and whether the HTTP server runs. Read-only. GUI: Tools → MCP server…; command line: `python -m pyfigures.mcp_control status` |
 
 **Call history.** Every tool call that reaches the server and names a figure
 (any `.pyf` argument, or a recipe's `output`) is appended to

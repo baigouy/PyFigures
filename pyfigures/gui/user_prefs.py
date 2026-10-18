@@ -32,3 +32,18 @@ def load_auto_show_tips():
 
 def save_auto_show_tips(value):
     _s().setValue('ui/auto_show_tips', bool(value))
+
+
+# ── MCP HTTP server ──────────────────────────────────────────────────
+def load_mcp_http_autostart():
+    """Start the MCP HTTP server when PyFigures opens (off by default)."""
+    return _s().value('mcp/http_autostart', False, type=bool)
+
+def save_mcp_http_autostart(value):
+    _s().setValue('mcp/http_autostart', bool(value))
+
+def load_mcp_http_port():
+    return _s().value('mcp/http_port', 8765, type=int)
+
+def save_mcp_http_port(value):
+    _s().setValue('mcp/http_port', int(value))

@@ -9,6 +9,7 @@ import csv
 import json
 import os
 import re
+import sys
 import xml.etree.ElementTree as ET
 from collections import Counter
 
@@ -578,3 +579,20 @@ def undo_last(pyf_path: str, steps: int = 1, force: bool = False) -> str:
     see what will be undone."""
     from pyfigures import history
     return history.undo_last(pyf_path, steps, force)
+
+
+# ---------------------------------------------------------------------------
+# the server itself (pyfigures/mcp_control.py)
+# ---------------------------------------------------------------------------
+@mcp.tool()
+def mcp_server_info() -> str:
+    """How this PyFigures MCP server is set up: the Python running it, the
+    number of tools, which MCP clients have it registered (Claude Code /
+    Claude Desktop / LM Studio start it themselves when needed) and whether
+    the HTTP server is running. Read-only: registering, starting and stopping
+    are done by the user (GUI Tools > MCP server…, or
+    python -m pyfigures.mcp_control)."""
+    from pyfigures import mcp_control
+    n_tools = len(mcp._tool_manager.list_tools())
+    return (f"PyFigures MCP server, {n_tools} tools, Python {sys.executable}\n"
+            + mcp_control.describe())

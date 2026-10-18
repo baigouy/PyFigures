@@ -561,6 +561,15 @@ class EZFIG_GUI(QMainWindow):
         if load_auto_show_tips():
             QTimer.singleShot(0, self.show_tips)
 
+        # the MCP HTTP server, if the user asked for it to start with PyFigures
+        # (Tools > MCP server…); one started here is stopped at close
+        self._started_mcp_http = False
+        try:
+            from pyfigures.gui.mcp_server_dialog import autostart_http_server
+            self._started_mcp_http = autostart_http_server()
+        except Exception:
+            traceback.print_exc()
+
         from pyfigures.gui.tutorial import TutorialController
         self._tutorial = TutorialController(self)
 
@@ -1289,6 +1298,12 @@ class EZFIG_GUI(QMainWindow):
                                 "a back cover, with freely placed and rotated photos on each page.")
         tools_menu.addAction(album_action)
         album_action.triggered.connect(self.open_album_designer)
+        tools_menu.addSeparator()
+        mcp_server_action = QAction("MCP server…", self)
+        mcp_server_action.setToolTip("Register the PyFigures MCP server with Claude or LM Studio "
+                                     "(they start it when they need it), or start / stop it over HTTP.")
+        tools_menu.addAction(mcp_server_action)
+        mcp_server_action.triggered.connect(self.open_mcp_server_dialog)
 
         template = self.menuBar.addMenu("Template")
         templatify_action = QAction("Convert figure to template", self)  # ? shall I say it like that
@@ -2896,6 +2911,12 @@ class EZFIG_GUI(QMainWindow):
             self.temp_dir.cleanup()
         except Exception:
             pass
+        if getattr(self, '_started_mcp_http', False):
+            try:
+                from pyfigures.gui.mcp_server_dialog import stop_autostarted_http_server
+                stop_autostarted_http_server()
+            except Exception:
+                traceback.print_exc()
         try:
             self._cleanup_qc_temp_dirs()
             self._discard_sidecar_stash()
@@ -5672,6 +5693,12 @@ class EZFIG_GUI(QMainWindow):
         self._poster_window.show()
         self._poster_window.raise_()
         self._poster_window.activateWindow()
+
+    def open_mcp_server_dialog(self):
+        from pyfigures.gui.mcp_server_dialog import McpServerDialog
+        dlg = McpServerDialog(self)
+        dlg.exec_()
+        return dlg
 
     def open_album_designer(self):
         # Same window class as the poster designer, in album mode: its own
