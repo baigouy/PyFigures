@@ -528,9 +528,12 @@ def _layout_rows(recipe, base=None):
     if "columns" in recipe:
         raise RecipeError("'columns' does not apply to a layout formula")
     if not isinstance(recipe["layout"], str):
-        raise RecipeError("'layout' must be a formula text such as \"(a,b,c)/(d,e,f)\"")
+        raise RecipeError("'layout' must be a formula text such as \"(a,b,c)/(d,e,f)\" or a "
+                          "picture (one line per row of cells)")
+    from pyfigures import layout_picture as LP
     try:
-        tree = LF.parse(recipe["layout"])
+        tree = (LP.parse(recipe["layout"]) if LP.is_picture(recipe["layout"])
+                else LF.parse(recipe["layout"]))
     except LF.FormulaError as e:
         raise RecipeError(f"layout: {e}") from None
     panels = recipe.get("panels") or {}
@@ -1416,6 +1419,31 @@ def _arrange_layout(out, plan):
         return el if el.tag == "Group" else group("X", [el])
 
     t = plan["layout"]
+    # a picture layout: every image is cropped to the shape of the cells it
+    # spans (cell ratio = the most common one), so rows and columns line up
+    spans = {}
+
+    def collect(node):
+        if node["type"] == "panel":
+            if "cells" in node:
+                spans[node["id"]] = node["cells"]
+        else:
+            for k in node["children"]:
+                collect(k)
+    collect(t)
+    if spans:
+        per_cell = [(aspect(leaf[p]), cw / ch) for p, (cw, ch) in spans.items()]
+        ones = [a for (a, s), (cw, ch) in zip(per_cell, spans.values()) if a and cw == ch == 1]
+        pool = ones or [a / s for a, s in per_cell if a]
+        if pool:
+            cell = Counter(round(a, 2) for a in pool).most_common(1)[0][0]
+            for p, (cw, ch) in spans.items():
+                if leaf[p].tag == "Image2D":
+                    w = _crop_to_aspect(leaf[p], cell * cw / ch, p)
+                else:
+                    w = f"layout: panel {p!r} is not a single image: kept its own size"
+                if w:
+                    warnings.append(w.replace("grid's", "cells'"))
     if t["type"] == "col":
         new_tops = [as_top(build(k)) for k in t["children"]]
     elif t["type"] == "grid":

@@ -130,6 +130,37 @@ def test_three_column_journals_map_like_the_builtin_science_preset():
     assert js.width_mm(style, "3")[0] == 184
 
 
+def test_numbers_codex_met_on_real_pages():
+    # Cell's page (2026-10-19 Codex trial): thousands and "w x h" sizes
+    assert js.supported_numbers("for line-art figures, at least 1,000 dpi", "dpi") == [1000]
+    assert js.supported_numbers("6.5 x 8 in (16.5 x 20 cm)", "mm") == \
+        pytest.approx([165.1, 203.2, 165, 200])
+
+
+def test_two_layouts_on_one_page_and_sizes_that_are_not_columns():
+    two = "two-column formats (such as research articles and reviews)"
+    three = "three-column formats (such as previews and commentaries)"
+    text = ("Two-column formats: 8.5 cm (1 column), 11.4 cm (1.5 columns), and 17.4 cm (full width). "
+            "Three-column formats: 5.5 cm (1 column), 11.4 cm (2 columns), and 17.4 cm (full width). "
+            "Medium: approximately 11 cm x 11 cm")
+    rule = lambda label, v, scope, q: {"kind": "width", "label": label, "relation": "max",
+                                       "value": v, "unit": "mm", "applies_to": scope,
+                                       "evidence_quote": q}
+    reply = {"rules": [rule("1 column", 85, two, "8.5 cm (1 column)"),
+                       rule("1.5 columns", 114, two, "11.4 cm (1.5 columns)"),
+                       rule("full width of the page", 174, two, "17.4 cm (full width)"),
+                       rule("1 column", 55, three, "5.5 cm (1 column)"),
+                       rule("2 columns", 114, three, "11.4 cm (2 columns)"),
+                       rule("full width of the page", 174, three, "17.4 cm (full width)")]}
+    style, _ = js.import_model_reply(json.dumps(reply), text, "Cell test", "final")
+    assert js.columns_mm(style) == {"single": 85, "1.5": 114, "double": 174}   # first layout
+    medium = {"rules": [dict(rule("Medium approximate figure dimensions", 110,
+                                  "approximate figure size, not a column", "approximately 11 cm x 11 cm"),
+                             relation="recommended")]}
+    style, _ = js.import_model_reply(json.dumps(medium), text, "Size test", "final")
+    assert js.columns_mm(style) == {}                  # a figure size is not a column
+
+
 def test_journal_info_says_what_is_available_or_how_to_import():
     sci = js.journal_info("Science")
     assert sci["status"] == "built_in" and sci["columns_mm"]["triple"] == 184
@@ -309,10 +340,12 @@ def test_editor_import_edit_review_save_and_use_in_the_journal_dialog(qapp, stor
     dlg.journal_combo.setCurrentText("Journal of Fly Figures")
     cols = [dlg.column_combo.itemData(i) for i in range(dlg.column_combo.count())]
     texts = [dlg.column_combo.itemText(i) for i in range(dlg.column_combo.count())]
-    assert cols == ["single", "1.5", "double", "triple"]     # "3 columns" makes it triple
-    assert texts[0] == "single — 85 mm" and texts[3] == "triple — 190 mm"
+    # the added "3 columns" rule is another layout than the page's 1 / 1.5 / 2
+    # columns: offered under its own label
+    assert cols == ["single", "1.5", "double", "3 columns"]
+    assert texts[0] == "single — 85 mm" and texts[3] == "3 columns — 190 mm"
     dlg.column_combo.setCurrentIndex(3)
-    assert dlg.values()["column"] == "triple"
+    assert dlg.values()["column"] == "3 columns"
     dlg.journal_combo.setCurrentText("science")             # a built-in: only its own sizes
     assert [dlg.column_combo.itemData(i) for i in range(dlg.column_combo.count())] == \
         ["single", "double", "triple"]

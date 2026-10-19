@@ -843,6 +843,17 @@ def recipe_reference() -> str:
                        "  c1: wt.tif\n  c2: ko.tif\n  c3: {image: rescue.tif, crop: {bottom: 20}}"
                        "\n  c4: ctrl.tif",
         },
+        "layout_picture": {
+            "what": "another way to write layout: draw the figure, one line per row of cells, "
+                    "panel ids separated by spaces; repeat an id over the cells it spans (its "
+                    "cells must form a rectangle); every line has the same number of cells",
+            "example": "layout: |\n  big big wt\n  big big ko\n  plot plot rescue\npanels:\n  big: "
+                       "overview.tif\n  wt: wt.tif\n  ko: ko.tif\n  rescue: rescue.tif\n  plot: "
+                       "{plot: counts.csv, kind: box}",
+            "note": "images are centre-cropped to the shape of their cells so everything lines "
+                    "up; panels that interlock like a pinwheel (no straight line between them) "
+                    "are refused",
+        },
         "notes": [
             "Paths are relative to the recipe file.",
             "px_to_unit is the pixel size (units per pixel), e.g. 0.1 for 0.1 um/pixel; "

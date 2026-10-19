@@ -95,7 +95,10 @@ def supported_numbers(quote: str, unit: str) -> list[float]:
     ("600–900 ppi")."""
     units = r"(mm|cm|inches|inch|in|dpi|ppi|points|point|pt|″|”|\")"
     found = []
-    pattern = (r"(\d+(?:[.,]\d+)?)\s*(?:(?:[–−-]|to|and)\s*(\d+(?:[.,]\d+)?)\s*)?"
+    # "1,000 dpi" is a thousand (a comma before exactly three digits)
+    quote = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", quote)
+    # ranges "600–900 ppi" and sizes "16.5 x 20 cm": the unit follows the second number
+    pattern = (r"(\d+(?:[.,]\d+)?)\s*(?:(?:[–−-]|to|and|x|×|by)\s*(\d+(?:[.,]\d+)?)\s*)?"
                + units + r"(?![a-z])")
     for m in re.finditer(pattern, quote, re.I):
         u = m.group(3).lower()
@@ -545,9 +548,10 @@ def user_style_for(journal) -> dict | None:
     return find_style(j)
 
 _COLUMN_CLASSES = (
-    ("1.5", r"\b(1[.,]5|1½|one and a half|one-and-a-half|intermediate|medium|mid)\b"),
-    ("double", r"\b(double|two[- ]column|2[- ]column|2 columns|full[- ]?(page|width)?|wide)\b"),
-    ("single", r"\b(single|one[- ]column|1[- ]column|1 column|narrow)\b"),
+    # explicit column wording only ("Medium: 11 x 11 cm" is a figure size, not a column)
+    ("1.5", r"\b(1[.,]5|1½|one and a half|one-and-a-half|column-and-a-half|intermediate)\b"),
+    ("double", r"\b(double|two[- ]column|2[- ]column|2 columns|full[- ]?(page|width))\b"),
+    ("single", r"\b(single|one[- ]column|1[- ]column|1 column)\b"),
 )
 
 
@@ -575,21 +579,35 @@ def columns_mm(style) -> dict:
     """{'single': mm, '1.5': mm, 'double': mm} for the width rules the labels
     identify (missing columns are left out, never guessed)."""
     rules = _width_rules(style)
-    three = any(re.search(_THREE_COLUMNS, f"{r['label']} {r['applies_to']}", re.I) for r in rules)
+    # a page can describe two layouts (Cell: two-column articles 85/114/174 and
+    # three-column previews 55/114/174): the first one described wins, the
+    # rules of the other stay reachable by their own label
+    three_scopes = {_norm(r["applies_to"]) for r in rules
+                    if re.search(_THREE_COLUMNS + r"|\bthree[- ]column", f"{r['label']} {r['applies_to']}",
+                                 re.I)}
+    layout = None
     out = {}
-    for col, pat in (_COLUMN_CLASSES_3 if three else _COLUMN_CLASSES):
-        for r in rules:
-            text = f"{r['label']} {r['applies_to']}"
-            if col in out or not re.search(pat, text, re.I):
-                continue
-            if col == "single" and re.search(r"\b1[.,]5\b|\b(2|3|two|three)[- ]columns?\b", text, re.I):
-                continue
-            out[col] = _width_value(r)
-    if three and "triple" not in out:          # "full width" of a three-column layout
-        for r in rules:
-            if re.search(r"\bfull[- ]?(page|width)?\b", f"{r['label']} {r['applies_to']}", re.I):
-                out["triple"] = _width_value(r)
+    for r in rules:
+        is_three = _norm(r["applies_to"]) in three_scopes
+        if layout is None:
+            layout = is_three
+        elif is_three != layout:
+            continue
+        classes = _COLUMN_CLASSES_3 if is_three else _COLUMN_CLASSES
+        # the label says which column; the scope ("two-column formats…") only
+        # when the label says nothing
+        col = None
+        for text in (r["label"], f"{r['label']} {r['applies_to']}"):
+            if is_three and re.search(r"\bfull[- ]?(page|width)?\b", text, re.I):
+                col = "triple"                        # "full width" of a three-column layout
+            else:
+                col = next((c for c, pat in classes if re.search(pat, text, re.I)
+                            and not (c == "single" and re.search(
+                                r"\b1[.,]5\b|\b(2|3|two|three)[- ]columns?\b", text, re.I))), None)
+            if col:
                 break
+        if col and col not in out:
+            out[col] = _width_value(r)
     return {c: out[c] for c in ("single", "1.5", "double", "triple") if c in out}
 
 

@@ -200,6 +200,50 @@ def test_bad_layouts_are_refused_before_building(files, text, message):
     assert not (files / "bad.pyf").exists()
 
 
+# ---------------------------------------------------------------- pictures
+
+@pytest.mark.parametrize("picture, formula", [
+    ("a a b\na a c\nd e f", "(a,(b/c))/(d,e,f)"),
+    ("a b c\nd e f", "(a,b,c)/(d,e,f)"),
+    ("x x y\nz w w", "(x,y)/(z,w)"),
+    ("a b\na c\na d", "a,(b/c/d)"),
+])
+def test_picture_is_cut_into_rows_and_columns(picture, formula):
+    from pyfigures import layout_picture as P
+    assert P.is_picture(picture)
+    assert P.to_formula(P.parse(picture)) == formula
+
+
+@pytest.mark.parametrize("picture, message", [
+    ("a a b\nd e b\nd c c", "pinwheel"),
+    ("a a\na b", "not a rectangle"),
+    ("a b\nc", "line 2 has 1 cells"),
+])
+def test_bad_pictures(picture, message):
+    from pyfigures import layout_picture as P
+    with pytest.raises(L.FormulaError, match=message):
+        P.parse(picture)
+
+
+def test_picture_recipe_lines_up_spanning_panels(files, qapp):
+    from pyfigures.mcp_tools.core import _load_objects_lazy
+    text = ("output: f.pyf\nletter_panels: false\nlayout: |\n"
+            "  wide wide b\n  wide wide c\n  d e f\n")
+    res = _build(files, text)
+    assert not isinstance(res, str), res
+    assert _tree(str(files / "f.pyf")) == [("X", ["wide", ("Y", ["b", "c"])]), ("X", ["d", "e", "f"])]
+    objs, Group, Image2D = _load_objects_lazy(str(files / "f.pyf"))
+    top, bottom = [o for o in objs if isinstance(o, Group)]
+    wide, col = top.content
+    rw, rc = wide.getRect(all=True), col.getRect(all=True)
+    assert abs(rw.top() - rc.top()) < 1.5 and abs(rw.bottom() - rc.bottom()) < 1.5
+    d, e, f = [x.getRect(all=True) for x in bottom.content]
+    # 2 x 2 cells: the wide panel is about two cells wide and tall (gaps aside)
+    assert abs(rw.width() - 2 * d.width()) < 0.05 * rw.width()
+    assert abs(f.left() - rc.left()) < 0.05 * rw.width()           # columns line up
+    assert any("cells'" in w for w in res["warnings"])
+
+
 def test_recipe_reference_and_cli_document_the_formula(capsys):
     import pyfigures.mcp_server as M
     ref = json.loads(M.recipe_reference())
