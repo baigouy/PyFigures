@@ -580,6 +580,7 @@ presets are never changed; every save is a new version in
 
 | Tool | Description |
 |------|-------------|
+| `journal_info(journal)` | Is the journal available? Built in → its column widths (only those its page gives: single / 1.5 / double / triple), the page and what it says; imported → its widths and rules; otherwise `not_available`, close names, and the steps to import it from the journal's pasted page. Call it before sizing a figure |
 | `prepare_journal_style_import(pasted_text, journal, stage, source_url, article_type)` | Instructions + JSON schema for the host model; nothing is saved |
 | `save_journal_style(style_json, pasted_text, journal, stage, ...)` | Check the model's JSON against the pasted text and save a new draft version; the error names the rule to fix. Returns `use_as`, the name to pass as `journal=` |
 | `validate_journal_style(style_json)` | Check a complete style without saving |

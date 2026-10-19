@@ -568,7 +568,7 @@ def _check_top(recipe, base):
             column = f"{column:g}"
         if not isinstance(recipe["journal"], str) or not isinstance(column, str):
             raise RecipeError("'journal' must be a journal name (e.g. nature) and 'column' "
-                              "single, 1.5 or double")
+                              "single, 1.5, double or triple (the sizes that journal gives)")
         try:
             _width_mm_for_journal(recipe["journal"], column)
         except ValueError as e:

@@ -262,6 +262,7 @@ class JournalStyleEditor(QDialog):
         except ValueError as e:
             self.status.setText(f"Not saved: {e}")
             return None
+        self.last_saved = res["use_as"]
         self.status.setText(f"Saved version {res['version']} ({res['status']}) — use it as "
                             f"journal '{res['use_as']}'. {res['path']}"
                             + (". " + "; ".join(res["warnings"]) if res["warnings"] else ""))

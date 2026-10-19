@@ -359,8 +359,13 @@ class _JournalDialog(QFrame):
         grid.addWidget(QLabel("Journal:", self), r, 0)
         grid.addWidget(self.journal_combo, r, 1); r += 1
 
+        import_btn = QPushButton("Import a journal from its web page…", self)
+        import_btn.setToolTip("Paste the figure guidelines of a journal's web page: its sizes "
+                              "and rules become a journal you can choose here")
+        import_btn.clicked.connect(self._import_journal)
+        grid.addWidget(import_btn, r, 1); r += 1
+
         self.column_combo = QComboBox(self)
-        self.column_combo.addItems(["single", "1.5", "double"])
         grid.addWidget(QLabel("Column:", self), r, 0)
         grid.addWidget(self.column_combo, r, 1); r += 1
 
@@ -368,6 +373,7 @@ class _JournalDialog(QFrame):
         self.width_mm_edit.setPlaceholderText("only if journal = custom, e.g. 85")
         grid.addWidget(QLabel("Custom width (mm):", self), r, 0)
         grid.addWidget(self.width_mm_edit, r, 1); r += 1
+        self._stored_column = None
         self._select_stored_target(getattr(parent, 'current_file', None))
 
         self.min_dpi_edit = QLineEdit("300", self)
@@ -388,23 +394,45 @@ class _JournalDialog(QFrame):
         grid.addWidget(self.style_label, r, 0, 1, 2); r += 1
         self.journal_combo.currentTextChanged.connect(self._journal_changed)
         self._journal_changed(self.journal_combo.currentText())
+        self._select_column(self._stored_column)
+
+    def column(self):
+        """The chosen column ('single' / '1.5' / 'double' / 'triple' or a
+        journal style's own width label)."""
+        return self.column_combo.currentData() or self.column_combo.currentText()
+
+    def _select_column(self, column):
+        if not column:
+            return
+        for i in range(self.column_combo.count()):
+            if self.column_combo.itemData(i) == column:
+                self.column_combo.setCurrentIndex(i)
+                return
 
     def _journal_changed(self, name):
-        """A saved journal style offers its own width labels and fills in its
+        """Only the column sizes this journal's page gives (built-in preset or
+        imported style), each with its width; a style also fills in its
         minimum DPI / font size."""
+        from pyfigures.journal_styles import journal_info as journal_lookup
         from pyfigures.journal_styles import user_style_for, min_value
-        style = user_style_for(name) if name != "(custom width)" else None
-        current = self.column_combo.currentText()
+        current = self.column()
         self.column_combo.blockSignals(True)
         self.column_combo.clear()
-        self.column_combo.addItems(["single", "1.5", "double"])
+        info = journal_lookup(name) if name != "(custom width)" else {"status": "custom"}
+        for col, mm in (info.get("columns_mm") or {}).items():
+            self.column_combo.addItem(f"{col} — {mm:g} mm", col)
+        self.column_combo.setEnabled(info["status"] != "custom")
+        style = user_style_for(name) if info["status"] == "saved_style" else None
         if style is None:
-            self.style_label.setText("")
+            src = (info.get("source") or {}).get("says", "")
+            self.style_label.setText(f"<i>From the journal's page: {src}</i>" if src else "")
         else:
+            cols = info.get("columns_mm") or {}
             for rule in style["rules"]:
                 if rule["kind"] == "width" and rule["unit"] == "mm" \
-                        and rule["label"] not in ("single", "1.5", "double"):
-                    self.column_combo.addItem(rule["label"])
+                        and rule["label"] not in cols and rule["value"] not in cols.values():
+                    self.column_combo.addItem(f"{rule['label']} — {rule['value']:g} mm",
+                                              rule["label"])
             dpi = min_value(style, "resolution", r"photo|halftone|colou?r|gr[ae]y|image|raster|combination")
             font = min_value(style, "font_size")
             if dpi:
@@ -414,9 +442,25 @@ class _JournalDialog(QFrame):
             self.style_label.setText(
                 f"<i>Journal style imported from its guidelines ({style['status']}, "
                 f"{style['stage']} stage, {len(style['rules'])} rules).</i>")
-        if self.column_combo.findText(current) >= 0:
-            self.column_combo.setCurrentText(current)
+        self._select_column(current)
         self.column_combo.blockSignals(False)
+
+    def _import_journal(self):
+        """Open the journal-style editor; the journals list then includes
+        what was saved."""
+        from pyfigures.gui.journal_style_editor import JournalStyleEditor
+        dialog = JournalStyleEditor(self)
+        dialog.exec_() if hasattr(dialog, 'exec_') else dialog.exec()
+        current = self.journal_combo.currentText()
+        self._JOURNALS = self.journal_names()
+        self.journal_combo.blockSignals(True)
+        self.journal_combo.clear()
+        self.journal_combo.addItem("(custom width)")
+        self.journal_combo.addItems(self._JOURNALS)
+        saved = getattr(dialog, "last_saved", None)
+        self.journal_combo.setCurrentText(saved or current)
+        self.journal_combo.blockSignals(False)
+        self._journal_changed(self.journal_combo.currentText())
 
     def _select_stored_target(self, pyf_path):
         """Open on the target the figure was last sized for (journal + column,
@@ -429,14 +473,14 @@ class _JournalDialog(QFrame):
             return
         if target.get("journal") in self._JOURNALS:
             self.journal_combo.setCurrentText(target["journal"])
-            self.column_combo.setCurrentText(str(target.get("column", "single")))
+            self._stored_column = str(target.get("column", "single"))
         else:
             self.journal_combo.setCurrentText("(custom width)")
             self.width_mm_edit.setText(f"{float(target['width_mm']):g}")
 
     def values(self) -> dict:
         journal = self.journal_combo.currentText()
-        out = {"column": self.column_combo.currentText()}
+        out = {"column": self.column()}
         if journal == "(custom width)":
             txt = self.width_mm_edit.text().strip()
             if not txt:
@@ -5517,8 +5561,18 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(journal_combo, 1, 1)
         grid.addWidget(QLabel('Column:', frame), 2, 0)
         column_combo = QComboBox(frame)
-        column_combo.addItems(['single', 'double'])
         grid.addWidget(column_combo, 2, 1)
+
+        def _journal_columns(name):
+            # only the sizes this journal's page gives
+            from pyfigures.journal_styles import journal_info as journal_lookup
+            column_combo.clear()
+            if name != '(none)':
+                for col, mm in (journal_lookup(name).get("columns_mm") or {}).items():
+                    column_combo.addItem(f"{col} — {mm:g} mm", col)
+            column_combo.setEnabled(column_combo.count() > 0)
+        journal_combo.currentTextChanged.connect(_journal_columns)
+        _journal_columns(journal_combo.currentText())
         grid.addWidget(QLabel('Pixel size (units/px, optional):', frame), 3, 0)
         pxu_edit = QLineEdit('', frame)
         grid.addWidget(pxu_edit, 3, 1)
@@ -5536,7 +5590,7 @@ class EZFIG_GUI(QMainWindow):
         kwargs = {"plot_kind": kind_combo.currentText()}
         if journal_combo.currentText() != '(none)':
             kwargs["journal"] = journal_combo.currentText()
-            kwargs["column"] = column_combo.currentText()
+            kwargs["column"] = column_combo.currentData() or "single"
         try:
             if pxu_edit.text().strip():
                 kwargs["px_to_unit"] = float(pxu_edit.text())

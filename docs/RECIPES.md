@@ -1123,21 +1123,27 @@ Wherever a colour is asked (`color`, `stamp_color`, `line_color`,
 
 `journal:` name (case-insensitive) and the resulting width in mm:
 
-| Journal | single | 1.5 | double | Also accepted |
-|---|---|---|---|---|
-| `nature` | 89 | 136 | 183 | |
-| `nature communications` | 88 | 136 | 180 | ncomms |
-| `nature methods` | 89 | 136 | 180 | nature cell biology, nature medicine |
-| `science` | 57 | 121 | 184 | science advances |
-| `cell` | 85 | 114 | 174 | cell reports, current biology, developmental cell |
-| `plos` | 83 | 129 | 174 | plos biology, plos genetics, plos one |
-| `elife` | 85 | 132 | 178 | |
-| `embo` | 87 | 127 | 180 | the page gives 87–180 mm |
-| `elsevier` | 90 | 140 | 190 | |
-| `springer` | 84 | 129 | 174 | |
-| `wiley` | 86 | 132 | 178 | |
-| `jcb` | 85 | 128 | 170 | journal of cell biology |
-| `pnas` | 87 | 114 | 178 | |
+Only the sizes each journal's own page states (pages read in October 2026); a
+journal offers just those columns (`—` = not given by the journal):
+
+| Journal | single | 1.5 | double | triple | Also accepted | The page says |
+|---|---|---|---|---|---|---|
+| `nature` | 89 | 136 | 183 | — | | 89 / 183 mm; column-and-a-half 120–136 mm |
+| `nature communications` | 88 | — | 180 | — | ncomms | 88 / 180 mm |
+| `nature methods` | — | — | 180 | — | nature cell biology, nature medicine | maximum width 180 mm |
+| `science` | 57 | — | 121 | 184 | | 1 / 2 / 3 columns: 5.7 / 12.1 / 18.4 cm |
+| `cell` | 85 | 114 | 174 | — | cell reports, current biology, developmental cell | 8.5 / 11.4 / 17.4 cm (two-column formats) |
+| `plos` | 132 | — | 190.5 | — | plos biology, plos genetics, plos one | text column 132 mm, full page 190.5 mm |
+| `embo` | 87 | — | 180 | — | the embo journal | between 87 and 180 mm |
+| `jcb` | 85 | — | 175 | — | journal of cell biology | 85 mm; maximum 175 mm |
+| `pnas` | 87 | 114 | 178 | — | | 8.7 / 11.4 / 17.8 cm |
+
+`column:` also accepts `1 column`, `2 columns`, `3 columns` and `full width`
+(the widest the journal has). `journal_info` (MCP) or
+`python -m pyfigures.journal_styles info <journal>` tells whether a journal is
+available and its sizes. Elsevier, Springer, Wiley (publisher-wide) and eLife
+(its page gives upload minimums, not column widths) have no preset: import the
+journal's page (below).
 
 Always check the journal's current author guidelines. After building, the MCP
 tools `check_journal_compliance`, `check_resolution` and

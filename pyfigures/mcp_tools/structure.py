@@ -1155,30 +1155,31 @@ def set_size(
 
 @mcp.tool()
 def list_journal_presets() -> str:
-    """List the built-in journal size presets (single / 1.5 / double column
-    widths in mm) usable as ``journal=`` in resize_figure, check_resolution and
-    check_journal_compliance, plus their accepted name aliases.
-
-    Use this to discover exact target widths before formatting a figure for
-    submission. Returns JSON: each journal's three column widths and the
-    recommended minimum print resolution (300 DPI for line/photographic art).
+    """List the built-in journal size presets usable as ``journal=`` in
+    resize_figure, check_resolution and check_journal_compliance: for each
+    journal only the column widths (mm) its own page gives (single / 1.5 /
+    double / triple), the page and what it says, and the accepted aliases;
+    plus the journal styles imported from pasted guidelines. For one journal
+    (and what to do when it is missing) use journal_info.
     """
+    from .core import _JOURNAL_SOURCES, _COLUMN_ORDER
     out = {}
     aliases_by_key: dict[str, list[str]] = {}
     for alias, key in _JOURNAL_ALIASES.items():
         aliases_by_key.setdefault(key, []).append(alias)
     for key, widths in sorted(_JOURNAL_PRESETS.items()):
         out[key] = {
-            "widths_mm": widths,
+            "widths_mm": {c: widths[c] for c in _COLUMN_ORDER if c in widths},
             "aliases": sorted(aliases_by_key.get(key, [])),
-            "recommended_min_dpi": 300,
+            "source": _JOURNAL_SOURCES.get(key, {}),
         }
     return json.dumps({
-        "columns": ["single", "1.5", "double"],
-        "note": "Widths are journal column widths in millimetres. Pass any listed "
-                "name or alias as journal=, and column='single'|'1.5'|'double'. "
-                "300 DPI is the usual minimum for print; some journals want 600 "
-                "DPI for line art — check the specific author guidelines.",
+        "columns": list(_COLUMN_ORDER),
+        "note": "Widths in millimetres, only those the journal's page states. Pass any "
+                "listed name or alias as journal=, and column= one of that journal's "
+                "columns (or '1 column' / '2 columns' / '3 columns' / 'full width'). "
+                "A journal that is not listed: ask the user to copy the figure-guidelines "
+                "part of its web page and import it (prepare_journal_style_import).",
         "journals": out,
         "saved_journal_styles": [
             {k: s[k] for k in ("use_as", "stage", "status", "version", "columns_mm")}
@@ -1217,11 +1218,11 @@ def resize_figure(
     only one should be given (journal preset > mm > cm > in > px):
 
     **journal** + **column**
-      Use a named journal preset.  Supported names (case-insensitive):
-        ``nature``, ``science``, ``cell``, ``plos``, ``elife``, ``embo``,
-        ``elsevier``, ``springer``, ``wiley``, ``jcb``, ``pnas``.
-      Also accepted: ``"nature methods"``, ``"plos one"``, ``"cell reports"``, etc.
-      *column*: ``"single"`` (default), ``"1.5"``, or ``"double"``.
+      Use a named journal preset (list_journal_presets / journal_info), or a
+      journal style imported from the journal's pasted guidelines.
+      *column*: ``"single"`` (default), ``"1.5"``, ``"double"`` or ``"triple"``
+      — only the sizes that journal's page gives (Science: single, double,
+      triple = 1, 2, 3 columns).
 
     **width_mm** / **width_cm** / **width_in**
       Physical width with explicit units.  Combined with *dpi* to give pixels.

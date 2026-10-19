@@ -124,8 +124,26 @@ def test_three_column_journals_map_like_the_builtin_science_preset():
          "applies_to": "printed figures", "evidence_quote": q}
         for label, v in (("1 column", 57), ("2 columns", 121), ("3 columns", 184))]}
     style, _ = js.import_model_reply(json.dumps(reply), text, "Science test", "final")
-    assert js.columns_mm(style) == {"single": 57, "1.5": 121, "double": 184}
+    assert js.columns_mm(style) == {"single": 57, "double": 121, "triple": 184}
     assert js.width_mm(style, "2 columns")[0] == 121
+    assert js.width_mm(style, "triple")[0] == 184
+    assert js.width_mm(style, "3")[0] == 184
+
+
+def test_journal_info_says_what_is_available_or_how_to_import():
+    sci = js.journal_info("Science")
+    assert sci["status"] == "built_in" and sci["columns_mm"]["triple"] == 184
+    assert "science.org" in sci["source"]["url"]
+    missing = js.journal_info("Natur Physics")
+    assert missing["status"] == "not_available" and "paste" in missing["how_to_add"][0]
+    assert js.journal_info("pnaas")["did_you_mean"] == ["pnas"]
+    style, _ = _pnas_style("Journal of Fly Figures")
+    js.save(style)
+    got = js.journal_info("journal of fly figures")
+    assert got["status"] == "saved_style" and got["columns_mm"]["1.5"] == 114
+    import pyfigures.mcp_server as M
+    assert json.loads(M.journal_info("cell"))["columns_mm"] == {"single": 85, "1.5": 114,
+                                                                 "double": 174}
 
 
 def test_manual_rules_need_no_quote_but_must_be_sane():
@@ -289,8 +307,17 @@ def test_editor_import_edit_review_save_and_use_in_the_journal_dialog(qapp, stor
     dlg = _JournalDialog()
     assert "Journal of Fly Figures" in dlg._JOURNALS and "nature" in dlg._JOURNALS
     dlg.journal_combo.setCurrentText("Journal of Fly Figures")
-    labels = [dlg.column_combo.itemText(i) for i in range(dlg.column_combo.count())]
-    assert labels[:3] == ["single", "1.5", "double"] and "3 columns" in labels
+    cols = [dlg.column_combo.itemData(i) for i in range(dlg.column_combo.count())]
+    texts = [dlg.column_combo.itemText(i) for i in range(dlg.column_combo.count())]
+    assert cols == ["single", "1.5", "double", "triple"]     # "3 columns" makes it triple
+    assert texts[0] == "single — 85 mm" and texts[3] == "triple — 190 mm"
+    dlg.column_combo.setCurrentIndex(3)
+    assert dlg.values()["column"] == "triple"
+    dlg.journal_combo.setCurrentText("science")             # a built-in: only its own sizes
+    assert [dlg.column_combo.itemData(i) for i in range(dlg.column_combo.count())] == \
+        ["single", "double", "triple"]
+    assert "3 columns" in dlg.style_label.text()
+    dlg.journal_combo.setCurrentText("Journal of Fly Figures")
     assert dlg.min_dpi_edit.text() == "300" and dlg.min_font_edit.text() == "6"
     assert "reviewed" in dlg.style_label.text()
     from pyfigures.mcp_tools.core import _width_mm_for_journal

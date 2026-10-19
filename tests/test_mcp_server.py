@@ -1184,10 +1184,17 @@ class TestResizeFigurePresets:
         ("nature",  "single",  89),
         ("nature",  "double", 183),
         ("cell",    "single",  85),
-        ("science", "single",  57),
-        ("science", "double", 184),
+        ("science", "single",  57),     # Science: 1 / 2 / 3 columns
+        ("science", "double", 121),
+        ("science", "triple", 184),
+        ("science", "3 columns", 184),
+        ("science", "full width", 184),
         ("cell",    "double", 174),
-        ("plos",    "double", 174),
+        ("cell",    "1.5",    114),
+        ("plos",    "single", 132),     # text column
+        ("plos",    "double", 190.5),   # full page width
+        ("jcb",     "double", 175),
+        ("nature",  "1.5",    136),
         ("pnas",    "single",  87),
         ("pnas",    "1.5",    114),     # PNAS Digital Art guide, p2 (not 131)
         ("pnas",    "double", 178),
@@ -1206,11 +1213,29 @@ class TestResizeFigurePresets:
         ("plos one",                "plos"),
         ("cell reports",            "cell"),
         ("journal of cell biology", "jcb"),
-        ("science advances",        "science"),
+        ("the embo journal",        "embo"),
     ])
     def test_journal_aliases(self, alias, canonical):
-        mm = _width_mm_for_journal(alias, "single")
-        assert mm == pytest.approx(_JOURNAL_PRESETS[canonical]["single"])
+        mm = _width_mm_for_journal(alias, "double")
+        assert mm == pytest.approx(_JOURNAL_PRESETS[canonical]["double"])
+
+    @pytest.mark.parametrize("journal,column,message", [
+        ("nature communications", "1.5", "single 88 mm, double 180 mm"),   # not on its page
+        ("nature methods", "single", "double 180 mm"),
+        ("pnas", "triple", "no triple column"),
+        ("nature", "quadruple", "Unknown column"),
+        ("elife", "single", "copy the figure-guidelines part"),      # removed: no widths on its page
+        ("elsevier", "single", "Unknown journal"),
+    ])
+    def test_only_the_sizes_a_journal_gives(self, journal, column, message):
+        with pytest.raises(ValueError, match=message):
+            _width_mm_for_journal(journal, column)
+
+    def test_every_preset_has_its_source(self):
+        from pyfigures.mcp_tools.core import _JOURNAL_SOURCES
+        for key in _JOURNAL_PRESETS:
+            assert _JOURNAL_SOURCES[key]["url"].startswith("https://")
+            assert _JOURNAL_SOURCES[key]["says"]
 
     def test_column_synonym_1(self, pyf_groups):
         # "1" is an alias for "single"

@@ -176,16 +176,16 @@ def test_journal_dialog_requires_width_when_custom(qapp):
 
 def test_journal_dialog_opens_on_the_stored_target(qapp, tmp_path):
     """The dialog starts on the target the figure was sized for (as the MCP
-    checks use it), e.g. Nature Communications 1.5 column."""
+    checks use it), e.g. Science 3 columns."""
     from qtpy.QtWidgets import QFrame
     from pyfigures.gui.pfgui import _JournalDialog
     from pyfigures.mcp_tools.core import _store_target
     pyf = str(tmp_path / "f.pyf")
-    _store_target(pyf, "nature communications", "1.5", 136)
+    _store_target(pyf, "science", "triple", 184)
     parent = QFrame()
     parent.current_file = pyf
     v = _JournalDialog(parent).values()
-    assert v["journal"] == "nature communications" and v["column"] == "1.5"
+    assert v["journal"] == "science" and v["column"] == "triple"
     _store_target(pyf, None, "single", 120)
     v = _JournalDialog(parent).values()
     assert v["width_mm"] == 120.0

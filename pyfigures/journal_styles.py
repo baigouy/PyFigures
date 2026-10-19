@@ -494,6 +494,46 @@ def find_style(name: str, stage: str | None = None) -> dict | None:
 # Using a style
 # ---------------------------------------------------------------------------
 
+def journal_info(journal: str) -> dict:
+    """What PyFigures knows about *journal*: a built-in preset (its column
+    widths, only those its page gives, and the page), a saved style, or
+    not_available with close names and how to import the journal's page.
+    Shared by the MCP tool journal_info, the GUI journal pickers and the CLI."""
+    import difflib
+    from .mcp_tools.core import (_COLUMN_ORDER, _JOURNAL_ALIASES, _JOURNAL_PRESETS,
+                                 _JOURNAL_SOURCES)
+    name = str(journal or "").strip()
+    key = _JOURNAL_ALIASES.get(name.lower(), name.lower())
+    if not key.startswith("custom:") and key in _JOURNAL_PRESETS:
+        w = _JOURNAL_PRESETS[key]
+        return {"journal": name, "status": "built_in", "use_as": key,
+                "columns_mm": {c: w[c] for c in _COLUMN_ORDER if c in w},
+                "source": _JOURNAL_SOURCES.get(key, {}),
+                "aliases": sorted(a for a, k in _JOURNAL_ALIASES.items() if k == key),
+                "note": "only the sizes the journal's page states; to follow its current page "
+                        "or add its other rules (DPI, fonts), import the page as a journal style"}
+    style = find_style(name)
+    if style is not None:
+        return {"journal": name, "status": "saved_style", "use_as": usable_name(style["journal"]),
+                "columns_mm": columns_mm(style), "review": style["status"],
+                "stage": style["stage"], "source": {"url": style["source_url"]},
+                "width_labels": [r["label"] for r in style["rules"] if r["kind"] == "width"],
+                "rules": describe_rules(style)}
+    known = sorted(set(_JOURNAL_PRESETS) | set(_JOURNAL_ALIASES)
+                   | {s["use_as"] for s in list_styles()})
+    return {"journal": name, "status": "not_available",
+            "did_you_mean": difflib.get_close_matches(key, known, n=4, cutoff=0.6),
+            "built_in": sorted(_JOURNAL_PRESETS),
+            "how_to_add": [
+                "Ask the user to open the journal's author guidelines page about figures "
+                "(figure size / artwork / digital art), select that text and paste it.",
+                "Call prepare_journal_style_import(pasted_text, journal, stage) and answer with "
+                "the JSON it asks for (every rule quoting the text).",
+                "Call save_journal_style(...): the style is then usable as journal=<use_as>.",
+                "Without MCP: PyFigures → QC → Journal styles… (paste the page, extract, "
+                "review, save)."]}
+
+
 def user_style_for(journal) -> dict | None:
     """The saved style *journal* refers to, or None when it is a built-in
     preset name (or nothing): built-ins always win, 'custom:' forces a style."""
@@ -521,11 +561,12 @@ def _width_value(r):
 
 
 # journals laid out in three columns (Science, Cell previews…): 1 / 2 / 3
-# columns are PyFigures' single / 1.5 / double, as in the built-in presets
+# columns are single / double / triple, as in the built-in Science preset
 _THREE_COLUMNS = r"\b(3|three)[- ]columns?\b"
 _COLUMN_CLASSES_3 = (
-    ("double", r"\b(3|three)[- ]columns?\b|\bfull[- ]?(page|width)?\b"),
-    ("1.5", r"\b(2|two)[- ]columns?\b|\b1[.,]5\b"),
+    ("triple", r"\b(3|three)[- ]columns?\b|\btriple\b"),
+    ("double", r"\b(2|two)[- ]columns?\b|\bdouble\b"),
+    ("1.5", r"\b1[.,]5\b|\bone and a half\b"),
     ("single", r"\b(1|one)[- ]column\b|\bsingle\b"),
 )
 
@@ -544,7 +585,12 @@ def columns_mm(style) -> dict:
             if col == "single" and re.search(r"\b1[.,]5\b|\b(2|3|two|three)[- ]columns?\b", text, re.I):
                 continue
             out[col] = _width_value(r)
-    return {c: out[c] for c in ("single", "1.5", "double") if c in out}
+    if three and "triple" not in out:          # "full width" of a three-column layout
+        for r in rules:
+            if re.search(r"\bfull[- ]?(page|width)?\b", f"{r['label']} {r['applies_to']}", re.I):
+                out["triple"] = _width_value(r)
+                break
+    return {c: out[c] for c in ("single", "1.5", "double", "triple") if c in out}
 
 
 def width_mm(style, column: str) -> tuple[float, str]:
@@ -554,10 +600,14 @@ def width_mm(style, column: str) -> tuple[float, str]:
     for r in _width_rules(style):
         if _norm(r["label"]) == want:
             return _width_value(r), r["label"]
-    aliases = {"1": "single", "one": "single", "single": "single", "half": "1.5", "1.5": "1.5",
-               "2": "double", "two": "double", "double": "double", "full": "double"}
-    col = aliases.get(want.rstrip("s").replace(" column", ""), None)
     cols = columns_mm(style)
+    col = None
+    if cols:
+        from .mcp_tools.core import _column_key
+        try:
+            col = _column_key(column, cols)
+        except ValueError:
+            col = None
     if col in cols:
         return cols[col], col
     labels = [r["label"] for r in _width_rules(style)]
@@ -616,6 +666,8 @@ def main(argv=None) -> int:
         sub.add_parser(name).add_argument("style", help="style JSON file")
     sub.add_parser("list")
     sub.add_parser("show").add_argument("journal")
+    sub.add_parser("info", help="is a journal available (built in / imported) and its sizes"
+                   ).add_argument("journal")
     a = p.parse_args(argv)
 
     def read(path):
@@ -642,6 +694,8 @@ def main(argv=None) -> int:
             res = save(json.loads(read(a.style)))
         elif a.cmd == "list":
             res = list_styles()
+        elif a.cmd == "info":
+            res = journal_info(a.journal)
         else:
             style = find_style(a.journal)
             res = {"error": f"no saved style {a.journal!r}"} if style is None else {

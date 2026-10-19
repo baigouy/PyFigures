@@ -1550,44 +1550,96 @@ def _describe_roi(el: ET.Element, idx: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Journal presets  (width in mm: single / 1.5-column / double)
+# Journal presets  (width in mm per column format)
 # ---------------------------------------------------------------------------
-# Checked against the journals' own author pages in October 2026 (Nature final
-# artwork 89/183, intermediate 120-136; Nature Communications 88/180; Nature
-# Methods/Medicine/Cell Biology: 180 maximum; Science 57/121/184 for 1/2/3
-# columns; Cell Press two-column formats 85/114/174; EMBO Journal 87-180).
-# The others are publishers' usual sizes: always check the current guide.
+# Only sizes the journal's own page states (pages read in October 2026, saved in
+# chatGPT_validation/2026-10-15/manuscript_verification_2026-10-16/guidelines):
+# a journal offers just the columns its page gives — "triple" for journals
+# laid out in three columns (Science). Publisher-wide presets (Elsevier,
+# Springer, Wiley) and eLife (its page gives upload minimums, not column
+# widths) were removed: import such a journal's page instead
+# (pyfigures/journal_styles.py, QC → Journal styles…).
+_COLUMN_ORDER = ("single", "1.5", "double", "triple")
 _JOURNAL_PRESETS: dict[str, dict[str, float]] = {
-    # key        single   1.5-col   double
     "nature":    {"single": 89,  "1.5": 136, "double": 183},
-    "nature communications": {"single": 88, "1.5": 136, "double": 180},
-    "nature methods": {"single": 89, "1.5": 136, "double": 180},
-    "science":   {"single": 57,  "1.5": 121, "double": 184},
+    "nature communications": {"single": 88, "double": 180},
+    "nature methods": {"double": 180},
+    "science":   {"single": 57,  "double": 121, "triple": 184},
     "cell":      {"single": 85,  "1.5": 114, "double": 174},
-    "plos":      {"single": 83,  "1.5": 129, "double": 174},
-    "elife":     {"single": 85,  "1.5": 132, "double": 178},
-    "embo":      {"single": 87,  "1.5": 127, "double": 180},   # "between 87 mm and 180 mm wide"
-    "elsevier":  {"single": 90,  "1.5": 140, "double": 190},
-    "springer":  {"single": 84,  "1.5": 129, "double": 174},
-    "wiley":     {"single": 86,  "1.5": 132, "double": 178},
-    "jcb":       {"single": 85,  "1.5": 128, "double": 170},   # Journal of Cell Biology
-    "pnas":      {"single": 87,  "1.5": 114, "double": 178},   # Digital Art guide p2
+    "plos":      {"single": 132, "double": 190.5},
+    "embo":      {"single": 87,  "double": 180},
+    "jcb":       {"single": 85,  "double": 175},
+    "pnas":      {"single": 87,  "1.5": 114, "double": 178},
+}
+_JOURNAL_SOURCES: dict[str, dict[str, str]] = {
+    "nature": {"url": "https://www.nature.com/nature/for-authors/final-submission",
+               "says": "89 mm wide (single column) and 183 mm wide (double column); a "
+                       "column-and-a-half where necessary (120–136 mm)"},
+    "nature communications": {"url": "https://www.nature.com/ncomms/submit/how-to-submit",
+                              "says": "single column 88 mm, double column 180 mm"},
+    "nature methods": {"url": "https://www.nature.com/nmeth/submission-guidelines/aip-and-formatting",
+                       "says": "figure panels saved at a maximum width of 180 mm (no column "
+                               "widths given; same rule for Nature Medicine and Nature Cell Biology)"},
+    "science": {"url": "https://www.science.org/content/page/instructions-preparing-initial-manuscript",
+                "says": "5.7 cm (1 column), 12.1 cm (2 columns) or 18.4 cm (3 columns)"},
+    "cell": {"url": "https://www.cell.com/information-for-authors/figure-guidelines",
+             "says": "two-column formats: 8.5 cm (1 column), 11.4 cm (1.5 columns), 17.4 cm "
+                     "(full width); three-column formats: 5.5 / 11.4 / 17.4 cm"},
+    "plos": {"url": "https://journals.plos.org/plosone/s/figures",
+             "says": "full page width 190.5 mm, text column 132 mm (figures 66.8–190.5 mm)"},
+    "embo": {"url": "https://www.embopress.org/page/journal/14602075/authorguide",
+             "says": "final size between 87 mm and 180 mm wide"},
+    "jcb": {"url": "https://rupress.org/jcb/pages/fig-vid-guidelines",
+            "says": "preferred single width 85 mm; maximum 175 mm (7 in)"},
+    "pnas": {"url": "https://www.pnas.org/pb-assets/authors/digitalart.pdf",
+             "says": "1 column 8.7 cm, 1.5 columns 11.4 cm, 2 columns 17.8 cm (page 2)"},
 }
 
-# Normalise aliases
+# Normalise aliases (titles whose page gives the same sizes)
 _JOURNAL_ALIASES = {
     "ncomms": "nature communications",
     "nature cell biology": "nature methods",
     "nature medicine": "nature methods",
-    "science advances": "science",
     "cell reports": "cell",
     "current biology": "cell",
     "developmental cell": "cell",
     "plos biology": "plos",
     "plos genetics": "plos",
     "plos one": "plos",
+    "embo journal": "embo",
+    "the embo journal": "embo",
     "journal of cell biology": "jcb",
 }
+
+_COLUMN_WORDS = {
+    "single": "single", "1": "single", "one": "single", "1 column": "single",
+    "one column": "single", "single column": "single",
+    "1.5": "1.5", "1.5 column": "1.5", "one and a half": "1.5", "intermediate": "1.5",
+    "column and a half": "1.5", "half": "1.5",
+    "double": "double", "2": "double", "two": "double", "2 column": "double",
+    "two column": "double", "double column": "double",
+    "triple": "triple", "3": "triple", "three": "triple", "3 column": "triple",
+    "three column": "triple", "triple column": "triple",
+}
+
+
+def _column_key(column, available) -> str:
+    """'single' | '1.5' | 'double' | 'triple' for the words people use
+    ('2 columns', 'three', 'full width' = the widest the journal has)."""
+    c = " ".join(str(column).lower().replace("-", " ").split())
+    c = c[:-1] if c.endswith("s") else c
+    if c in ("full", "full width", "full page", "full page width", "widest"):
+        return [k for k in _COLUMN_ORDER if k in available][-1]
+    key = _COLUMN_WORDS.get(c)
+    if key is None:
+        raise ValueError(f"Unknown column {column!r}. Use one of: "
+                         + ", ".join(k for k in _COLUMN_ORDER if k in available) + ".")
+    return key
+
+
+def _journal_columns_text(key) -> str:
+    return ", ".join(f"{c} {_JOURNAL_PRESETS[key][c]:g} mm"
+                     for c in _COLUMN_ORDER if c in _JOURNAL_PRESETS[key])
 
 
 def _width_mm_for_journal(journal: str, column: str) -> float:
@@ -1606,18 +1658,16 @@ def _width_mm_for_journal(journal: str, column: str) -> float:
         saved = [s["use_as"] for s in list_styles()]
         raise ValueError(
             f"Unknown journal {journal!r}. "
-            f"Known journals: {', '.join(sorted(_JOURNAL_PRESETS))}"
+            f"Built-in journals: {', '.join(sorted(_JOURNAL_PRESETS))}"
             + (f"; saved journal styles: {', '.join(saved)}" if saved else "")
-            + ". To add a journal, import its guidelines (QC → Journal styles…, "
-              "or the MCP tool prepare_journal_style_import)."
+            + ". To add it, copy the figure-guidelines part of the journal's web page and "
+              "import it (GUI: QC → Journal styles…; MCP: prepare_journal_style_import "
+              "then save_journal_style)."
         )
-    col = column.lower().strip().rstrip("s")  # "columns" → "column", "singles" → "single"
-    col_map = {"single": "single", "1": "single", "one": "single",
-               "1.5": "1.5", "half": "1.5",
-               "double": "double", "2": "double", "two": "double", "full": "double"}
-    col_key = col_map.get(col)
-    if col_key is None:
-        raise ValueError(f"Unknown column {column!r}. Use 'single', '1.5', or 'double'.")
+    col_key = _column_key(column, presets)
+    if col_key not in presets:
+        raise ValueError(f"{journal!r} has no {col_key} column size; its page gives: "
+                         f"{_journal_columns_text(j)}.")
     return presets[col_key]
 
 

@@ -111,6 +111,10 @@ def test_list_journal_presets():
     # aliases resolve
     assert any("nature medicine" in v["aliases"]
                for v in data["journals"].values())
+    sci = data["journals"]["science"]
+    assert sci["widths_mm"] == {"single": 57, "double": 121, "triple": 184}
+    assert "3 columns" in sci["source"]["says"]
+    assert "1.5" not in data["journals"]["nature communications"]["widths_mm"]
 
 
 def test_add_significance_bracket_adds_lines_and_free_label():

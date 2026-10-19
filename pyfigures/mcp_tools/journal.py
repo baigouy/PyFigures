@@ -19,6 +19,21 @@ def _dump(obj) -> str:
     return json.dumps(obj, indent=2, ensure_ascii=False)
 
 
+journal_lookup = _js.journal_info
+
+
+@mcp.tool()
+def journal_info(journal: str) -> str:
+    """Is this journal available, and with which sizes? Built-in preset → its
+    column widths (only those its page gives: single / 1.5 / double / triple),
+    the page and what it says; a journal style imported earlier → its widths
+    and rules; otherwise status not_available with close names and the steps
+    to import it from the journal's web page (the user copies the figure
+    guidelines and pastes them; then prepare_journal_style_import /
+    save_journal_style). Call it before sizing a figure for a journal."""
+    return _dump(journal_lookup(journal))
+
+
 @mcp.tool()
 def prepare_journal_style_import(pasted_text: str, journal: str, stage: str = "unspecified",
                                  source_url: str = "", article_type: str = "unspecified") -> str:

@@ -783,6 +783,14 @@ def auto_configure_images(
     return "\n".join(lines)
 
 
+def _saved_style_names():
+    try:
+        from ..journal_styles import list_styles
+        return [s["use_as"] for s in list_styles()]
+    except Exception:
+        return []
+
+
 @mcp.tool()
 def recipe_reference() -> str:
     """The recipe grammar: an annotated example plus EVERY accepted key, per
@@ -813,8 +821,12 @@ def recipe_reference() -> str:
         "flip": sorted(R._FLIPS),
         "exports": sorted(R._EXPORTS),
         "checks": {k: sorted(v) for k, v in R._CHECKS.items()},
-        "journals": sorted(_JOURNAL_PRESETS) + sorted(_JOURNAL_ALIASES),
-        "column": ["single", "1.5", "double"],
+        "journals": {k: v for k, v in sorted(_JOURNAL_PRESETS.items())},
+        "journal_aliases": dict(sorted(_JOURNAL_ALIASES.items())),
+        "saved_journal_styles": _saved_style_names(),
+        "column": "one of the columns the journal has (see journals: widths in mm), e.g. "
+                  "single, 1.5, double, triple; also '2 columns', 'full width'. A journal "
+                  "that is missing: import its pasted guidelines (prepare_journal_style_import).",
         "notes": [
             "Paths are relative to the recipe file.",
             "px_to_unit is the pixel size (units per pixel), e.g. 0.1 for 0.1 um/pixel; "
