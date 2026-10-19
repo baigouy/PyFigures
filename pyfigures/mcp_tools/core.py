@@ -1045,10 +1045,11 @@ def _unreadable_image(filename: str) -> str | None:
     not an image (a text file renamed .png); other formats are left to their
     readers."""
     name = str(filename)
+    from batoolset.ome_zarr import is_zarr_path
+    if is_zarr_path(name):                # OME-Zarr: a folder or URL, read by its own reader
+        return _unreadable_zarr(name)
     if name.lower().startswith(("http://", "https://", "omero:")) \
             or "#" in os.path.basename(name).split(".")[-1] or name in ("None", "@template@"):
-        return None
-    if ".zarr" in name.lower():           # OME-Zarr: a folder, read by its own reader
         return None
     if os.path.isdir(name):
         return f"{name} is a folder, not an image (create_figure_from_folder takes a folder)"
@@ -1071,6 +1072,44 @@ def _unreadable_image(filename: str) -> str | None:
                     return f"{name} holds no image"
     except Exception as e:
         return f"{name} cannot be read as an image ({type(e).__name__}: {e})"
+    return None
+
+
+def _unreadable_zarr(name: str) -> str | None:
+    """Why an OME-Zarr path (local or URL, optionally ``#level=N``) cannot be
+    used, or None. Reads its metadata only (a plain, non-OME local store is
+    tried with the generic reader). A local store not there (yet) is allowed,
+    as for files."""
+    import re
+    from batoolset import ome_zarr as Z
+    store, _, frag = name.partition("#")
+    level = None
+    if frag:
+        m = re.fullmatch(r"level=(\d+)", frag.strip())
+        if not m:
+            return (f"after an OME-Zarr path only '#level=N' can follow (N = a pyramid level, "
+                    f"see inspect_ome_zarr); got '#{frag}'")
+        level = int(m.group(1))
+    if not Z.is_url(store) and not os.path.exists(store):
+        return None
+    try:
+        info = Z.describe(store)
+    except ImportError:
+        return None                          # no zarr package: said when it is read
+    except Exception as e:
+        if Z.is_url(store):
+            return f"cannot read the OME-Zarr image {store} ({type(e).__name__}: {e})"
+        if level is None:
+            try:
+                from batoolset.img import Img
+                Img(store)                   # a plain zarr store (not OME)
+                return None
+            except Exception:
+                pass
+        return f"{store} is not a readable OME-Zarr image ({type(e).__name__}: {e})"
+    n = len(info.get("levels") or [])
+    if level is not None and not 0 <= level < n:
+        return f"level {level} out of range: {os.path.basename(store.rstrip('/'))} has {n} level(s), 0..{n - 1}"
     return None
 
 

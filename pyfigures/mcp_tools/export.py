@@ -65,12 +65,18 @@ _RENDER_VECTOR_EXTS = {".svg", ".pdf"}
 _RENDER_EXTS = _RENDER_RASTER_EXTS | _RENDER_VECTOR_EXTS
 
 
+def _unloaded_images(log: str) -> list[str]:
+    """The image files the renderer's log says it could not load (a
+    console-formatted log line, wrapped with the source position, is skipped)."""
+    found = (m.strip() for m in re.findall(r"could not load image (.+?)\s*$", log, re.M))
+    return list(dict.fromkeys(f for f in found if f and not re.search(r"\.py:\d+$", f)))
+
+
 def _render_error_message(msg: str) -> str:
     """The renderer's stderr as one clear sentence: the files it could not
     load (with what to do), or its last ERROR line — not log lines and a
     traceback."""
-    missing = list(dict.fromkeys(
-        m.strip() for m in re.findall(r"could not load image (.+?)\s*$", msg, re.M)))
+    missing = _unloaded_images(msg)
     if missing:
         return ("could not load image file(s): " + ", ".join(missing[:5])
                 + (f" and {len(missing) - 5} more" if len(missing) > 5 else "")
@@ -103,7 +109,21 @@ def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
         return False, _render_error_message(msg)
     if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
         return False, "renderer reported success but wrote no output"
+    unloaded = _unloaded_images(proc.stderr or "")
+    if unloaded:
+        _RENDER_WARNINGS[out_path] = (
+            f"{len(unloaded)} panel(s) could not be loaded and are empty in the output: "
+            + ", ".join(unloaded[:5]) + (" …" if len(unloaded) > 5 else "")
+            + " — if the files moved, remap_paths points the figure at their new place")
     return True, out_path
+
+
+_RENDER_WARNINGS = {}       # out_path -> panels a successful render could not load
+
+
+def _render_warning(out_path: str) -> str | None:
+    """The warning of the last render to *out_path* (once), or None."""
+    return _RENDER_WARNINGS.pop(out_path, None)
 
 
 @mcp.tool()
@@ -130,15 +150,20 @@ def export_figure(pyf_path: str, out_path: str, dpi: int = 300) -> str:
     if not os.path.isfile(pyf_path):
         return f"ERROR: no such .pyf file: {pyf_path}"
     out_path = os.path.abspath(out_path)
+    _RENDER_WARNINGS.pop(out_path, None)
     ok, msg = _run_render(pyf_path, out_path, dpi)
     if not ok:
         return f"ERROR: {msg}"
-    return json.dumps({
+    result = {
         "output": out_path,
         "format": ext.lstrip("."),
         "dpi": None if ext in _RENDER_VECTOR_EXTS else int(dpi),
         "bytes": os.path.getsize(out_path),
-    }, ensure_ascii=False, indent=2)
+    }
+    warning = _render_warning(out_path)
+    if warning:
+        result["warning"] = warning
+    return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
