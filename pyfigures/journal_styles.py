@@ -497,6 +497,14 @@ def find_style(name: str, stage: str | None = None) -> dict | None:
 # Using a style
 # ---------------------------------------------------------------------------
 
+def max_height(journal: str) -> dict:
+    """{'max_height_mm': mm, 'max_height_says': ...} when the journal's page
+    (built-in) or its saved style gives a maximum figure height; {} otherwise."""
+    from .mcp_tools.core import _journal_max_height
+    h = _journal_max_height(journal)
+    return {"max_height_mm": h[0], "max_height_says": h[1]} if h else {}
+
+
 def estimated_widths(journal: str) -> dict:
     """{'estimated_mm': {'half page': mm}, 'estimated_note': ...} for a journal
     whose page gives only a full width (column='half page'); {} otherwise."""
@@ -525,7 +533,7 @@ def journal_info(journal: str) -> dict:
         w = _JOURNAL_PRESETS[key]
         return {"journal": name, "status": "built_in", "use_as": key,
                 "columns_mm": {c: w[c] for c in _COLUMN_ORDER if c in w},
-                **estimated_widths(key),
+                **estimated_widths(key), **max_height(key),
                 "source": _JOURNAL_SOURCES.get(key, {}),
                 "aliases": sorted(a for a, k in _JOURNAL_ALIASES.items() if k == key),
                 "note": "only the sizes the journal's page states; to follow its current page "
@@ -534,6 +542,7 @@ def journal_info(journal: str) -> dict:
     if style is not None:
         return {"journal": name, "status": "saved_style", "use_as": usable_name(style["journal"]),
                 "columns_mm": columns_mm(style), **estimated_widths(usable_name(style["journal"])),
+                **max_height(usable_name(style["journal"])),
                 "review": style["status"],
                 "stage": style["stage"], "source": {"url": style["source_url"]},
                 "width_labels": [r["label"] for r in style["rules"] if r["kind"] == "width"],

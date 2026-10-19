@@ -1699,6 +1699,81 @@ def _journal_width(journal: str, column: str) -> tuple[float, str]:
     return presets[col_key], ""
 
 
+# The maximum figure height a journal's page states (same pages as the widths;
+# journals not listed give none: import their page to add one).
+_JOURNAL_MAX_HEIGHT: dict[str, tuple[float, str]] = {
+    "nature": (247, "The full depth of a Nature page is 247 mm"),
+    "plos": (222.3, "Height maximum 22.23 cm: the figure occupies the whole page, caption "
+                    "excluded"),
+    "pnas": (225, "Recommended max height: 54 picas / 9” / 22.5 cm (digital art guidelines)"),
+}
+
+
+def _journal_max_height(journal: str | None) -> tuple[float, str] | None:
+    """(max height mm, what the page says) for a built-in journal or a saved
+    style with a height rule; None when the journal gives no maximum height."""
+    if not journal:
+        return None
+    j = journal.lower().strip()
+    j = _JOURNAL_ALIASES.get(j, j)
+    if not j.startswith("custom:") and j in _JOURNAL_PRESETS:
+        return _JOURNAL_MAX_HEIGHT.get(j)
+    from ..journal_styles import find_style
+    style = find_style(journal)
+    if style is None:
+        return None
+    best = None
+    for r in style["rules"]:
+        if r["kind"] != "height" or r["unit"] != "mm" \
+                or r["relation"] not in ("max", "recommended", "target", "range"):
+            continue
+        v = r["maximum"] if r["relation"] == "range" else r["value"]
+        if best is None or v < best[0]:
+            best = (float(v), f"rule '{r['label']}': {r['evidence_quote'] or r['applies_to']}")
+    return best
+
+
+def _height_choices(journal, width_mm: float, height_mm: float, max_mm: float) -> list:
+    """What to do with a figure taller than the journal allows, for the user
+    to choose: [(kind, column, width mm, text)] with kind 'shrink' (narrow
+    until it fits), 'column' (the widest journal column it fits in, heights
+    estimated as proportional to the width) and 'off' (keep the width)."""
+    fit_w = width_mm * max_mm / height_mm
+    out = [("shrink", None, fit_w,
+            f"fit_height='shrink' narrows it to about {fit_w:.0f}mm (between column sizes)")]
+    cols = {}
+    if journal:
+        from ..journal_styles import journal_info
+        try:
+            cols = journal_info(journal).get("columns_mm") or {}
+        except Exception:
+            cols = {}
+    fitting = [(mm, c) for c, mm in cols.items() if mm < width_mm - 0.5 and mm <= fit_w + 0.5]
+    if fitting:
+        mm, c = max(fitting)
+        out.append(("column", c, float(mm),
+                    f"fit_height='column' uses the {c} column ({mm:g}mm, about "
+                    f"{height_mm * mm / width_mm:.0f}mm tall)"))
+    out.append(("off", None, width_mm,
+                f"fit_height=false keeps {width_mm:.0f}mm ({height_mm:.0f}mm tall, over the "
+                f"{max_mm:g}mm maximum)"))
+    return out
+
+
+def _figure_height_mm(pyf_path: str) -> float | None:
+    """Height of the laid-out figure (all top-level groups) in mm, or None."""
+    try:
+        objs, Group, _Image2D = _load_objects_lazy(pyf_path)
+        rects = [o.getRect(all=True) for o in objs if isinstance(o, Group)]
+    except Exception:
+        return None
+    if not rects:
+        return None
+    top = min(r.top() for r in rects)
+    bottom = max(r.bottom() for r in rects)
+    return (bottom - top) / 72.0 * 25.4                   # canvas unit = 1 pt
+
+
 def _width_mm_for_journal(journal: str, column: str) -> float:
     """Return the target width in mm for a journal + column-count combination.
     Built-in presets first; then journal styles saved from a journal's own
@@ -1962,10 +2037,13 @@ def _target_sidecar_path(pyf_path: str) -> str:
     return os.path.splitext(pyf_path)[0] + ".target.json"
 
 
-def _store_target(pyf_path: str, journal: str | None, column: str, width_mm: float) -> None:
+def _store_target(pyf_path: str, journal: str | None, column: str, width_mm: float,
+                  max_height_mm: float | None = None) -> None:
     data = {"width_mm": round(float(width_mm), 3)}
     if journal:
         data.update(journal=journal, column=column)
+    if max_height_mm:
+        data["max_height_mm"] = float(max_height_mm)       # narrowed to fit this height
     try:
         _atomic_write_text(_target_sidecar_path(pyf_path), json.dumps(data, indent=2))
     except OSError:

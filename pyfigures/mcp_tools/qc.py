@@ -25,7 +25,10 @@ from .core import (
     _child_text,
     _decode,
     _encode_str,
+    _figure_height_mm,
     _find_scale_bar,
+    _journal_max_height,
+    _stored_target,
     _load,
     _load_objects_lazy,
     _resolve_target_mm,
@@ -554,14 +557,38 @@ def check_journal_compliance(
             cur_sizes.append(float(s))
         except (TypeError, ValueError):
             pass
+    # the journal's maximum height (or the one the figure was narrowed to fit)
+    stored = _stored_target(pyf_path) or {}
+    height_journal = journal if journal is not None else (
+        stored.get("journal") if width_mm is None and width_cm is None and width_in is None
+        else None)
+    max_h = _journal_max_height(height_journal)
+    if stored.get("max_height_mm") and (journal is None or journal == stored.get("journal")):
+        if max_h is None or stored["max_height_mm"] < max_h[0]:
+            max_h = (float(stored["max_height_mm"]), "the height the figure was fitted to")
+    height_mm = _figure_height_mm(pyf_path) if max_h else None
     if cur_sizes:
         cur_px = max(cur_sizes)
         ok_w = abs(cur_px - target_px) <= max(2, target_px * 0.01)
-        results.append(("width", ok_w,
-                        f"figure {cur_px / 72.0 * 25.4:.1f}mm vs target "
-                        f"{target_mm:.1f}mm ({wsrc})"))
+        detail = f"figure {cur_px / 72.0 * 25.4:.1f}mm vs target {target_mm:.1f}mm ({wsrc})"
+        if not ok_w and cur_px < target_px and height_mm is not None \
+                and height_mm >= max_h[0] * 0.98 and height_mm <= max_h[0] * 1.01:
+            ok_w = True              # narrowed on purpose: at the maximum height
+            detail += f"; narrower so that its height fits the maximum {max_h[0]:g}mm"
+        results.append(("width", ok_w, detail))
     else:
         results.append(("width", False, "no group size found (free-canvas?)"))
+    if max_h is not None:
+        if height_mm is None:
+            results.append(("height", False, f"could not measure the figure height "
+                                             f"(maximum {max_h[0]:g}mm: {max_h[1]})"))
+        else:
+            results.append(("height", height_mm <= max_h[0] * 1.01,
+                            f"figure {height_mm:.1f}mm tall vs maximum {max_h[0]:g}mm "
+                            f"({max_h[1]})"
+                            + ("" if height_mm <= max_h[0] * 1.01 else
+                               " — resize_figure with the journal narrows it to fit, or "
+                               "choose a smaller column (fit_height='column')")))
 
     # ── font size ──────────────────────────────────────────────────────────────
     font_el = root.find("SerializableQFont")
@@ -665,13 +692,17 @@ def apply_journal_guidelines(
     scale_bar_units: float | None = None,
     scale_bar_unit: str = "µm",
     scale_bar_px_to_unit: float | None = None,
+    fit_height: bool | str = True,
 ) -> str:
     """One-shot reformat of a figure to a journal's guidelines, then report
     compliance. Bundles the individual tools so a pasted set of guidelines can be
     applied in a single call.
 
     Steps (each optional depending on arguments):
-      1. resize the figure to the target column width (journal preset or explicit).
+      1. resize the figure to the target column width (journal preset or explicit);
+         a figure then taller than the journal's maximum height is narrowed
+         (*fit_height* True/'shrink'), put in the widest column it fits in
+         ('column') or left too tall (False) — see resize_figure.
       2. set the figure font family (default Arial) and raise every font to
          *min_font_pt* (enforce_min_font_size).
       3. if *add_panel_labels*: add a bold lowercase letter (a, b, c, …) to the top-
@@ -698,10 +729,17 @@ def apply_journal_guidelines(
 
     # 1. resize
     r = resize_figure(pyf_path, journal=journal, column=column, dpi=dpi,
-                      width_mm=width_mm, width_cm=width_cm, width_in=width_in)
-    steps.append("resize: " + (r.split(".")[0] if r else "done"))
+                      width_mm=width_mm, width_cm=width_cm, width_in=width_in,
+                      fit_height=fit_height)
     if r.startswith("ERROR"):
         return "ERROR during resize: " + r
+    steps.append("resize: " + (r.split(".")[0] if r else "done"))
+    m = re.search(r"At [\d.]+mm wide the figure is .*?Choices: [^\n]*?\.(?=  |$)", r)
+    if m:
+        steps.append("height: " + m.group(0))
+    stored = _stored_target(pyf_path) or {}
+    if journal is not None and stored.get("column") and stored.get("column") != column:
+        column = stored["column"]            # fit_height='column' moved it to another column
 
     # 2. font family + min size
     if font_family is not None:

@@ -169,6 +169,8 @@ created as needed. Forward slashes work on every OS.
 | `letter_placement` | `top left` | Corner of the panel letters. |
 | `font` | none | Figure font: a family name, or a mapping with `family`, `size`, `italic`. §20. |
 | `min_font_pt` | none | Raise every smaller text to this size (journal minimum). |
+| `fit_height` | `shrink` | When the figure is taller than the journal's maximum height (Nature 247 mm, PLOS 222.3 mm, PNAS 225 mm, or an imported style's height rule) or `max_height_mm`: `shrink` narrows it until it fits, `column` uses the widest journal column it fits in, `off` keeps the width. The build warning lists the other choices. |
+| `max_height_mm` | none | A maximum figure height of your own (overrides the journal's). |
 | `tidy_text` | `false` | Typography clean-up of every label (`2*3`→`2×3`, `37 degrees C`→`37 °C`, `10µm`→`10 µm`, `10-20`→`10–20`). |
 | `auto_configure` | `false` | Read pixel sizes / channel counts from the files' metadata: LUT preset + scale bars. Explicit panel settings still win. §20. |
 | `alt_text` | none | `auto` (drafted from the panels) or the alt text itself. |

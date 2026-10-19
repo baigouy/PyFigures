@@ -30,6 +30,9 @@ from .core import (
     _JOURNAL_ALIASES,
     _JOURNAL_PRESETS,
     _journal_width,
+    _journal_max_height,
+    _figure_height_mm,
+    _height_choices,
     _ROI_PROTECTED,
     _append_image,
     _atomic_write_text,
@@ -1168,11 +1171,11 @@ def list_journal_presets() -> str:
     aliases_by_key: dict[str, list[str]] = {}
     for alias, key in _JOURNAL_ALIASES.items():
         aliases_by_key.setdefault(key, []).append(alias)
-    from ..journal_styles import estimated_widths
+    from ..journal_styles import estimated_widths, max_height
     for key, widths in sorted(_JOURNAL_PRESETS.items()):
         out[key] = {
             "widths_mm": {c: widths[c] for c in _COLUMN_ORDER if c in widths},
-            **estimated_widths(key),
+            **estimated_widths(key), **max_height(key),
             "aliases": sorted(aliases_by_key.get(key, [])),
             "source": _JOURNAL_SOURCES.get(key, {}),
         }
@@ -1215,6 +1218,8 @@ def resize_figure(
     journal: str | None = None,
     column: str = "single",
     group_path: list[int] | None = None,
+    max_height_mm: float | None = None,
+    fit_height: bool | str = True,
 ) -> str:
     """Resize all (or one) group(s) of a figure to a target physical width.
 
@@ -1244,6 +1249,15 @@ def resize_figure(
     **group_path**
       Which group to resize.  ``null`` (default) → all top-level groups.
       ``[0]`` → only group 0. ``[0,1]`` → a sub-group.
+
+    **max_height_mm** / **fit_height**
+      When the resized figure is taller than the journal's maximum height
+      (Nature 247 mm, PLOS 222.3 mm, PNAS 225 mm, or a height rule of an
+      imported journal style) or than *max_height_mm*: ``fit_height=True`` /
+      ``"shrink"`` (default) narrows it, aspect kept, until the height fits;
+      ``"column"`` uses the widest of the journal's columns it fits in;
+      ``False`` / ``"off"`` keeps the width. The result lists all the choices
+      so the user can pick another. Whole figure only.
 
     The underlying PyFigures layout engine (``set_to_width``) recomputes
     all child x/y/width/height/scale values, so the result is identical to
@@ -1311,12 +1325,61 @@ def resize_figure(
     result = set_size(pyf_path, canvas_units, group_path)   # also re-stacks the rows
     if result.startswith("ERROR"):
         return result
+
+    # ── Too tall for the journal's page: narrow it until the height fits ────
+    fit_note = ""
+    limit = None
+    if group_path is None:          # also with fit_height off: say it is too tall
+        if max_height_mm is not None:
+            limit = (float(max_height_mm), f"max_height_mm={float(max_height_mm):g}")
+        else:
+            limit = _journal_max_height(journal)
+    fitted_to = None
+    mode = {True: "shrink", False: "off"}.get(fit_height, str(fit_height).lower())
+    if mode not in ("shrink", "column", "off"):
+        return "ERROR: fit_height must be true/'shrink', 'column' or false/'off'."
+    height = _figure_height_mm(pyf_path) if limit is not None else None
+    if height is not None and height > limit[0] * 1.002:
+        column_mm = target_in * 25.4
+        first_height = height
+        choices = _height_choices(journal, column_mm, first_height, limit[0])
+        picked = None
+        if mode == "column":
+            picked = next((c for c in choices if c[0] == "column"), None)
+            if picked is not None:
+                column = picked[1]
+                target_in = picked[2] / 25.4
+                result = set_size(pyf_path, target_in * 72.0, group_path)
+                if result.startswith("ERROR"):
+                    return result
+                height = _figure_height_mm(pyf_path)
+        if picked is None and mode in ("shrink", "column"):
+            for _ in range(4):       # heights are not quite linear (gaps, labels)
+                if height is None or height <= limit[0] * 1.002:
+                    break
+                target_in = target_in * limit[0] / height * 0.999
+                result = set_size(pyf_path, target_in * 72.0, group_path)
+                if result.startswith("ERROR"):
+                    return result
+                height = _figure_height_mm(pyf_path)
+                fitted_to = limit[0]
+        canvas_units = target_in * 72.0
+        target_px = round(target_in * dpi)
+        done = {"off": f"kept at {column_mm:.1f}mm (fit_height off): too tall for the page",
+                "shrink": f"narrowed to {target_in * 25.4:.1f}mm, aspect kept, now "
+                          f"{(height or 0):.1f}mm tall",
+                "column": (f"set to the {column} column ({target_in * 25.4:g}mm), now "
+                           f"{(height or 0):.1f}mm tall") if picked else
+                          f"no journal column fits: narrowed to {target_in * 25.4:.1f}mm"}[mode]
+        others = "; ".join(c[3] for c in choices)
+        fit_note = (f"  At {column_mm:.1f}mm wide the figure is {first_height:.1f}mm tall, above "
+                    f"the maximum height {limit[0]:g}mm ({limit[1]}): {done}. Choices: {others}.")
     if group_path is None:          # the whole figure: remembered for the checks
-        _store_target(pyf_path, journal, column, target_in * 25.4)
+        _store_target(pyf_path, journal, column, target_in * 25.4, fitted_to)
 
     return (
         f"Figure resized to {target_in * 25.4:.1f}mm wide = {canvas_units:.1f} canvas pt; "
-        f"an export at {dpi} DPI is {target_px}px wide  [{source}].  {result}"
+        f"an export at {dpi} DPI is {target_px}px wide  [{source}].{fit_note}  {result}"
     )
 
 

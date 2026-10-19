@@ -95,6 +95,7 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              "background",
              # sizing, typography and finishing
              "width_mm", "width_cm", "width_in", "width_px", "dpi", "font", "min_font_pt",
+             "fit_height", "max_height_mm",
              "tidy_text", "letter_placement", "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
@@ -668,6 +669,14 @@ def _check_top(recipe, base):
         v = recipe[k]
         if not _is_num(v) or v <= 0 or (k == "width_px" and not _is_int(v)):
             raise RecipeError(f"'{k}' must be a positive number")
+    if "fit_height" in recipe and recipe["fit_height"] not in (True, False, "shrink", "column",
+                                                               "off"):
+        raise RecipeError("'fit_height' (a figure taller than the journal's maximum height) "
+                          "must be shrink (narrow it until it fits, the default), column (the "
+                          "widest journal column it fits in) or off (keep the width)")
+    if "max_height_mm" in recipe and (not _is_num(recipe["max_height_mm"])
+                                      or recipe["max_height_mm"] <= 0):
+        raise RecipeError("'max_height_mm' must be a positive number of millimetres")
     if "dpi" in recipe and (not _is_int(recipe["dpi"]) or recipe["dpi"] < 10):
         raise RecipeError("'dpi' must be an integer (dots per inch)")
     if "font" in recipe:
@@ -932,6 +941,8 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "width": {k: recipe[k] for k in ("width_mm", "width_cm", "width_in", "width_px")
                   if k in recipe},
         "dpi": recipe.get("dpi", 300),
+        "fit_height": recipe.get("fit_height", True),
+        "max_height_mm": recipe.get("max_height_mm"),
         "letter_panels": letter_panels,
         "letter_placement": recipe.get("letter_placement", "top left"),
         "caption": recipe.get("caption"),
@@ -1680,11 +1691,18 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                                                    font_italic=f.get("italic")), "font")
     if plan["tidy_text"]:
         warnings += _check(M.tidy_text(out), "tidy_text")
+    height = {"fit_height": plan["fit_height"], "max_height_mm": plan["max_height_mm"]}
+    resized = None
     if plan["journal"]:
-        warnings += _check(M.resize_figure(out, journal=plan["journal"], column=plan["column"],
-                                           dpi=plan["dpi"]), "journal resize")
+        resized = M.resize_figure(out, journal=plan["journal"], column=plan["column"],
+                                  dpi=plan["dpi"], **height)
+        warnings += _check(resized, "journal resize")
     elif plan["width"]:
-        warnings += _check(M.resize_figure(out, dpi=plan["dpi"], **plan["width"]), "resize")
+        resized = M.resize_figure(out, dpi=plan["dpi"], **plan["width"], **height)
+        warnings += _check(resized, "resize")
+    fit = re.search(r"At [\d.]+mm wide the figure is .*?Choices: .*?\.(?=  |$)", resized or "")
+    if fit:
+        warnings.append(fit.group(0))            # too tall for the page: what was done + choices
     if plan["min_font_pt"] is not None:
         warnings += _check(M.enforce_min_font_size(out, min_pt=float(plan["min_font_pt"])),
                            "min_font_pt")

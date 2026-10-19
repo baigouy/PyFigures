@@ -388,6 +388,15 @@ class _JournalDialog(QFrame):
         if with_apply_options:
             self.panel_labels_check = QCheckBox("Add panel letters (a, b, c…)", self)
             grid.addWidget(self.panel_labels_check, r, 0, 1, 2); r += 1
+            # a figure taller than the journal's maximum height: the user decides
+            self.fit_height_combo = QComboBox(self)
+            self.fit_height_combo.addItem("Narrow it until the height fits", "shrink")
+            self.fit_height_combo.addItem("Use the widest journal column it fits in", "column")
+            self.fit_height_combo.addItem("Keep the column width (too tall)", "off")
+            self.fit_height_combo.setToolTip("Used only when the journal gives a maximum height "
+                                             "and the figure is taller at the chosen width")
+            grid.addWidget(QLabel("If too tall:", self), r, 0)
+            grid.addWidget(self.fit_height_combo, r, 1); r += 1
 
         self.style_label = QLabel("", self)
         self.style_label.setWordWrap(True)
@@ -446,6 +455,9 @@ class _JournalDialog(QFrame):
             self.style_label.setText(
                 f"<i>Journal style imported from its guidelines ({style['status']}, "
                 f"{style['stage']} stage, {len(style['rules'])} rules).</i>")
+        if info.get("max_height_mm"):
+            self.style_label.setText(self.style_label.text()
+                                     + f"<br><i>Maximum height {info['max_height_mm']:g} mm.</i>")
         self._select_column(current)
         self.column_combo.blockSignals(False)
 
@@ -502,6 +514,7 @@ class _JournalDialog(QFrame):
             raise ValueError("Min DPI must be an integer and min font a number.")
         if self.with_apply_options:
             out["add_panel_labels"] = self.panel_labels_check.isChecked()
+            out["fit_height"] = self.fit_height_combo.currentData()
         return out
 
 
@@ -5015,7 +5028,7 @@ class EZFIG_GUI(QMainWindow):
             QMessageBox.warning(self, 'Invalid input', str(e))
             return
         kwargs = {k: v[k] for k in ('journal', 'column', 'width_mm',
-                                    'add_panel_labels') if k in v}
+                                    'add_panel_labels', 'fit_height') if k in v}
         kwargs['min_font_pt'] = v.get('min_font_pt', 7.0)
         self._run_mcp_mutation(apply_journal_guidelines,
                                "Applied journal guidelines.", **kwargs)
