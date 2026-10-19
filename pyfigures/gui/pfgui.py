@@ -421,6 +421,10 @@ class _JournalDialog(QFrame):
         info = journal_lookup(name) if name != "(custom width)" else {"status": "custom"}
         for col, mm in (info.get("columns_mm") or {}).items():
             self.column_combo.addItem(f"{col} — {mm:g} mm", col)
+        for col, mm in (info.get("estimated_mm") or {}).items():
+            # a journal giving only a full width: half page, flagged as an estimate
+            self.column_combo.addItem(f"{col} — {mm:g} mm (estimated, not on the journal's page)",
+                                      col)
         self.column_combo.setEnabled(info["status"] != "custom")
         style = user_style_for(name) if info["status"] == "saved_style" else None
         if style is None:
@@ -5568,8 +5572,12 @@ class EZFIG_GUI(QMainWindow):
             from pyfigures.journal_styles import journal_info as journal_lookup
             column_combo.clear()
             if name != '(none)':
-                for col, mm in (journal_lookup(name).get("columns_mm") or {}).items():
+                info = journal_lookup(name)
+                for col, mm in (info.get("columns_mm") or {}).items():
                     column_combo.addItem(f"{col} — {mm:g} mm", col)
+                for col, mm in (info.get("estimated_mm") or {}).items():
+                    column_combo.addItem(f"{col} — {mm:g} mm (estimated, not on the journal's page)",
+                                         col)
             column_combo.setEnabled(column_combo.count() > 0)
         journal_combo.currentTextChanged.connect(_journal_columns)
         _journal_columns(journal_combo.currentText())

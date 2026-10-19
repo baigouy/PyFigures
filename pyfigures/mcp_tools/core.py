@@ -1615,7 +1615,8 @@ _COLUMN_WORDS = {
     "single": "single", "1": "single", "one": "single", "1 column": "single",
     "one column": "single", "single column": "single",
     "1.5": "1.5", "1.5 column": "1.5", "one and a half": "1.5", "intermediate": "1.5",
-    "column and a half": "1.5", "half": "1.5",
+    "column and a half": "1.5",
+    "half": "half", "half page": "half", "half width": "half", "half page width": "half",
     "double": "double", "2": "double", "two": "double", "2 column": "double",
     "two column": "double", "double column": "double",
     "triple": "triple", "3": "triple", "three": "triple", "3 column": "triple",
@@ -1642,11 +1643,33 @@ def _journal_columns_text(key) -> str:
                      for c in _COLUMN_ORDER if c in _JOURNAL_PRESETS[key])
 
 
-def _width_mm_for_journal(journal: str, column: str) -> float:
-    """Return the target width in mm for a journal + column-count combination.
-    Built-in presets first; then journal styles saved from a journal's own
-    guidelines (pyfigures/journal_styles.py; 'custom:<title>' reaches one whose
-    title is also a built-in name)."""
+# A journal whose page gives only a full width (Nature Methods: "maximum width
+# of 180 mm") still prints half-page figures. Their width is not on the page,
+# so it is estimated as two columns side by side with a 5 mm gap (Nature's own
+# pages: 89 mm single = (183 - 5) / 2) and always reported as an estimate.
+_HALF_PAGE_GAP_MM = 5.0
+HALF_PAGE_NOTE = "estimated, not on the journal's page: (full width - 5 mm gap) / 2"
+
+
+def estimated_half_page_mm(full_mm: float) -> float:
+    return round((float(full_mm) - _HALF_PAGE_GAP_MM) / 2.0, 1)
+
+
+def _half_page(journal, widths: dict) -> tuple[float, str]:
+    """(estimated mm, note) for column='half' — only when *widths* has a full
+    width and no single column; otherwise say which real column to use."""
+    if "single" in widths:
+        raise ValueError(f"{journal!r} gives its own column sizes "
+                         f"({', '.join(f'{c} {widths[c]:g} mm' for c in widths)}); "
+                         "use one of them instead of an estimated half page.")
+    full = max(widths.values())
+    return estimated_half_page_mm(full), HALF_PAGE_NOTE
+
+
+def _journal_width(journal: str, column: str) -> tuple[float, str]:
+    """(target width in mm, note) for a journal + column. The note is empty for
+    a size the journal's page states, and says so when it is an estimate
+    (column='half page' on a journal that gives only a full width)."""
     j = journal.lower().strip()
     j = _JOURNAL_ALIASES.get(j, j)
     presets = None if j.startswith("custom:") else _JOURNAL_PRESETS.get(j)
@@ -1654,7 +1677,8 @@ def _width_mm_for_journal(journal: str, column: str) -> float:
         from ..journal_styles import find_style, width_mm, list_styles
         style = find_style(journal)
         if style is not None:
-            return float(width_mm(style, column)[0])
+            mm, rule = width_mm(style, column)
+            return float(mm), (HALF_PAGE_NOTE if rule == "half (estimated)" else "")
         saved = [s["use_as"] for s in list_styles()]
         raise ValueError(
             f"Unknown journal {journal!r}. "
@@ -1665,10 +1689,23 @@ def _width_mm_for_journal(journal: str, column: str) -> float:
               "then save_journal_style)."
         )
     col_key = _column_key(column, presets)
+    if col_key == "half":
+        return _half_page(journal, presets)
     if col_key not in presets:
+        hint = ("; column='half page' gives an estimated half-page width"
+                if "single" not in presets else "")
         raise ValueError(f"{journal!r} has no {col_key} column size; its page gives: "
-                         f"{_journal_columns_text(j)}.")
-    return presets[col_key]
+                         f"{_journal_columns_text(j)}{hint}.")
+    return presets[col_key], ""
+
+
+def _width_mm_for_journal(journal: str, column: str) -> float:
+    """Return the target width in mm for a journal + column-count combination.
+    Built-in presets first; then journal styles saved from a journal's own
+    guidelines (pyfigures/journal_styles.py; 'custom:<title>' reaches one whose
+    title is also a built-in name). See _journal_width for the note saying
+    whether the width is the journal's or an estimate."""
+    return _journal_width(journal, column)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1965,8 +2002,8 @@ def _resolve_target_mm(
     """Resolve a target physical figure width (mm) from journal preset or explicit
     units. Raises ValueError if nothing usable is given."""
     if journal is not None:
-        mm = _width_mm_for_journal(journal, column)
-        return mm, f"{journal!r} {column}-column = {mm:.0f}mm"
+        mm, note = _journal_width(journal, column)
+        return mm, f"{journal!r} {column}-column = {mm:g}mm" + (f" ({note})" if note else "")
     if width_mm is not None:
         return float(width_mm), f"{width_mm}mm"
     if width_cm is not None:

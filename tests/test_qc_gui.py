@@ -166,6 +166,21 @@ def test_journal_dialog_custom_width(qapp):
     assert v["width_mm"] == 85.0 and "journal" not in v
 
 
+def test_journal_dialog_flags_the_estimated_half_page(qapp):
+    from pyfigures.gui.pfgui import _JournalDialog
+    d = _JournalDialog()
+    d.journal_combo.setCurrentText("nature methods")
+    items = [(d.column_combo.itemText(i), d.column_combo.itemData(i))
+             for i in range(d.column_combo.count())]
+    assert items[0] == ("double — 180 mm", "double")
+    assert items[1][1] == "half page" and "87.5 mm (estimated" in items[1][0]
+    d.column_combo.setCurrentIndex(1)
+    assert d.column() == "half page"
+    d.journal_combo.setCurrentText("nature")                 # own columns: no estimate
+    assert not any("estimated" in d.column_combo.itemText(i)
+                   for i in range(d.column_combo.count()))
+
+
 def test_journal_dialog_requires_width_when_custom(qapp):
     from pyfigures.gui.pfgui import _JournalDialog
     d = _JournalDialog()

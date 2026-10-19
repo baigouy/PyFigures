@@ -177,6 +177,23 @@ def test_journal_info_says_what_is_available_or_how_to_import():
                                                                  "double": 174}
 
 
+def test_a_style_with_only_a_full_width_offers_an_estimated_half_page():
+    from pyfigures.mcp_tools.core import HALF_PAGE_NOTE, _journal_width
+    page = "Figure panels should be saved at a maximum width of 180 mm."
+    reply = {"rules": [{"kind": "width", "label": "maximum width", "relation": "max",
+                        "value": 180, "unit": "mm", "applies_to": "figure panels",
+                        "evidence_quote": "a maximum width of 180 mm"}]}
+    js.save(js.import_model_reply(json.dumps(reply), page, "Journal X", "final", "")[0])
+    assert _journal_width("Journal X", "maximum width") == (180, "")
+    assert _journal_width("Journal X", "half page") == (87.5, HALF_PAGE_NOTE)
+    assert js.journal_info("Journal X")["estimated_mm"] == {"half page": 87.5}
+    # PNAS gives its own columns: no estimate
+    js.save(_pnas_style()[0])
+    assert "estimated_mm" not in js.journal_info("custom:PNAS")
+    with pytest.raises(ValueError, match="own column sizes"):
+        _journal_width("custom:PNAS", "half page")
+
+
 def test_manual_rules_need_no_quote_but_must_be_sane():
     style, _ = js.validate({"journal": "Lab Journal", "stage": "final", "rules": [
         {"kind": "width", "label": "single column", "relation": "max", "value": 80, "unit": "mm",

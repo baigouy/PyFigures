@@ -156,7 +156,7 @@ created as needed. Forward slashes work on every OS.
 | `columns` | all in one row | Panels per row when using `panels`. |
 | `layout` | — | The whole layout as one formula, e.g. `"(a,b,c)/(d,e,f)"` or `"(a,(b/c))/d"` (see §4b). |
 | `journal` | none | Size the figure for a journal (see §23). Omit to keep the natural size. |
-| `column` | `single` | One of the sizes that journal gives: `single`, `1.5`, `double`, `triple` (also `1 column`, `2 columns`, `3 columns`, `full width`). |
+| `column` | `single` | One of the sizes that journal gives: `single`, `1.5`, `double`, `triple` (also `1 column`, `2 columns`, `3 columns`, `full width`; `half page` = an estimate, only for journals giving just a full width). |
 | `letter_panels` | `true` | Add A, B, C… to the top-left corner of each panel. Must be an unquoted `true`/`false` (`"false"` in quotes is refused, not read as yes). |
 | `title` | `"Figure"` | Title stored with the caption. |
 | `caption` | auto stub | Figure legend. Omitted → a stub listing the panels — `(A) wt; (B) ko; (C) data plot. [Describe …]` — to complete. Stored in `<figure>.caption.json`; export it with the caption tools. |
@@ -1183,7 +1183,11 @@ journal offers just those columns (`—` = not given by the journal):
 | `pnas` | 87 | 114 | 178 | — | | 8.7 / 11.4 / 17.8 cm |
 
 `column:` also accepts `1 column`, `2 columns`, `3 columns` and `full width`
-(the widest the journal has). `journal_info` (MCP) or
+(the widest the journal has). For a journal whose page gives only a full width
+(Nature Methods, Medicine, Cell Biology: 180 mm), `column: half page` gives an
+**estimated** half page, (full − 5 mm) / 2 = 87.5 mm: the result, the reports and
+the GUI picker say it is an estimate, not the journal's rule. Journals with their
+own column sizes refuse `half page` and list them. `journal_info` (MCP) or
 `python -m pyfigures.journal_styles info <journal>` tells whether a journal is
 available and its sizes. Elsevier, Springer, Wiley (publisher-wide) and eLife
 (its page gives upload minimums, not column widths) have no preset: import the

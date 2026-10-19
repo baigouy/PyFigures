@@ -29,6 +29,7 @@ from .core import (
     _unreadable_image,
     _JOURNAL_ALIASES,
     _JOURNAL_PRESETS,
+    _journal_width,
     _ROI_PROTECTED,
     _append_image,
     _atomic_write_text,
@@ -1167,9 +1168,11 @@ def list_journal_presets() -> str:
     aliases_by_key: dict[str, list[str]] = {}
     for alias, key in _JOURNAL_ALIASES.items():
         aliases_by_key.setdefault(key, []).append(alias)
+    from ..journal_styles import estimated_widths
     for key, widths in sorted(_JOURNAL_PRESETS.items()):
         out[key] = {
             "widths_mm": {c: widths[c] for c in _COLUMN_ORDER if c in widths},
+            **estimated_widths(key),
             "aliases": sorted(aliases_by_key.get(key, [])),
             "source": _JOURNAL_SOURCES.get(key, {}),
         }
@@ -1178,6 +1181,8 @@ def list_journal_presets() -> str:
         "note": "Widths in millimetres, only those the journal's page states. Pass any "
                 "listed name or alias as journal=, and column= one of that journal's "
                 "columns (or '1 column' / '2 columns' / '3 columns' / 'full width'). "
+                "estimated_mm (only for journals giving just a full width): column="
+                "'half page' = (full - 5 mm) / 2, an estimate, not the journal's rule. "
                 "A journal that is not listed: ask the user to copy the figure-guidelines "
                 "part of its web page and import it (prepare_journal_style_import).",
         "journals": out,
@@ -1222,7 +1227,9 @@ def resize_figure(
       journal style imported from the journal's pasted guidelines.
       *column*: ``"single"`` (default), ``"1.5"``, ``"double"`` or ``"triple"``
       — only the sizes that journal's page gives (Science: single, double,
-      triple = 1, 2, 3 columns).
+      triple = 1, 2, 3 columns). ``"half page"`` on a journal that gives only
+      a full width (Nature Methods: 180 mm) is an estimate, (full − 5 mm) / 2,
+      and the result says so.
 
     **width_mm** / **width_cm** / **width_in**
       Physical width with explicit units.  Combined with *dpi* to give pixels.
@@ -1242,19 +1249,8 @@ def resize_figure(
     all child x/y/width/height/scale values, so the result is identical to
     manually setting the size in the GUI.
 
-    Common journal single-column widths at 300 DPI:
-
-    | Journal  | Single (mm) | Double (mm) | Single px@300 |
-    |----------|-------------|-------------|---------------|
-    | Nature   | 89          | 183         | 1051          |
-    | Nat Comm | 88          | 180         | 1039          |
-    | Science  | 57          | 184         | 673           |
-    | Cell     | 85          | 174         | 1004          |
-    | PLOS ONE | 83          | 174         | 980           |
-    | eLife    | 85          | 178         | 1004          |
-    | EMBO     | 87          | 172         | 1028          |
-
-    list_journal_presets() gives every accepted name.
+    list_journal_presets() gives every accepted name and its widths (only
+    those the journal's page states).
 
     Examples::
 
@@ -1282,11 +1278,11 @@ def resize_figure(
     # 4.17x too large and every pt font 4.17x too small once printed.)
     if journal is not None:
         try:
-            target_mm = _width_mm_for_journal(journal, column)
+            target_mm, note = _journal_width(journal, column)
         except ValueError as e:
             return f"ERROR: {e}"
         target_in = target_mm / 25.4
-        source = f"{journal!r} {column}-column = {target_mm:.0f}mm"
+        source = f"{journal!r} {column}-column = {target_mm:g}mm" + (f" — {note}" if note else "")
     elif width_mm is not None:
         target_in = width_mm / 25.4
         source = f"{width_mm}mm"

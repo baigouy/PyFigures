@@ -497,6 +497,20 @@ def find_style(name: str, stage: str | None = None) -> dict | None:
 # Using a style
 # ---------------------------------------------------------------------------
 
+def estimated_widths(journal: str) -> dict:
+    """{'estimated_mm': {'half page': mm}, 'estimated_note': ...} for a journal
+    whose page gives only a full width (column='half page'); {} otherwise."""
+    from .mcp_tools.core import HALF_PAGE_NOTE, _journal_width
+    try:
+        mm, note = _journal_width(journal, "half page")
+    except ValueError:
+        return {}
+    if note != HALF_PAGE_NOTE:
+        return {}
+    return {"estimated_mm": {"half page": mm},
+            "estimated_note": f"column='half page' = {mm:g} mm, {HALF_PAGE_NOTE}"}
+
+
 def journal_info(journal: str) -> dict:
     """What PyFigures knows about *journal*: a built-in preset (its column
     widths, only those its page gives, and the page), a saved style, or
@@ -511,6 +525,7 @@ def journal_info(journal: str) -> dict:
         w = _JOURNAL_PRESETS[key]
         return {"journal": name, "status": "built_in", "use_as": key,
                 "columns_mm": {c: w[c] for c in _COLUMN_ORDER if c in w},
+                **estimated_widths(key),
                 "source": _JOURNAL_SOURCES.get(key, {}),
                 "aliases": sorted(a for a, k in _JOURNAL_ALIASES.items() if k == key),
                 "note": "only the sizes the journal's page states; to follow its current page "
@@ -518,7 +533,8 @@ def journal_info(journal: str) -> dict:
     style = find_style(name)
     if style is not None:
         return {"journal": name, "status": "saved_style", "use_as": usable_name(style["journal"]),
-                "columns_mm": columns_mm(style), "review": style["status"],
+                "columns_mm": columns_mm(style), **estimated_widths(usable_name(style["journal"])),
+                "review": style["status"],
                 "stage": style["stage"], "source": {"url": style["source_url"]},
                 "width_labels": [r["label"] for r in style["rules"] if r["kind"] == "width"],
                 "rules": describe_rules(style)}
@@ -613,22 +629,27 @@ def columns_mm(style) -> dict:
 
 def width_mm(style, column: str) -> tuple[float, str]:
     """(mm, which rule) for *column*: single / 1.5 / double, or a width rule's
-    own label (e.g. '3 columns'). ValueError lists what the style has."""
+    own label (e.g. '3 columns'). 'half page' on a style giving no single
+    column is an estimate, returned with the rule 'half (estimated)'.
+    ValueError lists what the style has."""
     want = _norm(column)
     for r in _width_rules(style):
         if _norm(r["label"]) == want:
             return _width_value(r), r["label"]
     cols = columns_mm(style)
-    col = None
-    if cols:
-        from .mcp_tools.core import _column_key
-        try:
-            col = _column_key(column, cols)
-        except ValueError:
-            col = None
+    from .mcp_tools.core import _column_key, _half_page
+    try:
+        col = _column_key(column, cols or {"double": 0})
+    except ValueError:
+        col = None
     if col in cols:
         return cols[col], col
-    labels = [r["label"] for r in _width_rules(style)]
+    rules = _width_rules(style)
+    if col == "half" and rules:
+        # a page giving only a full / maximum width: estimated half page
+        widths = dict(cols) or {"full": max(_width_value(r) for r in rules)}
+        return _half_page(style["journal"], widths)[0], "half (estimated)"
+    labels = [r["label"] for r in rules]
     raise ValueError(f"the journal style {style['journal']!r} has no {column!r} width "
                      f"(its widths: {', '.join(labels) or 'none'})")
 

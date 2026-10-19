@@ -1231,6 +1231,32 @@ class TestResizeFigurePresets:
         with pytest.raises(ValueError, match=message):
             _width_mm_for_journal(journal, column)
 
+    def test_half_page_is_an_estimate_only_without_columns(self):
+        from pyfigures.mcp_tools.core import HALF_PAGE_NOTE, _journal_width
+        from pyfigures.journal_styles import journal_info
+        # Nature Methods gives only "a maximum width of 180 mm"
+        for column in ("half page", "half", "Half-page"):
+            assert _journal_width("nature methods", column) == (87.5, HALF_PAGE_NOTE)
+        assert _journal_width("nature medicine", "half page")[0] == 87.5     # alias
+        info = journal_info("nature methods")
+        assert info["estimated_mm"] == {"half page": 87.5}
+        assert "estimated" in info["estimated_note"]
+        assert info["columns_mm"] == {"double": 180}                       # page sizes unchanged
+        # journals with their own columns: no estimate, use their sizes
+        assert "estimated_mm" not in journal_info("nature")
+        with pytest.raises(ValueError, match="single 89 mm"):
+            _journal_width("nature", "half page")
+        with pytest.raises(ValueError, match="half page"):                 # offered on a miss
+            _journal_width("nature methods", "single")
+        from pyfigures.mcp_server import list_journal_presets
+        presets = json.loads(list_journal_presets())["journals"]
+        assert presets["nature methods"]["estimated_mm"] == {"half page": 87.5}
+        assert "estimated_mm" not in presets["science"]
+
+    def test_resize_says_half_page_is_estimated(self, pyf_groups):
+        result = resize_figure(pyf_groups, journal="nature methods", column="half page")
+        assert "87.5" in result and "estimated" in result, result
+
     def test_every_preset_has_its_source(self):
         from pyfigures.mcp_tools.core import _JOURNAL_SOURCES
         for key in _JOURNAL_PRESETS:
