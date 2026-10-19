@@ -27,6 +27,10 @@ graphics and LaTeX-typeset plots stays outlines. Every PyFigures label
 (letters, channel names, scale-bar text, annotations) is real, editable text. ``$…$`` maths in labels is recorded as
 its TeX source (batoolset math_text markers) and becomes a native PowerPoint
 equation (OMML) inside the label's text box, and Unicode text in Illustrator.
+
+Video / time-stack panels play in PowerPoint: their picture becomes a movie
+(H.264 mp4 of the panel's frames, as displayed) with the shown frame as its
+poster image. Illustrator has no movies: it gets the shown frame.
 """
 from __future__ import annotations
 
@@ -51,9 +55,11 @@ _GENERIC_SANS = {"sans serif", "sans-serif", "sansserif", "helvetica", "helvetic
 # ---------------------------------------------------------------------------
 # scene capture (needs Qt)
 # ---------------------------------------------------------------------------
-def capture_scene(panel) -> dict:
+def capture_scene(panel, movies=False) -> dict:
     """Render the PyFigures canvas *panel* (an EZFIG panel) into a scene dict:
-    {'width', 'height', 'items': [...], 'panels': [(x, y, w, h), ...]} in points."""
+    {'width', 'height', 'items': [...], 'panels': [(x, y, w, h), ...]} in points.
+    With *movies*, the picture of each video / time-stack panel also carries its
+    frames as an mp4 (item['movie'], see attach_movies)."""
     from qtpy.QtCore import QBuffer, QByteArray, QIODevice, QRectF, QSize
     from qtpy.QtGui import QPainter
     from qtpy.QtSvg import QSvgGenerator
@@ -117,17 +123,143 @@ def capture_scene(panel) -> dict:
         buf.close()
 
     rects = []
+    rect_of = {}
     for s in fig_images:
         try:
             r = s.getRect(all=True)
-            rects.append((float(r.x()) - pad_x, float(r.y()) - pad_y, float(r.width()), float(r.height())))
+            rect_of[id(s)] = (float(r.x()) - pad_x, float(r.y()) - pad_y, float(r.width()), float(r.height()))
+            rects.append(rect_of[id(s)])
         except Exception:
             pass
     scene = parse_svg(bytes(data))
     scene["width"] = width
     scene["height"] = height
     assign_groups(scene, rects)
+    if movies:
+        attach_movies(panel, scene, rect_of)
     return scene
+
+
+def _qimage_to_rgb(qimg):
+    """(H, W, 3) uint8 copy of a QImage."""
+    import numpy as np
+    from qtpy.QtGui import QImage
+    img = qimg.convertToFormat(QImage.Format.Format_RGBA8888)
+    ptr = img.constBits()
+    ptr.setsize(img.sizeInBytes())
+    arr = np.frombuffer(ptr, dtype=np.uint8).reshape(img.height(), img.bytesPerLine() // 4, 4)
+    return np.ascontiguousarray(arr[:, :img.width(), :3])
+
+
+def _grab_drawn_image(shape):
+    """The picture *shape* draws (its displayed, cropped image, without labels),
+    as an (H, W, 3) array, or None."""
+    from qtpy.QtGui import QImage, QPixmap
+    from pyfigures.gui.svg_painter import CroppingPainter
+
+    class Grabber(CroppingPainter):
+        grabbed = None
+
+        def _keep(self, *args):
+            if self.grabbed is None:
+                for a in args[1:]:
+                    if isinstance(a, QPixmap):
+                        a = a.toImage()
+                    if isinstance(a, QImage):
+                        self.grabbed = a.copy()
+                        break
+
+        def drawImage(self, *args, **kwargs):
+            return self._crop_call(Grabber._keep, QImage, args, kwargs)
+
+        def drawPixmap(self, *args, **kwargs):
+            return self._crop_call(Grabber._keep, QPixmap, args, kwargs)
+
+    device = QImage(1, 1, QImage.Format.Format_ARGB32)
+    painter = Grabber(device)
+    try:
+        shape.enter_export_mode()
+        try:
+            shape.draw_bg(painter, draw=True, restore_painter_in_the_end=True)
+        finally:
+            shape.exit_export_mode()
+    finally:
+        painter.end()
+    if painter.grabbed is None:
+        return None
+    return _qimage_to_rgb(painter.grabbed)
+
+
+_MOVIE_MIN_SIDE = 512       # small stacks are enlarged (nearest neighbour): PowerPoint blurs them less
+_MOVIE_MAX_WIDTH = 3840     # mp4 decoder limit
+
+
+def movie_frames_to_mp4(frames, fps):
+    """H.264 mp4 bytes of a list of equal (H, W, 3) uint8 frames; small frames are
+    enlarged by a whole factor (sharp pixels) and the size made even."""
+    import tempfile
+    import numpy as np
+    from batoolset.img import write_video
+    stack = np.stack(frames, axis=0)
+    h, w = stack.shape[1:3]
+    factor = max(1, int(math.ceil(_MOVIE_MIN_SIDE / max(h, w))))
+    factor = max(1, min(factor, _MOVIE_MAX_WIDTH // max(w, 1)))
+    if factor > 1:
+        stack = np.repeat(np.repeat(stack, factor, axis=1), factor, axis=2)
+    pad_h = stack.shape[1] % 2
+    pad_w = stack.shape[2] % 2
+    if pad_h or pad_w:
+        stack = np.pad(stack, ((0, 0), (0, pad_h), (0, pad_w), (0, 0)), mode="edge")
+    tmp_dir = tempfile.mkdtemp(prefix="pyf_movie_")
+    path = os.path.join(tmp_dir, "panel.mp4")
+    try:
+        write_video(stack, path, fps=fps, dimensions="thwc")
+        with open(path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(path)
+            os.rmdir(tmp_dir)
+        except OSError:
+            pass
+
+
+def attach_movies(panel, scene, rect_of):
+    """Give the picture of every video / time-stack panel its movie: the panel's
+    frames (as displayed, cropped, without labels) as mp4 bytes in item['movie'].
+    PowerPoint plays it in place; the picture stays its poster frame."""
+    stacks = panel._collect_time_stacks() if hasattr(panel, "_collect_time_stacks") else []
+    for s, dims, n_frames in stacks:
+        rect = rect_of.get(id(s))
+        if rect is None or n_frames < 2:
+            continue
+        x, y, w, h = rect
+        best = None
+        for it in scene["items"]:
+            if it["kind"] != "image" or "movie" in it:
+                continue
+            x0, y0, x1, y1 = _bbox(it)
+            if x0 >= x - 1 and y0 >= y - 1 and x1 <= x + w + 1 and y1 <= y + h + 1:
+                if best is None or it["w"] * it["h"] > best["w"] * best["h"]:
+                    best = it
+        if best is None:
+            continue
+        originals = (getattr(s, "dimensions", None), getattr(s, "projection", None))
+        frames = []
+        try:
+            for i in range(n_frames):
+                panel._show_stack_frame(s, dims, i)
+                frame = _grab_drawn_image(s)
+                if frame is None or (frames and frame.shape != frames[0].shape):
+                    frames = []
+                    break
+                frames.append(frame)
+        finally:
+            s.dimensions, s.projection = originals
+            s.update_qimage()
+        if frames:
+            best["movie"] = movie_frames_to_mp4(frames, panel._video_fps([s]))
+            best["movie_frames"] = len(frames)
 
 
 # ---------------------------------------------------------------------------
@@ -664,7 +796,9 @@ def write_pptx(scene, out_path):
             grp.name = f"Panel {g + 1}"
             target = grp.shapes
         for it in items:
-            if it["kind"] == "image":
+            if it["kind"] == "image" and it.get("movie"):
+                _pptx_movie(slide.shapes, target, it, emu)
+            elif it["kind"] == "image":
                 _pptx_image(target, it, emu)
             elif it["kind"] == "path":
                 _pptx_path(target, it, emu, RGBColor, Pt)
@@ -679,6 +813,20 @@ def _pptx_image(shapes, it, emu):
                              emu(it["cy"] - it["h"] / 2), emu(it["w"]), emu(it["h"]))
     if abs(it["rotation"]) > 0.01:
         pic.rotation = it["rotation"] % 360
+
+
+def _pptx_movie(slide_shapes, shapes, it, emu):
+    """A playable movie where the picture was, the picture as its poster frame.
+    python-pptx adds movies to the slide only: it is then moved into the group."""
+    movie = slide_shapes.add_movie(io.BytesIO(it["movie"]), emu(it["cx"] - it["w"] / 2),
+                                   emu(it["cy"] - it["h"] / 2), emu(it["w"]), emu(it["h"]),
+                                   poster_frame_image=io.BytesIO(it["png"]), mime_type="video/mp4")
+    movie.name = "Movie"
+    if abs(it["rotation"]) > 0.01:
+        movie.rotation = it["rotation"] % 360
+    if shapes is not slide_shapes:
+        shapes._spTree.append(movie._element)
+        shapes._recalculate_extents()
 
 
 def _pptx_path(shapes, it, emu, RGBColor, Pt):
@@ -903,4 +1051,5 @@ def scene_summary(scene):
         kinds[it["kind"]] += 1
     return {"width_pt": round(scene["width"], 2), "height_pt": round(scene["height"], 2),
             "images": kinds["image"], "shapes": kinds["path"], "texts": kinds["text"],
+            "movies": sum(1 for it in scene["items"] if it.get("movie")),
             "panel_groups": len({it.get("group") for it in scene["items"] if it.get("group") is not None})}

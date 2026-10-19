@@ -222,6 +222,65 @@ def test_mcp_export_pptx_and_jsx(cropped_figure, tmp_path):
     assert M.export_illustrator_script(str(tmp_path / "nope.pyf"), str(tmp_path / "x.jsx")).startswith("ERROR")
 
 
+def _decode_mp4(data):
+    av = pytest.importorskip("av")
+    with av.open(io.BytesIO(data)) as c:
+        return [f.to_ndarray(format="rgb24") for f in c.decode(video=0)]
+
+
+def test_movie_frames_to_mp4_enlarges_small_frames_sharply_and_evenly():
+    frames = [np.full((5, 7, 3), 40 * i, np.uint8) for i in range(3)]
+    out = _decode_mp4(E.movie_frames_to_mp4(frames, fps=5))
+    # 7 px wide -> x74 (>= 512 px), then padded to even sizes
+    assert len(out) == 3 and out[0].shape == (370, 518, 3)
+    assert [int(round(f.mean())) for f in out] == pytest.approx([0, 40, 80], abs=3)
+
+
+def test_movie_panels_play_in_powerpoint(tmp_path):
+    """The editable PowerPoint showed a video panel as a still picture although
+    PowerPoint plays mp4: it is now a movie (poster frame = the shown frame)."""
+    import tifffile
+    import pyfigures.mcp_server as M
+    from pptx import Presentation
+    t = np.zeros((6, 40, 60), np.uint8)
+    for i in range(6):
+        t[i, :, 10 * i:10 * i + 10] = 255                               # a stripe moving right
+    movie = str(tmp_path / "movie.tif")
+    tifffile.imwrite(movie, t, imagej=True, metadata={"axes": "TYX"})
+    still = str(tmp_path / "still.tif")
+    tifffile.imwrite(still, np.full((40, 60), 90, np.uint8))
+    pyf = str(tmp_path / "fig.pyf")
+    M.create_figure(pyf, mode="groups", num_groups=1, orientation="X")
+    M.add_image(pyf, [0], still, label="A")
+    M.add_image(pyf, [0], movie, label="B")
+    M.transform_image(pyf, [0], 1, crop_right=20)                       # the movie keeps the crop
+
+    res = json.loads(M.export_pptx(pyf, str(tmp_path / "out.pptx")))
+    assert res["movies"] == 1 and res["images"] == 2 and res["panel_groups"] == 2
+    prs = Presentation(res["path"])
+    groups = [g for g in prs.slides[0].shapes if g.shape_type == 6]
+    kinds = [sorted(s.shape_type for s in g.shapes) for g in groups]
+    assert kinds == [[13, 17], [16, 17]]                                # picture / movie + its label
+    mov = [s for s in groups[1].shapes if s.shape_type == 16][0]
+    pic = [s for s in groups[0].shapes if s.shape_type == 13][0]
+    assert mov.top == pic.top and mov.height == pic.height and mov.left > pic.left
+    assert abs(mov.width / mov.height - 40 / 40) < 0.02                 # 40 x 40 after the crop
+    video = [r.target_part for r in mov.part.rels.values() if r.reltype.endswith("/video")]
+    assert len(video) == 1
+    frames = _decode_mp4(video[0].blob)
+    assert len(frames) == 6 and frames[0].shape[0] == frames[0].shape[1] >= 512
+    scale = frames[0].shape[1] / 40
+    lit = [np.where(f[..., 0].mean(0) > 128)[0] for f in frames]
+    assert [int(round(c.min() / scale)) for c in lit[:4]] == [0, 10, 20, 30]
+    assert len(lit[5]) == 0                                             # last stripe is cropped away
+    xml = prs.slides[0]._element.xml
+    assert "p:timing" in xml and "videoFile" in xml
+
+    # Illustrator has no movies: the shown frame only
+    jres = json.loads(M.export_illustrator_script(pyf, str(tmp_path / "out.jsx")))
+    assert jres["movies"] == 0 and len(os.listdir(jres["assets"])) == 2
+
+
 def test_labels_keep_the_size_they_have_in_the_other_exports(cropped_figure, tmp_path, qapp):
     """Labels and scale-bar text drawn by PyFigures came out at 72/96 of their
     size in PowerPoint / Illustrator (and so off-centre on the scale bar)."""

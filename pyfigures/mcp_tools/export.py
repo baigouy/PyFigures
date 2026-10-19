@@ -981,10 +981,12 @@ def export_pptx(pyf_path: str, out_path: str) -> str:
     brackets and vector plots are editable shapes. Cropped / rotated panels keep
     their crop and rotation. Text inside Matplotlib data plots (tick labels, axis
     titles, significance stars) is editable text too; text inside imported
-    SVG/PDF graphics and LaTeX-typeset plots stays exact outlines.
+    SVG/PDF graphics and LaTeX-typeset plots stays exact outlines. Video /
+    time-stack panels are playable movies (H.264 mp4 of the panel's frames; the
+    shown frame is the poster image; click the movie to play it).
 
-    Returns JSON: path, size in points, number of images / shapes / text boxes
-    and panel groups. Needs the ``python-pptx`` package.
+    Returns JSON: path, size in points, number of images / shapes / text boxes,
+    movies and panel groups. Needs the ``python-pptx`` package.
     """
     if not out_path.lower().endswith(".pptx"):
         return "ERROR: out_path must end in .pptx."

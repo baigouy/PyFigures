@@ -130,7 +130,7 @@ def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
         out_dir = _os.path.dirname(out_path)
         if out_dir:
             _os.makedirs(out_dir, exist_ok=True)
-        scene = capture_scene(panel)
+        scene = capture_scene(panel, movies=fmt == "pptx")
         summary = scene_summary(scene)
         if fmt == "pptx":
             write_pptx(scene, out_path)

@@ -6243,7 +6243,7 @@ class EZFIG_GUI(QMainWindow):
         self.statusBar().showMessage(f'Exporting {name}, please wait...')
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            scene = capture_scene(self.paint.EZFIG_panel)
+            scene = capture_scene(self.paint.EZFIG_panel, movies=fmt == 'pptx')
             if fmt == 'pptx':
                 write_pptx(scene, output_file)
                 extra = ''

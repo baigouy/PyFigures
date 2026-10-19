@@ -885,6 +885,24 @@ class MyWidget(QWidget):
                 stacks.append((s, dims, img.shape[dims.index('t')]))
         return stacks
 
+    @staticmethod
+    def _video_fps(shapes, default=25.0):
+        """Frame rate of the first of *shapes* whose image records one, else *default*."""
+        for s in shapes:
+            meta = getattr(getattr(s, 'img', None), 'metadata', None)
+            if meta and meta.get('fps'):
+                return float(meta['fps'])
+        return default
+
+    @staticmethod
+    def _show_stack_frame(s, dims, frame_idx):
+        """Make the time-stack panel *s* (axes *dims*) show frame *frame_idx*
+        (the first index of any other extra axis, no projection)."""
+        lead = dims[:dims.index('h')]  # extra dims before H, e.g. 't' or 'td'
+        s.projection = None
+        s.dimensions = {'order': dims, 'values': [frame_idx if L == 't' else 0 for L in lead]}
+        s.update_qimage()
+
     def _render_current_frame_to_array(self, size, scaling_factor_dpi, bg_color):
         """Render the figure at its current per-panel frame state into an
         (H, W, 3) uint8 RGB array. Mirrors the raster branch of save()."""
@@ -937,12 +955,7 @@ class MyWidget(QWidget):
         n_frames = max(tc for _, _, tc in stacks)
 
         if fps is None:
-            fps = 25.0
-            for s, _, _ in stacks:
-                meta = getattr(getattr(s, 'img', None), 'metadata', None)
-                if meta and meta.get('fps'):
-                    fps = float(meta['fps'])
-                    break
+            fps = self._video_fps([s for s, _, _ in stacks])
 
         # fixed canvas size (layout is identical across frames); no DPI prompt for video
         scaling_factor_dpi = scaling_factor_to_achieve_DPI(dpi)
@@ -959,12 +972,9 @@ class MyWidget(QWidget):
         try:
             for i in range(n_frames):
                 for (s, dims, tc) in stacks:
-                    lead = dims[:dims.index('h')]  # extra dims before H, e.g. 't' or 'td'
                     blank = frame_mode == 'blank' and i >= tc
                     frame_idx = i if i < tc else tc - 1
-                    s.projection = None
-                    s.dimensions = {'order': dims, 'values': [frame_idx if L == 't' else 0 for L in lead]}
-                    s.update_qimage()
+                    self._show_stack_frame(s, dims, frame_idx)
                     if blank and s.qimage is not None:
                         solid = QImage(s.qimage.size(), s.qimage.format())
                         solid.fill(QColor(*bg_color))
