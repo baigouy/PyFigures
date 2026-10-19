@@ -106,7 +106,10 @@ mcp = FastMCP(
         "means nothing (or not everything) was changed. Every call is logged beside "
         "the figure: list_history shows them, undo_last reverts the last change(s). "
         "Never invent pixel sizes, "
-        "units or statistics design: ask the user or read the image metadata."
+        "units or statistics design: ask the user or read the image metadata. "
+        "TEACHING: when the user asks how to do something themselves (\"show me how\"), "
+        "call show_me_how(<operation>) — it highlights the real menus in their open "
+        "PyFigures window and they do the clicks; explain_how gives the steps as text."
     ),
 )
 

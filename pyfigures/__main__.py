@@ -280,6 +280,7 @@ def run_pyfigures():
     # Only NOW create the main window — Fiji is fully ready (or skipped)
     w = EZFIG_GUI()
     w.show()
+    w.open_guide_mailbox()      # MCP show_me_how / `python -m pyfigures.guides show …`
 
     # Run the event loop; it returns once the last window is closed.
     exit_code = app.exec_() if hasattr(app, 'exec_') else app.exec()

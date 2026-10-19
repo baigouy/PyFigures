@@ -565,6 +565,31 @@ together.
 | `generate_alt_text(pyf_path, save)` | Draft alt text (screen-reader description) from the figure's content: panel letters, micrograph colours, merges, montages, channel splits, chart type + compared groups + recorded statistics, kymographs, scale bars, arrows. Returns a short sentence (≤ 250 chars) and a panel-by-panel description. GUI: File → Alt text (accessibility)… |
 | `set_alt_text(pyf_path, long, short)` | Store the reviewed alt text in `<figure>.alttext.json` |
 
+### "Show me how" tools (teach the user in the open PyFigures window)
+
+When the user wants to learn an operation, or a model cannot do a long task
+reliably, these tools open a short guide in the user's PyFigures window: the
+real menus are outlined one level at a time in a floating, closable bubble and
+the user does the clicks. Showing a guide never edits the figure
+(`operation_executed` is always false); the guide watches for the user's
+result (a split row appears, the LUTs change…) and reports `completed`.
+
+| Tool | Description |
+|------|-------------|
+| `list_how_to_guides()` | The guides: id, title, summary, and `do_it_tool` (the tool that does the same operation directly) |
+| `show_me_how(operation, pyf_path)` | Open a guide by id (`split_channels`, `crop_image`, `set_lut`, `zoom_inset`, `add_scale_bars`, `panel_letters`, `add_data_plot`, `channel_merge`, `journal_check`, `apply_journal`, `check_resolution`, `export_pptx`, `figure_caption`, `presubmission_review`, `colour_blind_preview`) or by the user's words ("how do I crop?"; an ambiguous request returns candidates). `pyf_path` picks the window when several are open. No window open → `gui_unavailable` plus the steps as text |
+| `guidance_status(pyf_path)` | `guidance_shown` (with the current step), `completed`, `cancelled`, `guidance_closed` or `no_guide` |
+| `close_guidance(pyf_path)` | Close the guide; the figure is not changed |
+| `explain_how(operation)` | The same authored steps as text, no GUI needed |
+
+The same guides are in the GUI under **Help → Show me how…**, and on the
+command line: `python -m pyfigures.guides list | explain <op> | show <op> |
+status | close`. The MCP server reaches a window through a local folder
+(`~/.pyfigures/gui_sessions/`) that the window opens at launch; a request must
+carry that window's random token and can only name a guide from the registry
+(`pyfigures/guides.py`), never code or screen coordinates. There is no recipe
+key: guides are interactive by nature.
+
 ### Consistency & upkeep tools
 
 | Tool | Description |

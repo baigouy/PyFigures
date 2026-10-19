@@ -572,6 +572,12 @@ class EZFIG_GUI(QMainWindow):
 
         from pyfigures.gui.tutorial import TutorialController
         self._tutorial = TutorialController(self)
+        # "Show me how" guides (Help menu); the mailbox that lets the MCP
+        # server / command line ask for one is opened by the app launch only
+        # (open_guide_mailbox), never by headless renders or tests
+        from pyfigures.gui.show_me_how import GuideRunner
+        self._guides = GuideRunner(self)
+        self._guide_mailbox = None
 
         # We create an image store to spare resources
         if True: # this takes even more memory as of now but I should be able to improve that in the future
@@ -1372,6 +1378,15 @@ class EZFIG_GUI(QMainWindow):
         help_menu.addAction(install_latex)
 
         help_menu.addSeparator()
+        from pyfigures.guides import GUIDES
+        how_menu = help_menu.addMenu('Show me how…')
+        how_menu.setToolTip('Short guides that highlight the menus to use; you do the clicks')
+        for guide_id, guide in GUIDES.items():
+            how_action = QAction(guide['title'], self)
+            how_action.setToolTip(guide['summary'])
+            how_action.triggered.connect(lambda checked=False, g=guide_id: self.show_me_how(g))
+            how_menu.addAction(how_action)
+
         beginner_tuto_action = QAction('▶  Beginner Tutorial', self)
         beginner_tuto_action.triggered.connect(self.start_beginner_tutorial)
         help_menu.addAction(beginner_tuto_action)
@@ -1597,6 +1612,31 @@ class EZFIG_GUI(QMainWindow):
     def show_tips(self):
         dialog = TipDialog(self, self.tips)
         dialog.exec_()
+
+    def open_guide_mailbox(self, root=None):
+        """Accept show-me-how requests from the MCP server and the command line
+        (pyfigures.guides); called when the app is launched for a user."""
+        if self._guide_mailbox is not None or os.environ.get('PYFIGURES_NO_GUIDE_MAILBOX') == '1':
+            return self._guide_mailbox
+        try:
+            from pyfigures.gui.show_me_how import GuideMailbox
+            self._guides.stop()
+            self._guide_mailbox = GuideMailbox(self, root=root)
+            self._guides = self._guide_mailbox.runner
+        except Exception:
+            logger.error('could not open the show-me-how mailbox:\n' + traceback.format_exc())
+        return self._guide_mailbox
+
+    def show_me_how(self, guide_id):
+        """Help → Show me how…: highlight the real menus/controls for one
+        operation (pyfigures.guides); the user does the clicks."""
+        from pyfigures.guides import GUIDES
+        try:
+            return self._guides.start(guide_id)
+        except LookupError as e:     # the guide's menu path is missing from this GUI
+            logger.error(f'show-me-how guide {guide_id!r} unavailable: {e}')
+            self.statusBar().showMessage(f'Guide unavailable: {GUIDES[guide_id]["title"]}')
+            return None
 
     def start_beginner_tutorial(self):
         from pyfigures.gui.tutorial import beginner_steps
@@ -2927,6 +2967,11 @@ class EZFIG_GUI(QMainWindow):
             self.temp_dir.cleanup()
         except Exception:
             pass
+        if getattr(self, '_guide_mailbox', None) is not None:
+            try:
+                self._guide_mailbox.close()
+            except Exception:
+                traceback.print_exc()
         if getattr(self, '_started_mcp_http', False):
             try:
                 from pyfigures.gui.mcp_server_dialog import stop_autostarted_http_server

@@ -37,10 +37,10 @@ import os
 import sys
 
 from .mcp_tools import app, core, structure, content, annotations, overlays, workflow, qc, export, poster
-from .mcp_tools import stacks, upkeep
+from .mcp_tools import stacks, upkeep, guidance
 
 _TOOL_MODULES = (app, core, structure, content, annotations, overlays, workflow, qc, export, poster,
-                 stacks, upkeep,)
+                 stacks, upkeep, guidance,)
 for _m in _TOOL_MODULES:
     globals().update({_k: _v for _k, _v in vars(_m).items()
                       if not (_k.startswith("__") and _k.endswith("__"))})
