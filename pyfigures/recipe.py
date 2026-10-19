@@ -91,7 +91,7 @@ class RecipeChecksFailed(RecipeError):
 
 
 _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
-             "defaults", "rows", "panels", "columns", "spacing", "label_background",
+             "defaults", "rows", "panels", "columns", "layout", "spacing", "label_background",
              "background",
              # sizing, typography and finishing
              "width_mm", "width_cm", "width_in", "width_px", "dpi", "font", "min_font_pt",
@@ -494,8 +494,72 @@ def _resolve(base_dir, p):
     return os.path.normpath(p if os.path.isabs(p) else os.path.join(base_dir, p))
 
 
+_FILE_LIKE = re.compile(r"\.[A-Za-z0-9]{2,5}$")
+
+
+def _layout_rows(recipe, base=None):
+    """A layout formula (pyfigures/layout_formula.py) as (tree, ids, rows):
+    one single-panel row per panel id, in reading order; the build then
+    arranges these rows into the formula's nested groups. An id that is not
+    in panels: is a file name, or the name of exactly ONE file in the recipe's
+    folder (a → a.png); several candidates are an error, never a guess."""
+    from pyfigures import layout_formula as LF
+    if "rows" in recipe:
+        raise RecipeError("a recipe needs either 'layout' (with 'panels' as a mapping id: panel) "
+                          "or 'rows', not both")
+    if "columns" in recipe:
+        raise RecipeError("'columns' does not apply to a layout formula")
+    if not isinstance(recipe["layout"], str):
+        raise RecipeError("'layout' must be a formula text such as \"(a,b,c)/(d,e,f)\"")
+    try:
+        tree = LF.parse(recipe["layout"])
+    except LF.FormulaError as e:
+        raise RecipeError(f"layout: {e}") from None
+    panels = recipe.get("panels") or {}
+    if not isinstance(panels, dict):
+        raise RecipeError("with 'layout', 'panels' must be a mapping of panel id to panel "
+                          "(e.g. panels: {a: {image: wt.tif, crop: {bottom: 20}}, b: ko.tif}), "
+                          "not a list")
+    ids = LF.panel_ids(tree)
+    seen = set()
+    for pid in ids:
+        if pid in seen:
+            raise RecipeError(f"layout: panel {pid!r} is placed twice — to show the same image "
+                              "twice, define two ids with the same source in panels:")
+        seen.add(pid)
+    unused = [str(k) for k in panels if str(k) not in seen]
+    if unused:
+        raise RecipeError(f"panels {unused} are not in the layout {recipe['layout']!r} "
+                          "(a typo? every panel id must appear in the formula once)")
+    rows = []
+    for pid in ids:
+        if pid in panels:
+            rows.append(({}, [panels[pid]]))
+        elif _FILE_LIKE.search(pid):
+            rows.append(({}, [pid]))                 # a file name used directly
+        else:
+            cands = []
+            if base and os.path.isdir(base):
+                cands = sorted(n for n in os.listdir(base)
+                               if os.path.splitext(n)[0].lower() == pid.lower()
+                               and os.path.isfile(os.path.join(base, n))
+                               and not n.lower().endswith((".yaml", ".yml", ".json", ".pyf")))
+            if len(cands) == 1:
+                rows.append(({}, [cands[0]]))
+                continue
+            if len(cands) > 1:
+                raise RecipeError(f"layout: panel {pid!r} matches several files {cands}: write "
+                                  f"the file name in the formula, or define {pid} in panels:")
+            raise RecipeError(f"layout: panel {pid!r} is not defined in panels: and no file "
+                              f"called {pid}.* is next to the recipe — add it, e.g. "
+                              f"panels: {{{pid}: {{image: file.tif}}}}")
+    return tree, ids, rows
+
+
 def _rows_of(recipe):
     """The rows as [(row_options, [panel, ...]), ...]."""
+    if "layout" in recipe:
+        return _layout_rows(recipe)[2]
     has_rows, has_panels = "rows" in recipe, "panels" in recipe
     if has_rows == has_panels:
         raise RecipeError("a recipe needs either 'rows' or 'panels' (not both)")
@@ -723,12 +787,18 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                 raise RecipeError(f"fill {k + 1}: file not found: {p}")
             fill.append(p)
 
+    layout_tree, layout_ids, rows_src = None, None, []
+    if "layout" in recipe and "template" not in recipe:
+        layout_tree, layout_ids, rows_src = _layout_rows(recipe, base)
+    elif "template" not in recipe:
+        rows_src = _rows_of(recipe)
     plan_rows = []
-    for r, (row_opts, row) in enumerate(_rows_of(recipe) if "template" not in recipe else []):
+    for r, (row_opts, row) in enumerate(rows_src):
         _check_row_opts(row_opts, len(row), f"row {r + 1}")
         plan_row = []
         for c, panel in enumerate(row):
-            where = f"row {r + 1}, panel {c + 1}"
+            where = (f"layout panel {layout_ids[r]!r}" if layout_ids
+                     else f"row {r + 1}, panel {c + 1}")
             if isinstance(panel, str):
                 panel = {"image": panel}          # `- [wt.tif, ko.tif]` shorthand
             kind = _panel_kind(panel, where)
@@ -819,6 +889,8 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "output": output,
         "base": base,
         "rows": plan_rows,
+        "layout": layout_tree,
+        "layout_ids": layout_ids,
         "journal": recipe.get("journal"),
         # YAML reads `column: 1.5` / `2` as numbers
         "column": (f"{recipe['column']:g}" if isinstance(recipe.get("column"), (int, float))
@@ -1220,6 +1292,117 @@ def _fill_template(M, out, template, files):
     return len(files), w
 
 
+def _crop_to_aspect(img, target, name):
+    """Centre-crop an Image2D element (on top of its own crop) to the aspect
+    ratio *target* (width / height). Returns a warning, or ''."""
+    from pyfigures.mcp_tools.core import _child_text, _decode, _raw_size_from_file, _set_child_text
+    fn = _decode(_child_text(img, "filename"))
+    size = _raw_size_from_file(fn) if isinstance(fn, str) else None
+    if not size:
+        return f"grid: panel {name!r} kept its own size (no image size to crop)"
+    crop = {k: int(float(_child_text(img, f"crop_{k}") or 0))
+            for k in ("left", "right", "top", "bottom")}
+    w = size[0] - crop["left"] - crop["right"]
+    h = size[1] - crop["top"] - crop["bottom"]
+    if w <= 0 or h <= 0 or abs(w / h - target) / target < 0.005:
+        return ""
+    if w / h > target:
+        extra = int(round(w - h * target))
+        crop["left"] += extra // 2
+        crop["right"] += extra - extra // 2
+        side = f"{extra} px left/right"
+    else:
+        extra = int(round(h - w / target))
+        crop["top"] += extra // 2
+        crop["bottom"] += extra - extra // 2
+        side = f"{extra} px top/bottom"
+    for k, v in crop.items():
+        _set_child_text(img, f"crop_{k}", str(v))
+    return f"grid: panel {name!r} centre-cropped by {side} to the grid's {target:.2f} aspect ratio"
+
+
+def _arrange_layout(out, plan):
+    """Move the one-panel rows built for a layout formula into the formula's
+    nested groups (rows = X, stacks = Y; a grid = a stack of rows whose cells
+    are cropped to one aspect ratio). Panels move with everything on them."""
+    from collections import Counter
+    from pyfigures.mcp_tools.core import (_child_text, _decode, _load, _new_group_elem,
+                                          _next_group_id, _raw_size_from_file, _save)
+    tree, root = _load(out)
+    tops = root.findall("Group")
+    ids = plan["layout_ids"]
+    if len(tops) != len(ids):
+        return [f"layout: expected {len(ids)} built panels, found {len(tops)} rows; "
+                "the panels were left as rows"]
+    leaf = {}
+    for pid, g in zip(ids, tops):
+        kids = list(g.find("content"))
+        leaf[pid] = kids[0] if len(kids) == 1 else g      # a split / montage / glob keeps its group
+    space = plan["spacing"]
+    next_id = [_next_group_id(root)]
+    warnings = []
+
+    def group(orientation, children):
+        el = _new_group_elem(orientation, space=space, group_id=next_id[0])
+        next_id[0] += 1
+        for c in children:
+            el.find("content").append(c)
+        return el
+
+    def aspect(el):
+        if el.tag != "Image2D":
+            return None
+        fn = _decode(_child_text(el, "filename"))
+        size = _raw_size_from_file(fn) if isinstance(fn, str) else None
+        if not size:
+            return None
+        w = size[0] - sum(int(float(_child_text(el, f"crop_{k}") or 0)) for k in ("left", "right"))
+        h = size[1] - sum(int(float(_child_text(el, f"crop_{k}") or 0)) for k in ("top", "bottom"))
+        return w / h if w > 0 and h > 0 else None
+
+    def build(node):
+        t = node["type"]
+        if t == "panel":
+            return leaf[node["id"]]
+        if t in ("row", "col"):
+            return group("X" if t == "row" else "Y", [build(k) for k in node["children"]])
+        from pyfigures.layout_formula import grid_cells
+        cells = grid_cells(node)
+        ratios = [a for a in (aspect(leaf[p]) for r in cells for p in r) if a]
+        if ratios:
+            target = Counter(round(a, 2) for a in ratios).most_common(1)[0][0]
+            for r in cells:
+                for p in r:
+                    if leaf[p].tag == "Image2D":
+                        w = _crop_to_aspect(leaf[p], target, p)
+                    else:
+                        w = f"grid: panel {p!r} is not a single image: kept its own size"
+                    if w:
+                        warnings.append(w)
+        rows = [group("X", [leaf[p] for p in r]) for r in cells]
+        return rows[0] if len(rows) == 1 else group("Y", rows)
+
+    def as_top(el):
+        return el if el.tag == "Group" else group("X", [el])
+
+    t = plan["layout"]
+    if t["type"] == "col":
+        new_tops = [as_top(build(k)) for k in t["children"]]
+    elif t["type"] == "grid":
+        g = build(t)
+        new_tops = list(g.find("content")) if _decode(_child_text(g, "orientation")) == "Y" else [g]
+    else:
+        new_tops = [as_top(build(t))]
+    children = list(root)
+    at = children.index(tops[0])
+    for g in tops:
+        root.remove(g)
+    for k, g in enumerate(new_tops):
+        root.insert(at + k, g)
+    _save(tree, out, recompute=True)
+    return warnings
+
+
 def build_figure_from_recipe(recipe_path: str) -> dict:
     """Build the figure described by *recipe_path*; returns a summary dict.
     Raises RecipeError on any invalid input or failed step. A build that fails
@@ -1395,6 +1578,11 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
     # pass 3: per-panel settings (none of them adds or moves a panel)
     for r, gp, i, path, opts, step in image_tasks:
         warnings += _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar)
+
+    # a layout formula: every panel was built as its own row, with all its
+    # settings; now arrange them into the formula's nested groups
+    if plan.get("layout"):
+        warnings += _arrange_layout(out, plan)
 
     lettered = 0
     if plan["letter_panels"]:

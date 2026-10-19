@@ -151,11 +151,12 @@ created as needed. Forward slashes work on every OS.
 | Key | Default | What it does |
 |---|---|---|
 | `output` | — **required** | The `.pyf` to write (must end in `.pyf`). Overwritten on rebuild. |
-| `rows` | — | The figure as a list of rows (see §4). Give `rows` **or** `panels`. |
-| `panels` | — | A flat list of panels, cut into rows of `columns` panels. |
+| `rows` | — | The figure as a list of rows (see §4). Give `rows`, `panels` **or** `layout`. |
+| `panels` | — | A flat list of panels, cut into rows of `columns` panels; with `layout`, a mapping *id: panel*. |
 | `columns` | all in one row | Panels per row when using `panels`. |
+| `layout` | — | The whole layout as one formula, e.g. `"(a,b,c)/(d,e,f)"` or `"(a,(b/c))/d"` (see §4b). |
 | `journal` | none | Size the figure for a journal (see §23). Omit to keep the natural size. |
-| `column` | `single` | `single`, `1.5` or `double` (also `1`, `2`, `half`, `full`). |
+| `column` | `single` | One of the sizes that journal gives: `single`, `1.5`, `double`, `triple` (also `1 column`, `2 columns`, `3 columns`, `full width`). |
 | `letter_panels` | `true` | Add A, B, C… to the top-left corner of each panel. Must be an unquoted `true`/`false` (`"false"` in quotes is refused, not read as yes). |
 | `title` | `"Figure"` | Title stored with the caption. |
 | `caption` | auto stub | Figure legend. Omitted → a stub listing the panels — `(A) wt; (B) ko; (C) data plot. [Describe …]` — to complete. Stored in `<figure>.caption.json`; export it with the caption tools. |
@@ -240,6 +241,49 @@ panels:
 Any image PyFigures opens can be used — TIFF / OME-TIFF / ImageJ hyperstacks,
 PNG, JPG and the microscopy formats of your install. For multi-series files,
 pick the series with `series` in `montage` / `split`, or in the GUI.
+
+---
+
+## 4b. Layout formulas — `layout`
+
+Instead of `rows`, the whole layout fits on one line; each panel is then
+defined once, under `panels:` (a mapping *id: panel*):
+
+```yaml
+output: fig2.pyf
+layout: "(split, plot) / [wt, ko / rescue, ctrl]"
+panels:
+  split: {split: cells.tif, names: [DNA, actin], crop: {bottom: 20}}
+  plot:  {plot: counts.csv, kind: box, annotate_stats: true}
+  wt: wt.tif
+  ko: ko.tif
+  rescue: {image: rescue.tif, lut: green, scale_bar: {units: 10, unit: um}}
+  ctrl: ctrl.tif
+```
+
+| Symbol | Meaning |
+|---|---|
+| `,` or `\|` | side by side |
+| `/` | stacked; `,` binds tighter, so `a,b/c,d` is the row `a,b` over the row `c,d` |
+| `( )` | a group, nested to any depth; a group spans the rows / columns it holds: `(a,(b/c))/d` puts `a` beside `b` over `c` (a panel two rows high) |
+| `[ ]` | a grid: every cell is centre-cropped to the grid's most common aspect ratio, so rows have equal heights and columns line up (the build lists each crop). Plain groups keep each image's own aspect ratio, without cropping |
+
+Spaces are only for reading: `a|b|c / d|e|f` = `(a,b,c)/(d,e,f)`.
+
+**Ids, not positions.** A name in the formula is a panel id from `panels:`
+(any panel kind, with all its keys), a file name (`a.png`, when it has no
+`, / ( ) [ ] |` or spaces), or the name of exactly one file next to the recipe
+(`a` → `a.png`; two candidates such as `a.png` and `a.tif` are an error, never
+a guess). Panel letters follow the formula's reading order and are
+regenerated on every build; an id always keeps its source and settings.
+Errors are reported before anything is built: an id placed twice, an id in
+`panels:` missing from the formula, an unknown id, unbalanced brackets (the
+message points at the character).
+
+`python -m pyfigures.layout_formula "(a,(b/c))/d"` prints how a formula is
+read. The parenthesised comma/slash notation is inspired by
+[Griphus](https://www.systaxon.ufes.br/gri/) (Systaxon, UFES), which builds
+figure plates from formulas such as `((1/5),(2/(3,4)/6))`.
 
 ---
 

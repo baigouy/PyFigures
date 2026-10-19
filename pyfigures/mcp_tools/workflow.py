@@ -827,6 +827,22 @@ def recipe_reference() -> str:
         "column": "one of the columns the journal has (see journals: widths in mm), e.g. "
                   "single, 1.5, double, triple; also '2 columns', 'full width'. A journal "
                   "that is missing: import its pasted guidelines (prepare_journal_style_import).",
+        "layout_formula": {
+            "what": "instead of rows: give the whole layout as one formula, and each panel "
+                    "once under panels: (a mapping id: panel)",
+            "syntax": "',' or '|' side by side, '/' stacked (',' binds tighter: a,b/c,d = row "
+                      "a,b over row c,d), '( )' nest to any depth — a group spans the rows/"
+                      "columns it holds, e.g. (a,(b/c))/d puts a beside b-over-c; '[ ]' a grid "
+                      "whose cells are centre-cropped to one aspect ratio so they line up. "
+                      "Spaces are ignored. Notation inspired by Griphus.",
+            "ids": "a panel id from panels:, a file name (no , / ( ) [ ] | or spaces), or the "
+                   "name of exactly one file next to the recipe (a -> a.png). Letters follow "
+                   "the formula's reading order.",
+            "example": "layout: \"(split,plot)/[c1,c2/c3,c4]\"\npanels:\n  split: {split: "
+                       "cells.tif, names: [DNA, actin]}\n  plot: {plot: counts.csv, kind: box}\n"
+                       "  c1: wt.tif\n  c2: ko.tif\n  c3: {image: rescue.tif, crop: {bottom: 20}}"
+                       "\n  c4: ctrl.tif",
+        },
         "notes": [
             "Paths are relative to the recipe file.",
             "px_to_unit is the pixel size (units per pixel), e.g. 0.1 for 0.1 um/pixel; "
