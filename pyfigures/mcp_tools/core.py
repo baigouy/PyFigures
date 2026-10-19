@@ -1048,6 +1048,9 @@ def _unreadable_image(filename: str) -> str | None:
     from batoolset.ome_zarr import is_zarr_path
     if is_zarr_path(name):                # OME-Zarr: a folder or URL, read by its own reader
         return _unreadable_zarr(name)
+    from batoolset import omero_web as O
+    if O.is_omero_url(name):
+        return _unreadable_omero(name)
     if name.lower().startswith(("http://", "https://", "omero:")) \
             or "#" in os.path.basename(name).split(".")[-1] or name in ("None", "@template@"):
         return None
@@ -1110,6 +1113,22 @@ def _unreadable_zarr(name: str) -> str | None:
     n = len(info.get("levels") or [])
     if level is not None and not 0 <= level < n:
         return f"level {level} out of range: {os.path.basename(store.rstrip('/'))} has {n} level(s), 0..{n - 1}"
+    return None
+
+
+def _unreadable_omero(url: str) -> str | None:
+    """Why an OMERO.web image link cannot be used, or None: server not
+    reachable, no such image, planes it does not have (metadata only). A
+    server asking for a login is allowed: the GUI asks for it when the figure
+    is opened (or OMERO_USERNAME / OMERO_PASSWORD for the MCP server)."""
+    from batoolset import omero_web as O
+    try:
+        O.describe(url)
+    except O.OmeroLoginRequired:
+        return None
+    except Exception as e:
+        reason = str(e) if isinstance(e, (ValueError, FileNotFoundError)) else f"{type(e).__name__}: {e}"
+        return f"cannot use the OMERO image {url}: {reason}"
     return None
 
 

@@ -188,6 +188,30 @@ def test_plane_selection_and_errors(server):
         O.describe(f"{server}/webclient/img_detail/99/")
 
 
+def test_plane_selections_the_image_does_not_have_are_refused(server):
+    url = f"{server}/webclient/img_detail/1/"            # Z=3, T=2, C=2
+    for frag, words in (("#z=3", "out of range"), ("#t=5", "out of range"), ("#c=7", "out of range"),
+                        ("#z=a", "numbers"), ("#z=2-1", "low to high"), ("#bogus=1", "unknown"),
+                        ("#z=", "numbers")):
+        with pytest.raises(ValueError, match=words):
+            O.describe(url + frag)
+    assert O.describe(url + "#z=0-2&t=1&c=0,1")["rendered_planes"] == 6
+
+
+def test_add_image_refuses_omero_links_that_cannot_work(qapp, server, tmp_path):
+    from pyfigures import mcp_server as M
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    assert M.add_image(pyf, [0], f"{server}/webclient/img_detail/1/#z=0&t=0").startswith("Added")
+    for url, words in ((f"{server}/webclient/img_detail/1/#c=7", "out of range"),
+                       (f"{server}/webclient/img_detail/99/", "not found"),
+                       ("http://127.0.0.1:9/webclient/img_detail/1/", "cannot use")):
+        res = M.add_image(pyf, [0], url)
+        assert res.startswith("ERROR") and words in res, res
+    # a private image is allowed: the login is asked for when the figure is opened
+    assert M.add_image(pyf, [0], f"{server}/webclient/?show=image-2").startswith("Added")
+
+
 def test_big_planes_are_read_in_regions(server):
     STATE["regions"] = 0
     _, arr = O.read_omero(f"{server}/webclient/img_detail/3/")

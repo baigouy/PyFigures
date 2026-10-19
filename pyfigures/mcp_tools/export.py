@@ -114,7 +114,8 @@ def _run_render(pyf_path: str, out_path: str, dpi: int, timeout: int = 300):
         _RENDER_WARNINGS[out_path] = (
             f"{len(unloaded)} panel(s) could not be loaded and are empty in the output: "
             + ", ".join(unloaded[:5]) + (" …" if len(unloaded) > 5 else "")
-            + " — if the files moved, remap_paths points the figure at their new place")
+            + " — files that moved: remap_paths points the figure at their new place; "
+              "links: check the address, the planes after '#' and that the server answers")
     return True, out_path
 
 
