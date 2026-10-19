@@ -92,6 +92,20 @@ def test_merge_lut_change_recolours_the_split_channel_names(tmp_path, dark_rgb):
     assert "MAGENTA" in luts and "RED" not in luts
 
 
+def test_zoom_corner_accepts_underscores_and_hyphens(tmp_path, dark_rgb):
+    import pyfigures.mcp_server as M
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, mode="groups", num_groups=1)
+    M.add_image(pyf, [0], dark_rgb)
+    for corner in ("top_left", "Bottom-Right"):
+        res = M.add_zoom_callout(pyf, [0], 0, source_x=20, source_y=20, source_w=10, source_h=10,
+                                 parent_width=80, parent_height=60, inset_corner=corner)
+        assert not res.startswith("ERROR"), res
+    assert M.add_zoom_callout(pyf, [0], 0, source_x=20, source_y=20, source_w=10, source_h=10,
+                              parent_width=80, parent_height=60,
+                              inset_corner="middle").startswith("ERROR")
+
+
 def test_gui_merge_lut_change_recolours_the_split_channel_names(qapp, tmp_path, dark_rgb):
     import pyfigures.mcp_server as M
     from batoolset.lists.tools import flatten_iterable

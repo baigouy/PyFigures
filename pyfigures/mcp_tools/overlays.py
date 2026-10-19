@@ -534,6 +534,9 @@ def add_zoom_callout(
     callout to selected panel.
     """
     corners = {"top right", "top left", "bottom right", "bottom left"}
+    # 'top_left', 'Top-Left' and 'TopLeft' mean 'top left'
+    spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", str(inset_corner))
+    inset_corner = " ".join(w for w in re.split(r"[\s\-_]+", spaced.strip().lower()) if w)
     if inset_corner not in corners:
         return f"ERROR: inset_corner must be one of {sorted(corners)}."
     if not (0.0 < inset_fraction <= 1.0):
