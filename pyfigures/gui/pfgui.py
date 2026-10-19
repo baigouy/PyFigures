@@ -1336,6 +1336,11 @@ class EZFIG_GUI(QMainWindow):
                                     '(needs the staplot package)')
         annots.addAction(data_plot_action)
         data_plot_action.triggered.connect(self.add_data_plot_action)
+        figure_colors_action = QAction("Figure colours…", self)
+        figure_colors_action.setToolTip("Recolour the whole figure at once (e.g. magenta / green): "
+                                        "every multi-channel image, merge, channel split and plot")
+        annots.addAction(figure_colors_action)
+        figure_colors_action.triggered.connect(self.figure_colors_action)
 
         qc_menu = self.menuBar.addMenu("QC")
         audit_action = QAction("Audit figure (missing scale bars / labels)", self)
@@ -4695,6 +4700,22 @@ class EZFIG_GUI(QMainWindow):
         """Help → Install LaTeX for PyFigures… (TinyTeX; MCP: install_latex)."""
         from pyfigures.gui.latex_support import install_latex_action
         return install_latex_action(self)
+
+    def figure_colors_action(self):
+        """Annotations → Figure colours… (MCP: set_figure_colors; recipe: colors:)."""
+        text, ok = QInputDialog.getText(
+            self, "Figure colours",
+            "Colours in channel order (gray, red, green, blue, cyan, magenta, yellow), e.g.\n"
+            "magenta, green — or colorblind. Single-channel panels become gray; plots take\n"
+            "these colours when they have as many groups, else a colour-blind-safe palette:",
+            text="magenta, green")
+        if not ok or not text.strip():
+            return
+        import re
+        from pyfigures.mcp_server import set_figure_colors
+        names = [c for c in re.split(r"[,\s]+", text.strip()) if c]
+        self._run_mcp_mutation(set_figure_colors, f"Figure colours: {', '.join(names)}.",
+                               colors=names)
 
     def add_data_plot_action(self):
         """Pick a CSV + plot options, then add a live data-plot panel

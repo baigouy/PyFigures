@@ -255,7 +255,8 @@ _DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped")
 
 def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
                            only_significant: bool, title: str, ylabel: str,
-                           xlabel: str, stats_mode: str = "auto", latex: bool = False) -> str:
+                           xlabel: str, stats_mode: str = "auto", latex: bool = False,
+                           colors: list | None = None) -> str:
     """Return a custom_loading_script that renders a data-plot panel from a CSV
     via staplot's UI-free api. Soft dependency: if staplot is not importable the
     panel shows an install hint instead of crashing the figure. The panel is
@@ -294,10 +295,35 @@ else:
                               annotate={bool(annotate)!r},
                               only_significant={bool(only_significant)!r},
                               stats_mode={stats_mode!r},
+                              colors={list(colors) if colors else None!r},
                               title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r})
     fig._pyf_rc = _rc
     self.img = fig
 """
+
+
+def _plot_colours(colors) -> tuple[list | None, str]:
+    """(matplotlib colours, error) for a plot's group colours: the figure's
+    colour words (magenta, green…) take the tints the images use, anything
+    else must be a colour matplotlib knows (#rrggbb, 'tab:blue'…)."""
+    if not colors:
+        return None, ""
+    if isinstance(colors, str):
+        colors = [colors]
+    from .stacks import _COLOR_HEX
+    from matplotlib.colors import is_color_like
+    out = []
+    for c in colors:
+        name = str(c).strip().lower()
+        if name in _COLOR_HEX:
+            out.append(f"#{_COLOR_HEX[name]:06x}" if name not in ("gray", "grey", "white")
+                       else "#999999")
+        elif is_color_like(str(c).strip()):
+            out.append(str(c).strip())
+        else:
+            return None, (f"unknown colour {c!r}: use a name (magenta, green, red, blue, cyan, "
+                          f"yellow, gray) or #rrggbb")
+    return out, ""
 
 
 def _csv_number_count(path: str) -> int:
@@ -342,6 +368,7 @@ def add_data_plot(
     xlabel: str = "",
     stats_mode: str = "auto",
     latex: bool = False,
+    colors: list[str] | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -377,6 +404,9 @@ def add_data_plot(
       computer's LaTeX (TeX Live / MiKTeX / MacTeX): full LaTeX in labels, e.g.
       ``ylabel="$D$ (\\si{\\micro\\metre\\squared\\per\\second})"``, sans-serif to
       match the figure. Ignored without a LaTeX installation.
+    *colors*: one colour per group, in the CSV's order (names such as magenta /
+      green or #rrggbb); groups beyond the list keep the default palette.
+      set_figure_colors recolours plots and images together.
 
     For *kind="scatter"* the correlation (r, R^2, p) of the first two columns is
     shown in the legend and recorded; for *kind="grouped"* a two-way ANOVA (main
@@ -405,9 +435,12 @@ def add_data_plot(
         return (f"ERROR: {csv_path} holds no numbers to plot (empty, or a header without "
                 f"values); nothing was added.")
 
+    plot_colors, bad = _plot_colours(colors)
+    if bad:
+        return f"ERROR: {bad}"
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
-                                    stats_mode, latex=latex)
+                                    stats_mode, latex=latex, colors=plot_colors)
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -775,6 +808,204 @@ def set_lut(
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return f"Image {image_index} in {loc}: {', '.join(changed)}.{warning}"
+
+
+# Okabe & Ito colour-blind-safe palette (black left out: it is the text colour)
+OKABE_ITO = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"]
+
+
+def _plot_group_count(script: str) -> int | None:
+    """How many groups (colours) the data plot of *script* draws, or None."""
+    m = re.search(r"^_csv = (.+)$", script, re.M)
+    kind = re.search(r"kind=('[a-z]+')", script)
+    if not m:
+        return None
+    try:
+        import ast
+        from staplot import api as _api
+        csv = ast.literal_eval(m.group(1))
+        if kind and ast.literal_eval(kind.group(1)) == "grouped":
+            import csv as _csvmod
+            with open(csv, newline="", encoding="utf-8-sig") as f:
+                rows = list(_csvmod.reader(f))[1:]
+            return len({r[1] for r in rows if len(r) >= 3}) or None
+        return len(_api.table_from_csv(csv).columns) or None
+    except Exception:
+        return None
+
+
+def _looks_like_photograph(path) -> bool:
+    """An RGB colour photograph (bright field, histology, gel scan): bright
+    background, so its channels are not fluorescence channels to recolour."""
+    try:
+        from PIL import Image
+        with Image.open(str(path)) as im:
+            if im.mode not in ("RGB", "RGBA"):
+                return False
+            im.thumbnail((256, 256))
+            import numpy as np
+            g = np.asarray(im.convert("L"), dtype=float)
+        return float(np.median(g)) > 0.5 * 255
+    except Exception:
+        return False
+
+
+_PLOT_CALL = re.compile(r"(_api\.plot\(_tbl,)")
+_PLOT_COLORS = re.compile(r"colors=(None|\[[^\]]*\]),\s*")
+
+
+def _recolour_plot_script(script: str, plot_colors: list) -> str:
+    """The data-plot script with its group colours set (old scripts have no
+    colors= argument: it is added)."""
+    if _PLOT_COLORS.search(script):
+        return _PLOT_COLORS.sub(lambda m: f"colors={plot_colors!r}, ", script, count=1)
+    return _PLOT_CALL.sub(lambda m: f"{m.group(1)} colors={plot_colors!r},", script, count=1)
+
+
+@mcp.tool()
+def set_figure_colors(pyf_path: str, colors: list[str], single_channel: str = "gray") -> str:
+    """Recolour the WHOLE figure in one call — "use magenta and green",
+    "make it colour-blind friendly". Channel i of every multi-channel image
+    (merges, fluorescence RGB micrographs, channel splits: their
+    single-channel panels and labels follow) takes ``colors[i]``; channels
+    beyond the list keep their colour.
+
+    - Single-channel panels outside a split: gray (``single_channel="gray"``,
+      the default — one channel reads best in gray) or ``"keep"``.
+    - RGB colour photographs (bright field, histology: bright background) are
+      left as they are.
+    - Data plots: a plot with exactly ``len(colors)`` groups takes those
+      colours; any other plot takes the colour-blind-safe Okabe–Ito palette
+      (magenta/green only make sense for two groups).
+
+    *colors*: colour names in channel order — gray, red, green, blue, cyan,
+    magenta, yellow. Example: a red/green/blue figure → ``["magenta",
+    "green"]`` gives magenta/green/blue images and magenta/green two-group
+    plots. ``["colorblind"]`` ("make it colour-blind friendly"): magenta/green
+    channels and the Okabe–Ito palette for every plot.
+    """
+    if single_channel not in ("gray", "grey", "keep"):
+        return "ERROR: single_channel must be 'gray' or 'keep'."
+    from .stacks import _COLOR_LUTS, _DEFAULT_SPLIT_COLORS, _SPLIT_RE, _sync_split_colours
+    import ast
+    if isinstance(colors, str):
+        colors = [c.strip() for c in re.split(r"[,\s]+", colors) if c.strip()]
+    names = [str(c).strip().lower() for c in colors or []]
+    colorblind = names in (["colorblind"], ["colourblind"], ["colour-blind"], ["color-blind"])
+    if colorblind:
+        names = ["magenta", "green"]          # red/green channels → magenta/green
+    bad = [c for c in names if c not in _COLOR_LUTS]
+    if not names or bad:
+        return (f"ERROR: colors must be a list of colour names ({', '.join(sorted(_COLOR_LUTS))})"
+                + (f"; unknown: {bad}" if bad else "") + ". Nothing was changed.")
+    plot_colors, err = _plot_colours(names)
+    if err:
+        return f"ERROR: {err}"
+    luts = [_COLOR_LUTS[c] for c in names]
+    rgb = []
+    for c in names:
+        ci = _color_to_int(c if c not in ("grey", "gray") else "white")
+        rgb.append(((ci >> 16 & 0xFF) / 255., (ci >> 8 & 0xFF) / 255., (ci & 0xFF) / 255.))
+
+    tree, root = _load(pyf_path)
+    done = {"images": 0, "merges": 0, "plots": 0}
+    synced: list[str] = []
+    left: list[str] = []
+    gray: list[str] = []
+    photos: list[str] = []
+    palette_plots: list[str] = []
+
+    def visit(container):
+        for img in [c for c in container if c.tag == "Image2D"]:
+            script = _decode_text(_child_text(img, "custom_loading_script"))
+            name = os.path.basename(str(_first_filename(img) or ""))
+            if "from staplot import api" in script:
+                n_groups = _plot_group_count(script)
+                if n_groups == len(plot_colors) and not colorblind:
+                    chosen = plot_colors
+                else:
+                    chosen = OKABE_ITO[:n_groups] if n_groups else list(OKABE_ITO)
+                    palette_plots.append(f"{n_groups or '?'} groups")
+                _set_child_text(img, "custom_loading_script",
+                                _encode_str(_recolour_plot_script(script, chosen)))
+                done["plots"] += 1
+                continue
+            if script.startswith(_MERGE_MARKER):
+                m = re.search(r"^_colors = (\[.*\])$", script, re.M)
+                if m:
+                    cur = [tuple(c) for c in ast.literal_eval(m.group(1))]
+                    new = [rgb[i] if i < len(rgb) else c for i, c in enumerate(cur)]
+                    lit = "[" + ", ".join(repr(tuple(float(v) for v in c)) for c in new) + "]"
+                    script = script[:m.start(1)] + lit + script[m.end(1):]
+                    _set_child_text(img, "custom_loading_script", _encode_str(script))
+                    done["merges"] += 1
+                    # the merge of a split from separate channel files: its singles follow
+                    synced.extend(_sync_split_colours(
+                        container, img, [luts[i] if i < len(luts) else None
+                                         for i in range(len(cur))]))
+                continue
+            if script.strip():
+                continue                                   # other generated panels
+            comment = str(_decode_text(_child_text(img, "user_comments"))).strip('"')
+            s = _SPLIT_RE.match(comment)
+            if s and s.group(4) != "merge":
+                continue                                   # follows its merge below
+            n = _channel_count_from_file(_first_filename(img)) or 0
+            try:
+                cur = ast.literal_eval(_child_text(img, "LUTs") or "None")
+            except (ValueError, SyntaxError):
+                cur = None
+            if isinstance(cur, list) and len(cur) >= 2:
+                n = max(n, len(cur))
+            if n < 2:
+                if single_channel == "keep":
+                    if name:
+                        left.append(name)
+                    continue
+                active = [x for x in (cur if isinstance(cur, list) else []) if x is not None]
+                if active and str(active[0]).upper() != "GRAY":
+                    _set_child_text(img, "LUTs", repr(["GRAY"]))
+                    gray.append(name)
+                continue
+            if not isinstance(cur, list) and n == 3 and _looks_like_photograph(_first_filename(img)):
+                photos.append(name)                        # a colour photograph, not channels
+                continue
+            if not isinstance(cur, list) or len(cur) != n:
+                cur = [_COLOR_LUTS[c] for c in _DEFAULT_SPLIT_COLORS.get(n, ["red", "green",
+                                                                            "blue"])][:n]
+                cur += ["GRAY"] * (n - len(cur))
+            new = [luts[i] if i < len(luts) and cur[i] is not None else cur[i] for i in range(n)]
+            _set_child_text(img, "LUTs", repr(new))
+            synced.extend(_sync_split_colours(container, img, new))
+            done["images"] += 1
+        for g in [c for c in container if c.tag == "Group"]:
+            content = g.find("content")
+            if content is not None:
+                visit(content)
+
+    visit(root)
+    if not any(done.values()) and not gray:
+        return ("Nothing to recolour: no multi-channel image, merge or data plot."
+                + (f" Left as they are: {', '.join(left + photos)}." if left or photos else ""))
+    _save(tree, pyf_path)
+    parts = [f"{done['images']} multi-channel image(s)", f"{done['merges']} channel merge(s)",
+             f"{done['plots']} data plot(s)"]
+    return (f"Figure colours set to {', '.join(names)} (channel order): "
+            + ", ".join(parts)
+            + (f"; channel splits matched: {', '.join(synced)}" if synced else "")
+            + (f". Single-channel panels set to gray (single_channel='keep' keeps their LUT): "
+               f"{', '.join(gray)}" if gray else "")
+            + ((f". Plots use the colour-blind-safe Okabe-Ito palette" if colorblind else
+                f". Plots with another number of groups ({', '.join(palette_plots)}) use the "
+                f"colour-blind-safe Okabe-Ito palette instead") if palette_plots else "")
+            + (f". Colour photographs left as they are: {', '.join(photos)}" if photos else "")
+            + (f". Left as they are (single channel): {', '.join(left)}" if left else "") + ".")
+
+
+def _decode_text(value) -> str:
+    from .core import _decode
+    v = _decode(value)
+    return "" if v in (None, "None") else str(v)
 
 
 @mcp.tool()

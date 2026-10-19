@@ -95,7 +95,7 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              "background",
              # sizing, typography and finishing
              "width_mm", "width_cm", "width_in", "width_px", "dpi", "font", "min_font_pt",
-             "fit_height", "max_height_mm",
+             "fit_height", "max_height_mm", "colors",
              "tidy_text", "letter_placement", "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
@@ -106,7 +106,7 @@ _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "corner_labels", "rois", "inset", "zoom", "brackets", "properties",
                "page"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
-              "annotate_stats", "only_significant", "label", "latex"}
+              "annotate_stats", "only_significant", "label", "latex", "colors"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
@@ -119,12 +119,13 @@ _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels"
 _SCRIPT_KEYS = {"label"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
-# a montage / split / merge also takes a scale bar (on its LAST panel only)
+# a montage / split / merge also takes a scale bar (split: every panel; montage:
+# the last panel)
 _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
                     # ... and a crop, applied to EVERY panel it makes (e.g. text
                     # burned into the image's bottom rows)
                     "crop",
-                    # scale_bar_panels: all -> a bar on every panel, not only the last
+                    # scale_bar_panels: last | all overrides that default
                     "scale_bar_panels"}
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
@@ -192,6 +193,25 @@ _MANAGED_PROPERTIES = {"filename", "custom_loading_script", "_proxy_stale", "_ra
 # ---------------------------------------------------------------------------
 # loading + validation
 # ---------------------------------------------------------------------------
+def _yaml_hint(text: str) -> str:
+    """What to write instead, for YAML slips small models repeated (Qwen3.5 9B
+    sent "- [a.png]" followed by "    [b.png]" 30 times against the bare parser
+    error)."""
+    lines = str(text or "").splitlines()
+    for n in range(1, len(lines)):
+        prev, line = lines[n - 1], lines[n]
+        m = re.match(r"^(\s*)-\s*\[(.*)\]\s*$", prev)
+        if m and re.match(r"^\s+\[(.*)\]\s*$", line):
+            joined = ", ".join(x.strip() for x in (m.group(2) + "," +
+                                                    line.strip()[1:-1]).split(",") if x.strip())
+            return (f" — line {n + 1} '{line.strip()}' continues the row of line {n}: the panels "
+                    f"of one row go in ONE list, '{m.group(1)}- [{joined}]'; a new row starts "
+                    f"with '- '. Or draw the layout: layout: |, then one line per row of panel "
+                    f"names.")
+    return (" — check the indentation (two spaces per level) and that each row under rows: "
+            "starts with '- ', e.g. rows:\\n  - [a.png, b.png]\\n  - [c.png]")
+
+
 def load_recipe(path: str) -> dict:
     """Read a recipe file (.yaml/.yml needs PyYAML; .json needs nothing)."""
     if not os.path.isfile(path):
@@ -206,7 +226,7 @@ def load_recipe(path: str) -> dict:
         try:
             data = yaml.safe_load(text)
         except yaml.YAMLError as e:
-            raise RecipeError(f"invalid YAML in {path}: {e}") from None
+            raise RecipeError(f"invalid YAML in {path}: {e}{_yaml_hint(text)}") from None
     else:
         try:
             data = json.loads(text)
@@ -262,7 +282,7 @@ def save_recipe_text(text: str, recipe_path: str) -> str:
         try:
             data = yaml.safe_load(text)       # JSON is valid YAML too
         except yaml.YAMLError as e:
-            raise RecipeError(f"invalid YAML recipe: {e}") from None
+            raise RecipeError(f"invalid YAML recipe: {e}{_yaml_hint(text)}") from None
     if not isinstance(data, dict):
         raise RecipeError("a recipe must be a mapping (key: value) at the top level")
     recipe_path = os.path.abspath(recipe_path)
@@ -290,13 +310,21 @@ def _panel_kind(panel, where):
                           + " / ".join(_PANEL_KINDS) + found + hint)
     kind = kinds[0]
     if isinstance(panel[kind], dict):
-        # {split: {image: x.tif, crop: ...}} — options nested inside the source
+        # {split: {image: x.tif, crop: ...}} — options nested inside the source.
+        # Unambiguous, and small models looped on it (gpt-oss: 25 refusals in a
+        # row), so it is read as the flat panel when every key is valid there.
         inner = dict(panel[kind])
-        src = next((inner.pop(k) for k in ("image", "file", "path", "source", kind)
-                    if k in inner), "file.tif")
+        src_key = next((k for k in ("image", "file", "path", "source", kind) if k in inner), None)
+        src = inner.pop(src_key) if src_key else "file.tif"
+        if kind == "split" and isinstance(inner.get("lut"), list) and "colors" not in inner:
+            inner["colors"] = [str(c).lower() for c in inner.pop("lut")]
         fixed = {kind: src, **inner, **{k: v for k, v in panel.items() if k != kind}}
-        raise RecipeError(f"{where}: '{kind}:' takes the file name; put the other keys beside "
-                          f"it, not inside — write {json.dumps(fixed, ensure_ascii=False)}")
+        if src_key and isinstance(src, (str, list)) and not set(fixed) - {kind} - _KIND_KEYS[kind]:
+            panel.clear()
+            panel.update(fixed)
+        else:
+            raise RecipeError(f"{where}: '{kind}:' takes the file name; put the other keys beside "
+                              f"it, not inside — write {json.dumps(fixed, ensure_ascii=False)}")
     unknown = set(panel) - {kind} - _KIND_KEYS[kind]
     if unknown:
         hint = ""
@@ -669,6 +697,16 @@ def _check_top(recipe, base):
         v = recipe[k]
         if not _is_num(v) or v <= 0 or (k == "width_px" and not _is_int(v)):
             raise RecipeError(f"'{k}' must be a positive number")
+    if "colors" in recipe:
+        from pyfigures.mcp_tools.stacks import _COLOR_LUTS
+        c = recipe["colors"]
+        cb = isinstance(c, list) and [str(x).lower().replace("-", "").replace("colour", "color")
+                                      for x in c] == ["colorblind"]
+        if not cb and (not isinstance(c, list) or not c
+                       or any(str(x).lower() not in _COLOR_LUTS for x in c)):
+            raise RecipeError(f"'colors' recolours the whole figure: a list of colour names in "
+                              f"channel order, from {sorted(_COLOR_LUTS)} — e.g. "
+                              f"colors: [magenta, green] — or colors: [colorblind]; got {c!r}")
     if "fit_height" in recipe and recipe["fit_height"] not in (True, False, "shrink", "column",
                                                                "off"):
         raise RecipeError("'fit_height' (a figure taller than the journal's maximum height) "
@@ -952,6 +990,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "background": recipe.get("background"),
         "font": font,
         "min_font_pt": recipe.get("min_font_pt"),
+        "colors": recipe.get("colors"),
         "tidy_text": tidy,
         "auto_configure": recipe.get("auto_configure", False),
         "alt_text": recipe.get("alt_text"),
@@ -1508,12 +1547,13 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             label_color=sb.get("color", "white"),
             px_to_unit=px), step + " scale bar")
 
-    def series_finish(group_path, opts, step):
-        """Scale bar of a montage / split group: on the last panel (or on all
-        with scale_bar_panels: all)."""
+    def series_finish(group_path, opts, step, default="last"):
+        """Scale bar of a montage / split group: a montage on its last panel,
+        a channel split on every panel (each channel is read on its own, as
+        in Figure 3); scale_bar_panels: last | all overrides."""
         w = []
         if opts.get("scale_bar"):
-            if opts.get("scale_bar_panels", "last") == "all":
+            if opts.get("scale_bar_panels", default) == "all":
                 targets = _series_panels(out, group_path)
             else:
                 targets = [_last_series_panel(out, group_path)]
@@ -1552,7 +1592,8 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             if kind == "plot":
                 kw = {k: opts[k] for k in ("kind", "error", "ylabel", "xlabel", "title",
                                            "stats_mode", "annotate_stats",
-                                           "only_significant", "label", "latex") if k in opts}
+                                           "only_significant", "label", "latex", "colors")
+                      if k in opts}
                 warnings += _check(M.add_data_plot(out, gp, path, **kw), step)
                 n_plots += 1
                 i += 1
@@ -1574,7 +1615,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                 src = {"channel_files": path} if isinstance(path, list) else {"stack_path": path}
                 warnings += _check(M.add_channel_split(out, parent_group_path=gp,
                                                        spacing=row_spacing, **src, **kw), step)
-                warnings += series_finish(gp + [n_sub], opts, step)
+                warnings += series_finish(gp + [n_sub], opts, step, default="all")
                 n_sub += 1
                 n_series += 1
                 continue
@@ -1675,6 +1716,9 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                 text_orientation=row_opts.get("labels_orientation", "horizontal")),
                 f"row {r + 1} labels")
 
+    if plan["colors"]:
+        # after every per-panel LUT: the whole figure in these colours
+        warnings += _check(M.set_figure_colors(out, plan["colors"]), "colors")
     if plan["label_background"] is not None:
         warnings += _check(M.set_label_background(out, plan["label_background"]),
                            "label background")
@@ -1747,6 +1791,15 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             warnings.append(f"remote image kept as a link (download failed): {miss['url']} ({miss['error']})")
 
     n_rows = len(plan["rows"])
+    # every zoom inset with its current size: "make the insets larger" needs it
+    # (Gemma 12B rebuilt the zoom without a size and the inset stayed the same)
+    zooms = []
+    for _row_opts, row in plan["rows"]:
+        for kind, path, opts in row:
+            for z in _as_list(opts.get("zoom") or []):
+                if isinstance(z, dict) and "box" in z:
+                    zooms.append({"panel": os.path.basename(str(path)), "box": z["box"],
+                                  "size": z.get("size", 0.4)})
     width_desc = (f"{plan['journal']} ({plan['column']})" if plan["journal"] else
                   (", ".join(f"{k}={v}" for k, v in plan["width"].items()) or None))
     return {
@@ -1765,6 +1818,11 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
         "checks": checks,
         "consolidated": bundle,
         "template": plan["template"],
+        **({"zoom_insets": zooms,
+            "zoom_note": "size = the inset's width as a fraction of its panel (0 < size <= 1); "
+                         "to enlarge an inset raise its zoom's size (e.g. 0.4 -> 0.55), keep "
+                         "the same box (the box is the region shown, not the inset)"}
+           if zooms else {}),
         "warnings": warnings,
         "summary": (f"Built {os.path.basename(out)}: {n_rows} row(s), "
                     f"{n_images} image(s), {n_plots} data plot(s)"

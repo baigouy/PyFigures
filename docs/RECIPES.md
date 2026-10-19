@@ -169,6 +169,7 @@ created as needed. Forward slashes work on every OS.
 | `letter_placement` | `top left` | Corner of the panel letters. |
 | `font` | none | Figure font: a family name, or a mapping with `family`, `size`, `italic`. §20. |
 | `min_font_pt` | none | Raise every smaller text to this size (journal minimum). |
+| `colors` | none | Recolour the whole figure: channel *i* of every multi-channel image, merge and channel split takes colour *i* — `colors: [magenta, green]` turns a red/green/blue figure magenta/green/blue. Single-channel panels outside a split become gray; RGB colour photographs (bright background) are left alone. A plot with exactly as many groups as colours takes them; other plots take the colour-blind-safe Okabe–Ito palette. `colors: [colorblind]` = magenta/green channels + Okabe–Ito for every plot. MCP `set_figure_colors`; GUI Annotations → Figure colours…. |
 | `fit_height` | `shrink` | When the figure is taller than the journal's maximum height (Nature 247 mm, PLOS 222.3 mm, PNAS 225 mm, or an imported style's height rule) or `max_height_mm`: `shrink` narrows it until it fits, `column` uses the widest journal column it fits in, `off` keeps the width. The build warning lists the other choices. |
 | `max_height_mm` | none | A maximum figure height of your own (overrides the journal's). |
 | `tidy_text` | `false` | Typography clean-up of every label (`2*3`→`2×3`, `37 degrees C`→`37 °C`, `10µm`→`10 µm`, `10-20`→`10–20`). |
@@ -408,6 +409,7 @@ hint instead of failing).
 | `annotate_stats` | `true` (default) | Compare groups and draw significance brackets. |
 | `only_significant` | `true` (default) | Draw brackets only for p < 0.05 (all comparisons are still recorded). |
 | `label` | text | Corner label on the chart. |
+| `colors` | list | One colour per group, in the CSV's order (`[magenta, green]`, `#rrggbb`). |
 
 CSV formats:
 
@@ -1060,7 +1062,8 @@ give **`px_to_unit`** (the pixel size, in the same unit) — usually once, in
 `defaults`. Montage, split, kymograph and orthogonal panels read the pixel size
 from the file automatically (a `px_to_unit` you give overrides it). A
 `scale_bar` on a montage or split — set on the panel or in `defaults` — is drawn
-on its last panel (`scale_bar_panels: all` puts one on every panel). A `crop` on a montage, split or merge applies to every panel
+on every panel of a split (each channel and the merge) and on the last panel of a
+montage; `scale_bar_panels: last` or `all` overrides. A `crop` on a montage, split or merge applies to every panel
 it makes — e.g. `{split: hela.png, names: [Lamp1, Mito, DNA], crop: {bottom: 24}}`
 removes text burned into the image's bottom rows from all channels and the merge.
 

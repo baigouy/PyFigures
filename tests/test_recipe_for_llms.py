@@ -66,11 +66,46 @@ def test_panel_key_at_the_top_says_to_use_defaults(images):
     assert not (images / "f.pyf").exists()
 
 
+def test_options_nested_inside_the_source_are_accepted(images, qapp):
+    """Qwen 3.5 9B / gpt-oss (2026-10-19 sweep): {split: {image: a.png, …}} was
+    read as a file name, then refused with the corrected panel; gpt-oss still
+    resent it 25 times. Unambiguous, so it is read as the flat panel."""
+    import xml.etree.ElementTree as ET
+    from PIL import Image
+    Image.new("RGB", (60, 40), (200, 100, 0)).save(images / "rgb.png")
+    res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
+        "output: f.pyf\nrows:\n"
+        "  - - {split: {image: rgb.png, crop: {bottom: 4}, names: [r, g, b], "
+        "lut: [Magenta, green, blue]}}\n"))
+    assert not res.startswith("ERROR"), res
+    imgs = list(ET.parse(images / "f.pyf").getroot().iter("Image2D"))
+    assert len(imgs) == 4                                    # 3 channels + merge
+    assert "MAGENTA" in (imgs[3].findtext("LUTs") or ""), imgs[3].findtext("LUTs")
+    assert all(float(e.findtext("crop_bottom") or 0) == 4 for e in imgs)
+    # a key that is not valid for the flat panel still gets the corrected form
+    res = M.build_figure_from_recipe(str(images / "g.yaml"), recipe_text=(
+        "output: g.pyf\nrows:\n  - - {split: {image: rgb.png, wobble: 3}}\n"))
+    assert res.startswith("ERROR") and 'write {"split": "rgb.png", "wobble": 3}' in res, res
+
+
+def test_build_result_lists_zoom_inset_sizes(images, qapp):
+    """Gemma 12B, asked for larger insets, rebuilt the zoom without a size."""
+    from PIL import Image
+    Image.new("L", (200, 150), 120).save(images / "big.png")
+    res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=(
+        "output: z.pyf\nrows:\n  - - {image: big.png, zoom: {box: [10, 10, 40, 30]}}\n")))
+    assert res["zoom_insets"] == [{"panel": "big.png", "box": [10, 10, 40, 30], "size": 0.4}]
+    assert "raise its zoom's size" in res["zoom_note"]
+
+
+def test_yaml_error_says_how_to_write_a_row(images):
+    """Qwen3.5 9B sent '- [a]' then '    [b]' 30 times against the parser error."""
+    res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
+        "output: f.pyf\nrows:\n  - [a.png]\n    [b.png]\n  - [c.png]\n"))
+    assert res.startswith("ERROR") and "'  - [a.png, b.png]'" in res, res
+
+
 @pytest.mark.parametrize("rows, message", [
-    # Qwen 3.5 9B (2026-10-19 sweep): the options nested inside the source key,
-    # read as a file name "…\{'image': 'a.png', …}"
-    ("  - - {split: {image: a.png, crop: {bottom: 4}, names: [x]}}",
-     'write {"split": "a.png", "crop": {"bottom": 4}, "names": ["x"]}'),
     # Gemma 12B: image + merge in one panel to get "each channel + merge"
     ("  - - {image: a.png, merge: true}", "{split: file.tif, names: [...], merge: true}"),
     # gpt-oss / Qwen: merge of one RGB file
@@ -239,7 +274,9 @@ def test_split_crop_applies_to_every_panel(tmp_path, qapp):
 
 
 def test_scale_bar_on_every_split_panel(tmp_path, qapp):
-    """'add a 10 µm scale bar to every image' — a split put it on its last panel only."""
+    """'add a 10 µm scale bar to every image' — a split put it on its last panel
+    only; now on every panel by default (every local model left the singles
+    without bars), scale_bar_panels: last for one."""
     import xml.etree.ElementTree as ET
     from PIL import Image
     Image.new("RGB", (80, 60), (200, 100, 0)).save(tmp_path / "cells.png")
@@ -247,7 +284,8 @@ def test_scale_bar_on_every_split_panel(tmp_path, qapp):
             "defaults: {{px_to_unit: 0.1, scale_bar: {{units: 1}}}}\n"
             "rows:\n"
             "  - - {{split: cells.png, names: [R, G, B]{extra}}}\n")
-    for name, extra, expected in (("last", "", 1), ("all", ", scale_bar_panels: all", 4)):
+    for name, extra, expected in (("default", "", 4), ("last", ", scale_bar_panels: last", 1),
+                                  ("all", ", scale_bar_panels: all", 4)):
         M.build_figure_from_recipe(str(tmp_path / f"{name}.yaml"),
                                    recipe_text=base.format(o=name, extra=extra))
         bars = list(ET.parse(tmp_path / f"{name}.pyf").getroot().iter("ScaleBar"))
