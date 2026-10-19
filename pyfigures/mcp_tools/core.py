@@ -237,27 +237,8 @@ def _atomic_write_text(path: str, text: str) -> None:
     """Write *text* to *path* atomically (temp file in the same folder, then
     os.replace), so a crash mid-write can never leave a truncated .pyf. Retries
     the replace briefly: OneDrive / antivirus can hold the target for a moment."""
-    import tempfile
-    import time
-    d = os.path.dirname(os.path.abspath(path)) or "."
-    fd, tmp = tempfile.mkstemp(prefix=".~pyf_", suffix=".tmp", dir=d)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(text)
-        for attempt in range(10):
-            try:
-                os.replace(tmp, path)
-                return
-            except PermissionError:
-                if attempt == 9:
-                    raise
-                time.sleep(0.1)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+    from ..atomic_io import write_atomic
+    write_atomic(path, text)
 
 
 def _raw_size_from_file(filename) -> tuple[int, int] | None:
@@ -1590,7 +1571,7 @@ _JOURNAL_PRESETS: dict[str, dict[str, float]] = {
     "springer":  {"single": 84,  "1.5": 129, "double": 174},
     "wiley":     {"single": 86,  "1.5": 132, "double": 178},
     "jcb":       {"single": 85,  "1.5": 128, "double": 170},   # Journal of Cell Biology
-    "pnas":      {"single": 87,  "1.5": 131, "double": 178},
+    "pnas":      {"single": 87,  "1.5": 114, "double": 178},   # Digital Art guide p2
 }
 
 # Normalise aliases

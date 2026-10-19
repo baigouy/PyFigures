@@ -111,17 +111,50 @@ def test_workflow_ships_the_launchers_on_macos():
     assert "${{ matrix.artifact_path }}" in dmg
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+_LAUNCHER_SCRIPT = os.path.join(ROOT, "packaging", "make_macos_launcher_apps.sh")
+
+
+def _posix(path):
+    return str(path).replace("\\", "/")
+
+
+def _bash_that_sees_windows_paths():
+    """A bash that can open this checkout's files by path. On Windows the
+    `bash` on PATH is often WSL's (System32), which cannot read C:\\ paths:
+    prefer Git Bash, and give up (skip) rather than test the wrong thing."""
+    candidates = [shutil.which("bash")]
+    if os.name == "nt":
+        for root in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                     os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+                     os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs")):
+            candidates.insert(0, os.path.join(root, "Git", "bin", "bash.exe"))
+    for bash in candidates:
+        if not bash or not os.path.isfile(bash):
+            continue
+        try:
+            r = subprocess.run([bash, "-c", 'test -f "$1"', "_", _posix(_LAUNCHER_SCRIPT)],
+                               capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if r.returncode == 0:
+            return bash
+    return None
+
+
+_BASH = _bash_that_sees_windows_paths()
+
+
+@pytest.mark.skipif(_BASH is None, reason="needs a bash that can read this checkout (Git Bash on Windows)")
 @pytest.mark.parametrize("name, flag, bundle_id", [
     ("PyFigures Album", "--album", "com.aigouy.pyfigures.album"),
     ("PyFigures Poster", "--poster", "com.aigouy.pyfigures.poster"),
 ])
 def test_macos_launcher_apps_are_made_next_to_pyfigures_app(tmp_path, name, flag, bundle_id):
-    script = os.path.join(ROOT, "packaging", "make_macos_launcher_apps.sh")
-    r = subprocess.run(["bash", script, str(tmp_path), "1.2.3"], capture_output=True, text=True)
+    script = _posix(_LAUNCHER_SCRIPT)
+    r = subprocess.run([_BASH, script, _posix(tmp_path), "1.2.3"], capture_output=True, text=True)
     assert r.returncode != 0 and "PyFigures.app" in r.stderr     # needs the built app first
     (tmp_path / "PyFigures.app").mkdir()
-    r = subprocess.run(["bash", script, str(tmp_path), "1.2.3"], capture_output=True, text=True)
+    r = subprocess.run([_BASH, script, _posix(tmp_path), "1.2.3"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     app = tmp_path / f"{name}.app" / "Contents"
     with open(app / "Info.plist", "rb") as f:

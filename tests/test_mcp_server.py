@@ -1189,6 +1189,8 @@ class TestResizeFigurePresets:
         ("cell",    "double", 174),
         ("plos",    "double", 174),
         ("pnas",    "single",  87),
+        ("pnas",    "1.5",    114),     # PNAS Digital Art guide, p2 (not 131)
+        ("pnas",    "double", 178),
         ("jcb",     "single",  85),
         ("nature communications", "single", 88),
         ("nature communications", "double", 180),

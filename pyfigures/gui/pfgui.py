@@ -3731,7 +3731,9 @@ class EZFIG_GUI(QMainWindow):
             first_letter=self.letter_line_edit.text() or None,
             auto_lettering=self.auto_lettering_checkbox.isChecked()))  # add GUI parameters
         xml_string = object_to_xml(neo_list, is_list=True)
-        write_string_to_file(file, xml_string)
+        # atomic: an interrupted save leaves the previous .pyf intact
+        from pyfigures.atomic_io import write_atomic
+        write_atomic(file, xml_string, make_dirs=True)
         # the LaTeX-typeset maths of its labels go with it (equations/labels)
         try:
             from batoolset.latex_tools import save_used

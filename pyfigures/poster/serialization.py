@@ -12,8 +12,8 @@ spreads, back cover, ...), each holding the same <Background>/<Image>/<Text>
 children a .pyfposter's root does — see PosterCanvas.suggested_filetype(),
 which picks .pyfalbum the moment a document has more than one plain page.
 """
+import io
 import os
-import tempfile
 import xml.etree.ElementTree as ET
 
 from pyfigures.poster.poster_shapes import (
@@ -58,19 +58,10 @@ def _write_atomic(tree, path):
     """Write next to the target, then rename over it: an interrupted save
     (crash, full disk, killed process) leaves the previous file intact
     instead of a truncated one."""
-    path = os.fspath(path)
-    folder = os.path.dirname(os.path.abspath(path))
-    fd, tmp = tempfile.mkstemp(prefix='.~', suffix='.tmp', dir=folder)
-    try:
-        with os.fdopen(fd, 'wb') as f:
-            tree.write(f, encoding='utf-8', xml_declaration=True)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.remove(tmp)
-        raise
+    from pyfigures.atomic_io import write_atomic
+    buf = io.BytesIO()
+    tree.write(buf, encoding='utf-8', xml_declaration=True)
+    write_atomic(path, buf.getvalue(), fsync=True)
 
 
 def sniff_root_tag(path):

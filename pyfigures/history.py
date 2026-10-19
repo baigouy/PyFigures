@@ -65,10 +65,8 @@ def restore(state: dict) -> None:
             if os.path.isfile(path):
                 os.remove(path)
         else:
-            tmp = path + ".restore_tmp"
-            with open(tmp, "wb") as f:
-                f.write(data)
-            os.replace(tmp, path)
+            from .atomic_io import write_atomic
+            write_atomic(path, data)
 
 
 def _digest(state: dict) -> str:
@@ -210,9 +208,9 @@ def undo_last(pyf_path: str, steps: int = 1, force: bool = False) -> str:
                 if os.path.isfile(target):
                     os.remove(target)
             else:
-                tmp = target + ".undo_tmp"
-                shutil.copyfile(os.path.join(folder, snap), tmp)
-                os.replace(tmp, target)
+                from .atomic_io import write_atomic
+                with open(os.path.join(folder, snap), "rb") as f:
+                    write_atomic(target, f.read())
         record(pyf_path, "undo_last", {"steps": 1, "force": force},
                f"restored the figure as it was before call {last['n']} ({last['tool']})",
                current, kind="undo", undoes=last["n"])

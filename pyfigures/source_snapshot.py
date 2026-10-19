@@ -191,10 +191,8 @@ def record(pyf_path: str, sources: list[str] | None = None) -> int:
             continue
     data = {"version": _VERSION, "figure": os.path.basename(pyf_path),
             "saved": time.strftime("%Y-%m-%dT%H:%M:%S"), "files": files}
-    tmp = snapshot_path(pyf_path) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=1, ensure_ascii=False)
-    os.replace(tmp, snapshot_path(pyf_path))
+    from .atomic_io import write_atomic
+    write_atomic(snapshot_path(pyf_path), json.dumps(data, indent=1, ensure_ascii=False))
     return len(files)
 
 

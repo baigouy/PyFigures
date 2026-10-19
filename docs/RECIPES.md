@@ -1137,7 +1137,7 @@ Wherever a colour is asked (`color`, `stamp_color`, `line_color`,
 | `springer` | 84 | 129 | 174 | |
 | `wiley` | 86 | 132 | 178 | |
 | `jcb` | 85 | 128 | 170 | journal of cell biology |
-| `pnas` | 87 | 131 | 178 | |
+| `pnas` | 87 | 114 | 178 | |
 
 Always check the journal's current author guidelines. After building, the MCP
 tools `check_journal_compliance`, `check_resolution` and

@@ -222,10 +222,8 @@ def _write_text(path: str, text: str, parse) -> str | None:
             n += 1
             backup = os.path.join(backup_dir(), f"{os.path.basename(path)}.{stamp}-{n}.bak")
         shutil.copyfile(path, backup)
-    tmp = path + f".pyfigures_tmp_{os.getpid()}"
-    with open(tmp, "w", encoding="utf-8", newline="") as f:
-        f.write(text)
-    os.replace(tmp, path)
+    from .atomic_io import write_atomic
+    write_atomic(path, text)
     return backup
 
 
