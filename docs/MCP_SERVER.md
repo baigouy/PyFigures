@@ -29,8 +29,9 @@ You do not start the server yourself for most clients: once **registered**, the
 client (Claude Code, Claude Desktop, LM Studio, Codex, AnythingLLM, Cursor,
 Gemini CLI…) starts `python -m pyfigures.mcp_server` when it needs the tools and
 stops it when it quits. Nothing runs in between and nothing needs to start at
-login. On Windows, the processes the server starts (renderers, LaTeX, ffmpeg)
-end with it.
+login. The processes the server starts (renderers, LaTeX, ffmpeg) end with it —
+on Windows, macOS and Linux; all of this works the same on the three systems
+(client configuration files are looked for in each system's own places).
 
 Register or remove it in one click: **GUI → Tools → MCP server…**, or
 
