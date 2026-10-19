@@ -1132,7 +1132,7 @@ Wherever a colour is asked (`color`, `stamp_color`, `line_color`,
 | `cell` | 85 | 114 | 174 | cell reports, current biology, developmental cell |
 | `plos` | 83 | 129 | 174 | plos biology, plos genetics, plos one |
 | `elife` | 85 | 132 | 178 | |
-| `embo` | 87 | 127 | 172 | |
+| `embo` | 87 | 127 | 180 | the page gives 87–180 mm |
 | `elsevier` | 90 | 140 | 190 | |
 | `springer` | 84 | 129 | 174 | |
 | `wiley` | 86 | 132 | 178 | |
@@ -1142,6 +1142,15 @@ Wherever a colour is asked (`color`, `stamp_color`, `line_color`,
 Always check the journal's current author guidelines. After building, the MCP
 tools `check_journal_compliance`, `check_resolution` and
 `enforce_min_font_size` (or the GUI's QC menu) verify fonts and DPI.
+
+**Other journals: import their guidelines.** Paste the figure-guidelines text
+of a journal's page into **QC → Journal styles…** (or give it to the MCP server:
+`prepare_journal_style_import` then `save_journal_style`); a model extracts the
+rules, each quoting the text, and you review them. The saved style is then a
+journal name like the built-ins: `journal: Journal of Fly Figures` (or
+`journal: "custom:PNAS"` when the title is also a built-in), with
+`column: single | 1.5 | double` or one of the style's own width labels
+(`column: 3 columns`). See `python -m pyfigures.journal_styles --help`.
 
 ---
 

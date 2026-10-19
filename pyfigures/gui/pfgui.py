@@ -333,14 +333,24 @@ class _JournalDialog(QFrame):
     """Pick a journal (or a custom column width) + options for the journal
     compliance / apply-guidelines / resolution tools."""
 
-    from pyfigures.mcp_tools.core import _JOURNAL_PRESETS
-    _JOURNALS = list(_JOURNAL_PRESETS)
-    del _JOURNAL_PRESETS
+    @staticmethod
+    def journal_names():
+        """Built-in presets, then the journal styles imported from a journal's
+        own guidelines (QC → Journal styles…)."""
+        from pyfigures.mcp_tools.core import _JOURNAL_PRESETS
+        names = list(_JOURNAL_PRESETS)
+        try:
+            from pyfigures.journal_styles import list_styles
+            names += [s["use_as"] for s in list_styles() if s["use_as"] not in names]
+        except Exception:
+            logger.error('could not read the saved journal styles:\n' + traceback.format_exc())
+        return names
 
     def __init__(self, parent=None, with_apply_options=False):
         super().__init__(parent)
         grid = QGridLayout(self)
         r = 0
+        self._JOURNALS = self.journal_names()
 
         self.journal_combo = QComboBox(self)
         self.journal_combo.addItem("(custom width)")
@@ -372,6 +382,41 @@ class _JournalDialog(QFrame):
         if with_apply_options:
             self.panel_labels_check = QCheckBox("Add panel letters (a, b, c…)", self)
             grid.addWidget(self.panel_labels_check, r, 0, 1, 2); r += 1
+
+        self.style_label = QLabel("", self)
+        self.style_label.setWordWrap(True)
+        grid.addWidget(self.style_label, r, 0, 1, 2); r += 1
+        self.journal_combo.currentTextChanged.connect(self._journal_changed)
+        self._journal_changed(self.journal_combo.currentText())
+
+    def _journal_changed(self, name):
+        """A saved journal style offers its own width labels and fills in its
+        minimum DPI / font size."""
+        from pyfigures.journal_styles import user_style_for, min_value
+        style = user_style_for(name) if name != "(custom width)" else None
+        current = self.column_combo.currentText()
+        self.column_combo.blockSignals(True)
+        self.column_combo.clear()
+        self.column_combo.addItems(["single", "1.5", "double"])
+        if style is None:
+            self.style_label.setText("")
+        else:
+            for rule in style["rules"]:
+                if rule["kind"] == "width" and rule["unit"] == "mm" \
+                        and rule["label"] not in ("single", "1.5", "double"):
+                    self.column_combo.addItem(rule["label"])
+            dpi = min_value(style, "resolution", r"photo|halftone|colou?r|gr[ae]y|image|raster|combination")
+            font = min_value(style, "font_size")
+            if dpi:
+                self.min_dpi_edit.setText(f"{dpi[0]:g}")
+            if font:
+                self.min_font_edit.setText(f"{font[0]:g}")
+            self.style_label.setText(
+                f"<i>Journal style imported from its guidelines ({style['status']}, "
+                f"{style['stage']} stage, {len(style['rules'])} rules).</i>")
+        if self.column_combo.findText(current) >= 0:
+            self.column_combo.setCurrentText(current)
+        self.column_combo.blockSignals(False)
 
     def _select_stored_target(self, pyf_path):
         """Open on the target the figure was last sized for (journal + column,
@@ -1246,6 +1291,11 @@ class EZFIG_GUI(QMainWindow):
         apply_journal_action = QAction("Apply journal guidelines…", self)
         qc_menu.addAction(apply_journal_action)
         apply_journal_action.triggered.connect(self.apply_journal_guidelines_action)
+        journal_styles_action = QAction("Journal styles (from a journal's guidelines)…", self)
+        journal_styles_action.setToolTip("Paste a journal's figure guidelines: a model extracts "
+                                         "the rules, you review and save them as a journal style")
+        qc_menu.addAction(journal_styles_action)
+        journal_styles_action.triggered.connect(self.journal_styles_action)
         enforce_font_action = QAction("Enforce minimum font size…", self)
         qc_menu.addAction(enforce_font_action)
         enforce_font_action.triggered.connect(self.enforce_min_font_action)
@@ -1612,6 +1662,14 @@ class EZFIG_GUI(QMainWindow):
     def show_tips(self):
         dialog = TipDialog(self, self.tips)
         dialog.exec_()
+
+    def journal_styles_action(self):
+        """QC → Journal styles…: make / review / correct a journal style from
+        the journal's pasted guidelines (pyfigures.journal_styles)."""
+        from pyfigures.gui.journal_style_editor import JournalStyleEditor
+        dialog = JournalStyleEditor(self)
+        dialog.exec_() if hasattr(dialog, 'exec_') else dialog.exec()
+        return dialog
 
     def open_guide_mailbox(self, root=None):
         """Accept show-me-how requests from the MCP server and the command line
@@ -5455,7 +5513,7 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)
         journal_combo = QComboBox(frame)
-        journal_combo.addItems(['(none)'] + _JournalDialog._JOURNALS)
+        journal_combo.addItems(['(none)'] + _JournalDialog.journal_names())
         grid.addWidget(journal_combo, 1, 1)
         grid.addWidget(QLabel('Column:', frame), 2, 0)
         column_combo = QComboBox(frame)

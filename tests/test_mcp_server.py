@@ -1191,6 +1191,7 @@ class TestResizeFigurePresets:
         ("pnas",    "single",  87),
         ("pnas",    "1.5",    114),     # PNAS Digital Art guide, p2 (not 131)
         ("pnas",    "double", 178),
+        ("embo",    "double", 180),     # EMBO J author guide: "between 87 mm and 180 mm wide"
         ("jcb",     "single",  85),
         ("nature communications", "single", 88),
         ("nature communications", "double", 180),

@@ -565,6 +565,36 @@ together.
 | `generate_alt_text(pyf_path, save)` | Draft alt text (screen-reader description) from the figure's content: panel letters, micrograph colours, merges, montages, channel splits, chart type + compared groups + recorded statistics, kymographs, scale bars, arrows. Returns a short sentence (≤ 250 chars) and a panel-by-panel description. GUI: File → Alt text (accessibility)… |
 | `set_alt_text(pyf_path, long, short)` | Store the reviewed alt text in `<figure>.alttext.json` |
 
+### Journal styles from a journal's own guidelines
+
+For a journal without a built-in preset (or to follow its current page): the
+user pastes the figure-guidelines text of the journal's web page; the model
+extracts the rules into a style; PyFigures checks that every rule quotes the
+pasted text and that its number is written there with its unit (cm / inches →
+mm, ppi → dpi) and refuses the draft otherwise. Styles saved through MCP are
+drafts; a person marks them reviewed in **QC → Journal styles…** (the editor:
+paste, extract with a local model or paste a chat model's reply, correct rules
+— an edited value becomes a `manual` rule —, save new versions). Built-in
+presets are never changed; every save is a new version in
+`~/.pyfigures/journal_styles/`.
+
+| Tool | Description |
+|------|-------------|
+| `prepare_journal_style_import(pasted_text, journal, stage, source_url, article_type)` | Instructions + JSON schema for the host model; nothing is saved |
+| `save_journal_style(style_json, pasted_text, journal, stage, ...)` | Check the model's JSON against the pasted text and save a new draft version; the error names the rule to fix. Returns `use_as`, the name to pass as `journal=` |
+| `validate_journal_style(style_json)` | Check a complete style without saving |
+| `list_journal_styles()` / `get_journal_style(journal, stage)` | Saved styles (latest versions) / one style with its rules and quotes |
+| `extract_journal_style(pasted_text, journal, model, stage, source_url, base_url, save)` | Extraction by a local model already loaded in LM Studio (or any OpenAI-compatible server); nothing is loaded or started |
+
+A saved style is accepted wherever a journal is: `resize_figure`,
+`check_journal_compliance` (which then also uses the style's minimum font size
+and photograph DPI, and lists all its rules so the unchecked ones can be
+checked by hand), `check_resolution`, `apply_journal_guidelines`, recipes'
+`journal:` and the GUI's journal dialogs. Use its title, or `custom:<title>`
+when the title is also a built-in name; columns are `single` / `1.5` /
+`double` or a width rule's own label (`"3 columns"`). Command line:
+`python -m pyfigures.journal_styles prompt|extract|import|validate|save|list|show`.
+
 ### "Show me how" tools (teach the user in the open PyFigures window)
 
 When the user wants to learn an operation, or a model cannot do a long task

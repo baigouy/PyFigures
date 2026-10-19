@@ -1180,7 +1180,22 @@ def list_journal_presets() -> str:
                 "300 DPI is the usual minimum for print; some journals want 600 "
                 "DPI for line art — check the specific author guidelines.",
         "journals": out,
+        "saved_journal_styles": [
+            {k: s[k] for k in ("use_as", "stage", "status", "version", "columns_mm")}
+            for s in _saved_journal_styles()],
+        "saved_styles_note": "Journal styles imported from a journal's own guidelines "
+                             "(prepare_journal_style_import / QC → Journal styles…); pass "
+                             "use_as as journal=, and column='single'|'1.5'|'double' or a "
+                             "width rule's label.",
     }, ensure_ascii=False, indent=2)
+
+
+def _saved_journal_styles():
+    from ..journal_styles import list_styles
+    try:
+        return list_styles()
+    except Exception:
+        return []
 
 
 @mcp.tool()

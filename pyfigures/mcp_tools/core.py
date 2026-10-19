@@ -1566,7 +1566,7 @@ _JOURNAL_PRESETS: dict[str, dict[str, float]] = {
     "cell":      {"single": 85,  "1.5": 114, "double": 174},
     "plos":      {"single": 83,  "1.5": 129, "double": 174},
     "elife":     {"single": 85,  "1.5": 132, "double": 178},
-    "embo":      {"single": 87,  "1.5": 127, "double": 172},
+    "embo":      {"single": 87,  "1.5": 127, "double": 180},   # "between 87 mm and 180 mm wide"
     "elsevier":  {"single": 90,  "1.5": 140, "double": 190},
     "springer":  {"single": 84,  "1.5": 129, "double": 174},
     "wiley":     {"single": 86,  "1.5": 132, "double": 178},
@@ -1591,14 +1591,25 @@ _JOURNAL_ALIASES = {
 
 
 def _width_mm_for_journal(journal: str, column: str) -> float:
-    """Return the target width in mm for a journal + column-count combination."""
+    """Return the target width in mm for a journal + column-count combination.
+    Built-in presets first; then journal styles saved from a journal's own
+    guidelines (pyfigures/journal_styles.py; 'custom:<title>' reaches one whose
+    title is also a built-in name)."""
     j = journal.lower().strip()
     j = _JOURNAL_ALIASES.get(j, j)
-    presets = _JOURNAL_PRESETS.get(j)
+    presets = None if j.startswith("custom:") else _JOURNAL_PRESETS.get(j)
     if presets is None:
+        from ..journal_styles import find_style, width_mm, list_styles
+        style = find_style(journal)
+        if style is not None:
+            return float(width_mm(style, column)[0])
+        saved = [s["use_as"] for s in list_styles()]
         raise ValueError(
             f"Unknown journal {journal!r}. "
-            f"Known journals: {', '.join(sorted(_JOURNAL_PRESETS))}."
+            f"Known journals: {', '.join(sorted(_JOURNAL_PRESETS))}"
+            + (f"; saved journal styles: {', '.join(saved)}" if saved else "")
+            + ". To add a journal, import its guidelines (QC → Journal styles…, "
+              "or the MCP tool prepare_journal_style_import)."
         )
     col = column.lower().strip().rstrip("s")  # "columns" → "column", "singles" → "single"
     col_map = {"single": "single", "1": "single", "one": "single",

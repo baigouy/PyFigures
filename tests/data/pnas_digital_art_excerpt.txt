@@ -1,0 +1,19 @@
+Excerpt of the PNAS Digital Art Guidelines (https://www.pnas.org/pb-assets/authors/digitalart.pdf),
+pages 1-2, as pasted by a user; used to test journal-style extraction.
+
+Monochrome (1-bit) images (line art): Common examples are graphs and charts made of solid black and white,
+with no gray values. The preferred resolution for this type of image is between 1000 and 1200 ppi at publication size.
+Combination halftones: Common examples are color or grayscale figures containing halftone and line art
+elements. The preferred resolution for this type of image is between 600 and 900 ppi at publication size.
+Halftones: Common examples are color or grayscale figures containing pictures only, with no text or thin lines.
+The suggested minimum resolution for this type of image is 300 ppi at publication size.
+Color mode: All color image files must be submitted in their original RGB color.
+
+Figure Sizing
+2. Start by making the height of your canvas less than the height of the page to accomodate the figure legend.
+Recommended max height: 54 picas / 9” / 22.5 cm.
+Use one of the following widths:
+1 column wide (20.5 picas / 3.42” / 8.7 cm)
+1.5 columns wide (27 picas / 4.5” / 11.4 cm)
+2 columns wide (42.125 picas / 7” / 17.8 cm)
+4. Size any text in your figure to at least 6–8 points. This will allow us to reduce the file if necessary.

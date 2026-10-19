@@ -522,6 +522,23 @@ def check_journal_compliance(
     except ValueError as e:
         return f"ERROR: {e}"
 
+    # a journal style imported from the journal's guidelines: its minimum font
+    # size and photograph DPI replace the defaults (not values the caller gave)
+    from ..journal_styles import user_style_for
+    style = user_style_for(journal)
+    style_notes = []
+    if style is not None:
+        from ..journal_styles import min_value
+        fmin = min_value(style, "font_size")
+        if fmin and min_font_pt == 7.0:
+            min_font_pt = fmin[0]
+            style_notes.append(f"minimum font {min_font_pt:g} pt from rule '{fmin[1]['label']}'")
+        dmin = min_value(style, "resolution", r"photo|halftone|colou?r|gr[ae]y|image|raster|combination")
+        if dmin and min_dpi == 300:
+            min_dpi = int(round(dmin[0]))
+            style_notes.append(f"minimum {min_dpi} DPI from rule '{dmin[1]['label']}' "
+                               f"({dmin[1]['applies_to']})")
+
     # canvas units are points (1/72 in) — see resize_figure; *dpi* only sets the
     # pixel count of a raster export
     target_px = round(target_mm / 25.4 * 72.0)
@@ -620,6 +637,15 @@ def check_journal_compliance(
     lines = [f"Journal compliance [{wsrc}]: {header}"]
     for crit, ok, detail in results:
         lines.append(f"  [{'ok' if ok else 'FAIL'}] {crit}: {detail}")
+    if style is not None:
+        from ..journal_styles import describe_rules
+        lines.append(f"Journal style {style['journal']!r} ({style['status']}, stage "
+                     f"{style['stage']}): " + ("; ".join(style_notes) or "widths only")
+                     + ". All its rules — the ones above are checked, check the others yourself:")
+        lines.extend(f"  - {d}" for d in describe_rules(style))
+        if style["status"] != "reviewed":
+            lines.append("  (draft style: its rules were extracted automatically and not yet "
+                         "reviewed by a person — QC → Journal styles…)")
     return "\n".join(lines)
 
 
