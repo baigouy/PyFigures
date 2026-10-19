@@ -96,6 +96,7 @@ def candidate_parts(body: str):
     tikzpictures. [(short description, LaTeX)]; empty if it has none."""
     parts = []
     counts = {}
+    body = _strip_comments(body)        # a commented-out figure is not a part
     for m in re.finditer(r"\\begin\{(figure|table)\*?\}(\[[^\]]*\])?(.*?)\\end\{\1\*?\}", body, re.S):
         kind = m.group(1).capitalize()
         counts[kind] = counts.get(kind, 0) + 1
@@ -106,6 +107,12 @@ def candidate_parts(body: str):
             caption = inner[cap.end():_balanced(inner, cap.end() - 1) - 1]
             caption = " ".join(re.sub(r"\\[A-Za-z]+\*?|[{}$]", " ", caption).split())[:60]
         content = _drop_command(_drop_command(inner, "caption"), "label").strip()
+        # shown outside its float: sub-figures / sub-tables (subcaption) still need to
+        # know they are in a figure or a table
+        if re.search(r"\\(subfigure|subtable|subcaptionbox|subfloat)\b|\\begin\{sub(figure|table)\}",
+                     content):
+            content = (r"\makeatletter\def\@captype{" + kind.lower() + r"}\makeatother"
+                       + "\n" + content)
         parts.append((f"{kind} {counts[kind]}" + (f": {caption}" if caption else ""), content))
     if not parts:
         for i, m in enumerate(re.finditer(r"\\begin\{tikzpicture\}.*?\\end\{tikzpicture\}", body, re.S)):
@@ -360,6 +367,11 @@ def is_stale(pdf_path) -> bool:
 def make_document_panel(pyf_path, tex_path, part=None) -> str:
     """Compile *tex_path* (its *part*; if not already) and return the PDF
     panel's path."""
+    if part is not None:
+        n = len(parts_of(tex_path))
+        if not 1 <= int(part) <= max(n, 1):
+            raise ValueError(f"part must be between 1 and {max(n, 1)} (the document has "
+                             f"{n} figure/table/picture(s))")
     out = document_pdf_path(pyf_path, tex_path, part)
     if not os.path.isfile(out):
         compile_document(tex_path, out, part)
