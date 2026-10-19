@@ -69,8 +69,7 @@ def test_defaults_scale_bar_reaches_montage_and_split_last_panel(proj):
     root = ET.parse(out).getroot()
     bars = [img.find("annotations/ScaleBar") is not None for img in root.iter("Image2D")]
     # image | montage t0 t1 (row 1) t2 (row 2) | split ch1 ch2 merge
-    # (a split puts a bar on every panel by default since 2026-10-19)
-    assert bars == [True, False, False, True, True, True, True]
+    assert bars == [True, False, False, True, False, False, True]
 
 
 @pytest.mark.parametrize("bad, msg", [

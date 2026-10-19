@@ -119,8 +119,8 @@ _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels"
 _SCRIPT_KEYS = {"label"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
-# a montage / split / merge also takes a scale bar (split: every panel; montage:
-# the last panel)
+# a montage / split / merge also takes a scale bar, on its last panel (a split:
+# the merge) unless scale_bar_panels: all
 _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
                     # ... and a crop, applied to EVERY panel it makes (e.g. text
                     # burned into the image's bottom rows)
@@ -1548,9 +1548,9 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             px_to_unit=px), step + " scale bar")
 
     def series_finish(group_path, opts, step, default="last"):
-        """Scale bar of a montage / split group: a montage on its last panel,
-        a channel split on every panel (each channel is read on its own, as
-        in Figure 3); scale_bar_panels: last | all overrides."""
+        """Scale bar of a montage / split group: one bar, on the last panel (a
+        split's merge: the panels share one scale, the author's choice);
+        scale_bar_panels: all puts one on every panel."""
         w = []
         if opts.get("scale_bar"):
             if opts.get("scale_bar_panels", default) == "all":
@@ -1615,7 +1615,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                 src = {"channel_files": path} if isinstance(path, list) else {"stack_path": path}
                 warnings += _check(M.add_channel_split(out, parent_group_path=gp,
                                                        spacing=row_spacing, **src, **kw), step)
-                warnings += series_finish(gp + [n_sub], opts, step, default="all")
+                warnings += series_finish(gp + [n_sub], opts, step)
                 n_sub += 1
                 n_series += 1
                 continue

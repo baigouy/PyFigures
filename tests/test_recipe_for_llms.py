@@ -273,10 +273,9 @@ def test_split_crop_applies_to_every_panel(tmp_path, qapp):
     assert len(crops) >= 4 and all(c == 12 for c in crops), crops
 
 
-def test_scale_bar_on_every_split_panel(tmp_path, qapp):
-    """'add a 10 µm scale bar to every image' — a split put it on its last panel
-    only; now on every panel by default (every local model left the singles
-    without bars), scale_bar_panels: last for one."""
+def test_split_scale_bar_on_merge_unless_all(tmp_path, qapp):
+    """A split gets one bar, on the merge (the author's choice: the panels
+    share one scale); scale_bar_panels: all for one on every panel."""
     import xml.etree.ElementTree as ET
     from PIL import Image
     Image.new("RGB", (80, 60), (200, 100, 0)).save(tmp_path / "cells.png")
@@ -284,12 +283,16 @@ def test_scale_bar_on_every_split_panel(tmp_path, qapp):
             "defaults: {{px_to_unit: 0.1, scale_bar: {{units: 1}}}}\n"
             "rows:\n"
             "  - - {{split: cells.png, names: [R, G, B]{extra}}}\n")
-    for name, extra, expected in (("default", "", 4), ("last", ", scale_bar_panels: last", 1),
+    for name, extra, expected in (("default", "", 1), ("last", ", scale_bar_panels: last", 1),
                                   ("all", ", scale_bar_panels: all", 4)):
         M.build_figure_from_recipe(str(tmp_path / f"{name}.yaml"),
                                    recipe_text=base.format(o=name, extra=extra))
-        bars = list(ET.parse(tmp_path / f"{name}.pyf").getroot().iter("ScaleBar"))
+        root = ET.parse(tmp_path / f"{name}.pyf").getroot()
+        bars = list(root.iter("ScaleBar"))
         assert len(bars) == expected, (name, len(bars))
+        if expected == 1:
+            # on the merge, the last panel
+            assert list(root.iter("Image2D"))[-1].find("annotations/ScaleBar") is not None
 
 
 def test_missing_space_after_colon_is_understood(tmp_path):

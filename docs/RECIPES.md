@@ -1062,8 +1062,9 @@ give **`px_to_unit`** (the pixel size, in the same unit) — usually once, in
 `defaults`. Montage, split, kymograph and orthogonal panels read the pixel size
 from the file automatically (a `px_to_unit` you give overrides it). A
 `scale_bar` on a montage or split — set on the panel or in `defaults` — is drawn
-on every panel of a split (each channel and the merge) and on the last panel of a
-montage; `scale_bar_panels: last` or `all` overrides. A `crop` on a montage, split or merge applies to every panel
+once, on the last panel (for a split, the merge: all panels share one scale);
+`scale_bar_panels: all` puts one on every panel — use it only when asked for a
+bar on each panel. A `crop` on a montage, split or merge applies to every panel
 it makes — e.g. `{split: hela.png, names: [Lamp1, Mito, DNA], crop: {bottom: 24}}`
 removes text burned into the image's bottom rows from all channels and the merge.
 
