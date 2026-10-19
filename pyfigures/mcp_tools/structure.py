@@ -50,6 +50,7 @@ from .core import (
     _new_image2d,
     _raw_size_from_file,
     _label_color_for,
+    _same_labels,
     _store_target,
     _check_property_value,
     _resolve_image_property,
@@ -850,9 +851,14 @@ def add_annotation(
     annots = imgs[image_index].find("annotations")
     if annots is None:
         annots = ET.SubElement(imgs[image_index], "annotations")
+    old = _same_labels(annots, text, placement)
+    for ta in old:
+        annots.remove(ta)
     annots.append(_new_tatext2d(text, placement, color=_label_color_for(imgs[image_index], text, placement)))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
+    if old:
+        return f"Replaced annotation '{text}' ({placement}) on image {image_index} in {loc}."
     return f"Added annotation '{text}' ({placement}) to image {image_index} in {loc}."
 
 
@@ -919,16 +925,23 @@ def add_corner_labels(
         annots = ET.SubElement(img, "annotations")
 
     added: list[str] = []
+    replaced = 0
+    existing = list(annots)
     for placement, texts in placement_map.items():
         if not texts:
             continue
         for text in texts:
+            for ta in _same_labels(annots, text, placement):
+                if ta in existing:          # labels of this call may repeat ("*", "*")
+                    annots.remove(ta)
+                    replaced += 1
             annots.append(_new_tatext2d(text, placement, color=_label_color_for(img, text, placement)))
             added.append(f"'{text}' @ {placement}")
 
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Added {len(added)} label(s) to image {image_index} in {loc}: {'; '.join(added)}."
+    note = f" ({replaced} existing label(s) with the same text replaced)" if replaced else ""
+    return f"Added {len(added)} label(s) to image {image_index} in {loc}: {'; '.join(added)}{note}."
 
 
 @mcp.tool()

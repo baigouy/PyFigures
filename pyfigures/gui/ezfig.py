@@ -3313,8 +3313,36 @@ class MyWidget(QWidget):
                         if cur_nb_channels:
                             elm.LUTs = luts[:cur_nb_channels]
                             elm.update_qimage()  # we force the qimage to change and display the right LUT --> TODO
+                            self._match_split_colours(elm)
 
             self.finalize_and_update()
+
+    def _match_split_colours(self, merge):
+        """The merge of a channel split got new LUTs: its single channels' name
+        labels (or tints) follow, as set_lut does over MCP."""
+        from batoolset.drawings.shapes.group import get_parent_of_obj
+        from batoolset.drawings.shapes.txt2d import TAText2D
+        from pyfigures.mcp_tools.stacks import split_colour_updates
+        if not merge.LUTs or 'channel split of' not in str(getattr(merge, 'user_comments', '') or ''):
+            return
+        content = get_parent_of_obj(merge, self.shapes_to_draw)
+        if not content:
+            return
+        panels = [p for p in content if hasattr(p, 'LUTs')]
+
+        def labels_of(p):
+            return [a for a in (getattr(p, 'annotations', None) or []) if isinstance(a, TAText2D)]
+
+        siblings = [(getattr(p, 'user_comments', ''), p.LUTs, [t.getHtmlText() for t in labels_of(p)])
+                    for p in panels]
+        for k, new_luts, labels, _what in split_colour_updates(merge.user_comments, merge.LUTs, siblings):
+            panel = panels[k]
+            if new_luts is not None:
+                panel.LUTs = new_luts
+                panel.update_qimage()
+            texts = labels_of(panel)
+            for j, html in labels.items():
+                texts[j].setText(html)
 
             # if bg is not None:
             #     bg_dialog = BackgroundColorPicker(self)

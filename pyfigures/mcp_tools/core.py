@@ -1322,9 +1322,10 @@ def _label_color_for(img: ET.Element, text: str, placement: str = "top left") ->
     """Default colour of a plain-text label on *img*: white on a dark corner
     (fluorescence: the black default was nearly invisible), black on a bright
     one (bright field, white backgrounds), white when the pixels cannot be
-    read; the default (black) on a plot / scripted panel; None for HTML text,
-    which carries its own colour."""
-    if re.search(r"<\s*/?\s*[A-Za-z][^>]*>", text or ""):
+    read; the default (black) on a plot / scripted panel; None for HTML text
+    that sets its own colour. HTML without a colour ("<b>A</b>") follows the
+    same rule: it came out black, invisible on fluorescence."""
+    if re.search(r"<\s*/?\s*[A-Za-z][^>]*>", text or "") and re.search(r"colou?r\s*[:=]", text, re.I):
         return None
     script = _child_text(img, "custom_loading_script")
     if isinstance(script, str) and script not in ("", "None"):
@@ -1333,6 +1334,28 @@ def _label_color_for(img: ET.Element, text: str, placement: str = "top left") ->
     if bright is not None and bright > 0.6:
         return 0x000000
     return 0xFFFFFF
+
+
+def _label_plain_text(text) -> str:
+    """The visible text of a (possibly HTML) label."""
+    import html
+    t = re.sub(r"<style\b[^>]*>.*?</style>", "", str(text or ""), flags=re.S | re.I)
+    return html.unescape(re.sub(r"<[^>]+>", "", t)).strip().strip('"').strip()
+
+
+def _same_labels(annots: ET.Element, text: str, placement: str) -> list:
+    """Text labels already at *placement* that show the same text as *text*:
+    adding a re-styled copy replaces them (a second, white "A" was drawn over
+    the first, black one)."""
+    plain = _label_plain_text(text)
+    if not plain:
+        return []
+    out = []
+    for ta in annots.findall("TAText2D"):
+        where = str(_child_text(ta, "placement") or "").strip('"').lower()
+        if where == str(placement).lower() and _label_plain_text(_child_text(ta, "text")) == plain:
+            out.append(ta)
+    return out
 
 
 def _new_tatext2d(text: str, placement: str = "top left",

@@ -751,6 +751,10 @@ def set_lut(
         return "ERROR: " + "; ".join(unknown)
     _set_child_text(img, "LUTs", repr(luts_encoded))
     changed.append(f"LUTs={luts_encoded}")
+    from .stacks import _sync_split_colours
+    synced = _sync_split_colours(container, img, luts_encoded)
+    if synced:
+        changed.append("channel split matched: " + ", ".join(synced))
     warning = ""
     n_channels = _channel_count_from_file(_first_filename(img))
     if n_channels and n_channels > 1 and len(luts) == 1:

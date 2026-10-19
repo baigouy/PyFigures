@@ -12,8 +12,10 @@ from the source stack whenever the figure is opened.
 """
 from __future__ import annotations
 
+import ast
 import math
 import os
+import re
 import xml.etree.ElementTree as ET
 
 from .app import mcp, _warn
@@ -25,6 +27,7 @@ from .core import (
     _encode_str,
     _first_filename,
     _get_container,
+    _label_plain_text,
     _load,
     _navigate_group,
     _new_group_elem,
@@ -462,6 +465,71 @@ def add_channel_split(
             + (" + merge" if include_merge else "")
             + (", grayscale singles" if gray else ", tinted singles")
             + (f", Z {proj}-projected" if proj else "") + ".")
+
+
+_SPLIT_RE = re.compile(r"\[series (\d+)/(\d+)\] channel split of (.*): (.*)$")
+
+
+def split_colour_updates(merge_comment, luts, siblings) -> list:
+    """What the single channels of a channel split need after its merge (user
+    comment *merge_comment*) got new LUTs *luts*: the name label of a grayscale
+    single (its legend) takes the channel's new colour, a tinted single its new
+    tint. The merge turned magenta while "Lamp1" stayed red.
+
+    *siblings*: [(user_comment, own_luts, [label texts])] of the panels next to
+    the merge. Returns [(sibling_index, new_luts or None, {label_index:
+    new_text}, description)]. Pure: shared by set_lut and the GUI."""
+    m = _SPLIT_RE.match(str(merge_comment or "").strip('"'))
+    if not m or m.group(4) != "merge":
+        return []
+    lut_colour = {v: k for k, v in _COLOR_LUTS.items() if k not in ("grey", "white")}
+    # labels are <font color=#…> or, once saved by the GUI, Qt rich text "color:#…"
+    pattern = r"(colou?r\s*[:=]\s*)#[0-9a-fA-F]{6}"
+    out = []
+    for k, (comment, own, texts) in enumerate(siblings):
+        s = _SPLIT_RE.match(str(comment or "").strip('"'))
+        if not s or s.group(2) != m.group(2) or s.group(3) != m.group(3) or s.group(4) == "merge":
+            continue
+        i = int(s.group(1)) - 1
+        if i >= len(luts) or luts[i] is None:
+            continue
+        colour = lut_colour.get(str(luts[i]).upper())
+        if colour is None:
+            continue
+        if isinstance(own, str):
+            try:
+                own = ast.literal_eval(own)
+            except (ValueError, SyntaxError):
+                own = None
+        active = [x for x in (own or []) if x is not None]
+        if active and str(active[0]).upper() != "GRAY":
+            out.append((k, [luts[i] if x is not None else None for x in own], {},
+                        f"{s.group(4)} tinted {colour}"))
+            continue
+        labels = {}
+        for j, text in enumerate(texts):
+            text = str(text or "")
+            if _label_plain_text(text) == s.group(4) and re.search(pattern, text):
+                labels[j] = re.sub(pattern, lambda mt: f"{mt.group(1)}#{_COLOR_HEX[colour]:06x}", text, count=1)
+        if labels:
+            out.append((k, None, labels, f"{s.group(4)} label {colour}"))
+    return out
+
+
+def _sync_split_colours(container, merge_img, luts) -> list[str]:
+    """split_colour_updates() applied to the panels of a .pyf container."""
+    imgs = container.findall("Image2D")
+    siblings = [(_child_text(img, "user_comments"), _child_text(img, "LUTs"),
+                 [_child_text(ta, "text") for ta in img.findall("annotations/TAText2D")]) for img in imgs]
+    changed = []
+    for k, new_luts, labels, what in split_colour_updates(_child_text(merge_img, "user_comments"), luts, siblings):
+        if new_luts is not None:
+            _set_child_text(imgs[k], "LUTs", repr(new_luts))
+        tas = imgs[k].findall("annotations/TAText2D")
+        for j, text in labels.items():
+            _set_child_text(tas[j], "text", _encode_str(text))
+        changed.append(what)
+    return changed
 
 
 # ---------------------------------------------------------------------------
