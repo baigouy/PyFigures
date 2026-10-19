@@ -279,14 +279,32 @@ def _panel_kind(panel, where):
     if "split" in panel and isinstance(panel.get("merge"), bool) and "merge" in kinds:
         kinds.remove("merge")
     if len(kinds) != 1:
+        found = f" (found {' and '.join(kinds)})" if kinds else f" (keys found: {sorted(panel)})"
+        hint = ""
+        if {"merge", "split"} & set(kinds) or "image" in kinds and "merge" in panel:
+            hint = (" — each channel of ONE multi-channel file plus their merge is a single "
+                    "panel {split: file.tif, names: [...], merge: true}; merge: [a.tif, b.tif] "
+                    "overlays SEPARATE single-channel files")
         raise RecipeError(f"{where}: a panel needs exactly one of "
-                          + " / ".join(_PANEL_KINDS))
+                          + " / ".join(_PANEL_KINDS) + found + hint)
     kind = kinds[0]
+    if isinstance(panel[kind], dict):
+        # {split: {image: x.tif, crop: ...}} — options nested inside the source
+        inner = dict(panel[kind])
+        src = next((inner.pop(k) for k in ("image", "file", "path", "source", kind)
+                    if k in inner), "file.tif")
+        fixed = {kind: src, **inner, **{k: v for k, v in panel.items() if k != kind}}
+        raise RecipeError(f"{where}: '{kind}:' takes the file name; put the other keys beside "
+                          f"it, not inside — write {json.dumps(fixed, ensure_ascii=False)}")
     unknown = set(panel) - {kind} - _KIND_KEYS[kind]
     if unknown:
+        hint = ""
+        if any("split" in str(k) for k in unknown):
+            hint = (" — to show each channel of a file, use a split panel: "
+                    "{split: file.tif, names: [...]}")
         raise RecipeError(f"{where}: unknown key(s) for a {kind} panel: {sorted(unknown)} "
                           f"(allowed: {sorted(_KIND_KEYS[kind])}; recipe_reference() "
-                          "lists every key)")
+                          f"lists every key){hint}")
     return kind
 
 
@@ -740,6 +758,8 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             hint = (f" — {panel_keys} {'is a panel key' if len(panel_keys) == 1 else 'are panel keys'}: "
                     f"for every panel put it under 'defaults' (defaults: {{{k}: {example}}}), "
                     f"or on the panels that need it")
+        elif any("letter" in str(k) for k in unknown):
+            hint = " — panel letters: letter_panels: true (placement: letter_placement)"
         raise RecipeError(f"unknown top-level key(s): {sorted(unknown)}{hint} "
                           f"(allowed: {sorted(_TOP_KEYS)})")
     if "output" not in recipe:
@@ -770,7 +790,13 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         raise RecipeError("'defaults' must be a mapping")
     bad = set(defaults) - _DEFAULT_KEYS
     if bad:
-        raise RecipeError(f"unknown key(s) in defaults: {sorted(bad)}")
+        hint = ""
+        if any("letter" in str(k) for k in bad):
+            hint = " — panel letters are a top-level key: letter_panels: true"
+        elif bad & _TOP_KEYS:
+            hint = f" — {sorted(bad & _TOP_KEYS)} go at the top of the recipe, not in defaults"
+        raise RecipeError(f"unknown key(s) in defaults: {sorted(bad)} "
+                          f"(allowed: {sorted(_DEFAULT_KEYS)}){hint}")
 
     fill = []
     for k, f in enumerate(recipe.get("fill") or []):
@@ -863,7 +889,11 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                 plan_row.append((kind, files, merged))
                 continue
             if kind == "merge":
-                raise RecipeError(f"{where}: merge must be a list of channel files")
+                raise RecipeError(
+                    f"{where}: merge must be a list of single-channel files, e.g. merge: "
+                    "[dapi.tif, gfp.tif]; for each channel of ONE multi-channel file (an RGB "
+                    "image, a stack) plus their merge, use {split: file.tif, names: [...], "
+                    "merge: true} — a split already adds its merge panel")
             if kind == "glob":
                 matches = sorted(_glob.glob(_resolve(base, panel["glob"])))
                 matches = [m for m in matches if os.path.isfile(m)]

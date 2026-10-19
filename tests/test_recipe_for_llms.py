@@ -66,6 +66,36 @@ def test_panel_key_at_the_top_says_to_use_defaults(images):
     assert not (images / "f.pyf").exists()
 
 
+@pytest.mark.parametrize("rows, message", [
+    # Qwen 3.5 9B (2026-10-19 sweep): the options nested inside the source key,
+    # read as a file name "…\{'image': 'a.png', …}"
+    ("  - - {split: {image: a.png, crop: {bottom: 4}, names: [x]}}",
+     'write {"split": "a.png", "crop": {"bottom": 4}, "names": ["x"]}'),
+    # Gemma 12B: image + merge in one panel to get "each channel + merge"
+    ("  - - {image: a.png, merge: true}", "{split: file.tif, names: [...], merge: true}"),
+    # gpt-oss / Qwen: merge of one RGB file
+    ("  - - {merge: a.png}", "a split already adds its merge panel"),
+    # gpt-oss: a made-up key
+    ("  - - {image: a.png, channel_split: true}", "use a split panel"),
+])
+def test_errors_tell_a_small_model_what_to_write(images, rows, message):
+    res = M.build_figure_from_recipe(str(images / "f.yaml"),
+                                     recipe_text=f"output: f.pyf\nrows:\n{rows}\n")
+    assert res.startswith("ERROR") and message in res, res
+    assert not (images / "f.pyf").exists()
+
+
+@pytest.mark.parametrize("text, message", [
+    ("lettering: true", "letter_panels: true"),
+    ("defaults: {letter_panels: true}", "panel letters are a top-level key: letter_panels: true"),
+    ("defaults: {journal: nature}", "go at the top of the recipe"),
+])
+def test_misplaced_letters_and_journal_say_where_they_go(images, text, message):
+    res = M.build_figure_from_recipe(str(images / "f.yaml"), recipe_text=(
+        f"output: f.pyf\n{text}\nrows:\n  - [a.png]\n"))
+    assert res.startswith("ERROR") and message in res, res
+
+
 def test_pixel_size_inside_the_scale_bar_and_zoom_inset_fraction(images, qapp):
     """scale_bar: {units, px_to_unit} and zoom inset_fraction were refused (a
     local model retried them ~50 times); they are natural, so accepted."""
