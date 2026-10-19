@@ -59,7 +59,7 @@ def _run_poster_op(op_args: list[str], timeout: int = 120):
 
 def _poster_result(ok, payload):
     if not ok:
-        return f"ERROR: {payload}"
+        return "ERROR: " + re.sub(r"^(ERROR:\s*)+", "", str(payload).strip())
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -74,7 +74,8 @@ def create_poster(poster_path: str, page_preset: str | None = "A4",
     (add_poster_image) can be freely positioned and rotated without
     cropping, unlike panels in the scientific figure editor.
 
-    *page_preset* is one of A4 (default)/A3/A2/A1/A0 (portrait, ISO mm sizes);
+    *page_preset* is one of A6/A5/A4 (default)/A3/A2/A1/A0, Letter, Legal or
+    Tabloid (portrait);
     pass explicit page_width_mm/page_height_mm instead for a custom size.
     Returns the new document's page size and (empty) image list as JSON.
     """
@@ -96,7 +97,8 @@ def create_album(album_path: str, page_preset: str | None = "A4",
     *album_path* gets ".pyfalbum" added when it has no extension, and must
     not exist yet: an album is only ever created as one, an existing poster
     is never converted (build_poster_from_recipe with `album: true` also
-    makes one). *page_preset* is one of A4 (default)/A3/A2/A1/A0 for a single
+    makes one). *page_preset* is one of A6/A5/A4 (default)/A3/A2/A1/A0, Letter,
+    Legal or Tabloid for a single
     page (a cover); a spread is twice as wide. Pass page_width_mm/
     page_height_mm instead for a custom page size.
     Returns the new album's first page and page count as JSON.
@@ -106,7 +108,9 @@ def create_album(album_path: str, page_preset: str | None = "A4",
 
 def _create(op, path, page_preset, page_width_mm, page_height_mm):
     args = [op, path]
-    if page_width_mm is not None and page_height_mm is not None:
+    if page_width_mm is not None or page_height_mm is not None:
+        if page_width_mm is None or page_height_mm is None:
+            return "ERROR: give both page_width_mm and page_height_mm (or a page_preset)"
         args += ["--page-width", str(page_width_mm), "--page-height", str(page_height_mm)]
     elif page_preset:
         args += ["--preset", page_preset]
@@ -122,8 +126,9 @@ def add_poster_page(poster_path: str, kind: str = "spread",
                     index: int | None = None) -> str:
     """Add a page to a poster document, turning it into a multi-page photo
     album (see docs/poster.md) the moment it has more than one page — a
-    document starts as one plain page (.pyfposter) and is automatically
-    saved as .pyfalbum from then on, same tool calls either way.
+    document starts as one plain page (.pyfposter) and is saved in the
+    album format from then on (the file keeps its name and opens as before),
+    same tool calls either way.
 
     *kind*: "spread" (default — two physical pages designed as one
     continuous canvas, so a photo/text box can freely cross the gutter,

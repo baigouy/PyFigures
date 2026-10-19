@@ -12,9 +12,59 @@ from batoolset.settings.global_settings import set_UI
 set_UI()
 
 import math
+import os
 
 from qtpy.QtCore import QRectF, QPointF, Qt
 from qtpy.QtGui import QPixmap, QTransform, QPolygonF, QPainter, QColor, QPen, QTextDocument, QFontMetricsF
+
+_QT_OR_NOT_IMAGES = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp', '.svg', '.ico',
+                     '.csv', '.tsv', '.txt', '.json', '.yaml', '.yml', '.xml', '.html', '.md',
+                     '.py', '.pyf', '.pyfposter', '.pyfalbum', '.pdf', '.tex', ''}
+
+
+def load_pixmap(path):
+    """The image at *path* as a QPixmap. Files Qt cannot read itself
+    (16-bit / 32-bit / float TIFFs, microscopy formats, stacks) are read
+    with the figure editor's reader and shown 8-bit over their finite data
+    range (first plane of a stack). A null QPixmap if neither can read it."""
+    pm = QPixmap(path)
+    if not pm.isNull() or not path or not os.path.isfile(path):
+        return pm
+    ext = os.path.splitext(str(path))[1].lower()
+    if ext in _QT_OR_NOT_IMAGES:
+        return pm          # Qt's own formats, or not an image: no slower reader
+    try:
+        import numpy as np
+        from batoolset.img import Img
+        arr = np.asarray(Img(path))
+    except Exception:
+        return pm
+    arr = np.squeeze(arr)
+    while arr.ndim > 3 or (arr.ndim == 3 and arr.shape[-1] not in (3, 4)):
+        arr = arr[0]
+    if arr.ndim != 2 and arr.ndim != 3:
+        return pm
+    if arr.dtype != np.uint8:
+        a = arr.astype(np.float64)
+        finite = np.isfinite(a)
+        if not finite.any():
+            return pm
+        lo = a[finite].min()
+        hi = a[finite].max()
+        a = np.where(finite, a, lo)
+        a = (a - lo) * (255.0 / (hi - lo)) if hi > lo else np.zeros_like(a)
+        arr = np.clip(a, 0, 255).astype(np.uint8)
+    arr = np.ascontiguousarray(arr)
+    from qtpy.QtGui import QImage
+    h, w = arr.shape[:2]
+    if arr.ndim == 2:
+        img = QImage(arr.data, w, h, w, QImage.Format.Format_Grayscale8)
+    elif arr.shape[2] == 3:
+        img = QImage(arr.data, w, h, 3 * w, QImage.Format.Format_RGB888)
+    else:
+        img = QImage(arr.data, w, h, 4 * w, QImage.Format.Format_RGBA8888)
+    return QPixmap.fromImage(img.copy())
+
 
 TEMPLATE_SENTINEL = '@template@'
 # Same sentinel string/idea as the main editor's Image2D template slots
@@ -145,7 +195,7 @@ class PosterImage:
         if self.is_template:
             return QPixmap()
         if self._pixmap is None or self._pixmap_path != self.path:
-            self._pixmap = QPixmap(self.path)
+            self._pixmap = load_pixmap(self.path)
             self._pixmap_path = self.path
         return self._pixmap
 
@@ -156,7 +206,7 @@ class PosterImage:
         slot) instead of keeping whatever size the slot happened to have,
         so filling out of aspect-ratio order still looks right."""
         self.source_pyf = source_pyf
-        pm = QPixmap(image_path)
+        pm = load_pixmap(image_path)
         if not pm.isNull() and pm.height():
             aspect = pm.width() / pm.height()
             if self.width_mm / self.height_mm > aspect:
@@ -349,7 +399,7 @@ class PosterBackground:
 
     def pixmap(self):
         if self._pixmap is None or self._pixmap_path != self.path:
-            self._pixmap = QPixmap(self.path)
+            self._pixmap = load_pixmap(self.path)
             self._pixmap_path = self.path
         return self._pixmap
 

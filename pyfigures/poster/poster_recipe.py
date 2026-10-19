@@ -35,13 +35,7 @@ import glob as _glob
 import json
 import os
 
-PAGE_PRESETS = {
-    'A4': (210.0, 297.0),
-    'A3': (297.0, 420.0),
-    'A2': (420.0, 594.0),
-    'A1': (594.0, 841.0),
-    'A0': (841.0, 1189.0),
-}
+from pyfigures.poster.page_presets import PAGE_PRESETS, preset_size
 _TOP_KEYS = {'output', 'page', 'album', 'render', 'render_dpi', 'web', 'pages', 'front_cover',
              'spreads', 'back_cover'}
 _PAGE_KEYS = {'kind', 'background', 'images', 'arrange', 'text', 'width_mm', 'height_mm'}
@@ -229,10 +223,11 @@ def plan_recipe(recipe, recipe_path):
 
     page = recipe.get('page', 'A4')
     if isinstance(page, str):
-        if page not in PAGE_PRESETS:
-            raise PosterRecipeError(f'page: unknown preset {page!r}; use one of {sorted(PAGE_PRESETS)} '
-                                    f'or {{width_mm: ..., height_mm: ...}}')
-        size = PAGE_PRESETS[page]
+        try:
+            size = preset_size(page)
+        except ValueError:
+            raise PosterRecipeError(f'page: unknown preset {page!r}; use one of '
+                                    f'{", ".join(PAGE_PRESETS)} or {{width_mm: ..., height_mm: ...}}') from None
     elif isinstance(page, dict):
         _unknown(page, {'width_mm', 'height_mm'}, 'page')
         size = (_num(page.get('width_mm'), 'page.width_mm', positive=True),

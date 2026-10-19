@@ -35,8 +35,8 @@ cover — see poster_shapes.PAGE_KINDS): every op above that edits page
 content also accepts [--page N] (0-based, default: page 0) to target a page
 other than the document's first. A document starts as one plain page and is
 saved as .pyfposter; the moment add-page adds a second page (or changes the
-one page's kind), it's saved as .pyfalbum instead — same poster/image/text
-JSON shape either way.
+one page's kind), it's saved in the .pyfalbum format instead (under the same
+file name) — same poster/image/text JSON shape either way.
 
     python -m pyfigures.poster.poster_headless list-pages <poster>
     python -m pyfigures.poster.poster_headless add-page <poster> [--kind spread|cover_front|cover_back|single] [--width MM] [--height MM] [--index N]
@@ -101,13 +101,7 @@ import argparse
 import json
 import sys
 
-PAGE_PRESETS = {
-    'A4': (210.0, 297.0),
-    'A3': (297.0, 420.0),
-    'A2': (420.0, 594.0),
-    'A1': (594.0, 841.0),
-    'A0': (841.0, 1189.0),
-}
+from pyfigures.poster.page_presets import PAGE_PRESETS, preset_size as _preset_size  # noqa: F401
 FRAME_STYLES = ('none', 'simple', 'polaroid')
 # Mirrors pyfigures.poster.poster_shapes.TEXT_STYLE_ORDER, duplicated as a
 # plain tuple (like FRAME_STYLES above) so argparse setup for --help doesn't
@@ -133,12 +127,20 @@ def _make_app():
     return app
 
 
-def _canvas_from(poster_path, page_width_mm=None, page_height_mm=None, page=None):
+def _canvas_from(poster_path, page_width_mm=None, page_height_mm=None, page=None, create=False):
+    """The document at *poster_path*; a new one only with *create* (a
+    mistyped path used to start an empty poster silently)."""
     from pyfigures.poster.poster_canvas import PosterCanvas
     poster_path = _os.path.abspath(poster_path)
     if _os.path.isfile(poster_path):
         canvas = PosterCanvas()
-        canvas.load(poster_path)
+        try:
+            canvas.load(poster_path)
+        except Exception as e:
+            raise ValueError(f'cannot read {poster_path} as a poster or album ({e})') from None
+    elif not create:
+        raise FileNotFoundError(f'no such poster or album: {poster_path} '
+                                '(create_poster / create_album make one)')
     else:
         canvas = PosterCanvas(page_width_mm=page_width_mm or 210.0,
                               page_height_mm=page_height_mm or 297.0)
@@ -164,10 +166,28 @@ def _save(canvas, poster_path):
     canvas.save(poster_path, filetype=canvas.suggested_filetype())
 
 
-def _parse_indices(raw):
+def _parse_indices(raw, canvas=None, photos_only=False):
+    """"0,2,3" -> [0, 2, 3], checked against *canvas*'s shapes (in range;
+    with *photos_only*, no text boxes: arrangements move photos)."""
     if not raw:
         return None
-    return [int(x) for x in raw.split(',') if x.strip() != '']
+    try:
+        indices = [int(x) for x in raw.split(',') if x.strip() != '']
+    except ValueError:
+        raise ValueError(f'indices must be shape numbers separated by commas, e.g. "0,2,3" '
+                         f'(got {raw!r})') from None
+    if canvas is not None:
+        n = len(canvas.shapes_to_draw)
+        bad = [i for i in indices if not 0 <= i < n]
+        if bad:
+            raise ValueError(f'index {bad[0]} out of range: this page has {n} shape(s), 0..{n - 1}')
+        if photos_only:
+            from pyfigures.poster.poster_shapes import PosterText
+            texts = [i for i in indices if isinstance(canvas.shapes_to_draw[i], PosterText)]
+            if texts:
+                raise ValueError(f'shape {texts[0]} is a text box; arrangements and layouts move '
+                                 'photos only')
+    return indices
 
 
 def _shape_dict(idx, shape):
@@ -229,9 +249,7 @@ def op_create(args, album=False):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     w, h = args.page_width, args.page_height
     if args.preset:
-        if args.preset not in PAGE_PRESETS:
-            raise ValueError(f'unknown preset {args.preset!r}; use one of {sorted(PAGE_PRESETS)}')
-        w, h = PAGE_PRESETS[args.preset]
+        w, h = _preset_size(args.preset)
     if (w is not None and w <= 0) or (h is not None and h <= 0):
         raise ValueError('page width and height must be positive')
     if (w is None) != (h is None):
@@ -246,7 +264,13 @@ def op_create(args, album=False):
         if _os.path.exists(args.poster):
             raise FileExistsError(f'{_os.path.abspath(args.poster)} already exists; '
                                   'a photo album can only be created as a new file')
-    canvas = _canvas_from(args.poster, page_width_mm=w, page_height_mm=h)
+    else:
+        if not _os.path.splitext(args.poster)[1]:
+            args.poster += '.pyfposter'
+        if not args.poster.lower().endswith(('.pyfposter', '.pyfalbum')):
+            raise ValueError('a poster is saved as .pyfposter (or .pyfalbum once it has '
+                             'several pages)')
+    canvas = _canvas_from(args.poster, page_width_mm=w, page_height_mm=h, create=True)
     if album:
         canvas.new_document(w or 210.0, h or 297.0, album=True)
         canvas.file_path = _os.path.abspath(args.poster)
@@ -294,6 +318,10 @@ def op_add_text(args):
         value = getattr(args, name)
         if value is not None and value <= 0:
             raise ValueError(f'--{name} must be positive')
+    if args.html is not None:
+        import re
+        if not re.sub(r'<[^>]*>|&nbsp;', '', args.html).strip():
+            raise ValueError('the text is empty')
     text = canvas.add_text(html=args.html, x_mm=args.x, y_mm=args.y,
                            theta=args.theta if args.theta is not None else 0.0,
                            style=args.style or 'body')
@@ -325,6 +353,7 @@ def op_set_background(args):
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     image_path = _os.path.abspath(args.image)
     canvas.check_image_readable(image_path)
+    _check_zoom(args.zoom)
     canvas.set_background(image_path)
     if args.zoom is not None:
         canvas.background.set_zoom(args.zoom)
@@ -341,6 +370,7 @@ def op_adjust_background(args):
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if canvas.background is None:
         raise ValueError('this poster has no background to adjust; use set-background first')
+    _check_zoom(args.zoom)
     if args.reset:
         canvas.background.reset_view()
     if args.zoom is not None:
@@ -398,11 +428,8 @@ def op_list(args):
 
 
 def _resolve_targets(canvas, indices_arg, min_count, verb):
-    indices = _parse_indices(indices_arg)
+    indices = _parse_indices(indices_arg, canvas)
     if indices is not None:
-        bad = [i for i in indices if not (0 <= i < len(canvas.shapes_to_draw))]
-        if bad:
-            raise IndexError(f'index {bad[0]} out of range (0..{len(canvas.shapes_to_draw) - 1})')
         targets = [canvas.shapes_to_draw[i] for i in indices]
     else:
         targets = list(canvas.shapes_to_draw)
@@ -440,8 +467,9 @@ def op_arrange_scatter(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     from pyfigures.poster.poster_layouts import scatter_layout
+    _check_margin(args.margin)
     scatter_layout(canvas.shapes_to_draw, canvas.page_width_mm, canvas.page_height_mm,
-                   indices=_parse_indices(args.indices), seed=args.seed,
+                   indices=_parse_indices(args.indices, canvas, photos_only=True), seed=args.seed,
                    margin_mm=args.margin, max_rotation_deg=args.max_rotation,
                    fit_to_page=not args.no_fit)
     _save(canvas, args.poster)
@@ -452,8 +480,10 @@ def op_arrange_arc(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     from pyfigures.poster.poster_layouts import arc_layout
+    if args.radius <= 0:
+        raise ValueError(f'radius must be positive (got {args.radius} mm)')
     arc_layout(canvas.shapes_to_draw, args.center_x, args.center_y, args.radius,
-              indices=_parse_indices(args.indices),
+              indices=_parse_indices(args.indices, canvas, photos_only=True),
               start_angle_deg=args.start_angle, end_angle_deg=args.end_angle,
               face=args.face,
               page_width_mm=canvas.page_width_mm, page_height_mm=canvas.page_height_mm,
@@ -466,8 +496,13 @@ def op_arrange_grid(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     from pyfigures.poster.poster_layouts import grid_layout
+    if args.columns is not None and args.columns < 1:
+        raise ValueError(f'columns must be 1 or more (got {args.columns})')
+    if args.gap < 0:
+        raise ValueError(f'gap must be 0 or more (got {args.gap} mm)')
+    _check_margin(args.margin)
     grid_layout(canvas.shapes_to_draw, canvas.page_width_mm, canvas.page_height_mm,
-               indices=_parse_indices(args.indices), columns=args.columns,
+               indices=_parse_indices(args.indices, canvas, photos_only=True), columns=args.columns,
                margin_mm=args.margin, gap_mm=args.gap, fit_to_page=not args.no_fit)
     _save(canvas, args.poster)
     return {'ok': True, **_doc_dict(canvas)}
@@ -482,8 +517,10 @@ def op_apply_layout(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     from pyfigures.poster.poster_templates import apply_layout
+    _check_margin(args.margin)
     apply_layout(canvas.shapes_to_draw, canvas.page_width_mm, canvas.page_height_mm,
-                args.layout, indices=_parse_indices(args.indices), margin_mm=args.margin,
+                args.layout, indices=_parse_indices(args.indices, canvas, photos_only=True),
+                margin_mm=args.margin,
                 repeat=not args.no_repeat, group=not args.no_group)
     _save(canvas, args.poster)
     return {'ok': True, **_doc_dict(canvas)}
@@ -502,6 +539,9 @@ def op_ungroup(args):
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if not (0 <= args.index < len(canvas.shapes_to_draw)):
         raise IndexError(f'image index {args.index} out of range (0..{len(canvas.shapes_to_draw) - 1})')
+    if canvas.shapes_to_draw[args.index].group_id is None:
+        raise ValueError(f'shape {args.index} is not in a group (layouts group the photos they '
+                         'place; see list_poster_images, group_id)')
     canvas.selected = canvas.shapes_to_draw[args.index]
     canvas.ungroup_selected()
     _save(canvas, args.poster)
@@ -544,6 +584,16 @@ def op_render(args):
     if not _os.path.isfile(out_path) or _os.path.getsize(out_path) == 0:
         raise RuntimeError(f'rendering produced no output at {out_path}')
     return {'ok': True, 'path': out_path, **_missing_warning(canvas)}
+
+
+def _check_margin(margin):
+    if margin is not None and margin < 0:
+        raise ValueError(f'margin must be 0 or more (got {margin} mm)')
+
+
+def _check_zoom(zoom):
+    if zoom is not None and zoom <= 0:
+        raise ValueError(f'zoom must be positive (got {zoom}); 1 = the image just covers the page')
 
 
 def _check_dpi(dpi):
@@ -696,6 +746,7 @@ def op_export_web(args):
     if not (0 <= args.quality <= 100):
         raise ValueError(f'quality must be 0..100 (got {args.quality})')
     out_path = _os.path.abspath(args.out)
+    _os.makedirs(_os.path.dirname(out_path), exist_ok=True)
     result = canvas.export_album_web(out_path, dpi=args.dpi, quality=args.quality)
     if not _os.path.isfile(out_path) or _os.path.getsize(out_path) == 0:
         raise RuntimeError(f'web export produced no output at {out_path}')
@@ -708,9 +759,21 @@ def op_build(args):
     return {'ok': True, **build_poster_from_recipe(args.recipe)}
 
 
+class _Parser(argparse.ArgumentParser):
+    """Bad arguments (an unknown --frame, --kind…) give one "ERROR:" line,
+    not the usage text."""
+
+    def error(self, message):
+        self.exit(2, f'ERROR: {message}\n')
+
+
+# the message alone for the errors a caller makes; the type too for the others
+_PLAIN_ERRORS = (ValueError, IndexError, FileNotFoundError, FileExistsError, KeyError)
+
+
 def _main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description='Headless .pyfposter editing and rendering.')
-    sub = ap.add_subparsers(dest='op', required=True)
+    ap = _Parser(description='Headless .pyfposter editing and rendering.')
+    sub = ap.add_subparsers(dest='op', required=True, parser_class=_Parser)
 
     bd = sub.add_parser('build', help='build a poster/album from a YAML/JSON recipe '
                                       '(see pyfigures/poster/poster_recipe.py)')
@@ -721,7 +784,7 @@ def _main(argv=None) -> int:
         c.add_argument('poster')
         c.add_argument('--page-width', type=float, default=None)
         c.add_argument('--page-height', type=float, default=None)
-        c.add_argument('--preset', choices=list(PAGE_PRESETS), default=None)
+        c.add_argument('--preset', default=None, help=', '.join(PAGE_PRESETS))
 
     _PAGE_HELP = 'which page to operate on (0-based; default: the document\'s only/first page)'
 
@@ -958,7 +1021,10 @@ def _main(argv=None) -> int:
     try:
         result = ops[args.op](args)
     except Exception as e:
-        sys.stderr.write(f'ERROR: {type(e).__name__}: {e}\n')
+        msg = str(e.args[0]) if isinstance(e, KeyError) and e.args else str(e)
+        if not isinstance(e, _PLAIN_ERRORS):
+            msg = f'{type(e).__name__}: {msg}'
+        sys.stderr.write(f'ERROR: {msg}\n')
         return 1
     sys.stdout.write(json.dumps(result, ensure_ascii=False) + '\n')
     return 0

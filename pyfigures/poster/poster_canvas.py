@@ -1262,7 +1262,8 @@ class PosterCanvas(QWidget):
         """Raise FileNotFoundError/ValueError unless *path* loads as an image."""
         if not os.path.isfile(path):
             raise FileNotFoundError(f'no such image file: {path}')
-        if QImage(path).isNull():
+        from pyfigures.poster.poster_shapes import load_pixmap
+        if load_pixmap(path).isNull():
             raise ValueError(f'cannot read {os.path.basename(path)} as an image '
                              f'(unsupported or corrupt file)')
 

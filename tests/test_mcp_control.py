@@ -77,6 +77,21 @@ def test_lm_studio_entry_switched_off_by_mcp_commander(home):
     assert "switched off" in C.describe()
 
 
+def test_quick_edits_keep_every_backup(home, monkeypatch):
+    import datetime as dt
+    frozen = dt.datetime(2026, 10, 19, 9, 0, 0)
+
+    class Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen
+    monkeypatch.setattr(C.datetime, "datetime", Clock)
+    cfg = str(home / "a.json")
+    for k in range(4):
+        C._write_json(cfg, {"k": k})
+    assert len(os.listdir(C.backup_dir())) == 3
+
+
 def test_snippets(home):
     assert json.loads(C.config_snippet("py"))["mcpServers"]["pyfigures"]["command"] == "py"
     toml = C.config_snippet("C:\\py\\python.exe", fmt="codex")
@@ -207,6 +222,51 @@ def test_processes_a_server_started_end_with_it(tmp_path):
     while C._pid_alive(child) and time.time() < end:
         time.sleep(0.2)
     assert not C._pid_alive(child)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_processes_a_server_started_end_with_it_on_sigterm(tmp_path):
+    """macOS / Linux: a client stopping the server (SIGTERM) stops its children."""
+    import signal
+    pid_file = tmp_path / "child.pid"
+    script = (
+        "import subprocess, sys, time\n"
+        "from pyfigures.mcp_server import _children_die_with_me\n"
+        "assert _children_die_with_me() == 'posix'\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+        f"open(r'{pid_file}', 'w').write(str(p.pid))\n"
+        "time.sleep(120)\n")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([os.path.dirname(os.path.dirname(os.path.abspath(C.__file__))),
+                                         env.get("PYTHONPATH", "")])
+    server = subprocess.Popen([sys.executable, "-c", script], env=env)
+    end = time.time() + 120
+    while not pid_file.exists() or not pid_file.read_text():
+        assert time.time() < end and server.poll() is None
+        time.sleep(0.2)
+    child = int(pid_file.read_text())
+    assert C._pid_alive(child)
+    server.send_signal(signal.SIGTERM)
+    server.wait(30)
+    end = time.time() + 10
+    while C._pid_alive(child) and time.time() < end:
+        time.sleep(0.2)
+    assert not C._pid_alive(child)
+
+
+def test_kill_children_stops_the_processes_started():
+    script = (
+        "import subprocess, sys\n"
+        "from pyfigures.mcp_server import _kill_children\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+        "_kill_children()\n"
+        "print(p.wait(10) is not None)\n")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([os.path.dirname(os.path.dirname(os.path.abspath(C.__file__))),
+                                         env.get("PYTHONPATH", "")])
+    out = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True,
+                         timeout=120)
+    assert out.stdout.strip() == "True", out.stderr
 
 
 def test_gui_dialog_registers_and_starts_the_http_server(home, qapp, monkeypatch):

@@ -142,7 +142,7 @@ def test_create_poster_presets(tmp_path, preset, size):
 def test_create_poster_custom_size_and_validation(tmp_path):
     d = ok(M.create_poster(str(tmp_path / "c.pyfposter"), page_width_mm=100, page_height_mm=50))
     assert (d["page_width_mm"], d["page_height_mm"]) == (100, 50)
-    err(M.create_poster(str(tmp_path / "bad.pyfposter"), page_preset="A9"), "invalid choice")
+    err(M.create_poster(str(tmp_path / "bad.pyfposter"), page_preset="A9"), "unknown page preset")
     err(M.create_poster(str(tmp_path / "neg.pyfposter"), page_width_mm=-5, page_height_mm=50), "positive")
     assert not os.path.exists(tmp_path / "neg.pyfposter")
 
@@ -558,7 +558,7 @@ def test_create_album_only_as_a_new_pyfalbum(tmp_path, photos):
     d = ok(M.create_album(str(tmp_path / "custom.pyfalbum"), page_width_mm=200, page_height_mm=200))
     assert d["page_width_mm"] == 200
     err(M.create_album(str(tmp_path / "x.pyfposter")), "pyfalbum")
-    err(M.create_album(str(tmp_path / "bad.pyfalbum"), page_preset="A9"), "invalid choice")
+    err(M.create_album(str(tmp_path / "bad.pyfalbum"), page_preset="A9"), "unknown page preset")
     poster = str(tmp_path / "old.pyfalbum")                   # a plain multi-page document
     ok(M.create_poster(poster))
     ok(M.add_poster_page(poster))

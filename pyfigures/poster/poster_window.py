@@ -25,14 +25,7 @@ from pyfigures.gui.user_prefs import load_theme
 from pyfigures.poster.poster_canvas import PosterCanvas, _MmToPx
 from pyfigures.poster.poster_shapes import TEXT_STYLE_PRESETS, TEXT_STYLE_ORDER
 
-# name (mm width x mm height), portrait orientation
-PAGE_PRESETS = {
-    'A4': (210.0, 297.0),
-    'A3': (297.0, 420.0),
-    'A2': (420.0, 594.0),
-    'A1': (594.0, 841.0),
-    'A0': (841.0, 1189.0),
-}
+from pyfigures.poster.page_presets import PAGE_PRESETS
 
 IMAGE_FILE_FILTER = 'Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff)'
 # "Add image..." also accepts a .pyf scientific figure: it's flattened to a

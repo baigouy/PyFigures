@@ -88,13 +88,53 @@ def run_stdio(server=None):
     anyio.run(_run_stdio_async, server or mcp)
 
 
+def _kill_children():
+    """Stop every process this server started (and theirs)."""
+    try:
+        import psutil
+    except ImportError:
+        return
+    try:
+        procs = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return
+    for p in procs:
+        try:
+            p.kill()
+        except psutil.Error:
+            pass
+    psutil.wait_procs(procs, timeout=5)
+
+
+def _children_die_with_me_posix():
+    """macOS / Linux: when the client stops the server (MCP clients close
+    stdin, then send SIGTERM) or the HTTP server is stopped, the processes it
+    started are stopped too. A SIGKILL cannot be caught; stop_http kills the
+    whole tree itself."""
+    import atexit
+    import signal
+
+    def on_signal(signum, frame):
+        _kill_children()
+        os._exit(128 + signum)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            signal.signal(sig, on_signal)
+        except (ValueError, OSError):          # not the main thread
+            return None
+    atexit.register(_kill_children)
+    return "posix"
+
+
 def _children_die_with_me():
     """Windows: put the server in a job object closed (and its processes
     killed) when the server ends, so a renderer, LaTeX or ffmpeg started by a
-    tool never outlives a server that its client killed. Elsewhere, and if
-    Windows refuses, nothing is done."""
+    tool never outlives a server that its client killed. macOS / Linux: the
+    same on SIGTERM / SIGHUP / exit (_children_die_with_me_posix). If the
+    system refuses, nothing is done."""
     if sys.platform != "win32":
-        return None
+        return _children_die_with_me_posix()
     import ctypes
     from ctypes import wintypes
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)

@@ -217,6 +217,10 @@ def _write_text(path: str, text: str, parse) -> str | None:
         os.makedirs(backup_dir(), exist_ok=True)
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         backup = os.path.join(backup_dir(), f"{os.path.basename(path)}.{stamp}.bak")
+        n = 1
+        while os.path.exists(backup):      # Windows' clock: same stamp for quick edits
+            n += 1
+            backup = os.path.join(backup_dir(), f"{os.path.basename(path)}.{stamp}-{n}.bak")
         shutil.copyfile(path, backup)
     tmp = path + f".pyfigures_tmp_{os.getpid()}"
     with open(tmp, "w", encoding="utf-8", newline="") as f:
