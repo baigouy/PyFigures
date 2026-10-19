@@ -23,7 +23,7 @@ command line::
     python -m pyfigures.mcp_control stop
     python -m pyfigures.mcp_control register lm_studio      # or claude_code, codex, …
     python -m pyfigures.mcp_control unregister lm_studio
-    python -m pyfigures.mcp_control snippet --format json|codex|hermes|url
+    python -m pyfigures.mcp_control snippet --format json|codex|hermes|url|http
 
 Registered directly: Claude Code / Claude Desktop, LM Studio, Codex (OpenAI's
 app and CLI, ~/.codex/config.toml), AnythingLLM Desktop, Cursor, Gemini CLI.
@@ -133,9 +133,57 @@ def config_snippet(python: str | None = None, fmt: str = "json") -> str:
                 f"    command: {json.dumps(_wsl_path(command) if note else command)}\n"
                 f"    args: [{args}]\n")
     if fmt == "url":
-        st = http_status()
-        return st["url"] if st["running"] else f"http://127.0.0.1:{DEFAULT_PORT}/mcp"
+        return http_url()
+    if fmt == "http":
+        return http_snippets_text()
     return json.dumps({"mcpServers": {SERVER_NAME: entry}}, indent=2)
+
+
+def http_url(port: int | None = None) -> str:
+    """The HTTP server's address: the running one, else the one *port* (the
+    default port) would give."""
+    st = http_status()
+    if st["running"] and port in (None, st.get("port")):
+        return st["url"]
+    return f"http://127.0.0.1:{port or DEFAULT_PORT}/mcp"
+
+
+def http_snippets(url: str | None = None) -> list[dict]:
+    """What to paste into each kind of client to reach the HTTP server at
+    *url*: [{title, text, where}]. The plain address comes first (any client
+    that asks for a server URL)."""
+    url = url or http_url()
+    def as_json(entry):
+        return json.dumps({"mcpServers": {SERVER_NAME: entry}}, indent=2)
+    return [
+        {"title": "Address", "text": url,
+         "where": "Any client that asks for an MCP server URL (streamable HTTP)."},
+        {"title": "Claude Code", "text": f"claude mcp add --transport http {SERVER_NAME} {url}",
+         "where": "Run in a terminal."},
+        {"title": "JSON with a URL", "text": as_json({"url": url}),
+         "where": "Cursor (~/.cursor/mcp.json), LM Studio (~/.lmstudio/mcp.json) and most "
+                  "clients that read an 'mcpServers' JSON."},
+        {"title": "AnythingLLM", "text": as_json({"type": "streamable", "url": url}),
+         "where": "anythingllm_mcp_servers.json in AnythingLLM's storage/plugins folder."},
+        {"title": "Gemini CLI", "text": as_json({"httpUrl": url}),
+         "where": "~/.gemini/settings.json"},
+        {"title": "Codex", "text": f"[mcp_servers.{SERVER_NAME}]\nurl = {json.dumps(url)}\n",
+         "where": "~/.codex/config.toml (OpenAI's Codex app and CLI)."},
+        {"title": "Hermes Agent", "text": f"mcp_servers:\n  {SERVER_NAME}:\n    url: {json.dumps(url)}\n",
+         "where": "~/.hermes/config.yaml. From WSL, 127.0.0.1 reaches Windows only with "
+                  "WSL's mirrored networking."},
+        {"title": "Clients that only start programs",
+         "text": as_json({"command": "npx", "args": ["-y", "mcp-remote", url]}),
+         "where": "A bridge for clients without URL support (needs Node.js)."},
+    ]
+
+
+def http_snippets_text(url: str | None = None) -> str:
+    """http_snippets as plain text (command line, MCP tool)."""
+    blocks = []
+    for s in http_snippets(url):
+        blocks.append(f"── {s['title']} — {s['where']}\n{s['text'].rstrip()}")
+    return "\n\n".join(blocks)
 
 
 # ── registration with MCP clients ─────────────────────────────────────
@@ -518,6 +566,9 @@ def describe() -> str:
     if st["running"]:
         lines.append(f"HTTP server: running at {st['url']} (pid {st['pid']}, since {st['started']})"
                      + ("" if st.get("listening") else " — not answering"))
+        lines.append("")
+        lines.append("What to paste into a client to use it:")
+        lines.append(http_snippets_text(st["url"]))
     else:
         lines.append("HTTP server: not running")
     return "\n".join(lines)
@@ -537,10 +588,13 @@ def main(argv=None) -> int:
         p = sub.add_parser(name, help=f"{name} the server with an MCP client")
         p.add_argument("client", choices=list(CLIENTS))
     p = sub.add_parser("snippet", help="print what to paste into a client configuration")
-    p.add_argument("--format", choices=["json", "codex", "hermes", "url"], default="json")
+    p.add_argument("--format", choices=["json", "codex", "hermes", "url", "http"], default="json",
+                   help="http: everything to paste for the HTTP server, client by client")
     a = ap.parse_args(argv)
     if a.cmd == "start":
         res = start_http(a.port, a.host)
+        if http_status()["running"]:
+            res += "\n\nWhat to paste into a client to use it:\n" + http_snippets_text()
     elif a.cmd == "stop":
         res = stop_http()
     elif a.cmd == "register":

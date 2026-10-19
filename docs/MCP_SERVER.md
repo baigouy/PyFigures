@@ -49,14 +49,21 @@ client or with MCP Commander shows as "switched off".
 Other clients: the dialog's buttons (or `snippet --format json|codex|hermes|url`)
 copy the `mcpServers` JSON most clients read, the YAML of Hermes Agent
 (`~/.hermes/config.yaml`; in WSL the Windows Python is started through
-`/mnt/c/…`), or the HTTP server's URL.
+`/mnt/c/…`).
 
 **HTTP server** — for clients that connect to a URL instead of starting a
-program: Start / Stop in the same dialog (optionally started when PyFigures
-opens and stopped when it closes), or
+program: **Start the HTTP server** in the same dialog. While it runs, the dialog
+lists what to paste into each kind of client, each with a Copy button: the
+address, the `claude mcp add --transport http …` command, the `mcpServers` JSON
+with a `url` (Cursor, LM Studio…), AnythingLLM's and Gemini CLI's JSON, Codex's
+TOML, Hermes Agent's YAML, and an `npx mcp-remote` bridge for clients that only
+start programs. It can also be started when PyFigures opens (off by default; it
+then stops when PyFigures closes). Nothing is started at login. From the
+command line:
 
 ```bash
-python -m pyfigures.mcp_control start --port 8765   # http://127.0.0.1:8765/mcp
+python -m pyfigures.mcp_control start --port 8765   # http://127.0.0.1:8765/mcp, then what to paste
+python -m pyfigures.mcp_control snippet --format http
 python -m pyfigures.mcp_control stop                # stops it and every process it started
 ```
 

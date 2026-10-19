@@ -2,10 +2,11 @@
 and start / stop it over HTTP (pyfigures/mcp_control.py)."""
 from batoolset.settings.global_settings import set_UI
 set_UI()
+import json
 import threading
 
-from qtpy.QtCore import QTimer, Signal
-from qtpy.QtGui import QGuiApplication
+from qtpy.QtCore import Qt, Signal
+from qtpy.QtGui import QGuiApplication, QFontDatabase
 from qtpy.QtWidgets import (QDialog, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
                             QPushButton, QSpinBox, QCheckBox, QMessageBox, QGroupBox)
 
@@ -47,9 +48,7 @@ class McpServerDialog(QDialog):
                                                      "(Windsurf, Cline…)."),
                                 ("Copy Hermes YAML", "hermes", "For Hermes Agent: paste into "
                                                                "~/.hermes/config.yaml (in WSL "
-                                                               "if Hermes runs there)."),
-                                ("Copy HTTP URL", "url", "For clients that connect to a URL: start "
-                                                         "the HTTP server below first.")):
+                                                               "if Hermes runs there).")):
             b = QPushButton(label)
             b.setToolTip(tip)
             b.clicked.connect(lambda _=False, f=fmt: self.copy_snippet(f))
@@ -62,18 +61,44 @@ class McpServerDialog(QDialog):
         line = QFrame()
         hl = QHBoxLayout(line)
         hl.setContentsMargins(0, 0, 0, 0)
+        self.start_stop = QPushButton()
+        self.start_stop.setMinimumHeight(36)
+        font = self.start_stop.font()
+        font.setBold(True)
+        self.start_stop.setFont(font)
+        self.start_stop.clicked.connect(self.toggle_http)
+        hl.addWidget(self.start_stop, 1)
         hl.addWidget(QLabel("Port"))
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(user_prefs.load_mcp_http_port())
         hl.addWidget(self.port)
-        self.start_stop = QPushButton()
-        self.start_stop.clicked.connect(self.toggle_http)
-        hl.addWidget(self.start_stop)
-        hl.addStretch(1)
         h.addWidget(line)
         self.http_state = QLabel()
+        self.http_state.setWordWrap(True)
         h.addWidget(self.http_state)
+        # what to paste into each kind of client, shown while the server runs
+        self.http_snippets = QFrame()
+        sg = QGridLayout(self.http_snippets)
+        sg.setContentsMargins(0, 0, 0, 0)
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        self._snippet_texts = []
+        for row, s in enumerate(C.http_snippets()):
+            title = QLabel(f"<b>{s['title']}</b>")
+            title.setToolTip(s["where"])
+            sg.addWidget(title, row, 0, Qt.AlignmentFlag.AlignTop)
+            text = QLabel()
+            text.setFont(mono)
+            text.setToolTip(s["where"])
+            text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            sg.addWidget(text, row, 1)
+            b = QPushButton("Copy")
+            b.setToolTip(s["where"])
+            b.clicked.connect(lambda _=False, i=row: self.copy_http_snippet(i))
+            sg.addWidget(b, row, 2, Qt.AlignmentFlag.AlignTop)
+            self._snippet_texts.append(text)
+        sg.setColumnStretch(1, 1)
+        h.addWidget(self.http_snippets)
         self.autostart = QCheckBox("Start the HTTP server when PyFigures opens "
                                    "(it stops when PyFigures closes)")
         self.autostart.setChecked(user_prefs.load_mcp_http_autostart())
@@ -108,13 +133,21 @@ class McpServerDialog(QDialog):
             self._reg_buttons[r["client"]].setEnabled(not r["error"])
         st = C.http_status()
         if st["running"]:
-            self.http_state.setText(f"Running at {st['url']} (pid {st['pid']})")
-            self.start_stop.setText("Stop")
+            self.http_state.setText(f"Running at <b>{st['url']}</b> (pid {st['pid']}). "
+                                    "Paste one of these into the client:")
+            self.start_stop.setText("Stop the HTTP server")
             self.port.setEnabled(False)
+            for text, s in zip(self._snippet_texts, C.http_snippets(st["url"])):
+                shown = s["text"].rstrip()
+                if shown.startswith("{"):         # JSON on one line here; copied indented
+                    shown = json.dumps(json.loads(shown))
+                text.setText(shown)
         else:
-            self.http_state.setText("Not running")
-            self.start_stop.setText("Start")
+            self.http_state.setText("Not running. Start it to get the address and what to "
+                                    "paste into each client.")
+            self.start_stop.setText("Start the HTTP server")
             self.port.setEnabled(True)
+        self.http_snippets.setVisible(st["running"])
         self.start_stop.setEnabled(not self._busy)
 
     def _say(self, text):
@@ -141,6 +174,11 @@ class McpServerDialog(QDialog):
     def copy_snippet(self, fmt="json"):
         QGuiApplication.clipboard().setText(C.config_snippet(fmt=fmt))
         self._say("Copied. Paste it into the MCP client's configuration.")
+
+    def copy_http_snippet(self, index):
+        s = C.http_snippets()[index]
+        QGuiApplication.clipboard().setText(s["text"])
+        self._say(f"Copied ({s['title']}). {s['where']}")
 
     def toggle_http(self, wait=False):
         if self._busy:

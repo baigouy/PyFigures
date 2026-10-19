@@ -88,6 +88,23 @@ def test_snippets(home):
     assert C.config_snippet(fmt="url").endswith("/mcp")
 
 
+def test_http_snippets_for_each_kind_of_client(home):
+    url = "http://127.0.0.1:9999/mcp"
+    s = {x["title"]: x["text"] for x in C.http_snippets(url)}
+    assert s["Address"] == url
+    assert s["Claude Code"] == f"claude mcp add --transport http pyfigures {url}"
+    assert json.loads(s["JSON with a URL"])["mcpServers"]["pyfigures"] == {"url": url}
+    assert json.loads(s["AnythingLLM"])["mcpServers"]["pyfigures"]["type"] == "streamable"
+    assert json.loads(s["Gemini CLI"])["mcpServers"]["pyfigures"] == {"httpUrl": url}
+    assert C._toml_load(s["Codex"])["mcp_servers"]["pyfigures"] == {"url": url}
+    import yaml
+    assert yaml.safe_load(s["Hermes Agent"])["mcp_servers"]["pyfigures"] == {"url": url}
+    assert json.loads(s["Clients that only start programs"])["mcpServers"]["pyfigures"]["args"][-1] == url
+    assert C.http_url(9999) == url
+    text = C.config_snippet(fmt="http")
+    assert "Claude Code" in text and "/mcp" in text
+
+
 def test_codex_toml_keeps_comments_and_other_tables(home):
     cfg = home / ".codex" / "config.toml"
     cfg.parent.mkdir()
@@ -210,11 +227,18 @@ def test_gui_dialog_registers_and_starts_the_http_server(home, qapp, monkeypatch
     try:
         assert "running at" in dlg.toggle_http(wait=True)
         qapp.processEvents()
-        assert dlg.start_stop.text() == "Stop" and "Running at" in dlg.http_state.text()
+        assert dlg.start_stop.text() == "Stop the HTTP server"
+        url = C.http_status()["url"]
+        assert "Running at" in dlg.http_state.text() and url in dlg.http_state.text()
+        assert not dlg.http_snippets.isHidden()
+        assert dlg._snippet_texts[0].text() == url
+        dlg.copy_http_snippet(2)
+        assert json.loads(QGuiApplication.clipboard().text())["mcpServers"]["pyfigures"]["url"] == url
     finally:
         assert dlg.toggle_http(wait=True).startswith("Stopped")
     qapp.processEvents()
-    assert dlg.start_stop.text() == "Start"
+    assert dlg.start_stop.text() == "Start the HTTP server"
+    assert dlg.http_snippets.isHidden()
     # autostart with PyFigures (off by default), stopped at close
     assert D.autostart_http_server() is False
     user_prefs.save_mcp_http_port(_free_port())
