@@ -82,7 +82,11 @@ def capture_scene(panel) -> dict:
     gen.setOutputDevice(buf)
     gen.setSize(QSize(int(math.ceil(width)), int(math.ceil(height))))
     gen.setViewBox(QRectF(0, 0, width, height))
-    gen.setResolution(72)           # 1 SVG unit = 1 point = 1 canvas unit
+    # 1 SVG unit = 1 point = 1 canvas unit; the resolution only sets how point-size
+    # fonts become units: as on the images the other exports draw on (QImage,
+    # 96 dpi), or labels and letters came out at 72/96 of their size, off-centre
+    from qtpy.QtGui import QImage
+    gen.setResolution(QImage(1, 1, QImage.Format.Format_ARGB32).logicalDpiY())
     from pyfigures.gui.svg_painter import CroppingPainter
     painter = CroppingPainter(gen)
     painter.translate(-pad_x, -pad_y)

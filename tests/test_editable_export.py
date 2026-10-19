@@ -222,6 +222,31 @@ def test_mcp_export_pptx_and_jsx(cropped_figure, tmp_path):
     assert M.export_illustrator_script(str(tmp_path / "nope.pyf"), str(tmp_path / "x.jsx")).startswith("ERROR")
 
 
+def test_labels_keep_the_size_they_have_in_the_other_exports(cropped_figure, tmp_path, qapp):
+    """Labels and scale-bar text drawn by PyFigures came out at 72/96 of their
+    size in PowerPoint / Illustrator (and so off-centre on the scale bar)."""
+    import pyfigures.mcp_server as M
+    from PIL import Image
+    from pptx import Presentation
+    png = str(tmp_path / "ref.png")
+    json.loads(M.export_figure(cropped_figure, png, dpi=288))            # 4 px per point
+    a = np.asarray(Image.open(png).convert("L"))
+    h, w = a.shape
+    corner = a[int(h * 0.8):, int(w * 0.8):] > 128        # the white "10 µm" + bar, bottom right
+    widths = corner.sum(axis=1)
+    bar_top = np.where(widths > widths.max() * 0.9)[0].min()
+    cols = np.where(corner[:bar_top - 2].any(axis=0))[0]
+    text_width_pt = (cols.max() - cols.min() + 1) / 4.0
+    res = json.loads(M.export_pptx(cropped_figure, str(tmp_path / "out.pptx")))
+    prs = Presentation(res["path"])
+    sizes = [r.font.size.pt for g in prs.slides[0].shapes if g.shape_type == 6
+             for s in g.shapes if s.has_text_frame and s.text_frame.text.replace(" ", "") == "10µm"
+             for r in s.text_frame.paragraphs[0].runs]
+    assert sizes
+    # "10 µm" in Arial is 2.799 em wide
+    assert abs(sizes[0] * 2.799 - text_width_pt) < 0.1 * text_width_pt, (sizes[0], text_width_pt)
+
+
 def test_svg_export_keeps_crops(cropped_figure, tmp_path):
     """Regression: File > Export As > SVG embedded cropped panels uncropped,
     squeezed into the cropped box (Qt's SVG engine ignores source rects)."""
