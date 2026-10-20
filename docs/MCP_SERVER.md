@@ -474,6 +474,7 @@ figure should show more of it. GUI: Annotations → Stack views.
 | Tool | Description |
 |------|-------------|
 | `transform_image(pyf_path, group_path, image_index, ...)` | Rotate, flip (H/V), crop edges, set opacity or fill colour |
+| `set_figure_colors(pyf_path, colors, single_channel)` | Recolour the whole figure in one call ("use magenta and green"): channel *i* of every multi-channel image, merge and channel split takes colour *i* (split labels follow); single-channel images become gray (`single_channel="keep"` leaves them); colour photographs are kept; plots take the colours only when they have that many groups, else Okabe–Ito; `["colorblind"]` = magenta/green + Okabe–Ito on every plot. Recipe: top-level `colors`. GUI: Annotations → Figure colours… |
 | `set_lut(pyf_path, group_path, image_index, luts, ...)` | Set colour LUTs per channel; optional intensity normalisation. Names are case-insensitive (`matplotlib_viridis` works); unknown names are rejected with suggestions |
 | `configure_image(pyf_path, group_path, image_index, ...)` | Set active channels, Z-projection mode, Z range, series index, normalisation |
 | `add_channel_merge(pyf_path, group_path, channel_files, colors, mode, ..., normalization)` | Overlay 2–4 single-channel images into one pseudo-coloured composite panel. `normalization="per_channel"` (min–max stretch, disclosed in the adjustment ledger) or `"none"` (raw intensities) |

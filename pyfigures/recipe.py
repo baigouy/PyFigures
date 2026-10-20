@@ -319,7 +319,10 @@ def _panel_kind(panel, where):
         if kind == "split" and isinstance(inner.get("lut"), list) and "colors" not in inner:
             inner["colors"] = [str(c).lower() for c in inner.pop("lut")]
         fixed = {kind: src, **inner, **{k: v for k, v in panel.items() if k != kind}}
-        if src_key and isinstance(src, (str, list)) and not set(fixed) - {kind} - _KIND_KEYS[kind]:
+        if src_key and isinstance(src, (str, list)):
+            # flattened even with a wrong key inside, so the error below names
+            # that key instead of repeating "flatten it" (gpt-oss looped on a
+            # nested split that also held `channels`)
             panel.clear()
             panel.update(fixed)
         else:
@@ -328,7 +331,10 @@ def _panel_kind(panel, where):
     unknown = set(panel) - {kind} - _KIND_KEYS[kind]
     if unknown:
         hint = ""
-        if any("split" in str(k) for k in unknown):
+        if kind == "split" and "channels" in unknown:
+            hint = (" — a split already shows every channel plus their merge: remove "
+                    "'channels'; give names (and colors) in channel order")
+        elif any("split" in str(k) for k in unknown):
             hint = (" — to show each channel of a file, use a split panel: "
                     "{split: file.tif, names: [...]}")
         raise RecipeError(f"{where}: unknown key(s) for a {kind} panel: {sorted(unknown)} "
@@ -956,6 +962,12 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
             path = _resolve(base, panel[kind])
             if not source_exists(path):
                 raise RecipeError(f"{where}: file not found: {path}")
+            if kind in ("image", "split", "montage") and \
+                    os.path.splitext(str(path))[1].lower() in (".csv", ".tsv", ".xlsx", ".xls"):
+                # a table read as an image became a black panel (Qwen3 30B)
+                raise RecipeError(f"{where}: {os.path.basename(str(path))} is a data table, not "
+                                  f"an image — plot it with {{plot: {panel[kind]}, kind: box}} "
+                                  "(kind: bar, box, violin, scatter or grouped)")
             plan_row.append((kind, path, merged))
         if "labels" in row_opts and isinstance(row_opts["labels"], list) \
                 and len(row_opts["labels"]) != len(plan_row):
@@ -1402,7 +1414,16 @@ def _crop_to_aspect(img, target, name):
         side = f"{extra} px top/bottom"
     for k, v in crop.items():
         _set_child_text(img, f"crop_{k}", str(v))
-    return f"grid: panel {name!r} centre-cropped by {side} to the grid's {target:.2f} aspect ratio"
+    kept = (size[0] - crop["left"] - crop["right"]) * (size[1] - crop["top"] - crop["bottom"])
+    pct = 100 * kept / (size[0] * size[1])
+    msg = (f"grid: panel {name!r} centre-cropped by {side} to the grid's {target:.2f} aspect "
+           f"ratio ({pct:.0f}% of the image shown)")
+    if pct < 50:
+        # a picture route kept 17-25% of an overview (ChatGPT audit, 19 Oct)
+        msg += (" — most of the image is cut away: if the whole field matters, give the panel "
+                "a cell span closer to the image's shape, or use a formula ( , / ) which keeps "
+                "whole images")
+    return msg
 
 
 def _arrange_layout(out, plan):
@@ -1510,6 +1531,44 @@ def _arrange_layout(out, plan):
         root.insert(at + k, g)
     _save(tree, out, recompute=True)
     return warnings
+
+
+def _zoom_list(plan):
+    """Every zoom inset with its current size: "make the insets larger" needs
+    it (Gemma 12B rebuilt the zoom without a size and the inset stayed the
+    same)."""
+    zooms = []
+    for _row_opts, row in plan["rows"]:
+        for kind, path, opts in row:
+            for z in _as_list(opts.get("zoom") or []):
+                if isinstance(z, dict) and "box" in z:
+                    zooms.append({"panel": os.path.basename(str(path)), "box": z["box"],
+                                  "size": z.get("size", 0.4)})
+    return zooms
+
+
+def recipe_zooms(recipe_path: str) -> list:
+    """_zoom_list of a recipe file, [] when it is missing or invalid."""
+    try:
+        return _zoom_list(_plan(load_recipe(recipe_path), recipe_path))
+    except Exception:
+        return []
+
+
+def zoom_size_changes(old: list, new: list) -> list:
+    """Warnings for zoom insets whose size changed between two versions of a
+    recipe (recipe_zooms) while their box stayed the same: a rebuild for
+    another edit (colours) silently shrank an enlarged inset (Qwen3 30B,
+    0.6 -> 0.4)."""
+    out = []
+    for z in new:
+        for o in old:
+            if o["panel"] == z["panel"] and list(o["box"]) == list(z["box"]) \
+                    and o["size"] != z["size"]:
+                out.append(f"zoom inset on {z['panel']} (box {list(z['box'])}) changed size "
+                           f"{o['size']} -> {z['size']} from the previous recipe; if this edit "
+                           f"was about something else, put size: {o['size']} back")
+    return out
 
 
 def build_figure_from_recipe(recipe_path: str) -> dict:
@@ -1791,15 +1850,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             warnings.append(f"remote image kept as a link (download failed): {miss['url']} ({miss['error']})")
 
     n_rows = len(plan["rows"])
-    # every zoom inset with its current size: "make the insets larger" needs it
-    # (Gemma 12B rebuilt the zoom without a size and the inset stayed the same)
-    zooms = []
-    for _row_opts, row in plan["rows"]:
-        for kind, path, opts in row:
-            for z in _as_list(opts.get("zoom") or []):
-                if isinstance(z, dict) and "box" in z:
-                    zooms.append({"panel": os.path.basename(str(path)), "box": z["box"],
-                                  "size": z.get("size", 0.4)})
+    zooms = _zoom_list(plan)
     width_desc = (f"{plan['journal']} ({plan['column']})" if plan["journal"] else
                   (", ".join(f"{k}={v}" for k, v in plan["width"].items()) or None))
     return {

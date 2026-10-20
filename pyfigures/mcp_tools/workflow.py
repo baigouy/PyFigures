@@ -850,15 +850,39 @@ def recipe_reference() -> str:
             "example": "layout: |\n  big big wt\n  big big ko\n  plot plot rescue\npanels:\n  big: "
                        "overview.tif\n  wt: wt.tif\n  ko: ko.tif\n  rescue: rescue.tif\n  plot: "
                        "{plot: counts.csv, kind: box}",
+            "more_examples": {
+                "two panels above three": "a a a b b b\nc c d d e e",
+                "one full-width panel below two": "a b\nc c",
+            },
             "note": "images are centre-cropped to the shape of their cells so everything lines "
-                    "up; panels that interlock like a pinwheel (no straight line between them) "
-                    "are refused",
+                    "up (the build warns when most of an image is cut away; a formula keeps "
+                    "whole images); panels that interlock like a pinwheel (no straight line "
+                    "between them) are refused",
+        },
+        "whole_figure_colors": {
+            "example": "colors: [magenta, green]",
+            "what": "TOP-LEVEL colors recolours the WHOLE figure — use it for requests such as "
+                    "'use magenta and green': channel 1 of every multi-channel image, merge "
+                    "and channel split takes the first colour, channel 2 the second (later "
+                    "channels keep theirs; split labels follow); single-channel images become "
+                    "gray; colour photographs (bright field, histology) are kept; a data plot "
+                    "takes the colours only when it has that many groups, otherwise the "
+                    "colour-blind-safe Okabe-Ito palette. colors: [colorblind] = magenta/green "
+                    "channels and Okabe-Ito on every plot. A plot panel's own colors changes "
+                    "that plot only.",
+            "existing_figure": "for a colour-only change of a built figure, either add colors: "
+                               "to the SAME complete recipe (keep every other key, crops, zoom "
+                               "boxes and sizes unchanged) or call set_figure_colors(pyf, "
+                               "colors), which changes nothing else",
         },
         "notes": [
             "Paths are relative to the recipe file.",
             "px_to_unit is the pixel size (units per pixel), e.g. 0.1 for 0.1 um/pixel; "
             "never invent it: ask the user or read it from the image metadata "
-            "(auto_configure: true).",
+            "(auto_configure: true). The numbers in the examples here (pixel sizes, "
+            "bar lengths, crops) are illustrative, not values to copy.",
+            "When editing a built figure, rebuild from the previous complete recipe and change "
+            "only what was asked: the build warns when a zoom inset's size changed.",
             "Give either journal (+ column) or one explicit width, not both.",
             "Build with build_figure_from_recipe(recipe_path, recipe_text=...), then check "
             "the result with render_preview; to change the figure, edit the recipe and build again.",
@@ -917,10 +941,17 @@ def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -
     or an ERROR string (missing file, unknown key,
     invalid value) — nothing is half-built silently.
     """
-    from ..recipe import build_figure_from_recipe as _build, RecipeError, save_recipe_text
+    from ..recipe import (build_figure_from_recipe as _build, RecipeError, save_recipe_text,
+                          recipe_zooms, zoom_size_changes)
     try:
+        before = []
         if recipe_text:
+            before = recipe_zooms(recipe_path)
             recipe_path = save_recipe_text(recipe_text, recipe_path)
-        return json.dumps(_build(recipe_path), ensure_ascii=False, indent=2)
+        res = _build(recipe_path)
+        if before:
+            res["warnings"] = zoom_size_changes(before, res.get("zoom_insets") or []) \
+                + list(res.get("warnings") or [])
+        return json.dumps(res, ensure_ascii=False, indent=2)
     except RecipeError as e:
         return f"ERROR: {e}"

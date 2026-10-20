@@ -47,11 +47,29 @@ def _cells(text):
         if len(r) != n:
             raise FormulaError(f"layout picture: line {i + 1} has {len(r)} cells, line 1 has {n}; "
                                "every line needs the same number of cells (repeat a name to "
-                               "make a panel span several cells)")
+                               "make a panel span several cells)" + _row_hint(rows))
         for name in r:
             if not _NAME.match(name):
                 raise FormulaError(f"layout picture: {name!r} (line {i + 1}) is not a panel name")
     return rows
+
+
+def _row_hint(rows, max_cells=24):
+    """The picture with every line stretched to a common number of cells
+    ("a b / c d e" -> "a a a b b b / c c d d e e"), offered when it is a valid
+    picture (Qwen3 30B repeated unequal rows 16 times). Never applied silently:
+    the stretched spans may not be what was meant."""
+    import math
+    n = math.lcm(*(len(r) for r in rows))
+    if n > max_cells:
+        return ""
+    lines = [" ".join(name for name in r for _ in range(n // len(r))) for r in rows]
+    try:
+        parse("\n".join(lines))        # rectangles and no pinwheel
+    except FormulaError:
+        return ""
+    return ("; with equal widths per line that would be:\n  " + "\n  ".join(lines)
+            + "\n(check the spans are what you meant)")
 
 
 def _areas(rows):

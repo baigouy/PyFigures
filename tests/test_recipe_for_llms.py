@@ -82,10 +82,68 @@ def test_options_nested_inside_the_source_are_accepted(images, qapp):
     assert len(imgs) == 4                                    # 3 channels + merge
     assert "MAGENTA" in (imgs[3].findtext("LUTs") or ""), imgs[3].findtext("LUTs")
     assert all(float(e.findtext("crop_bottom") or 0) == 4 for e in imgs)
-    # a key that is not valid for the flat panel still gets the corrected form
+    # a key that is not valid for the flat panel: the error names that key
+    # (gpt-oss's real nested split also held `channels`; "flatten it" looped)
     res = M.build_figure_from_recipe(str(images / "g.yaml"), recipe_text=(
-        "output: g.pyf\nrows:\n  - - {split: {image: rgb.png, wobble: 3}}\n"))
-    assert res.startswith("ERROR") and 'write {"split": "rgb.png", "wobble": 3}' in res, res
+        "output: g.pyf\nrows:\n  - - {split: {image: rgb.png, channels: [0, 1, 2], "
+        "colors: [red, green, blue]}}\n"))
+    assert res.startswith("ERROR") and "['channels']" in res and "remove 'channels'" in res, res
+    assert "put the other keys beside" not in res
+    # no source key inside: still the corrected form
+    res = M.build_figure_from_recipe(str(images / "h.yaml"), recipe_text=(
+        "output: h.pyf\nrows:\n  - - {split: {wobble: 3}}\n"))
+    assert res.startswith("ERROR") and "put the other keys beside" in res, res
+
+
+def test_picture_with_unequal_rows_gets_the_stretched_picture(images):
+    """Qwen3 30B resent pictures with unequal rows 16 times."""
+    from pyfigures.layout_formula import FormulaError
+    from pyfigures.layout_picture import parse
+    with pytest.raises(FormulaError, match="a a a b b b\n  c c d d e e"):
+        parse("a b\nc d e")
+    # no candidate when the stretched picture is not valid (pinwheel / L)
+    with pytest.raises(FormulaError) as e:
+        parse("a b\na c d\na")
+    assert "would be" not in str(e.value)
+
+
+def test_table_as_image_is_refused_with_plot_form(images):
+    """A CSV given as an image file became a black panel (Qwen3 30B)."""
+    (images / "m.csv").write_text("A,B\n1,2\n", encoding="utf-8")
+    res = M.build_figure_from_recipe(str(images / "t.yaml"), recipe_text=(
+        "output: t.pyf\nrows:\n  - [a.png, m.csv]\n"))
+    assert res.startswith("ERROR") and "{plot: m.csv, kind: box}" in res, res
+
+
+def test_picture_crop_reports_how_much_is_shown(images, qapp):
+    from PIL import Image
+    Image.new("L", (300, 100), 90).save(images / "wide.png")
+    Image.new("L", (100, 100), 90).save(images / "sq.png")
+    res = json.loads(M.build_figure_from_recipe(str(images / "p.yaml"), recipe_text=(
+        "output: p.pyf\nlayout: |\n  w s\n  w s\npanels:\n  w: wide.png\n  s: sq.png\n")))
+    msg = " ".join(res["warnings"])
+    assert "% of the image shown" in msg and "most of the image is cut away" in msg, msg
+
+
+def test_rebuild_warns_when_a_zoom_size_changed(images, qapp):
+    """Qwen3 30B rebuilt for a colour change and the enlarged inset went
+    from 0.6 back to 0.4."""
+    from PIL import Image
+    Image.new("L", (200, 150), 120).save(images / "big.png")
+    text = "output: z.pyf\nrows:\n  - - {image: big.png, zoom: {box: [10, 10, 40, 30]%s}}\n"
+    M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ", size: 0.6")
+    res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ""))
+    assert any("0.6 -> 0.4" in w and "size: 0.6 back" in w for w in res["warnings"]), res
+    res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ""))
+    assert not any("changed size" in w for w in res["warnings"])
+
+
+def test_recipe_reference_explains_whole_figure_colours():
+    ref = json.loads(M.recipe_reference())
+    assert ref["whole_figure_colors"]["example"] == "colors: [magenta, green]"
+    assert "set_figure_colors" in ref["whole_figure_colors"]["existing_figure"]
+    assert "a a a b b b" in ref["layout_picture"]["more_examples"]["two panels above three"]
+    assert any("illustrative" in n for n in ref["notes"])
 
 
 def test_build_result_lists_zoom_inset_sizes(images, qapp):
