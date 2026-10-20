@@ -664,6 +664,10 @@ def check_journal_compliance(
     lines = [f"Journal compliance [{wsrc}]: {header}"]
     for crit, ok, detail in results:
         lines.append(f"  [{'ok' if ok else 'FAIL'}] {crit}: {detail}")
+    # a 9B model read COMPLIANT as "the figure is ready" with a wrong row layout
+    lines.append("  (These are the journal's mechanical rules only — not whether the "
+                 "arrangement matches what was asked, nor a visual review; describe_figure "
+                 "shows the actual layout.)")
     if style is not None:
         from ..journal_styles import describe_rules
         lines.append(f"Journal style {style['journal']!r} ({style['status']}, stage "

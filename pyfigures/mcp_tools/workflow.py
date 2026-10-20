@@ -952,6 +952,19 @@ def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -
         if before:
             res["warnings"] = zoom_size_changes(before, res.get("zoom_insets") or []) \
                 + list(res.get("warnings") or [])
+        _LAST_RECIPE_ERROR.pop(os.path.abspath(recipe_path), None)
         return json.dumps(res, ensure_ascii=False, indent=2)
     except RecipeError as e:
+        # the same recipe resent unchanged (small models looped up to 30 times)
+        key = os.path.abspath(recipe_path)
+        sig = (recipe_text or "", str(e))
+        again = _LAST_RECIPE_ERROR.get(key) == sig
+        _LAST_RECIPE_ERROR[key] = sig
+        if again:
+            return (f"ERROR: this exact recipe was already refused for the same reason — resending "
+                    f"it unchanged cannot work; change what the message says (or ask the user "
+                    f"one focused question): {e}")
         return f"ERROR: {e}"
+
+
+_LAST_RECIPE_ERROR: dict = {}     # recipe path -> (recipe text, error) of its last refusal

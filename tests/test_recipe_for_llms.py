@@ -133,9 +133,12 @@ def test_rebuild_warns_when_a_zoom_size_changed(images, qapp):
     text = "output: z.pyf\nrows:\n  - - {image: big.png, zoom: {box: [10, 10, 40, 30]%s}}\n"
     M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ", size: 0.6")
     res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ""))
-    assert any("0.6 -> 0.4" in w and "size: 0.6 back" in w for w in res["warnings"]), res
+    assert any("is now SMALLER" in w and "0.6 -> 0.4" in w and "size: 0.6 back" in w
+               and "ABOVE 0.6" in w for w in res["warnings"]), res
     res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ""))
-    assert not any("changed size" in w for w in res["warnings"])
+    assert not any("is now" in w for w in res["warnings"])
+    res = json.loads(M.build_figure_from_recipe(str(images / "z.yaml"), recipe_text=text % ", size: 0.7"))
+    assert any("is now LARGER" in w for w in res["warnings"]), res
 
 
 def test_recipe_reference_explains_whole_figure_colours():
@@ -370,3 +373,69 @@ def test_recipe_reference_lists_every_key():
     assert set(ref["top_level_keys"]) == R._TOP_KEYS
     assert set(ref["keys_per_panel_kind"]) == set(R._PANEL_KINDS)
     assert "nature" in ref["journals"] and "pptx" in ref["exports"]
+
+
+def test_build_reply_shows_the_actual_saved_layout(images, qapp):
+    """Qwen 9B put the second micrograph beside the split instead of beside
+    the plot, and kept that through five edits while describing the asked
+    layout: the reply now shows what was saved."""
+    from PIL import Image
+    Image.new("RGB", (60, 40), (200, 100, 0)).save(images / "rgb.png")
+    (images / "m.csv").write_text("A,B\n1,2\n2,3\n", encoding="utf-8")
+    wrong = json.loads(M.build_figure_from_recipe(str(images / "w.yaml"), recipe_text=(
+        "output: w.pyf\nrows:\n  - - {split: rgb.png}\n    - a.png\n  - - {plot: m.csv}\n")))
+    assert wrong["actual_layout"] == ["row 1: [rgb.png x4] | a.png", "row 2: m.csv (plot)"], wrong
+    right = json.loads(M.build_figure_from_recipe(str(images / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {split: rgb.png}\n  - - a.png\n    - {plot: m.csv}\n")))
+    assert right["actual_layout"] == ["row 1: [rgb.png x4]", "row 2: a.png | m.csv (plot)"], right
+    assert "SAVED figure" in right["layout_note"]
+    nested = json.loads(M.build_figure_from_recipe(str(images / "n.yaml"), recipe_text=(
+        "output: n.pyf\nlayout: \"(a/b),m\"\npanels:\n  a: a.png\n  b: b.png\n"
+        "  m: {plot: m.csv}\n")))
+    assert nested["actual_layout"] == ["row 1: (a.png / b.png) | m.csv (plot)"], nested
+    assert "row 2: a.png | m.csv (plot)" in M.describe_figure(str(images / "r.pyf"))
+
+
+def test_scale_bar_calibration_provenance_is_flagged(images, qapp):
+    """Qwen3 30B copied 0.1 µm/pixel from the examples into a layout given no
+    calibration: a pixel size the file does not carry is flagged (not
+    blocked), and one contradicting the file's metadata too."""
+    from batoolset.img import Img
+    import numpy as np
+    res = json.loads(M.build_figure_from_recipe(str(images / "c.yaml"), recipe_text=(
+        "output: c.pyf\ndefaults: {px_to_unit: 0.1, scale_bar: {units: 1}}\nrows:\n"
+        "  - [a.png, b.png]\n")))
+    msg = [w for w in res["warnings"] if "carry no pixel size" in w]
+    assert msg and "a.png, b.png" in msg[0] and "only if the user gave" in msg[0], res["warnings"]
+    # a TIFF calibrated at 0.5 µm/px given 0.1 in the recipe
+    t = images / "cal.tif"
+    import tifffile
+    tifffile.imwrite(str(t), np.zeros((40, 60), np.uint8), imagej=True,
+                     resolution=(2.0, 2.0), metadata={"unit": "um"})
+    res = json.loads(M.build_figure_from_recipe(str(images / "d.yaml"), recipe_text=(
+        "output: d.pyf\ndefaults: {px_to_unit: 0.1, scale_bar: {units: 1}}\nrows:\n  - [cal.tif]\n")))
+    assert any("differs from the image metadata" in w and "0.5" in w for w in res["warnings"]), \
+        res["warnings"]
+    # no scale bar: nothing to say
+    res = json.loads(M.build_figure_from_recipe(str(images / "e.yaml"), recipe_text=(
+        "output: e.pyf\nrows:\n  - [a.png]\n")))
+    assert not any("pixel size" in w for w in res["warnings"])
+
+
+def test_same_failing_recipe_resent_gets_told_so(images):
+    text = "output: x.pyf\nrows:\n  - [a.png, nothere.png]\n"
+    first = M.build_figure_from_recipe(str(images / "x.yaml"), recipe_text=text)
+    assert first.startswith("ERROR") and "already refused" not in first
+    again = M.build_figure_from_recipe(str(images / "x.yaml"), recipe_text=text)
+    assert again.startswith("ERROR") and "already refused for the same reason" in again
+    assert "nothere.png" in again
+    changed = M.build_figure_from_recipe(str(images / "x.yaml"),
+                                         recipe_text=text.replace("nothere", "nope"))
+    assert "already refused" not in changed
+
+
+def test_compliance_says_it_checks_print_rules_only(images, qapp):
+    M.build_figure_from_recipe(str(images / "j.yaml"), recipe_text=(
+        "output: j.pyf\nrows:\n  - [a.png]\n"))
+    rep = M.check_journal_compliance(str(images / "j.pyf"), journal="nature", column="single")
+    assert "mechanical rules only" in rep and "describe_figure" in rep

@@ -632,6 +632,61 @@ def _top_groups(root: ET.Element) -> list[ET.Element]:
     return [c for c in root if c.tag == "Group"]
 
 
+_PLOT_CSV = re.compile(r"_csv\s*=\s*(['\"])(.+?)\1")
+
+
+def _panel_token(img: ET.Element) -> str:
+    """Short name of a panel for layout_rows: the file name, '<csv> (plot)'
+    for a data plot, '(script panel)' otherwise."""
+    fn = _child_text(img, "filename")
+    if isinstance(fn, str) and fn and fn != "@template@":
+        return Path(fn).name
+    script = _child_text(img, "custom_loading_script")
+    if script:
+        m = _PLOT_CSV.search(str(script))
+        if m:
+            return f"{Path(m.group(2)).name} (plot)"
+        return "(script panel)"
+    return "(template slot)" if _is_template(img) else "(empty)"
+
+
+def _layout_token(el: ET.Element, top: bool = False) -> str | None:
+    if el.tag == "Image2D":
+        return None if el.findtext("isText", "False") == "True" else _panel_token(el)
+    if el.tag != "Group" or _is_label_row_group(el):
+        return None
+    content = el.find("content")
+    parts = [t for t in (_layout_token(c) for c in (list(content) if content is not None else []))
+             if t]
+    if not parts:
+        return None
+    if len(parts) > 1 and len(set(parts)) == 1:
+        # a channel split / montage: the same file several times
+        tok = f"[{parts[0]} x{len(parts)}]"
+    elif len(parts) == 1:
+        tok = parts[0]
+    else:
+        tok = (" | " if _child_text(el, "orientation") != "Y" else " / ").join(parts)
+        if not top:
+            tok = f"({tok})"
+    return tok
+
+
+def layout_rows(root: ET.Element) -> list[str]:
+    """The figure's ACTUAL arrangement, read from the saved file: one line per
+    top-level row, panels by file name, ' | ' side by side, ' / ' stacked,
+    '( )' a nested group, '[name xN]' the N panels of a channel split or
+    montage. Build replies carry it so a model compares what was saved with
+    what was asked (Qwen 9B kept a wrong row through five edits while
+    describing the requested one)."""
+    rows = []
+    for el in root:
+        tok = _layout_token(el, top=True)
+        if tok:
+            rows.append(f"row {len(rows) + 1}: {tok}")
+    return rows
+
+
 def _all_groups(root: ET.Element) -> list[ET.Element]:
     """BFS over all <Group> elements in the document."""
     result, queue = [], list(root)

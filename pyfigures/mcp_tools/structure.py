@@ -23,6 +23,7 @@ from .app import (
     mcp,
 )
 from .core import (
+    layout_rows,
     _missing_image_note,
     _placement_error,
     _orientation,
@@ -88,6 +89,12 @@ def describe_figure(pyf_path: str) -> str:
     canvas_imgs = [c for c in root if c.tag == "Image2D"]
     groups = _top_groups(root)
     lines = [f"Figure: {pyf_path}"]
+    rows = layout_rows(root)
+    if rows and groups:
+        lines.append("Actual layout (' | ' side by side, ' / ' stacked, '[file xN]' a channel "
+                     "split or montage):")
+        lines.extend("  " + r for r in rows)
+        lines.append("")
 
     if canvas_imgs:
         lines.append(f"\nFree-canvas mode - {len(canvas_imgs)} image(s) (use group_path=[] to address them):")

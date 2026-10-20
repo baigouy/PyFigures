@@ -1547,6 +1547,37 @@ def _zoom_list(plan):
     return zooms
 
 
+def _calibration_warnings(plan) -> list:
+    """Where a scale bar's pixel size comes from: models copied the example
+    0.1 µm/pixel into figures given no calibration (Qwen3 30B, despite the
+    documentation). A px_to_unit the image file does not carry is flagged as
+    user-supplied-only; one that contradicts the file's own is flagged too.
+    Nothing is blocked: a calibration the user gave is legitimate."""
+    from pyfigures.mcp_tools.workflow import _try_read_image_info
+    missing, clash = {}, []
+    for _row_opts, row in plan["rows"]:
+        for kind, path, opts in row:
+            px = opts.get("px_to_unit")
+            if not opts.get("scale_bar") or not px or not isinstance(path, str):
+                continue
+            try:
+                own = _try_read_image_info(path).get("px_to_unit")
+            except Exception:
+                own = None
+            name = os.path.basename(path)
+            if own is None:
+                missing.setdefault(px, []).append(name)
+            elif abs(float(own) - float(px)) > 0.01 * float(own):
+                clash.append(f"{name}: the file says {own:.4g} per pixel, the recipe {px}")
+    out = [f"scale bars use px_to_unit {px} from the recipe for {', '.join(sorted(set(names)))}: "
+           f"the image file(s) carry no pixel size — keep it only if the user gave this "
+           f"calibration (example values such as 0.1 are not real calibrations)"
+           for px, names in missing.items()]
+    if clash:
+        out.append("pixel size differs from the image metadata — " + "; ".join(clash))
+    return out
+
+
 def recipe_zooms(recipe_path: str) -> list:
     """_zoom_list of a recipe file, [] when it is missing or invalid."""
     try:
@@ -1565,9 +1596,13 @@ def zoom_size_changes(old: list, new: list) -> list:
         for o in old:
             if o["panel"] == z["panel"] and list(o["box"]) == list(z["box"]) \
                     and o["size"] != z["size"]:
-                out.append(f"zoom inset on {z['panel']} (box {list(z['box'])}) changed size "
-                           f"{o['size']} -> {z['size']} from the previous recipe; if this edit "
-                           f"was about something else, put size: {o['size']} back")
+                # the direction in words: Qwen3 30B called 0.8 -> 0.6 "enlarged"
+                way = "SMALLER" if float(z["size"]) < float(o["size"]) else "LARGER"
+                out.append(f"zoom inset on {z['panel']} (box {list(z['box'])}) is now {way}: "
+                           f"size {o['size']} -> {z['size']} from the previous recipe; if this "
+                           f"edit was about something else, put size: {o['size']} back"
+                           + (" (to enlarge it, size must go ABOVE "
+                              f"{o['size']}, at most 1)" if way == "SMALLER" else ""))
     return out
 
 
@@ -1851,6 +1886,13 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
 
     n_rows = len(plan["rows"])
     zooms = _zoom_list(plan)
+    warnings += _calibration_warnings(plan)
+    import xml.etree.ElementTree as _ET
+    from pyfigures.mcp_tools.core import layout_rows
+    try:
+        actual = layout_rows(_ET.parse(out).getroot())
+    except Exception:
+        actual = []
     width_desc = (f"{plan['journal']} ({plan['column']})" if plan["journal"] else
                   (", ".join(f"{k}={v}" for k, v in plan["width"].items()) or None))
     return {
@@ -1869,6 +1911,11 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
         "checks": checks,
         "consolidated": bundle,
         "template": plan["template"],
+        "actual_layout": actual,
+        "layout_note": "actual_layout is read from the SAVED figure (' | ' side by side, ' / ' "
+                       "stacked, '[file xN]' a channel split or montage): check it matches "
+                       "the requested arrangement — a successful build only means the recipe "
+                       "ran",
         **({"zoom_insets": zooms,
             "zoom_note": "size = the inset's width as a fraction of its panel (0 < size <= 1); "
                          "to enlarge an inset raise its zoom's size (e.g. 0.4 -> 0.55), keep "
