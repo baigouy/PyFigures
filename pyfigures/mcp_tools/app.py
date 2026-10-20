@@ -134,14 +134,27 @@ def _keep_text_arguments_as_text():
 
     def is_text(annotation):
         args = typing.get_args(annotation)
-        return annotation is str or (bool(args) and set(args) <= {str, type(None)})
+        # str | dict | None (a recipe as text or as an object): text stays text
+        return annotation is str or (str in args and set(args) <= {str, dict, type(None)})
+
+    def is_text_list(annotation):
+        # list[str] or list[str] | None
+        if typing.get_origin(annotation) is list:
+            return typing.get_args(annotation) == (str,)
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        return len(args) == 1 and is_text_list(args[0])
 
     def pre_parse_json(self, data):
+        fields = self.arg_model.model_fields
         text = {k: v for k, v in data.items() if isinstance(v, str)
-                and k in self.arg_model.model_fields
-                and is_text(self.arg_model.model_fields[k].annotation)}
+                and k in fields and is_text(fields[k].annotation)}
         parsed = original(self, data)
         parsed.update(text)
+        for k, v in parsed.items():
+            # one label sent as a plain string (add_corner_labels(top_right="α / β"))
+            # is that one label, not a validation error
+            if isinstance(v, str) and k in fields and is_text_list(fields[k].annotation):
+                parsed[k] = [v]
         return parsed
 
     pre_parse_json._pyfigures = True
@@ -177,15 +190,19 @@ def _figures_of_call(fn, args, kwargs) -> list[str]:
             if text is None and os.path.isfile(path):
                 with open(path, encoding="utf-8") as f:
                     text = f.read()
-            if text:
+            if isinstance(text, dict):
+                data = text
+            elif text:
                 if path.lower().endswith(".json"):
                     data = json.loads(text)
                 else:
                     import yaml
                     data = yaml.safe_load(text)
-                out = data.get("output") if isinstance(data, dict) else None
-                if isinstance(out, str):
-                    found.append(_resolve(os.path.dirname(os.path.abspath(path)), out))
+            else:
+                data = None
+            out = data.get("output") if isinstance(data, dict) else None
+            if isinstance(out, str):
+                found.append(_resolve(os.path.dirname(os.path.abspath(path)), out))
         except Exception:
             pass
     return list(dict.fromkeys(found))

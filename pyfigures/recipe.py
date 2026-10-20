@@ -208,6 +208,22 @@ def _yaml_hint(text: str) -> str:
                     f"of one row go in ONE list, '{m.group(1)}- [{joined}]'; a new row starts "
                     f"with '- '. Or draw the layout: layout: |, then one line per row of panel "
                     f"names.")
+    example = ("\n  rows:\n    - - {split: a.tif, names: [A, B]}     # row 1\n"
+               "    - - {image: b.tif, zoom: {box: [10, 10, 50, 50], size: 0.4}}   # row 2, panel 1\n"
+               "      - {plot: c.csv, kind: box}        # row 2, panel 2\n"
+               "(or send the whole recipe as JSON)")
+    for n in range(1, len(lines)):
+        prev, line = lines[n - 1].rstrip(), lines[n]
+        if line.lstrip().startswith(","):
+            # Qwen3.5 9B: "  - - {a}\n    , {b}" for 10 builds in a row
+            return (f" — line {n + 1} starts with ',': a block list has no commas between items; "
+                    f"each panel starts with '- ' (one '- ' per panel, aligned under the first "
+                    f"panel of its row) and each new row with '- - ' at the rows level:{example}")
+        if re.match(r"^\s*-(\s+-)?\s+\{.*\}\s*$", prev) and re.match(r"^\s+[A-Za-z_]\w*\s*:", line):
+            key = line.strip().split(":")[0]
+            return (f" — line {n + 1} adds '{key}:' after the panel of line {n} was closed by "
+                    f"'}}': put it INSIDE the braces, e.g. "
+                    f"{prev.strip().lstrip('- ').rstrip()[:-1].rstrip()}, {line.strip()}}}{example}")
     return (" — check the indentation (two spaces per level) and that each row under rows: "
             "starts with '- ', e.g. rows:\\n  - [a.png, b.png]\\n  - [c.png]")
 
@@ -299,6 +315,18 @@ def _panel_kind(panel, where):
     # `merge: true/false` on a split is its option (merged panel or not), not a merge panel
     if "split" in panel and isinstance(panel.get("merge"), bool) and "merge" in kinds:
         kinds.remove("merge")
+    if sorted(kinds) == ["image", "split"] and isinstance(panel["image"], str) \
+            and (panel["split"] is True or isinstance(panel["split"], dict)
+                 and not {"image", "file", "path", "source", "split"} & set(panel["split"])):
+        # {image: x.tif, split: {names: [...]}} or {image: x.tif, split: true}:
+        # a split of that file, nothing else (Qwen3.5 9B resent it 4 times
+        # against the "exactly one of" refusal)
+        inner = panel["split"] if isinstance(panel["split"], dict) else {}
+        fixed = {"split": panel["image"], **inner,
+                 **{k: v for k, v in panel.items() if k not in ("image", "split")}}
+        panel.clear()
+        panel.update(fixed)
+        kinds = ["split"]
     if len(kinds) != 1:
         found = f" (found {' and '.join(kinds)})" if kinds else f" (keys found: {sorted(panel)})"
         hint = ""
@@ -341,6 +369,78 @@ def _panel_kind(panel, where):
                           f"(allowed: {sorted(_KIND_KEYS[kind])}; recipe_reference() "
                           f"lists every key){hint}")
     return kind
+
+
+# names models used for inset / zoom keys (the MCP tools' argument names
+# among them) -> the recipe key; renamed only when the recipe key is absent
+_INSET_ALIASES = {"filename": "image", "file": "image", "path": "image", "source": "image",
+                  "size_fraction": "size", "inset_fraction": "size", "fraction": "size",
+                  "corner": "placement"}
+_ZOOM_ALIASES = {"size_fraction": "size", "inset_fraction": "size", "fraction": "size",
+                 "region": "box", "rect": "box", "placement": "corner"}
+
+
+def _percent_hint(v):
+    """'(a percentage? 40 -> 0.4)' for a fraction given as a percentage."""
+    if _is_num(v) and 1 < v <= 100:
+        return f" — a percentage? write size: {round(v / 100, 3)}"
+    return ""
+
+
+def _renamed(item, aliases):
+    out = dict(item)
+    for old, new in aliases.items():
+        if old in out and new not in out:
+            out[new] = out.pop(old)
+    return out
+
+
+def _inset_as_zoom(item):
+    """The zoom an inset without an image was meant to be: models wrote
+    ``inset: {at: [x, y], size: [w, h]}`` to magnify a region. None when
+    it does not look like one."""
+    if not isinstance(item, dict) or "image" in item:
+        return None
+    box = item.get("box")
+    if not (isinstance(box, list) and len(box) == 4):
+        at = item.get("at") or item.get("position") or item.get("xy")
+        wh = item.get("size") if isinstance(item.get("size"), list) else [item.get("width"), item.get("height")]
+        if not (isinstance(at, list) and len(at) == 2 and isinstance(wh, list) and len(wh) == 2
+                and all(_is_num(v) for v in at + wh)):
+            return None
+        box = [at[0], at[1], wh[0], wh[1]]
+    size = item.get("size")
+    return {"box": box, "size": size if _is_num(size) and 0 < size <= 1 else 0.4}
+
+
+def _check_not_options_only(panel, previous, where):
+    """A panel made only of options (``- {inset: {...}}`` after the image it
+    should decorate) is refused with the panel written the right way:
+    Qwen3.5 9B kept the separate panel for a dozen builds against the bare
+    'needs exactly one of' message."""
+    if not isinstance(panel, dict) or not panel or any(k in panel for k in _PANEL_KINDS):
+        return
+    if not set(panel) <= _KIND_KEYS["image"]:
+        return
+    opts = dict(panel)
+    zoom = _inset_as_zoom(opts.get("inset"))
+    if zoom:
+        opts.pop("inset")
+        opts["zoom"] = zoom
+    if isinstance(previous, str):
+        previous = {"image": previous}
+    if isinstance(previous, dict) and any(k in previous for k in ("image", "glob")):
+        fixed = json.dumps({**previous, **opts}, ensure_ascii=False)
+        msg = (f"{where} is only options ({', '.join(sorted(panel))}), not a panel: they belong "
+               f"INSIDE the image panel they decorate, the one before — write that panel as "
+               f"{fixed} and remove this one")
+    else:
+        msg = (f"{where} is only options ({', '.join(sorted(panel))}), not a panel: put them "
+               f"inside an image panel, e.g. {json.dumps({'image': 'file.tif', **opts}, ensure_ascii=False)}")
+    if zoom:
+        msg += (" (inset: places ANOTHER image in a corner and needs image:; to magnify a region "
+                "of this image use zoom: {box: [x, y, width, height], size: 0.4})")
+    raise RecipeError(msg)
 
 
 def _is_int(v):
@@ -409,15 +509,40 @@ def _normalise_panel_opts(opts, where):
                               f"and scale_bar px_to_unit: {px!r}")
         opts["px_to_unit"] = px
         opts["scale_bar"] = sb
+    if "inset" in opts:
+        insets = []
+        for k, item in enumerate(_as_list(opts["inset"])):
+            if isinstance(item, dict):
+                item = _renamed(item, _INSET_ALIASES)
+                zoom = _inset_as_zoom(item)
+                if zoom:
+                    raise RecipeError(
+                        f"{where}: inset {k + 1} has no image: — inset: places ANOTHER image file "
+                        f"in a corner ({{image: other.tif, size: 0.3}}); to magnify a region of "
+                        f"this image write zoom: {json.dumps(zoom)} (box = x, y, width, height "
+                        f"in pixels; size = inset width as a fraction of the panel)")
+                if "size" in item and not (_is_num(item["size"]) and 0 < item["size"] <= 1):
+                    raise RecipeError(f"{where}: inset {k + 1} size is its width as a fraction of "
+                                      f"the panel width (0 < size <= 1, e.g. size: 0.3), got "
+                                      f"{item['size']!r}{_percent_hint(item['size'])}")
+            insets.append(item)
+        opts["inset"] = insets if isinstance(opts["inset"], list) else insets[0]
     if "zoom" in opts:
         zooms = []
         for k, z in enumerate(_as_list(opts["zoom"])):
-            if isinstance(z, dict) and "inset_fraction" in z and "size" not in z:
-                z = dict(z)
-                z["size"] = z.pop("inset_fraction")
+            if isinstance(z, dict):
+                z = _renamed(z, _ZOOM_ALIASES)
+                guess = None if "box" in z else _inset_as_zoom(z)
+                if guess:
+                    # [x, y] could be the corner or the centre: not guessed silently
+                    raise RecipeError(
+                        f"{where}: zoom {k + 1} needs box: [x, y, width, height] (pixels, x/y = "
+                        f"top-left corner) and size (inset width as a fraction of the panel) — "
+                        f"e.g. zoom: {json.dumps(guess)}")
             if isinstance(z, dict) and "size" in z and not (_is_num(z["size"]) and 0 < z["size"] <= 1):
                 raise RecipeError(f"{where}: zoom {k + 1} size is the inset width as a fraction "
-                                  f"of the panel width (0 < size <= 1, e.g. size: 0.4), got {z['size']!r}")
+                                  f"of the panel width (0 < size <= 1, e.g. size: 0.4), got {z['size']!r}"
+                                  f"{_percent_hint(z['size'])}")
             zooms.append(z)
         opts["zoom"] = zooms if isinstance(opts["zoom"], list) else zooms[0]
 
@@ -884,6 +1009,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                      else f"row {r + 1}, panel {c + 1}")
             if isinstance(panel, str):
                 panel = {"image": panel}          # `- [wt.tif, ko.tif]` shorthand
+            _check_not_options_only(panel, row[c - 1] if c else None, where)
             kind = _panel_kind(panel, where)
             merged = {k: v for k, v in defaults.items() if k in _KIND_KEYS[kind]}
             merged.update({k: v for k, v in panel.items() if k != kind})
@@ -1580,6 +1706,27 @@ def _calibration_warnings(plan) -> list:
     return out
 
 
+def _burned_text_warnings(plan) -> list:
+    """Text burned into a source image near its edge (Fiji's sample-image
+    notice stayed in a model-built figure, overlapping the scale bar): the
+    crop that removes it, as a suggestion only (pyfigures/burned_text.py)."""
+    from pyfigures.burned_text import burned_text_warning
+    out = []
+    seen = set()
+    for _row_opts, row in plan["rows"]:
+        for kind, path, opts in row:
+            if kind not in ("image", "split", "montage") or not isinstance(path, str):
+                continue
+            key = (path, json.dumps(opts.get("crop") or {}, sort_keys=True))
+            if key in seen:
+                continue
+            seen.add(key)
+            w = burned_text_warning(path, opts.get("crop"))
+            if w:
+                out.append(w)
+    return out
+
+
 def recipe_zooms(recipe_path: str) -> list:
     """_zoom_list of a recipe file, [] when it is missing or invalid."""
     try:
@@ -1889,6 +2036,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
     n_rows = len(plan["rows"])
     zooms = _zoom_list(plan)
     warnings += _calibration_warnings(plan)
+    warnings += _burned_text_warnings(plan)
     import xml.etree.ElementTree as _ET
     from pyfigures.mcp_tools.core import layout_rows
     try:

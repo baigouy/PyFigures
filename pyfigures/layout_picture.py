@@ -32,10 +32,14 @@ _NAME = re.compile(r"^[^\s(),|/\[\]]+$")
 
 
 def is_picture(text) -> bool:
-    """A picture layout: several non-empty lines and none of the formula's
-    symbols. Anything else is a one-line formula (pyfigures/layout_formula)."""
+    """A picture layout: none of the formula's symbols, and several non-empty
+    lines or one line of several names (``a b c`` is one row — models wrote
+    it and a formula cannot mean anything else by it). Anything else is a
+    one-line formula (pyfigures/layout_formula)."""
+    if re.search(r"[(),|/\[\]]", str(text)):
+        return False
     lines = [ln for ln in str(text).splitlines() if ln.strip()]
-    return len(lines) >= 2 and not re.search(r"[(),|/\[\]]", str(text))
+    return len(lines) >= 2 or len(lines) == 1 and len(lines[0].split()) >= 2
 
 
 def _cells(text):

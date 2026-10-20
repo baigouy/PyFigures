@@ -892,7 +892,7 @@ def recipe_reference() -> str:
 
 
 @mcp.tool()
-def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -> str:
+def build_figure_from_recipe(recipe_path: str, recipe_text: str | dict | None = None) -> str:
     """Build a figure from a declarative **recipe** (YAML or JSON) — the
     reproducible, git-diffable description of a figure. Often the simplest way
     to make a whole figure: call recipe_reference() FIRST for every accepted
@@ -903,6 +903,9 @@ def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -
     recipe itself, YAML or JSON), the text is checked, written to recipe_path
     (so you need no file-writing tool and the figure stays reproducible) and
     built; relative paths in it are relative to recipe_path's folder.
+    *recipe_text* can also be the recipe as a JSON OBJECT (same keys,
+    {"output": ..., "rows": [[{"image": "a.tif"}, ...], ...]}): no YAML
+    indentation to get right — the easiest form when YAML keeps failing.
     Invalid recipes are refused before anything is built.
 
     The recipe lists rows of panels (``image`` / ``glob`` / ``plot`` / ``montage``
@@ -945,6 +948,8 @@ def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -
                           recipe_zooms, zoom_size_changes)
     try:
         before = []
+        if isinstance(recipe_text, dict):
+            recipe_text = _recipe_object_text(recipe_text, recipe_path)
         if recipe_text:
             before = recipe_zooms(recipe_path)
             recipe_path = save_recipe_text(recipe_text, recipe_path)
@@ -960,11 +965,29 @@ def build_figure_from_recipe(recipe_path: str, recipe_text: str | None = None) -
         sig = (recipe_text or "", str(e))
         again = _LAST_RECIPE_ERROR.get(key) == sig
         _LAST_RECIPE_ERROR[key] = sig
+        tail = ""
+        if "invalid YAML" in str(e):
+            tail = ("\nNo YAML needed: recipe_text can be the recipe as a JSON object, e.g. "
+                    '{"output": "fig.pyf", "rows": [[{"split": "a.tif"}], '
+                    '[{"image": "b.tif"}, {"plot": "c.csv", "kind": "box"}]]}')
         if again:
             return (f"ERROR: this exact recipe was already refused for the same reason — resending "
                     f"it unchanged cannot work; change what the message says (or ask the user "
-                    f"one focused question): {e}")
-        return f"ERROR: {e}"
+                    f"one focused question): {e}{tail}")
+        return f"ERROR: {e}{tail}"
 
 
 _LAST_RECIPE_ERROR: dict = {}     # recipe path -> (recipe text, error) of its last refusal
+
+
+def _recipe_object_text(recipe: dict, recipe_path: str) -> str:
+    """A recipe given as an object, written as the file's language: YAML for
+    .yaml/.yml (readable, git-diffable), JSON otherwise."""
+    if recipe_path.lower().endswith((".yaml", ".yml")):
+        try:
+            import yaml
+            return yaml.safe_dump(recipe, sort_keys=False, allow_unicode=True,
+                                  default_flow_style=None)
+        except ImportError:
+            pass
+    return json.dumps(recipe, ensure_ascii=False, indent=1)

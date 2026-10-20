@@ -239,6 +239,9 @@ def audit_figure(pyf_path: str) -> str:
     reviewers most often ask to add. Only micrographs need a bar (not plots or
     text), and a montage / channel split needs one for the whole series (it is
     listed by its last panel), the rule check_journal_compliance applies.
+    ``panels_with_burned_in_text`` lists sources with text burned into their
+    pixels near an edge (an information line) and the crop that removes it —
+    a suggestion: the user decides whether that text belongs to the data.
 
     Read-only. Use this after building a figure to catch panels you forgot to
     label or scale-bar, then fix them with set_scale_bar / add_annotation /
@@ -286,6 +289,23 @@ def audit_figure(pyf_path: str) -> str:
     missing_label = [{"group_path": p["group_path"], "image_index": p["image_index"],
                       "filename": p["filename"]}
                      for p in panels if p["n_labels"] == 0]
+    # text burned into a source near its edge (an info line left in the figure)
+    from ..burned_text import burned_text_warning
+    from .core import _child_text
+    burned = []
+    for p, el in zip(panels, elems):
+        crop = {}
+        for side in ("left", "right", "top", "bottom"):
+            try:
+                crop[side] = max(0, int(float(_child_text(el, "crop_" + side) or 0)))
+            except (TypeError, ValueError):
+                crop[side] = 0
+        fn = p["filename"]
+        w = burned_text_warning(fn, {k: v for k, v in crop.items() if v}) \
+            if isinstance(fn, str) and not fn.startswith("[") else None
+        if w:
+            burned.append({"group_path": p["group_path"], "image_index": p["image_index"],
+                           "filename": fn, "warning": w})
 
     return json.dumps({
         "n_panels": len(panels),
@@ -293,6 +313,7 @@ def audit_figure(pyf_path: str) -> str:
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,
         "panels_missing_label": missing_label,
+        "panels_with_burned_in_text": burned,
         "panels": panels,
     }, ensure_ascii=False, indent=2)
 

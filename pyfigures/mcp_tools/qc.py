@@ -640,7 +640,11 @@ def check_journal_compliance(
             worst = min((p["dpi"] for p in panels if p["dpi"]), default=None)
             results.append(("resolution", not bad,
                             f"{len(bad)}/{len(panels)} panel(s) below {min_dpi} DPI"
-                            + (f" (worst {worst} DPI)" if worst else "")))
+                            + (f" (worst {worst} DPI)" if worst else "")
+                            + (f" — to reach {min_dpi} DPI that panel must be printed "
+                               f"{min_dpi / worst:.2f}x smaller, or come from a source with "
+                               f"{min_dpi / worst:.2f}x more pixels per side"
+                               if bad and worst else "")))
     except Exception as e:
         results.append(("resolution", False, f"could not analyse: {e}"))
 
@@ -668,6 +672,15 @@ def check_journal_compliance(
     lines.append("  (These are the journal's mechanical rules only — not whether the "
                  "arrangement matches what was asked, nor a visual review; describe_figure "
                  "shows the actual layout.)")
+    # two models answered "ready for submission" right after a [FAIL] resolution
+    failed = [crit for crit, ok, _ in results if not ok]
+    if failed:
+        lines.append(f"VERDICT: NOT READY — {len(failed)} check(s) FAIL ({', '.join(failed)}). "
+                     "Fix them, or tell the user plainly that they remain unresolved; do not "
+                     "call the figure ready for submission.")
+    else:
+        lines.append("VERDICT: the mechanical checks pass. Readiness for submission also needs "
+                     "the requested content and layout checked and the user's own review.")
     if style is not None:
         from ..journal_styles import describe_rules
         lines.append(f"Journal style {style['journal']!r} ({style['status']}, stage "

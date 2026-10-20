@@ -288,6 +288,19 @@ read. The parenthesised comma/slash notation is inspired by
 [Griphus](https://www.systaxon.ufes.br/gri/) (Systaxon, UFES), which builds
 figure plates from formulas such as `((1/5),(2/(3,4)/6))`.
 
+**Layout pictures.** `layout` can also be drawn, one line per row of panel
+ids separated by spaces; repeating an id makes the panel span several cells:
+
+```yaml
+layout: |
+  a a b
+  a a c
+  d e f
+```
+
+Every line needs the same number of cells. A single line of several ids
+(`layout: "split image plot"`) is one row.
+
 ---
 
 ## 5. `defaults`
