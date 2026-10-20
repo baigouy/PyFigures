@@ -1045,6 +1045,151 @@ def write_jsx(scene, out_path):
     return out_path, assets_dir
 
 
+# ---------------------------------------------------------------------------
+# VectorCraft (.vectorcraft native file)
+# ---------------------------------------------------------------------------
+# VectorCraft (github.com/storytold/vectorcraft, MIT/Apache) is an open-source
+# Illustrator replacement whose native format is documented JSON
+# (crates/format/src/lib.rs): format version 3 keeps the images inline as
+# base64, which every VectorCraft version reads. Document coordinates are in
+# points with y down, like the scene; an Affine is [a, b, c, d, e, f]
+# (x' = a x + c y + e, y' = b x + d y + f).
+VECTORCRAFT_FORMAT_VERSION = 3
+
+
+def _vc_rgb(c):
+    return {"model": "rgb", "r": round(c[0] / 255.0, 6), "g": round(c[1] / 255.0, 6),
+            "b": round(c[2] / 255.0, 6)}
+
+
+def _vc_paint(c):
+    return {"type": "solid", "color": _vc_rgb(c)} if c is not None else {"type": "none"}
+
+
+def _vc_rot(deg, sx=1.0, sy=1.0):
+    t = math.radians(deg)
+    return [math.cos(t) * sx, math.sin(t) * sx, -math.sin(t) * sy, math.cos(t) * sy]
+
+
+def _vc_text_style(run, color):
+    style = ("Bold " if run.get("bold") else "") + ("Italic" if run.get("italic") else "")
+    return {"font_family": run.get("family") or "Arial",
+            "font_style": style.strip() or "Regular",
+            "size": _r(run.get("size") or 12.0), "tracking": 0.0, "baseline_shift": 0.0,
+            "h_scale": 100.0, "v_scale": 100.0, "rotation": 0.0,
+            "fill": _vc_paint(run.get("color") or color), "stroke": {"type": "none"},
+            "stroke_width": 0.0, "underline": False, "strikethrough": False, "all_caps": False}
+
+
+def vectorcraft_document(scene, title="PyFigures figure", generator="PyFigures"):
+    """The .vectorcraft JSON (as a dict) of *scene*: one layer 'PyFigures', one
+    group per panel, embedded PNG images, editable point type and vector paths."""
+    W = float(scene["width"])
+    H = float(scene["height"])
+    next_id = [2]
+    images_top = {}
+    images_doc = {}
+
+    def nid():
+        next_id[0] += 1
+        return next_id[0] - 1
+
+    def node(it):
+        if it["kind"] == "image":
+            key = "img%03d" % len(images_top)
+            from PIL import Image
+            pw, ph = Image.open(io.BytesIO(it["png"])).size
+            images_top[key] = {"mime": "image/png", "data": base64.b64encode(it["png"]).decode("ascii")}
+            images_doc[key] = {"mime": "image/png"}
+            a, b, c, d = _vc_rot(it["rotation"], it["w"] / pw, it["h"] / ph)
+            # the pixel centre lands on the item's centre
+            e = it["cx"] - (a * pw / 2 + c * ph / 2)
+            f = it["cy"] - (b * pw / 2 + d * ph / 2)
+            out = {"id": nid(), "kind": {"type": "image", "key": key, "width": pw, "height": ph,
+                                         "xf": [_r(a), _r(b), _r(c), _r(d), _r(e), _r(f)]}}
+            if it.get("opacity", 1.0) < 0.999:
+                out["opacity"] = _r(it["opacity"])
+            return out
+        if it["kind"] == "path":
+            subs = [{"anchors": [{"p": [_r(x), _r(y)]} for x, y in pts],
+                     "closed": bool(closed or it["fill"] is not None)}
+                    for pts, closed in it["subpaths"]]
+            out = {"id": nid(),
+                   "appearance": {"items": [
+                       {"kind": "fill", "paint": _vc_paint(it["fill"])},
+                       {"kind": "stroke", "paint": _vc_paint(it["stroke"]),
+                        "width": _r(max(0.25, it["stroke_width"])) if it["stroke"] is not None else 0.0}]},
+                   "kind": {"type": "path", "path": {"subpaths": subs}}}
+            op = max(it["fill_opacity"] if it["fill"] is not None else 0.0,
+                     it["stroke_opacity"] if it["stroke"] is not None else 0.0)
+            if op < 0.999:
+                out["opacity"] = _r(op)
+            return out
+        color = it.get("color") or (0, 0, 0)
+        runs = [{"text": run["text"], "style": _vc_text_style(run, color)} for run in _runs(it)]
+        a, b, c, d = _vc_rot(it["rotation"])
+        return {"id": nid(),
+                "name": it["text"][:40],
+                "appearance": {"items": [{"kind": "fill", "paint": _vc_paint(color)},
+                                         {"kind": "stroke", "paint": {"type": "none"}, "width": 0.0}]},
+                "kind": {"type": "text", "kind": {"kind": "point"},
+                         "xf": [_r(a), _r(b), _r(c), _r(d), _r(it["x"]), _r(it["y"])],
+                         "runs": runs,
+                         "para": {"justify": "Left", "left_indent": 0.0, "right_indent": 0.0,
+                                  "first_line_indent": 0.0, "space_before": 0.0, "space_after": 0.0,
+                                  "hyphenate": False}}}
+
+    children = []
+    panels = scene.get("panels") or []
+    for g, items in _grouped(scene):
+        nodes = [node(it) for it in items]
+        if g is not None and len(nodes) > 1:
+            clip = False
+            if g < len(panels):
+                # a clip group, as the figure clips each panel (a zoom inset's
+                # frame stops at the panel's edge): its first child clips
+                x, y, w, h = panels[g]
+                nodes.insert(0, {"id": nid(), "name": "Panel %d clip" % (g + 1),
+                                 "appearance": {"items": [
+                                     {"kind": "fill", "paint": {"type": "none"}},
+                                     {"kind": "stroke", "paint": {"type": "none"}, "width": 0.0}]},
+                                 "kind": {"type": "path", "clipping": True, "path": {"subpaths": [
+                                     {"anchors": [{"p": [_r(x), _r(y)]}, {"p": [_r(x + w), _r(y)]},
+                                                  {"p": [_r(x + w), _r(y + h)]}, {"p": [_r(x), _r(y + h)]}],
+                                      "closed": True}]}}})
+                clip = True
+            children.append({"id": nid(), "name": "Panel %d" % (g + 1),
+                             "kind": {"type": "group", "children": nodes, "clip": clip}})
+        else:
+            children.extend(nodes)
+    layer = {"id": 1, "name": "PyFigures",
+             "kind": {"type": "layer", "color": {"Preset": 0}, "template": False,
+                      "printable": True, "children": children}}
+    document = {"version": 1, "title": title, "units": "Points", "color_mode": "Rgb",
+                "artboards": [{"id": 1, "name": "Figure",
+                               "rect": {"x0": 0.0, "y0": 0.0, "x1": _r(W), "y1": _r(H)},
+                               "show_center_mark": False, "show_cross_hairs": False}],
+                "layers": [layer], "images": images_doc, "next_id": next_id[0]}
+    return {"format": "vectorcraft", "version": VECTORCRAFT_FORMAT_VERSION,
+            "generator": generator, "document": document, "images": images_top}
+
+
+def write_vectorcraft(scene, out_path, title=None):
+    """Write *scene* as a native VectorCraft document (.vectorcraft): open it in
+    VectorCraft with File → Open; panels are groups, labels live type, scale
+    bars / ROIs / plots vector paths, images embedded (no assets folder)."""
+    try:
+        from pyfigures.version import __VERSION__
+        generator = f"PyFigures {__VERSION__}"
+    except Exception:
+        generator = "PyFigures"
+    doc = vectorcraft_document(scene, title or os.path.splitext(os.path.basename(out_path))[0],
+                               generator)
+    with open(out_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(doc, f, ensure_ascii=False)
+    return out_path
+
+
 def scene_summary(scene):
     kinds = {"image": 0, "path": 0, "text": 0}
     for it in scene["items"]:

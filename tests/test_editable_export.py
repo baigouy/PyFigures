@@ -386,7 +386,136 @@ def test_gui_export_actions(qapp, tmp_path, monkeypatch, cropped_figure):
         assert len(msgs) == n
         names = [a.text() for a in g.findChildren(pfgui.QAction)]
         assert "PowerPoint (editable)…" in names and "Adobe Illustrator script (.jsx)…" in names
+        out3 = str(tmp_path / "gui.vectorcraft")
+        monkeypatch.setattr(pfgui, "saveFileDialog", lambda *a, **k: out3)
+        g.export_as_vectorcraft()
+        assert os.path.isfile(out3) and msgs[-1] == ("information", "VectorCraft document exported")
+        assert "VectorCraft (editable)…" in names or "VectorCraft (editable)…" in \
+            [a.text() for a in g.findChildren(pfgui.QAction)]
     finally:
         g._dirty = False
         g._stop_all_img_loaders()
         g.close()
+
+
+# ---------------------------------------------------------------------------
+# VectorCraft (.vectorcraft native document)
+# ---------------------------------------------------------------------------
+def test_write_vectorcraft_native_document(tmp_path):
+    out = str(tmp_path / "fig.vectorcraft")
+    E.write_vectorcraft(_scene(), out)
+    d = json.load(open(out, encoding="utf-8"))
+    assert d["format"] == "vectorcraft" and d["version"] == 3       # images inline: every version reads it
+    doc = d["document"]
+    assert doc["units"] == "Points"
+    assert doc["artboards"][0]["rect"] == {"x0": 0.0, "y0": 0.0, "x1": 300.0, "y1": 150.0}
+    layer = doc["layers"][0]
+    assert layer["name"] == "PyFigures" and layer["kind"]["type"] == "layer"
+    group, box, label = layer["kind"]["children"]
+    assert group["name"] == "Panel 1" and group["kind"]["clip"] is True
+    clip, img, bar, letter = group["kind"]["children"]
+    # the panel clips its content, as in the figure (a clip group's first child)
+    assert clip["kind"]["clipping"] is True
+    assert [a["p"] for a in clip["kind"]["path"]["subpaths"][0]["anchors"]] == \
+        [[0, 0], [150, 0], [150, 150], [0, 150]]
+    # the 8 x 4 px image stretched over 150 x 150 pt, embedded as base64 PNG
+    ik = img["kind"]
+    assert (ik["type"], ik["width"], ik["height"]) == ("image", 8, 4)
+    assert ik["xf"] == [18.75, 0.0, -0.0, 37.5, 0.0, 0.0]
+    assert base64.b64decode(d["images"][ik["key"]]["data"]) == _png()
+    assert doc["images"][ik["key"]] == {"mime": "image/png"}
+    assert bar["appearance"]["items"][1]["width"] == 3 and bar["kind"]["path"]["subpaths"][0]["closed"] is False
+    run = letter["kind"]["runs"][0]
+    assert run["text"] == "A" and run["style"]["font_style"] == "Bold" and run["style"]["size"] == 12
+    assert letter["kind"]["xf"][4:] == [4, 14]
+    # outside every panel: no group; transparency kept; rotated italic text
+    assert box["opacity"] == 0.5 and box["appearance"]["items"][0]["paint"]["color"]["r"] == round(58 / 255, 6)
+    assert label["kind"]["runs"][0]["style"]["font_style"] == "Italic"
+    a, b, c, dd = label["kind"]["xf"][:4]
+    assert (a, b, c, dd) == pytest.approx((0, -1, 1, 0), abs=1e-6)       # -90°
+    ids = []
+
+    def walk(n):
+        ids.append(n["id"])
+        for ch in n["kind"].get("children", []):
+            walk(ch)
+    walk(layer)
+    assert len(ids) == len(set(ids)) and doc["next_id"] > max(ids)
+
+
+def test_mcp_and_recipe_export_vectorcraft(cropped_figure, tmp_path):
+    import pyfigures.mcp_server as M
+    res = json.loads(M.export_vectorcraft(cropped_figure, str(tmp_path / "out.vectorcraft")))
+    assert res["images"] == 2 and res["panel_groups"] == 2 and "File > Open" in res["usage"]
+    d = json.load(open(res["path"], encoding="utf-8"))
+    from PIL import Image
+    sizes = sorted(Image.open(io.BytesIO(base64.b64decode(v["data"]))).size for v in d["images"].values())
+    assert sizes == [(60, 80), (120, 80)]                              # the crop is kept
+    assert M.export_vectorcraft(cropped_figure, str(tmp_path / "x.svg")).startswith("ERROR")
+    import tifffile
+    from pyfigures.recipe import build_figure_from_recipe
+    tifffile.imwrite(str(tmp_path / "a.tif"), np.zeros((32, 32), np.uint8))
+    (tmp_path / "r.json").write_text(json.dumps({"output": "r.pyf", "rows": [[{"image": "a.tif"}]],
+                                                  "exports": ["vectorcraft"]}), encoding="utf-8")
+    build_figure_from_recipe(str(tmp_path / "r.json"))
+    assert os.path.isfile(str(tmp_path / "r.vectorcraft"))
+
+
+def test_svg_labels_have_their_size_and_the_page_its_true_size(cropped_figure, tmp_path):
+    """SVG text came out at 72/96 of its size in every SVG reader (VectorCraft
+    showed it, browsers too): font sizes were converted at 72 dpi while every
+    other export draws text at the image resolution."""
+    import pyfigures.mcp_server as M
+    from pptx import Presentation
+    svg = str(tmp_path / "f.svg")
+    M.export_figure(cropped_figure, svg)
+    text = open(svg, encoding="utf-8").read()
+    m = re.search(r'font-size="([\d.]+)"[^>]*>\s*10\s*µm<', text)
+    res = json.loads(M.export_pptx(cropped_figure, str(tmp_path / "f.pptx")))
+    prs = Presentation(res["path"])
+    size = next(r.font.size.pt for g in prs.slides[0].shapes if g.shape_type == 6
+                for s in g.shapes if s.has_text_frame and s.text_frame.text.replace(" ", "") == "10µm"
+                for r in s.text_frame.paragraphs[0].runs)
+    assert m and float(m.group(1)) == pytest.approx(size, abs=0.6), (m and m.group(1), size)
+    w_mm = float(re.search(r'<svg[^>]*?width="([\d.]+)mm"', text).group(1))
+    vb_w = float(re.search(r'viewBox="0 0 ([\d.]+)', text).group(1))
+    assert w_mm == pytest.approx(vb_w / 72 * 25.4, abs=0.05)            # 1 unit = 1 point
+
+
+def _vectorcraft_cli():
+    import glob
+    exe = os.environ.get("VECTORCRAFT_CLI")
+    if exe and os.path.isfile(exe):
+        return exe
+    for pattern in (r"C:\Softwares\vectorcraft*\vectorcraft-cli.exe",
+                    r"C:\Program Files\VectorCraft\vectorcraft-cli.exe", "/usr/bin/vectorcraft-cli"):
+        found = sorted(glob.glob(pattern))
+        if found:
+            return found[-1]
+    return None
+
+
+def test_vectorcraft_itself_opens_the_exports(cropped_figure, tmp_path):
+    """With VectorCraft installed (or VECTORCRAFT_CLI set), its own reader opens
+    the .vectorcraft and SVG exports without import warnings."""
+    import subprocess
+    exe = _vectorcraft_cli()
+    if exe is None:
+        pytest.skip("VectorCraft is not installed")
+    import pyfigures.mcp_server as M
+    vc = str(tmp_path / "f.vectorcraft")
+    json.loads(M.export_vectorcraft(cropped_figure, vc))
+    svg = str(tmp_path / "f.svg")
+    M.export_figure(cropped_figure, svg)
+    for path in (vc, svg):
+        out = subprocess.run([exe, "info", path], capture_output=True, text=True, timeout=120,
+                             encoding="utf-8")
+        assert out.returncode == 0, out.stderr
+        info = json.loads(out.stdout)
+        assert info["warnings"] == [], info["warnings"]
+    kinds = json.loads(subprocess.run([exe, "info", vc], capture_output=True, text=True,
+                                      timeout=120, encoding="utf-8").stdout)["kinds"]
+    assert kinds.get("Clip Group") == 2 and kinds.get("Image") == 2 and kinds.get("Type", 0) >= 3
+    png = str(tmp_path / "vc.png")
+    out = subprocess.run([exe, "convert", vc, png], capture_output=True, text=True, timeout=120)
+    assert out.returncode == 0 and os.path.getsize(png) > 1000, out.stderr

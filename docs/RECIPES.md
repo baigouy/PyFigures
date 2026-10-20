@@ -176,7 +176,7 @@ created as needed. Forward slashes work on every OS.
 | `auto_configure` | `false` | Read pixel sizes / channel counts from the files' metadata: LUT preset + scale bars. Explicit panel settings still win. §20. |
 | `alt_text` | none | `auto` (drafted from the panels) or the alt text itself. |
 | `copy_style_from` | none | Another `.pyf` whose look (fonts, letters, scale bars, spacing, plots) is copied; `copy_style_aspects` limits what. |
-| `exports` | none | Files to write after building: `[pdf, png, svg, tif, jpg, latex, print, video, source_data, review, caption, ledger, colorblind, pptx, illustrator]`. §20. |
+| `exports` | none | Files to write after building: `[pdf, png, svg, tif, jpg, latex, print, video, source_data, review, caption, ledger, colorblind, pptx, illustrator, vectorcraft]`. §20. |
 | `allow_scripts` | `false` | Must be `true` for `script:` panels (they run Python code). §18. |
 | `checks` | none | Checks run after the build — `integrity`, `scale`, `scale_bars`, `labels`, `resolution`, `journal`; a failing one stops the build before the exports. §20. |
 | `consolidate` | `false` | `true`: copy every source file into `<figure>.files/` and link the figure to the copies; or a `.pyf` path to write that self-contained copy elsewhere. §20. |
@@ -966,6 +966,7 @@ journal already accepted). `copy_style_aspects` picks among `fonts`, `letters`,
 | `colorblind` | `fig_colorblind.png` | The figure as a colour-blind reader sees it; `cvd_type: deuteranopia` (default), `protanopia` or `tritanopia`. |
 | `pptx` | `fig.pptx` | Editable PowerPoint slide: one group per panel, pictures + native text boxes and shapes (letters, labels, scale bars, ROIs, arrows). |
 | `illustrator` (`jsx`) | `fig.jsx` + `fig_assets/` | Adobe Illustrator script that rebuilds the figure with live text and vector paths (File → Scripts → Other Script…). Keep the assets folder next to it. |
+| `vectorcraft` | `fig.vectorcraft` | Native document for [VectorCraft](https://github.com/storytold/vectorcraft), the open-source Illustrator replacement (File → Open): one clip group per panel, live text, vector paths, images embedded — one file, nothing beside it. VectorCraft also opens the `svg` and `pdf` exports. |
 
 The build summary lists the files written under `exports`.
 
@@ -1381,7 +1382,7 @@ server, and edited afterwards in either.
 | `auto_configure` | — | `auto_configure_images` |
 | `alt_text` | File → Alt text (accessibility)… | `generate_alt_text`, `set_alt_text` |
 | `copy_style_from` | File → Copy style from another figure… | `copy_style` |
-| `exports` | File → Export As ▶, File → Review comments → Export for review…, QC → Adjustment provenance ledger (Methods)…, QC → Preview figure under colour-blindness… | `export_figure`, `export_latex`, `export_print_ready`, `export_video`, `export_source_data`, `export_review`, `export_caption`, `export_adjustment_ledger`, `simulate_color_blindness`, `export_pptx`, `export_illustrator_script` |
+| `exports` | File → Export As ▶, File → Review comments → Export for review…, QC → Adjustment provenance ledger (Methods)…, QC → Preview figure under colour-blindness… | `export_figure`, `export_latex`, `export_print_ready`, `export_video`, `export_source_data`, `export_review`, `export_caption`, `export_adjustment_ledger`, `simulate_color_blindness`, `export_pptx`, `export_illustrator_script`, `export_vectorcraft` |
 | `checks` | QC → Check image integrity…, Check scale-bar consistency…, Audit figure (missing scale bars / labels), Check print resolution…, Check journal compliance…, Pre-submission review (all checks)… | `check_image_integrity`, `check_scale_consistency`, `audit_figure`, `check_resolution`, `check_journal_compliance` |
 | `consolidate` | File → Save And Consolidate... | `consolidate_figure` |
 | `template`, `fill` | File → Convert figure to template; drop images on the slots | `templatify_figure`, `fill_template`, `batch_fill_templates` |

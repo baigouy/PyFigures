@@ -1024,6 +1024,30 @@ def export_illustrator_script(pyf_path: str, out_path: str) -> str:
 
 
 @mcp.tool()
+def export_vectorcraft(pyf_path: str, out_path: str) -> str:
+    """Export the figure as a native **VectorCraft** document (.vectorcraft) —
+    VectorCraft is the open-source Illustrator replacement
+    (github.com/storytold/vectorcraft). GUI: Export As → VectorCraft (editable).
+
+    One file, nothing beside it: one layer 'PyFigures' with one group per panel,
+    embedded images (cropped / rotated as shown), live point type for letters,
+    channel names, labels and scale-bar text (Arial by default), and vector
+    paths for scale bars, ROIs, arrows, brackets and vector plots. Open it in
+    VectorCraft with File → Open. VectorCraft also opens PyFigures' SVG and PDF
+    exports; this file keeps the panel groups and the text editable.
+
+    Returns JSON: path, size in points and object counts.
+    """
+    if not out_path.lower().endswith(".vectorcraft"):
+        return "ERROR: out_path must end in .vectorcraft."
+    summary, err = _editable_export(pyf_path, out_path, "vectorcraft")
+    if err:
+        return f"ERROR: {err}"
+    summary["usage"] = "VectorCraft: File > Open... and choose " + os.path.basename(out_path)
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def consolidate_figure(pyf_path: str, out_pyf: str, download_remote: bool = False) -> str:
     """Save a self-contained copy of the figure with every referenced image
     bundled next to it (GUI: File → Save And Consolidate).

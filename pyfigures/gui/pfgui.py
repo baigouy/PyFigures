@@ -1225,6 +1225,13 @@ class EZFIG_GUI(QMainWindow):
         export_menu.addAction(export_as_jsx_action)
         export_as_jsx_action.triggered.connect(self.export_as_illustrator)
 
+        export_as_vc_action = QAction("VectorCraft (editable)…", self)
+        export_as_vc_action.setToolTip(
+            "A native .vectorcraft document for VectorCraft, the open-source Illustrator "
+            "replacement: one group per panel, live text, vector shapes, embedded images.")
+        export_menu.addAction(export_as_vc_action)
+        export_as_vc_action.triggered.connect(self.export_as_vectorcraft)
+
         export_menu.addSeparator()
 
         _raster_title = QAction("— Raster —", self)
@@ -6693,13 +6700,21 @@ class EZFIG_GUI(QMainWindow):
         if output_file:
             self._export_editable(output_file, 'jsx')
 
+    def export_as_vectorcraft(self):
+        output_file = saveFileDialog(parent_window=self,
+                                     extensions="VectorCraft document (*.vectorcraft);;All Files (*)",
+                                     default_ext='.vectorcraft')
+        if output_file:
+            self._export_editable(output_file, 'vectorcraft')
+
     def _export_editable(self, output_file, fmt):
-        """Editable export (PowerPoint or Illustrator script) of the current figure."""
-        from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx
+        """Editable export (PowerPoint, Illustrator script or VectorCraft
+        document) of the current figure."""
+        from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx, write_vectorcraft
         if not self.paint.EZFIG_panel.shapes_to_draw:
             QMessageBox.information(self, 'Nothing to export', 'The figure contains no panels.')
             return
-        name = 'PowerPoint' if fmt == 'pptx' else 'Illustrator script'
+        name = {'pptx': 'PowerPoint', 'vectorcraft': 'VectorCraft document'}.get(fmt, 'Illustrator script')
         self.statusBar().showMessage(f'Exporting {name}, please wait...')
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -6707,6 +6722,9 @@ class EZFIG_GUI(QMainWindow):
             if fmt == 'pptx':
                 write_pptx(scene, output_file)
                 extra = ''
+            elif fmt == 'vectorcraft':
+                write_vectorcraft(scene, output_file)
+                extra = '\n\nIn VectorCraft: File > Open…'
             else:
                 _, assets = write_jsx(scene, output_file)
                 extra = ('\n\nKeep the folder ' + os.path.basename(assets) + ' next to it.\n'

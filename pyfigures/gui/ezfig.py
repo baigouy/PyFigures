@@ -168,9 +168,12 @@ logger = TA_logger()
 __DEBUG_SELECTION__ = False
 
 
-def _finish_svg(svg_path, collector=None):
+def _finish_svg(svg_path, collector=None, size_pt=None):
     """The written SVG: vector panels embedded from their own source
-    (*collector*, svg_embed), and real font families (svg_painter)."""
+    (*collector*, svg_embed), real font families (svg_painter) and, with
+    *size_pt* (width, height in points), the true printed size in the root's
+    width/height (Qt derives them from the generator's resolution, which is
+    the text resolution, not 72 per inch)."""
     from pyfigures.gui.svg_painter import real_font_families
     try:
         with open(svg_path, encoding='utf-8') as f:
@@ -181,6 +184,14 @@ def _finish_svg(svg_path, collector=None):
     if collector is not None:
         new = collector.embed(new)
     new = real_font_families(new)
+    if size_pt is not None:
+        import re as _re
+        w_mm = size_pt[0] / 72 * 25.4
+        h_mm = size_pt[1] / 72 * 25.4
+        new = _re.sub(r'(<svg\b[^>]*?\swidth=")[^"]*(")', lambda m: f'{m.group(1)}{w_mm:.3f}mm{m.group(2)}',
+                      new, count=1)
+        new = _re.sub(r'(<svg\b[^>]*?\sheight=")[^"]*(")', lambda m: f'{m.group(1)}{h_mm:.3f}mm{m.group(2)}',
+                      new, count=1)
     if new != text:
         with open(svg_path, 'w', encoding='utf-8') as f:
             f.write(new)
@@ -746,6 +757,13 @@ class MyWidget(QWidget):
             if description is not None and isinstance(description, str):
                 generator.setDescription(description)
             generator.setResolution(72)
+            if filetype == 'svg':
+                # 1 SVG unit = 1 point; the resolution only sets how point-size
+                # fonts become units — as on the images every other export draws
+                # on (QImage, 96 dpi): at 72 every label, letter and scale-bar text
+                # came out at 72/96 of its size (VectorCraft, browsers, Inkscape)
+                from qtpy.QtGui import QImage as _QImage    # (QImage is used below as a global)
+                generator.setResolution(_QImage(1, 1, _QImage.Format.Format_ARGB32).logicalDpiY())
 
             if filetype == 'svg':
                 # Qt's SVG engine ignores drawImage source rects: crop ourselves
@@ -831,7 +849,7 @@ class MyWidget(QWidget):
                 # QSvgGenerator keeps its file open until it is deleted
                 painter = None
                 generator = None
-                _finish_svg(path, collector)
+                _finish_svg(path, collector, size_pt=(float(bounds.width()), float(bounds.height())))
             if picture is not None:
                 if not picture.save(path):
                     raise OSError(f'could not write {path}')

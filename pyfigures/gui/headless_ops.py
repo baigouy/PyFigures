@@ -9,7 +9,7 @@ mirroring pyfigures/gui/render_headless.py.
 
     python -m pyfigures.gui.headless_ops video       <pyf> <out.mp4> [--frame-mode freeze|blank] [--bg R,G,B]
     python -m pyfigures.gui.headless_ops consolidate <pyf> <out.pyf> [--download-remote]
-    python -m pyfigures.gui.headless_ops editable    <pyf> <out.pptx|out.jsx> --format pptx|jsx
+    python -m pyfigures.gui.headless_ops editable    <pyf> <out.pptx|out.jsx|out.vectorcraft> --format pptx|jsx|vectorcraft
 """
 from __future__ import annotations
 
@@ -120,7 +120,8 @@ def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
     """Export an editable PowerPoint (*fmt* 'pptx') or Adobe Illustrator script
     (*fmt* 'jsx', plus its ``<stem>_assets`` image folder). Returns a JSON summary."""
     import json as _json
-    from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx, scene_summary
+    from pyfigures.gui.editable_export import (capture_scene, write_pptx, write_jsx,
+                                               write_vectorcraft, scene_summary)
     out_path = _os.path.abspath(out_path)
     app, gui = _build_gui(pyf_path)  # noqa: F841 (keep app alive)
     try:
@@ -134,6 +135,8 @@ def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
         summary = scene_summary(scene)
         if fmt == "pptx":
             write_pptx(scene, out_path)
+        elif fmt == "vectorcraft":
+            write_vectorcraft(scene, out_path)
         else:
             _, assets = write_jsx(scene, out_path)
             summary["assets"] = assets
@@ -236,7 +239,7 @@ def _main(argv=None) -> int:
     ed = sub.add_parser("editable")
     ed.add_argument("pyf_path")
     ed.add_argument("out_path")
-    ed.add_argument("--format", required=True, choices=["pptx", "jsx"])
+    ed.add_argument("--format", required=True, choices=["pptx", "jsx", "vectorcraft"])
 
     fo = sub.add_parser("fonts")
     fo.add_argument("out_json")
