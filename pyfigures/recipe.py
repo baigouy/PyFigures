@@ -2037,6 +2037,11 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
     zooms = _zoom_list(plan)
     warnings += _calibration_warnings(plan)
     warnings += _burned_text_warnings(plan)
+    if any(isinstance(path, str) and path.lower().endswith(".pdf")
+           for _ro, row in plan["rows"] for _k, path, _o in row):
+        from pyfigures.extras import has_pymupdf, pdf_vector_note
+        if not has_pymupdf():
+            warnings.append(pdf_vector_note())
     import xml.etree.ElementTree as _ET
     from pyfigures.mcp_tools.core import layout_rows
     try:

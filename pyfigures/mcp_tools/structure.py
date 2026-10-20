@@ -621,7 +621,12 @@ def add_image(
     # a URL (OMERO link, OME-Zarr, http image) is named in full: its last
     # path part can be meaningless ("?show=image-1")
     shown = filename if str(filename).lower().startswith(("http://", "https://")) else Path(filename).name
-    return f"Added {shown} as image {n} in {loc}{suffix}." + _missing_image_note(filename)
+    note = _missing_image_note(filename)
+    if str(filename).lower().endswith(".pdf"):
+        from ..extras import has_pymupdf, pdf_vector_note
+        if not has_pymupdf():
+            note += "\nNOTE: " + pdf_vector_note() + "."
+    return f"Added {shown} as image {n} in {loc}{suffix}." + note
 
 
 @mcp.tool()

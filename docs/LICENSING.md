@@ -11,7 +11,7 @@ licences, not legal advice.
 | PyFigures' own source code (GitHub, PyPI) | **BSD 2-Clause** | It is your code; you choose its licence. |
 | `pip install pyfigures` | **BSD 2-Clause** | You distribute only your code. pip installs the dependencies (PyQt6, pypdfium2, optionally PyMuPDF, ...) on the user's machine, each under its own licence. |
 | The standalone apps (Windows / macOS executables) | **GNU GPL v3** as a whole | They *contain* GPL code (PyQt6, read-lif, pyqt6-plugins, FFmpeg built with x264/x265). Distributing a combined work that includes GPL code means distributing the whole under the GPL. |
-| PyMuPDF | not in the apps | AGPL v3; pip-only optional extra (`pyfigures[pdf]`). The apps read PDFs with pypdfium2 (Apache/BSD) instead. |
+| PyMuPDF | not in the apps | AGPL v3; optional extra (`pyfigures[pdf]`), offered for installation from PyPI on the user's request (apps included, into a per-user folder). Without it PDFs are read with pypdfium2 (Apache/BSD). |
 | LaTeX (TinyTeX / TeX Live) | not in the apps | Downloaded on request (*Help → Install LaTeX for PyFigures…*, the MCP tool `install_latex`) from TinyTeX's own releases into the user's folder; the user receives it from TinyTeX/TeX Live under their licences (GPL, LPPL and others), so PyFigures distributes none of it and has no source to provide for it. Bundling it would add ~400 MB and TeX Live's source to every release. |
 
 As the copyright holder you can license your own code differently in different
@@ -51,6 +51,21 @@ network**: whoever runs a *modified* version as a network service must offer
 its source to those users. A desktop application is not affected, so bundling
 PyMuPDF would have been legal (GPL v3 section 13); it was left out for
 simplicity.
+
+**Installed on request (2026-10-20).** When a PDF is added, or a figure
+with PDF panels is exported to a vector format, the GUI offers to install
+PyMuPDF (Tools → Vector PDF panels asks again any time; "Don't ask again"
+turns the offer off). The dialog names the licence (AGPL v3, Artifex) and
+the source (PyPI). Nothing is downloaded without the user's click, so
+PyFigures does not distribute PyMuPDF and the apps stay GPL v3 only: from
+pip it runs `pip install pymupdf`; in a standalone app it downloads the
+wheel for that platform and Python from PyPI, checks its SHA-256 against
+PyPI's, and unpacks it into a per-user folder (`%LOCALAPPDATA%\PyFigures\extras`,
+`~/Library/Application Support/PyFigures/extras`, `~/.local/share/PyFigures/extras`)
+that the app puts on its import path (`pyfigures/extras.py`). Running AGPL
+code on one's own computer carries no obligation; §13 concerns modified
+versions offered to others over a network. MCP and recipe replies say what
+PyMuPDF would change and that the user must be asked first.
 
 ## omero-py (raw pixels from OMERO)
 

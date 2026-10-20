@@ -127,7 +127,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[pdf]
     ```
 
-    A PDF dropped onto the canvas becomes a panel, laid out like an image. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Out of the box (and in the standalone apps), the page is rendered with pypdfium2 as a 600 dpi image. With this extra (PyMuPDF, AGPL v3) it stays a **vector panel**, like an SVG file, clipping included, in PDF and SVG exports.
+    A PDF dropped onto the canvas becomes a panel, laid out like an image. For a multi-page PDF you pick the page (like a series in a .lif file; `page:` in recipes, `page=` in `add_image`). Out of the box (and in the standalone apps), the page is rendered with pypdfium2 as a 600 dpi image. With this extra (PyMuPDF, AGPL v3) it stays a **vector panel**, like an SVG file, clipping included, in PDF and SVG exports. The GUI offers to install it for you (one click, downloaded from PyPI only if you accept; also Tools → Vector PDF panels) the first time you add a PDF or export a figure holding PDF panels — in the standalone apps too, where it goes into a per-user folder.
 
 **LaTeX mathematics:**
 - **In any label or poster text**, `$…$` is typeset as maths (e.g. `$\Delta F/F_0$`, `$t = 12\,\mathrm{min}$`; `\$` is a literal dollar), on screen and in every export, as vectors. With TeX Live, MiKTeX or MacTeX installed, each formula is typeset by **LaTeX itself** (full LaTeX: `\SI{0.12}{\micro\metre\squared\per\second}`, `\bm`, any amsmath construct) in the **label's own font** when XeLaTeX is there (letters, digits, Greek and units in Arial for an Arial label; symbols from Latin Modern Math; else Latin Modern, sans-serif for sans-serif labels) and kept in an `equations/labels` folder next to the figure, so it opens identically on computers without TeX. Without TeX, Matplotlib's built-in maths is used, in the label's own font. (`PYFIGURES_LABEL_MATH=mathtext` forces the built-in engine.)
@@ -217,7 +217,7 @@ Optional (installed only if you ask for them):
 | **FFmpeg** (inside PyAV) | Video codecs; this build includes **x264 and x265** (GPL v2+) and LGPL/BSD codec libraries | https://ffmpeg.org/ | **GPL v3** as built |
 | **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
 | **zarr** (`pyfigures[zarr]`) | OME-Zarr images (with numcodecs)                       | https://pypi.org/project/zarr/                | MIT                |
-| **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not in the standalone apps) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
+| **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not bundled; the GUI offers to install it) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
 | **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
 | **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |

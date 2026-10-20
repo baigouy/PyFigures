@@ -52,6 +52,15 @@ def save_max_project_z_stacks(value):
     _s().setValue('images/max_project_z', bool(value))
 
 
+# ── Optional extras ──────────────────────────────────────────────────
+def load_offer_pymupdf():
+    """Offer to install PyMuPDF (vector PDF panels) when a PDF needs it."""
+    return _s().value('extras/offer_pymupdf', True, type=bool)
+
+def save_offer_pymupdf(value):
+    _s().setValue('extras/offer_pymupdf', bool(value))
+
+
 # ── MCP HTTP server ──────────────────────────────────────────────────
 def load_mcp_http_autostart():
     """Start the MCP HTTP server when PyFigures opens (off by default)."""

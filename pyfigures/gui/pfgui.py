@@ -1532,6 +1532,11 @@ class EZFIG_GUI(QMainWindow):
                                       "of the last changes it made.")
         tools_menu.addAction(mcp_history_action)
         mcp_history_action.triggered.connect(self.mcp_history_dialog)
+        pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
+        pdf_vector_action.setToolTip("Install PyMuPDF so that PDF panels stay vectors instead of "
+                                     "600-dpi pictures (free, AGPL v3, downloaded from PyPI).")
+        tools_menu.addAction(pdf_vector_action)
+        pdf_vector_action.triggered.connect(lambda *_: self._offer_vector_pdf('menu'))
 
         view_menu = self.menuBar.addMenu('View')
         from pyfigures.gui.user_prefs import load_max_project_z_stacks, load_show_edit_hint
@@ -2450,6 +2455,9 @@ class EZFIG_GUI(QMainWindow):
             # no video reader at all: offer PyAV (bundles ffmpeg) before loading
             from pyfigures.gui.video_support import offer_video_support
             offer_video_support(self, 'read')
+        if any(isinstance(p, str) and p.lower().endswith('.pdf') for p in str_paths):
+            # without PyMuPDF the page would be a 600-dpi picture
+            self._offer_vector_pdf('add')
 
         n_total = len(str_paths)
         loaded_imgs = {}  # path -> Img or None; written by worker, read on main thread
@@ -6562,14 +6570,30 @@ class EZFIG_GUI(QMainWindow):
             return True
         return False
 
+    def _offer_vector_pdf(self, reason):
+        """Offer PyMuPDF (vector PDF panels); for 'export' only when the figure
+        holds PDF panels. Panels already drawn as pictures are converted."""
+        from pyfigures.gui import pdf_support
+        panels = pdf_support.figure_pdf_panels(self.paint.EZFIG_panel.shapes_to_draw)
+        if reason == 'export' and not panels:
+            return False
+        ok = pdf_support.offer_pymupdf(self, reason, panels, force=(reason == 'menu'))
+        if ok and panels:
+            self.paint.EZFIG_panel.update()
+        return ok
+
     def export_as_svg(self):
         output_file = saveFileDialog(parent_window=self, extensions="Supported Files (*.svg);;All Files (*)",
                                      default_ext='.svg')
+        if output_file:
+            self._offer_vector_pdf('export')
         self._save(output_file)
 
     def export_as_pdf(self):
         output_file = saveFileDialog(parent_window=self, extensions="Supported Files (*.pdf);;All Files (*)",
                                      default_ext='.pdf')
+        if output_file:
+            self._offer_vector_pdf('export')
         self._save(output_file)
 
     def export_as_png(self):
@@ -6718,6 +6742,7 @@ class EZFIG_GUI(QMainWindow):
         if not self.paint.EZFIG_panel.shapes_to_draw:
             QMessageBox.information(self, 'Nothing to export', 'The figure contains no panels.')
             return
+        self._offer_vector_pdf('export')
         name = {'pptx': 'PowerPoint', 'vectorcraft': 'VectorCraft document'}.get(fmt, 'Illustrator script')
         self.statusBar().showMessage(f'Exporting {name}, please wait...')
         QApplication.setOverrideCursor(Qt.WaitCursor)
