@@ -63,7 +63,7 @@ GUIDES: dict[str, dict] = {
             {"select": "channel_image",
              "text": "Click the multi-channel image you want to split. The guide does not "
                      "select or change it for you."},
-            {"menu": ["Annotations", "Stack views", "Channel split (each channel + merge)…"]},
+            {"menu": ["Insert", "Stack views", "Channel split (each channel + merge)…"]},
             {"dialog": "Name the channels, choose their colours and keep <b>Add the merge</b> "
                        "checked if you want it. Click <b>Ok</b>. A new row is added; the "
                        "original panel stays."},
@@ -138,7 +138,7 @@ GUIDES: dict[str, dict] = {
         "summary": "Set the style and position of the automatic panel letters.",
         "keywords": ["letter", "letters", "lettering", "label panels", "a b c", "panel labels"],
         "steps": [
-            {"menu": ["Lettering", "Parameters"]},
+            {"menu": ["Annotations", "Panel letters (A, B, C…)…"]},
             {"dialog": "Choose the letter style, size and corner, then click <b>Ok</b>. "
                        "Automatic lettering is the checkbox in the toolbar."},
         ],
@@ -151,7 +151,7 @@ GUIDES: dict[str, dict] = {
         "summary": "Make a box/bar/scatter plot panel (with statistics) from a CSV file.",
         "keywords": ["plot", "graph", "chart", "csv", "box plot", "bar plot", "statistics", "stats"],
         "steps": [
-            {"menu": ["Annotations", "Add data plot from CSV…"]},
+            {"menu": ["Insert", "Data plot from CSV…"]},
             {"dialog": "Pick the CSV, the plot type and the statistics options, then click "
                        "<b>Ok</b>. The plot is added as a new panel."},
         ],
@@ -164,7 +164,7 @@ GUIDES: dict[str, dict] = {
         "summary": "Overlay separate single-channel images into one coloured composite.",
         "keywords": ["merge", "overlay", "composite", "combine channels"],
         "steps": [
-            {"menu": ["Annotations", "Add multi-channel merge…"]},
+            {"menu": ["Insert", "Multi-channel merge…"]},
             {"dialog": "Choose the channel images and their colours, then click <b>Ok</b>."},
         ],
         "alternative": "",
@@ -252,10 +252,10 @@ GUIDES: dict[str, dict] = {
         "keywords": ["colour blind", "color blind", "colorblind", "deuteranopia", "accessibility",
                      "cvd"],
         "steps": [
-            {"menu": ["Help", "Preview figure under colour-blindness…"]},
+            {"menu": ["QC", "Preview figure under colour-blindness…"]},
             {"dialog": "Compare the simulated views; avoid red/green pairs that look alike."},
         ],
-        "alternative": "Help → Show color-blind assistant suggests safe palettes.",
+        "alternative": "QC → Show color-blind assistant suggests safe palettes.",
         "done": "dialog_closed",
         "mcp": "simulate_color_blindness",
     },

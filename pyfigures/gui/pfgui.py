@@ -921,7 +921,8 @@ class EZFIG_GUI(QMainWindow):
         self.force_update_layout_button = QAction(get_icon('fa.check', color_disabled='lightgray'),
                                                   'Update selection size', self)
         # self.force_update_layout_button_associated = QAction('All', self)
-        self.force_update_layout_button_associated = QLabel('All', self)
+        self.force_update_layout_button_associated = QLabel('→ whole figure', self)
+        self.force_update_layout_button_associated.setToolTip('The width applies to the whole figure')
         self.force_update_layout_button.triggered.connect(self.on_size_spinbox_value_changed_delayed)
         # self.force_update_layout_button_associated.triggered.connect(self.on_size_spinbox_value_changed_delayed)
         # self.force_update_layout_button.clicked.connect(self.on_size_spinbox_value_changed_delayed)
@@ -970,7 +971,9 @@ class EZFIG_GUI(QMainWindow):
 
         # Create combobox for units
         self.unit_combobox = QComboBox(self)
-        self.unit_combobox.addItems(["Cm", "Inches"])
+        self.unit_combobox.addItems(["Cm", "Inches", "mm"])
+        self.unit_combobox.setToolTip("Unit of the printed size shown on the left (journals give "
+                                      "widths in mm; QC → Apply journal guidelines sets them)")
         self.unit_combobox.currentIndexChanged.connect(self.update_size_in_unit)
         self.update_size_in_unit()
 
@@ -1010,6 +1013,19 @@ class EZFIG_GUI(QMainWindow):
         self.page_bounds_checkbox = QCheckBox("Page Bounds")
         self.page_bounds_checkbox.setChecked(False)
         self.page_bounds_checkbox.stateChanged.connect(self.on_page_bounds_changed)
+
+        # what each toolbar control does (several had no tooltip at all)
+        self.size_spinbox.setToolTip(
+            "Width in pixels (72 per inch) of the whole figure — or, while something is "
+            "selected, of the selection only (see the label on the right). Enter or ✓ applies it.")
+        self.value_label.setToolTip("The same width as printed size")
+        self.force_update_layout_button.setToolTip("Apply the width now")
+        self.main_space_spinner.setToolTip("Gap between panels, in pixels")
+        self.auto_lettering_checkbox.setToolTip("Letter the panels automatically (A, B, C…); "
+                                                "Annotations → Panel letters sets their style")
+        self.letter_line_edit.setToolTip("First letter (type 'A' for capitals, 'a' for lower case)")
+        self.page_bounds_checkbox.setToolTip("Show a page outline (A4, letter…) to see how the "
+                                             "figure fits on a page")
 
         # Add QWidgets directly to  the QToolBar
         self.mainToolBar.addAction(self.open_ico)
@@ -1072,22 +1088,19 @@ class EZFIG_GUI(QMainWindow):
                               "https://…/image.zarr or a local .zarr folder, e.g. from the IDR) or an "
                               "image on your OMERO server (paste its OMERO.web link). For OME-Zarr "
                               "pick the pyramid level; for OMERO log in if asked.")
-        file_menu.addAction(url_action)
-        url_action.triggered.connect(self.add_image_from_url_action)
+        url_action.triggered.connect(self.add_image_from_url_action)      # Insert menu
 
         equation_action = QAction("Add equation (LaTeX)…", self)
         equation_action.setToolTip("Type a LaTeX equation (e.g. \\Delta F/F_0); it is typeset as a "
                                    "vector panel, no TeX installation needed. Right-click it later to "
                                    "edit it.")
-        file_menu.addAction(equation_action)
-        equation_action.triggered.connect(self.add_equation_action)
+        equation_action.triggered.connect(self.add_equation_action)       # Insert menu
 
         latex_code_action = QAction("Add LaTeX code panel…", self)
         latex_code_action.setToolTip("Write LaTeX code (a TikZ / pgfplots picture, a table, a whole "
                                      "document): compiled into a vector panel that stays editable "
                                      "(right-click → Edit LaTeX code…). Needs LaTeX.")
-        file_menu.addAction(latex_code_action)
-        latex_code_action.triggered.connect(self.add_latex_code_action)
+        latex_code_action.triggered.connect(self.add_latex_code_action)   # Insert menu
 
         draft_action = QAction("Draft figure from folder…", self)
         draft_action.setToolTip("Auto-assemble a first-pass figure from a folder of "
@@ -1123,7 +1136,11 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(save_as_action)
         save_as_action.triggered.connect(lambda: self.save_pyfigures(file=None))
 
+        save_as_action.setToolTip("Save the figure under a new .pyf name")
         save_n_consolidate_action = QAction("Save And Consolidate...", self)
+        save_n_consolidate_action.setToolTip(
+            "Save a copy of the figure together with copies of all its source images and "
+            "CSVs in one folder, so it can be moved to another computer or shared")
         file_menu.addAction(save_n_consolidate_action)
         save_n_consolidate_action.triggered.connect(lambda: self.save_and_consolidate())
 
@@ -1133,6 +1150,24 @@ class EZFIG_GUI(QMainWindow):
                                   "overlay and a list of what changed.")
         file_menu.addAction(compare_action)
         compare_action.triggered.connect(self.compare_version_action)
+
+        templatify_action = QAction("Convert figure to template", self)
+        templatify_action.setToolTip("Turn the figure into an empty layout: drop new images onto "
+                                     "its slots to reuse the same arrangement")
+        file_menu.addAction(templatify_action)
+        templatify_action.triggered.connect(self.templatify_figure)
+
+        review_menu = file_menu.addMenu("Review comments")
+        export_for_review_action = QAction("Export for review…", self)
+        export_for_review_action.setToolTip("Save a copy that co-authors can comment on")
+        review_menu.addAction(export_for_review_action)
+        export_for_review_action.triggered.connect(self.export_for_review)
+        import_review_action = QAction("Import review comments…", self)
+        review_menu.addAction(import_review_action)
+        import_review_action.triggered.connect(self.import_review_comments)
+        view_review_action = QAction("View review comments", self)
+        review_menu.addAction(view_review_action)
+        view_review_action.triggered.connect(self.view_review_comments)
 
         file_menu.addSeparator()
         caption_action = QAction("Figure caption / legend…", self)
@@ -1239,63 +1274,107 @@ class EZFIG_GUI(QMainWindow):
         export_menu.addAction(export_source_data_action)
         export_source_data_action.triggered.connect(self.export_source_data_action)
 
-        selection = self.menuBar.addMenu("Selection")
-        reset_selection = QAction("Reset Selection", self)  # ? shall I say it like that
-        selection.addAction(reset_selection)
+        # ── Edit ─────────────────────────────────────────────────────────
+        edit_menu = self.menuBar.addMenu("Edit")
+        for text, shortcut, slot in (("Undo", "Z", self.undo), ("Redo", "Y", self.redo),
+                                     ("Select all", "A", self.select_all)):
+            # the key after the tab is only shown: the window-wide QShortcuts
+            # above do the work (a second binding would make them ambiguous)
+            act = QAction(f"{text}\t{self.ctrl_key}+{shortcut}", self)
+            edit_menu.addAction(act)
+            act.triggered.connect(lambda _checked=False, f=slot: f())
+        edit_menu.addSeparator()
+        reset_selection = QAction("Reset Selection", self)
+        reset_selection.setToolTip("Deselect everything (the toolbar's width then applies to "
+                                   "the whole figure)")
+        edit_menu.addAction(reset_selection)
         reset_selection.triggered.connect(lambda: (self.paint.EZFIG_panel.set_current_selection(None),
-                                                   self.paint.EZFIG_panel.update()))  # cool I didn't know one can do that...
+                                                   self.paint.EZFIG_panel.update()))
+        duplicate_selection = QAction("Duplicate Selection", self)
+        edit_menu.addAction(duplicate_selection)
+        duplicate_selection.triggered.connect(self.paint.EZFIG_panel.duplicate)
 
-        duplicate_selection = QAction("Duplicate Selection", self)  # ? shall I say it like that
-        selection.addAction(duplicate_selection)
-        duplicate_selection.triggered.connect(self.paint.EZFIG_panel.duplicate)  # cool I didn't know one can do that...
+        # ── Insert: everything that adds a panel ─────────────────────────
+        insert_menu = self.menuBar.addMenu("Insert")
+        images_menu = insert_menu.addMenu("Images from files")
+        images_menu.setToolTip("The same choices as when image files are dropped on the canvas")
+        for text, tip, how in (
+                ("To a new row…", "Pick image files: they become one new row", "row"),
+                ("To a new column…", "Pick image files: they become one new column", "col"),
+                ("To a grid panel…", "Pick image files and arrange them as a grid", "panel"),
+                ("As single images…", "Pick image files: each one is added on its own", "single"),
+                ("To a row with the selected panel…",
+                 "Pick image files: they are put in a row with the selected panel or group",
+                 "with_row"),
+                ("To a column with the selected panel…",
+                 "Pick image files: they are put in a column with the selected panel or group",
+                 "with_col"),
+                ("Stack as a montage of frames…",
+                 "Pick one time or Z stack: several of its frames side by side, with time or "
+                 "depth stamps", "montage")):
+            act = QAction(text, self)
+            act.setToolTip(tip)
+            images_menu.addAction(act)
+            act.triggered.connect(lambda _checked=False, h=how: self.add_images_from_files_action(h))
+        insert_menu.addAction(url_action)
+        insert_menu.addSeparator()
 
-        lettering = self.menuBar.addMenu("Lettering")
-        lettering_parameters = QAction("Parameters", self)  # ? shall I say it like that
-        lettering.addAction(lettering_parameters)
-        lettering_parameters.triggered.connect(
-            self.change_lettering_parameters)  # cool I didn't know one can do that...
+        data_plot_action = QAction("Data plot from CSV…", self)
+        data_plot_action.setToolTip('Render a bar / box / violin / scatter / grouped plot from a '
+                                    'CSV of measurements, with automatic significance brackets '
+                                    '(needs the staplot package)')
+        insert_menu.addAction(data_plot_action)
+        data_plot_action.triggered.connect(self.add_data_plot_action)
 
-        annots = self.menuBar.addMenu("Annotations")
-        rm_all_annots = QAction("Remove all annotations (ROIs, scale bars, texts, ...)", self)  # ? shall I say it like that
-        annots.addAction(rm_all_annots)
-        rm_all_annots.triggered.connect(self.paint.EZFIG_panel.remove_all_annotations)  # cool I didn't know one can do that...
-        rm_all_scale = QAction("Remove all scale bars", self)  # ? shall I say it like that
-        annots.addAction(rm_all_scale)
-        rm_all_scale.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=ScaleBar))  # cool I didn't know one can do that...
-        rm_all_texts = QAction("Remove all texts", self)  # ? shall I say it like that
-        annots.addAction(rm_all_texts)
-        rm_all_texts.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=TAText2D))  # cool I didn't know one can do that...
-        rm_all_ROIs = QAction("Remove all ROIs", self)  # ? shall I say it like that
-        annots.addAction(rm_all_ROIs)
-        rm_all_ROIs.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=[Circle2D, Ellipse2D,Freehand2D,  Line2D,Point2D, Polygon2D, PolyLine2D, Rectangle2D,Square2D]))  # cool I didn't know one can do that...
-        rm_all_insets = QAction("Remove all insets", self)  # ? shall I say it like that
-        annots.addAction(rm_all_insets)
-        rm_all_insets.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=Image2D))
-        annots.addSeparator()
-        tidy_text_action = QAction("Tidy text typography (×, °, units, ranges…)", self)
-        tidy_text_action.setToolTip('Apply safe typography fixes to every label: 2*3→2×3, '
-                                    '37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5')
-        annots.addAction(tidy_text_action)
-        tidy_text_action.triggered.connect(self.tidy_all_text)
-
-        annots.addSeparator()
-        add_colour_bar_action = QAction("Add LUT colour bar…", self)
-        add_colour_bar_action.setToolTip('Insert an intensity calibration bar '
-                                         '(colour bar) matching a LUT')
-        annots.addAction(add_colour_bar_action)
-        add_colour_bar_action.triggered.connect(self.add_colour_bar)
-
-        annots.addSeparator()
-        scale_bar_all_action = QAction("Add scale bar to all panels…", self)
-        annots.addAction(scale_bar_all_action)
-        scale_bar_all_action.triggered.connect(self.add_scale_bar_all)
-
-        annots.addSeparator()
-        channel_merge_action = QAction("Add multi-channel merge…", self)
+        channel_merge_action = QAction("Multi-channel merge…", self)
         channel_merge_action.setToolTip('Overlay several single-channel images '
                                         '(e.g. DAPI + GFP + RFP) into one pseudo-coloured merge panel')
-        annots.addAction(channel_merge_action)
+        insert_menu.addAction(channel_merge_action)
         channel_merge_action.triggered.connect(self.add_channel_merge_action)
+
+        stack_menu = insert_menu.addMenu("Stack views")
+        stack_menu.setToolTip("Work on the selected image panel")
+        for text, tip, slot in (
+                ("Montage of frames (time / Z)…",
+                 "Opt-in: several frames of the selected stack in a new row, with "
+                 "time or depth stamps (a stack otherwise shows one image: the max "
+                 "projection of a Z stack, the first frame of a time series)",
+                 self.add_stack_montage_action),
+                ("Channel split (each channel + merge)…",
+                 "New row: each channel of the selected image in gray with its name in "
+                 "colour, then the merge",
+                 self.add_channel_split_action),
+                ("Channel split (Magenta/Green mode)…",
+                 "New row: each channel of the selected image in its own colour "
+                 "(magenta / green), then the merge",
+                 lambda: self._channel_split_selected(gray=False)),
+                ("Kymograph along a line…",
+                 "Position along a line against time, from the selected time stack",
+                 self.add_kymograph_action),
+                ("Orthogonal views (XZ / YZ)…",
+                 "XY + YZ + XZ cut through a point of the selected Z stack",
+                 self.add_orthogonal_views_action)):
+            act = QAction(text, self)
+            act.setToolTip(tip)
+            stack_menu.addAction(act)
+            act.triggered.connect(lambda _checked=False, f=slot: f())
+
+        add_colour_bar_action = QAction("LUT colour bar…", self)
+        add_colour_bar_action.setToolTip('Insert an intensity calibration bar '
+                                         '(colour bar) matching a LUT')
+        insert_menu.addAction(add_colour_bar_action)
+        add_colour_bar_action.triggered.connect(self.add_colour_bar)
+        insert_menu.addSeparator()
+        insert_menu.addAction(equation_action)
+        insert_menu.addAction(latex_code_action)
+
+        # ── Annotations: what is drawn on panels ─────────────────────────
+        annots = self.menuBar.addMenu("Annotations")
+        scale_bar_all_action = QAction("Add scale bar to all panels…", self)
+        scale_bar_all_action.setToolTip("One calibrated scale bar on every image panel (to edit "
+                                        "a single one, double-click it)")
+        annots.addAction(scale_bar_all_action)
+        scale_bar_all_action.triggered.connect(self.add_scale_bar_all)
 
         zoom_callout_action = QAction("Add zoom callout to selected panel…", self)
         zoom_callout_action.setToolTip('Box a region of the selected image and show it magnified '
@@ -1309,38 +1388,48 @@ class EZFIG_GUI(QMainWindow):
         annots.addAction(arrow_action)
         arrow_action.triggered.connect(self.add_arrow_action)
 
-        stack_menu = annots.addMenu("Stack views")
-        for text, tip, slot in (
-                ("Montage of frames (time / Z)…",
-                 "Opt-in: several frames of the selected stack in a new row, with "
-                 "time or depth stamps (a stack otherwise shows one image)",
-                 self.add_stack_montage_action),
-                ("Channel split (each channel + merge)…",
-                 "New row: each channel of the selected image in gray with its name in "
-                 "colour, then the merge",
-                 self.add_channel_split_action),
-                ("Kymograph along a line…",
-                 "Position along a line against time, from the selected time stack",
-                 self.add_kymograph_action),
-                ("Orthogonal views (XZ / YZ)…",
-                 "XY + YZ + XZ cut through a point of the selected Z stack",
-                 self.add_orthogonal_views_action)):
-            act = QAction(text, self)
-            act.setToolTip(tip)
-            stack_menu.addAction(act)
-            act.triggered.connect(slot)
+        draw_hint_action = QAction("Draw ROIs, text, crop or rotate (double-click a panel)…", self)
+        draw_hint_action.setToolTip("Opens the image editor of the selected panel — the same as "
+                                    "double-clicking it")
+        annots.addAction(draw_hint_action)
+        draw_hint_action.triggered.connect(self.edit_selected_image_action)
+        annots.addSeparator()
 
-        data_plot_action = QAction("Add data plot from CSV…", self)
-        data_plot_action.setToolTip('Render a bar / box / violin / scatter / grouped plot from a '
-                                    'CSV of measurements, with automatic significance brackets '
-                                    '(needs the staplot package)')
-        annots.addAction(data_plot_action)
-        data_plot_action.triggered.connect(self.add_data_plot_action)
         figure_colors_action = QAction("Figure colours…", self)
         figure_colors_action.setToolTip("Recolour the whole figure at once (e.g. magenta / green): "
                                         "every multi-channel image, merge, channel split and plot")
         annots.addAction(figure_colors_action)
         figure_colors_action.triggered.connect(self.figure_colors_action)
+
+        lettering_parameters = QAction("Panel letters (A, B, C…)…", self)
+        lettering_parameters.setToolTip("Font, size, case and position of the automatic panel "
+                                        "letters")
+        annots.addAction(lettering_parameters)
+        lettering_parameters.triggered.connect(self.change_lettering_parameters)
+
+        tidy_text_action = QAction("Tidy text typography (×, °, units, ranges…)", self)
+        tidy_text_action.setToolTip('Apply safe typography fixes to every label: 2*3→2×3, '
+                                    '37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5')
+        annots.addAction(tidy_text_action)
+        tidy_text_action.triggered.connect(self.tidy_all_text)
+
+        annots.addSeparator()
+        rm_menu = annots.addMenu("Remove")
+        rm_all_annots = QAction("Remove all annotations (ROIs, scale bars, texts, ...)", self)
+        rm_menu.addAction(rm_all_annots)
+        rm_all_annots.triggered.connect(self.paint.EZFIG_panel.remove_all_annotations)
+        rm_all_scale = QAction("Remove all scale bars", self)
+        rm_menu.addAction(rm_all_scale)
+        rm_all_scale.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=ScaleBar))
+        rm_all_texts = QAction("Remove all texts", self)
+        rm_menu.addAction(rm_all_texts)
+        rm_all_texts.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=TAText2D))
+        rm_all_ROIs = QAction("Remove all ROIs", self)
+        rm_menu.addAction(rm_all_ROIs)
+        rm_all_ROIs.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=[Circle2D, Ellipse2D,Freehand2D,  Line2D,Point2D, Polygon2D, PolyLine2D, Rectangle2D,Square2D]))
+        rm_all_insets = QAction("Remove all insets", self)
+        rm_menu.addAction(rm_all_insets)
+        rm_all_insets.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=Image2D))
 
         qc_menu = self.menuBar.addMenu("QC")
         audit_action = QAction("Audit figure (missing scale bars / labels)", self)
@@ -1366,11 +1455,16 @@ class EZFIG_GUI(QMainWindow):
         qc_menu.addAction(enforce_font_action)
         enforce_font_action.triggered.connect(self.enforce_min_font_action)
         qc_menu.addSeparator()
-        mcp_history_action = QAction("MCP call history / undo…", self)
-        mcp_history_action.setToolTip("Every call the MCP server made on this figure, and undo "
-                                      "of the last changes it made.")
-        qc_menu.addAction(mcp_history_action)
-        mcp_history_action.triggered.connect(self.mcp_history_dialog)
+        cvd_preview_action = QAction('Preview figure under colour-blindness…', self)
+        cvd_preview_action.setToolTip('See the whole figure as a colour-blind '
+                                      'reader would (deuteranopia / protanopia / '
+                                      'tritanopia)')
+        cvd_preview_action.triggered.connect(self.preview_color_blindness)
+        qc_menu.addAction(cvd_preview_action)
+        show_color_blind_assistant = QAction('Show color-blind assistant', self)
+        show_color_blind_assistant.setToolTip('Colour-blind-safe LUT / palette combinations')
+        show_color_blind_assistant.triggered.connect(self.launch_color_assistant)
+        qc_menu.addAction(show_color_blind_assistant)
         qc_menu.addSeparator()
         integrity_action = QAction("Check image integrity (duplicates / clones)…", self)
         integrity_action.setToolTip("Screen panels for reused, flipped/rotated or "
@@ -1426,26 +1520,29 @@ class EZFIG_GUI(QMainWindow):
                                      "(they start it when they need it), or start / stop it over HTTP.")
         tools_menu.addAction(mcp_server_action)
         mcp_server_action.triggered.connect(self.open_mcp_server_dialog)
-
-        template = self.menuBar.addMenu("Template")
-        templatify_action = QAction("Convert figure to template", self)  # ? shall I say it like that
-        template.addAction(templatify_action)
-        templatify_action.triggered.connect(self.templatify_figure)  # cool I didn't know one can do that...
-
-        review_menu = self.menuBar.addMenu("Review")
-        export_for_review_action = QAction("Export for review…", self)
-        review_menu.addAction(export_for_review_action)
-        export_for_review_action.triggered.connect(self.export_for_review)
-
-        import_review_action = QAction("Import review comments…", self)
-        review_menu.addAction(import_review_action)
-        import_review_action.triggered.connect(self.import_review_comments)
-
-        view_review_action = QAction("View review comments", self)
-        review_menu.addAction(view_review_action)
-        view_review_action.triggered.connect(self.view_review_comments)
+        mcp_history_action = QAction("MCP call history / undo…", self)
+        mcp_history_action.setToolTip("Every call the MCP server made on this figure, and undo "
+                                      "of the last changes it made.")
+        tools_menu.addAction(mcp_history_action)
+        mcp_history_action.triggered.connect(self.mcp_history_dialog)
 
         view_menu = self.menuBar.addMenu('View')
+        from pyfigures.gui.user_prefs import load_max_project_z_stacks, load_show_edit_hint
+        self.edit_hint_action = QAction("Show the 'double-click to edit' hint", self)
+        self.edit_hint_action.setCheckable(True)
+        self.edit_hint_action.setChecked(load_show_edit_hint())
+        self.edit_hint_action.setToolTip("After images are added, a bubble reminds that "
+                                         "double-clicking a panel crops, rotates or annotates it")
+        self.edit_hint_action.toggled.connect(self._set_show_edit_hint)
+        view_menu.addAction(self.edit_hint_action)
+        self.max_proj_action = QAction("Show new Z stacks as max projection", self)
+        self.max_proj_action.setCheckable(True)
+        self.max_proj_action.setChecked(load_max_project_z_stacks())
+        self.max_proj_action.setToolTip("Unchecked: a new Z stack shows its first slice (the "
+                                        "image editor changes the projection of one panel)")
+        self.max_proj_action.toggled.connect(self._set_max_project_z)
+        view_menu.addAction(self.max_proj_action)
+        view_menu.addSeparator()
         theme_menu = view_menu.addMenu('Theme')
         self._theme_actions = {}
         from pyfigures.gui.theme import apply_theme, load_saved_theme
@@ -1470,17 +1567,6 @@ class EZFIG_GUI(QMainWindow):
         show_shortcuts_action = QAction("List shortcuts", self)
         show_shortcuts_action.triggered.connect(self.show_shortcuts_dialog)
         help_menu.addAction(show_shortcuts_action)
-
-        show_color_blind_assistant = QAction('Show color-blind assistant', self)
-        show_color_blind_assistant.triggered.connect(self.launch_color_assistant)
-        help_menu.addAction(show_color_blind_assistant)
-
-        cvd_preview_action = QAction('Preview figure under colour-blindness…', self)
-        cvd_preview_action.setToolTip('See the whole figure as a colour-blind '
-                                      'reader would (deuteranopia / protanopia / '
-                                      'tritanopia)')
-        cvd_preview_action.triggered.connect(self.preview_color_blindness)
-        help_menu.addAction(cvd_preview_action)
 
         help_menu.addSeparator()
         user_guide_action = QAction('User Guide', self)
@@ -1644,6 +1730,8 @@ class EZFIG_GUI(QMainWindow):
     def update_size_in_unit(self):
         if 'nch' in self.unit_combobox.currentText():
             value = pixels_to_inch(self.size_spinbox.value())
+        elif self.unit_combobox.currentText() == 'mm':
+            value = pixels_to_cm(self.size_spinbox.value()) * 10
         else:
             value = pixels_to_cm(self.size_spinbox.value())
         rounded_value_str = "px "+str(chr(8776))+"{:.1f}".format(round(value, 1))  #
@@ -1896,10 +1984,18 @@ class EZFIG_GUI(QMainWindow):
             tmp = [tmp]
 
         if (compare_lists_sets(tmp, self.paint.EZFIG_panel.shapes_to_draw) and self.paint.EZFIG_panel.shapes_to_draw) or not self.paint.EZFIG_panel.selected_shape:
-            self.force_update_layout_button_associated.setText('All')
-            # self.force_update_layout_button.setToolTip()
+            self.force_update_layout_button_associated.setText('→ whole figure')
+            self.force_update_layout_button_associated.setToolTip(
+                'The width applies to the whole figure')
         else:
-            self.force_update_layout_button_associated.setText('Sel')
+            self.force_update_layout_button_associated.setText('→ selection only')
+            self.force_update_layout_button_associated.setToolTip(
+                'Something is selected: the width applies to it only. Click the empty canvas '
+                '(or Edit → Reset Selection) to size the whole figure.')
+            if self.paint.EZFIG_panel.shapes_to_draw:
+                self.statusBar().showMessage(
+                    'Double-click a panel to crop, rotate or annotate it · drag it onto another '
+                    'panel to swap or group them · right-click for more', 8000)
 
         # Create a QWidget to hold the layout
         if False:
@@ -2237,6 +2333,11 @@ class EZFIG_GUI(QMainWindow):
         add_header("Add to canvas")
         all_as_single_images = self.paint.EZFIG_panel.contextMenu.addAction("➕  As single image(s)")
         all_as_single_images.triggered.connect(_with_series(self.all_images_directly))
+        # one time / Z stack dropped alone: a montage of its frames is likely
+        # wanted (several files dropped together rather want one image each)
+        if len(lst) == 1 and isinstance(lst[0], str) and self._stack_axes_of_file(lst[0]):
+            montage = self.paint.EZFIG_panel.contextMenu.addAction("🎞  Montage of frames (time / Z)…")
+            montage.triggered.connect(_with_series(lambda resolved: self.montage_from_file(resolved[0])))
 
         # ── Group: template assignment (only when dropping onto a template) ──
         if all_encounters_in_shape_below_mouse:
@@ -2379,10 +2480,13 @@ class EZFIG_GUI(QMainWindow):
                     if img is not None:
                         img2d.img = img
                         img2d.update_qimage()
+                        self._max_project_new_z_stacks(img2d)
                 else:
                     img2d = item
                 result.append(img2d)
             callback(result)
+            if result:
+                QTimer.singleShot(0, self._maybe_show_edit_hint)
             thread.quit()
             try:
                 self._active_img_loaders.remove((thread, worker))
@@ -2504,7 +2608,7 @@ class EZFIG_GUI(QMainWindow):
             lambda imgs: QTimer.singleShot(300, lambda: self.paint.EZFIG_panel._create_panel_real(imgs)))
 
     def add_image_from_url_action(self):
-        """File > Add image from URL / OME-Zarr / OMERO…: one image, added as a
+        """Insert > Add image from URL / OME-Zarr / OMERO…: one image, added as a
         new row. For OME-Zarr the pyramid level is chosen from the image's own
         levels; an OMERO link may need a login and, for a big stack, a choice
         of planes."""
@@ -2696,7 +2800,7 @@ class EZFIG_GUI(QMainWindow):
         return self._write_equation(v)
 
     def add_equation_action(self):
-        """File > Add equation (LaTeX)…: the equation is added as a new row."""
+        """Insert > Add equation (LaTeX)…: the equation is added as a new row."""
         v = self._equation_dialog()
         if not v:
             return
@@ -2748,7 +2852,7 @@ class EZFIG_GUI(QMainWindow):
         return None
 
     def add_latex_code_action(self, *_):
-        """File > Add LaTeX code panel…: a panel whose script is LaTeX code
+        """Insert > Add LaTeX code panel…: a panel whose script is LaTeX code
         (MCP: add_latex_code), added as a new row."""
         res = self._latex_code_dialog()
         if not res:
@@ -2808,6 +2912,155 @@ class EZFIG_GUI(QMainWindow):
             combined = ([target] + imgs) if target is not None else imgs
             panel._add_as_new_group(combined, orientation=orientation, remove_from_parents=True)
         self._load_images_then_callback(lst, _combine)
+
+    _IMAGE_FILTER = ("Images (*.tif *.tiff *.png *.jpg *.jpeg *.bmp *.gif *.czi *.lif *.lsm *.nd2 "
+                     "*.oib *.oif *.ome.tif *.mp4 *.avi *.mkv);;All Files (*)")
+
+    def add_images_from_files_action(self, how):
+        """Insert → Images from files: pick files, then do what the matching
+        drag-and-drop choice does (row, column, grid panel, single images,
+        combined with the selected panel, or a montage of one stack)."""
+        target = None
+        if how in ('with_row', 'with_col'):
+            sel = self.paint.EZFIG_panel.selected_shape
+            if isinstance(sel, list) and len(sel) == 1:
+                sel = sel[0]
+            if not isinstance(sel, (Image2D, Group)) or isinstance(sel, list):
+                QMessageBox.information(self, 'Select a panel',
+                                        'Click one panel or group first: the new images are '
+                                        'placed next to it.')
+                return False
+            target = self.paint.EZFIG_panel.get_top_parent_of_shape(sel) or sel
+        if how == 'montage':
+            path = openFileNameDialog(parent_window=self, extensions=self._IMAGE_FILTER)
+            if not path:
+                return False
+            return self.montage_from_file(path)
+        files = openFileNamesDialog(parent_window=self, extensions=self._IMAGE_FILTER)
+        if not files:
+            return False
+        resolved = self._resolve_series_for_files(list(files))
+        if not resolved:
+            return False
+        if how == 'row':
+            self.add_images_to_new_row(resolved)
+        elif how == 'col':
+            self.add_images_to_new_col(resolved)
+        elif how == 'panel':
+            self.create_panel(resolved)
+        elif how == 'single':
+            self.all_images_directly(resolved)
+        else:
+            self.add_images_combined_with_target(resolved, target,
+                                                 'X' if how == 'with_row' else 'Y')
+        return True
+
+    @staticmethod
+    def _stack_axes_of_file(path, serie=None):
+        """[(axis letter, size)] of the time / Z axes of an image file with
+        more than one frame ([] for a plain image or an unreadable file)."""
+        from pyfigures.stack_info import stack_info
+        try:
+            info = stack_info(path, serie)
+        except Exception:
+            return []
+        lead = info['order'][:info['order'].index('h')] if 'h' in info['order'] else ''
+        return [(k, info['sizes'][k]) for k in ('t', 'd') if k in lead and info['sizes'].get(k, 1) > 1]
+
+    def montage_from_file(self, path, serie=None):
+        """Montage of frames of a stack file that is not on the canvas yet
+        (dropped alone, or picked in Insert → Images from files)."""
+        from types import SimpleNamespace
+        if isinstance(path, tuple):
+            path, serie = path
+        if not self._stack_axes_of_file(path, serie):
+            QMessageBox.information(self, 'Not a stack',
+                                    f'{os.path.basename(path)} has a single time point and Z '
+                                    'slice: it is added as one image instead.')
+            self.add_images_to_new_row([(path, serie) if serie is not None else path])
+            return False
+        return self._stack_montage_dialog(SimpleNamespace(filename=path, serie_to_open=serie),
+                                          keep_crop_from=None)
+
+    def _channel_split_selected(self, gray=True):
+        """Insert → Stack views → Channel split (Magenta/Green mode): the
+        right-click split of the selected multi-channel image."""
+        sel = self.paint.EZFIG_panel.selected_shape
+        if isinstance(sel, list) and len(sel) == 1:
+            sel = sel[0]
+        img = getattr(sel, 'img', None)
+        if not isinstance(sel, Image2D) or not isinstance(img, np.ndarray) \
+                or 'c' not in (guess_dimensions(img) or '') or img.shape[-1] < 2:
+            QMessageBox.information(self, 'Select a multi-channel image',
+                                    'Click one image panel with several channels first.')
+            return False
+        self.paint.EZFIG_panel.selected_shape = sel
+        self.paint.EZFIG_panel.split_channels(mode='gray' if gray else 'magenta')
+        return True
+
+    def edit_selected_image_action(self):
+        """Annotations → Draw ROIs, text, crop or rotate: the image editor of
+        the selected panel (what double-clicking it opens)."""
+        sel = self.paint.EZFIG_panel.selected_shape
+        if isinstance(sel, list) and len(sel) == 1:
+            sel = sel[0]
+        if not isinstance(sel, Image2D) or sel.isText:
+            QMessageBox.information(self, 'Select an image',
+                                    'Click one image panel first (or simply double-click it).')
+            return False
+        self.paint.EZFIG_panel.update_image_annotations(image2d=sel)
+        return True
+
+    def _set_show_edit_hint(self, on):
+        from pyfigures.gui.user_prefs import save_show_edit_hint
+        save_show_edit_hint(on)
+
+    def _set_max_project_z(self, on):
+        from pyfigures.gui.user_prefs import save_max_project_z_stacks
+        save_max_project_z_stacks(on)
+
+    def _maybe_show_edit_hint(self):
+        """Once per session, after images are first added: a bubble saying
+        that double-clicking a panel crops, rotates or annotates it (only
+        hinted at in the start-up tips before). Its "Don't show again" box
+        and View → Show the 'double-click to edit' hint switch it off."""
+        if getattr(self, '_edit_hint_shown', False) or not self.edit_hint_action.isChecked():
+            return None
+        self._edit_hint_shown = True
+        box = QMessageBox(self)
+        box.setWindowTitle('Tip: editing a panel')
+        box.setIcon(QMessageBox.Information)
+        box.setText('<b>Double-click an image</b> to crop, rotate, change its colours or draw '
+                    'on it (ROIs, text, arrows, scale bar).<br><br>'
+                    'Drag a panel onto another to swap or group them; right-click for more.')
+        # parented and referenced: an orphan checkbox wrapper was collected and
+        # box.checkBox() then crashed (access violation)
+        dont = QCheckBox("Don't show this again", box)
+        box.setCheckBox(dont)
+        self._edit_hint_check = dont
+        box.setStandardButtons(QMessageBox.Ok)
+        box.setModal(False)
+        dont.toggled.connect(lambda on: self.edit_hint_action.setChecked(not on))
+        box.show()
+        self._edit_hint_box = box
+        return box
+
+    def _max_project_new_z_stacks(self, img2d):
+        """A new Z stack shows its max projection instead of its first slice
+        (View → Show new Z stacks as max projection). The projection acts on
+        the last extra axis, so only stacks whose last one is Z are changed —
+        a time series keeps its first frame."""
+        if not self.max_proj_action.isChecked() or img2d.projection is not None \
+                or not isinstance(getattr(img2d, 'img', None), np.ndarray):
+            return
+        try:
+            dims = guess_dimensions(img2d.img) or ''
+        except Exception:
+            return
+        extra = dims.replace('h', '').replace('w', '').replace('c', '')
+        if extra and extra[-1] == 'd' and img2d.img.shape[dims.index('d')] > 1:
+            img2d.projection = 'max'
+            img2d.update_qimage()
 
     def eventFilter(self, obj, event):
         if obj == self.size_spinbox and event.type() == QEvent.KeyRelease:
@@ -4260,7 +4513,11 @@ class EZFIG_GUI(QMainWindow):
         found = self._selected_image_panel('make the montage')
         if not found:
             return
-        sel = found[0]
+        return self._stack_montage_dialog(found[0], keep_crop_from=found[0])
+
+    def _stack_montage_dialog(self, sel, keep_crop_from=None):
+        """The montage dialog for *sel* (anything with filename and
+        serie_to_open: a panel, or a dropped file not on the canvas)."""
         info = self._stack_info_or_warn(sel)
         if info is None:
             return
@@ -4302,14 +4559,15 @@ class EZFIG_GUI(QMainWindow):
         stamps = QCheckBox('Stamp each frame (0 min, 2 min…)', frame)
         stamps.setChecked(True)
         grid.addWidget(stamps, 6, 0, 1, 2)
-        keep_crop = self._keep_crop_checkbox(frame, sel)
+        keep_crop = self._keep_crop_checkbox(frame, keep_crop_from) \
+            if keep_crop_from is not None else None
         if keep_crop is not None:
             grid.addWidget(keep_crop, 7, 0, 1, 2)
         cd = CustomDialog(title="Stack montage",
                           message="Adds a new row showing several frames of the stack.",
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self)
         if cd.exec_() != QDialog.Accepted:
-            return
+            return False
         spec = frames.text().strip() or None
         if spec and spec.isdigit():
             spec = int(spec)
@@ -4325,6 +4583,7 @@ class EZFIG_GUI(QMainWindow):
             kw['crop'] = self._panel_crop(sel)
         from pyfigures.mcp_server import add_stack_montage
         self._run_mcp_mutation(add_stack_montage, "Montage added as a new row.", **kw)
+        return True
 
     def add_channel_split_action(self):
         """Channel-split row (each channel + merge) from the selected
@@ -5201,7 +5460,7 @@ class EZFIG_GUI(QMainWindow):
             lines.append(f"  {i}. {q}")
         lines.append("")
         lines.append("Tip: also view the figure under colour-blindness "
-                     "(Help → Preview figure under colour-blindness…).")
+                     "(QC → Preview figure under colour-blindness…).")
         self._show_report('Pre-submission review', "\n".join(lines))
 
     def adjustment_ledger_action(self):

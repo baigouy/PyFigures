@@ -1029,7 +1029,7 @@ fill: [wt_1.tif, wt_2.tif, "ko_*.tif"]      # files or globs, in slot order
 exports: [pdf]
 ```
 
-A template is a figure whose panels are empty slots (Template → Convert figure
+A template is a figure whose panels are empty slots (File → Convert figure
 to template in the GUI). The slots are filled in reading order and keep their
 size, crop, LUT, scale bar and labels. `template` replaces `rows` / `panels`;
 everything in this section (size, fonts, caption, checks, exports…) still
@@ -1346,7 +1346,7 @@ server, and edited afterwards in either.
 | `journal` / `column` | QC → Apply journal guidelines…; size box in the toolbar | `resize_figure`, `apply_journal_guidelines` |
 | `spacing` | "Y Spacing" in the toolbar; right-click a group → Change space between elements | `set_spacing`, `set_figure_properties(default_spacing=)` |
 | `background` | "Background" button in the toolbar | `set_figure_properties(page_background=)` |
-| `label_background` | right-click → Text & lettering ▶ → Change background (non-Letter text); Lettering → Parameters for the letters | `set_label_background`, `style_annotation(background=)` |
+| `label_background` | right-click → Text & lettering ▶ → Change background (non-Letter text); Annotations → Panel letters (A, B, C…) for the letters | `set_label_background`, `style_annotation(background=)` |
 | `letter_panels` | "Auto Lettering" in the toolbar | `add_corner_labels` |
 | `caption`, `title` | File → Figure caption / legend… | `set_figure_caption` |
 | `lut` | right-click → Appearance ▶ → Set LUT(s); Edit Image | `set_lut` |
@@ -1354,12 +1354,12 @@ server, and edited afterwards in either.
 | `crop` | Edit Image | `transform_image` |
 | `scale_bar`, `px_to_unit` | Annotations → Add scale bar to all panels…; Edit Image | `set_scale_bar`, `set_scale_bar_all` |
 | `label` | Edit Image (text tool) | `add_annotation`, `set_annotation_text` |
-| `plot` | Annotations → Add data plot from CSV… | `add_data_plot` |
-| `montage` | Annotations → Stack views → Montage of frames (time / Z)… | `add_stack_montage` |
-| `split` | Annotations → Stack views → Channel split (each channel + merge)… | `add_channel_split` |
+| `plot` | Insert → Data plot from CSV… | `add_data_plot` |
+| `montage` | Insert → Stack views → Montage of frames (time / Z)… | `add_stack_montage` |
+| `split` | Insert → Stack views → Channel split (each channel + merge)… | `add_channel_split` |
 | `arrows` | Annotations → Add arrow pointing at a feature… | `add_arrow` |
-| `kymograph` | Annotations → Stack views → Kymograph along a line… | `add_kymograph` |
-| `orthogonal` | Annotations → Stack views → Orthogonal views (XZ / YZ)… | `add_orthogonal_views` |
+| `kymograph` | Insert → Stack views → Kymograph along a line… | `add_kymograph` |
+| `orthogonal` | Insert → Stack views → Orthogonal views (XZ / YZ)… | `add_orthogonal_views` |
 
 | `text`, `corner_labels` | Edit Image → text tool; right-click → Add labels ▶ | `add_annotation`, `add_corner_labels` |
 | `rois` | Edit Image → Annotations tab (rectangle, ellipse, line, arrow, polygon…) | `add_roi_rect`, `add_roi_ellipse`, `add_roi_line`, `add_roi_polygon` |
@@ -1368,23 +1368,23 @@ server, and edited afterwards in either.
 | `zoom` | Annotations → Add zoom callout to selected panel… | `add_zoom_callout` |
 | `rotate`, `flip` | Edit Image → Rotate + Crop | `transform_image` |
 | `channels`, `z_range`, `display_range` | Edit Image → File Infos + Scale | `configure_image` |
-| `merge` | Annotations → Add multi-channel merge… | `add_channel_merge` |
-| `colorbar` | Annotations → Add LUT colour bar… | `add_lut_calibration_bar` |
+| `merge` | Insert → Multi-channel merge… | `add_channel_merge` |
+| `colorbar` | Insert → LUT colour bar… | `add_lut_calibration_bar` |
 | `script` | Edit Image → Script tab (on an empty image) | `add_scripted_image`, `set_script` |
-| `equation` | File → Add equation (LaTeX)…; right-click → Edit equation… | `add_equation` |
-| `tex` | File → Add LaTeX code panel…; right-click → Edit LaTeX code… | `add_latex_code` |
+| `equation` | Insert → Add equation (LaTeX)…; right-click → Edit equation… | `add_equation` |
+| `tex` | Insert → Add LaTeX code panel…; right-click → Edit LaTeX code… | `add_latex_code` |
 | row `orientation`, `spacing` | drop → To column; right-click → Change space between elements | `add_group`, `set_orientation`, `set_spacing` |
 | row `labels`, `side_label` | right-click → Add labels ▶ | `add_label_row`, `add_side_label` |
 | `width_*`, `dpi` | Figure width box in the toolbar | `resize_figure` |
-| `font`, `letter_placement` | Lettering → Parameters | `set_figure_properties`, `style_annotation` |
+| `font`, `letter_placement` | Annotations → Panel letters (A, B, C…) | `set_figure_properties`, `style_annotation` |
 | `min_font_pt`, `tidy_text` | QC → Enforce minimum font size…; Annotations → Tidy text typography… | `enforce_min_font_size`, `tidy_text` |
 | `auto_configure` | — | `auto_configure_images` |
 | `alt_text` | File → Alt text (accessibility)… | `generate_alt_text`, `set_alt_text` |
 | `copy_style_from` | File → Copy style from another figure… | `copy_style` |
-| `exports` | File → Export As ▶, Review → Export for review…, QC → Adjustment provenance ledger (Methods)…, Help → Preview figure under colour-blindness… | `export_figure`, `export_latex`, `export_print_ready`, `export_video`, `export_source_data`, `export_review`, `export_caption`, `export_adjustment_ledger`, `simulate_color_blindness`, `export_pptx`, `export_illustrator_script` |
+| `exports` | File → Export As ▶, File → Review comments → Export for review…, QC → Adjustment provenance ledger (Methods)…, QC → Preview figure under colour-blindness… | `export_figure`, `export_latex`, `export_print_ready`, `export_video`, `export_source_data`, `export_review`, `export_caption`, `export_adjustment_ledger`, `simulate_color_blindness`, `export_pptx`, `export_illustrator_script` |
 | `checks` | QC → Check image integrity…, Check scale-bar consistency…, Audit figure (missing scale bars / labels), Check print resolution…, Check journal compliance…, Pre-submission review (all checks)… | `check_image_integrity`, `check_scale_consistency`, `audit_figure`, `check_resolution`, `check_journal_compliance` |
 | `consolidate` | File → Save And Consolidate... | `consolidate_figure` |
-| `template`, `fill` | Template → Convert figure to template; drop images on the slots | `templatify_figure`, `fill_template`, `batch_fill_templates` |
+| `template`, `fill` | File → Convert figure to template; drop images on the slots | `templatify_figure`, `fill_template`, `batch_fill_templates` |
 | `properties` | Edit Image | `set_image_property` |
 
 Not in recipes — use the GUI or MCP on the built figure: freehand drawings,

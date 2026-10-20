@@ -437,7 +437,7 @@ Where Scatter/Fan/Grid are *generative* (parametric, can take any number of
 images), the *Layout* toolbar button offers a small gallery of hand-designed
 page layouts to fill instead — the poster module's version of picking a slide
 layout in PowerPoint, and the counterpart to the main editor's Template
-feature (`Template > Convert figure to template` + MCP `fill_template`,
+feature (`File > Convert figure to template` + MCP `fill_template`,
 which strip a real figure down to `@template@` slots and refill them one at a
 time). Here the "slots" are a fixed catalog of shapes you fill in one call:
 
@@ -500,7 +500,7 @@ layout name that matches the photo count. The catalog itself lives in
 
 `apply_poster_layout` above needs the photos already on the page. To design
 the page *before* you've picked which photo goes where — the poster module's
-counterpart to the main editor's `Template > Convert figure to template` +
+counterpart to the main editor's `File > Convert figure to template` +
 `fill_template` workflow — open the toolbar's **`Layout`** gallery and check
 **"Sketch as empty slots (no photos yet — fill them in later)"** before
 picking a layout. This adds the layout's slots as empty placeholders: dashed

@@ -808,7 +808,7 @@ def export_review(pyf_path: str, out_html: str, dpi: int = 150) -> str:
 
 @mcp.tool()
 def list_review_comments(pyf_path: str) -> str:
-    """List the review comments stored in a figure's sidecar (GUI: Review → View
+    """List the review comments stored in a figure's sidecar (GUI: File → Review comments → View
     review comments). Returns each comment's position, text and author (JSON)."""
     try:
         from pyfigures.gui.review.html_export import load_sidecar_comments
@@ -822,7 +822,7 @@ def list_review_comments(pyf_path: str) -> str:
 @mcp.tool()
 def import_review_comments(pyf_path: str, review_html: str) -> str:
     """Pull comments from a reviewed HTML page back into the figure's sidecar
-    (GUI: Review → Import review comments).
+    (GUI: File → Review comments → Import review comments).
 
     *review_html*: the .html a reviewer saved after commenting. New comments are
     merged with any already stored. Returns the merged comment count.

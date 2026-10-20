@@ -34,6 +34,24 @@ def save_auto_show_tips(value):
     _s().setValue('ui/auto_show_tips', bool(value))
 
 
+# ── Hints ────────────────────────────────────────────────────────────
+def load_show_edit_hint():
+    """The 'double-click an image to crop, rotate or annotate it' bubble."""
+    return _s().value('ui/show_edit_hint', True, type=bool)
+
+def save_show_edit_hint(value):
+    _s().setValue('ui/show_edit_hint', bool(value))
+
+
+# ── Adding images ────────────────────────────────────────────────────
+def load_max_project_z_stacks():
+    """New Z stacks show their max projection (else the first slice)."""
+    return _s().value('images/max_project_z', True, type=bool)
+
+def save_max_project_z_stacks(value):
+    _s().setValue('images/max_project_z', bool(value))
+
+
 # ── MCP HTTP server ──────────────────────────────────────────────────
 def load_mcp_http_autostart():
     """Start the MCP HTTP server when PyFigures opens (off by default)."""

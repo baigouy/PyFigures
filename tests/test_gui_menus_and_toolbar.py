@@ -395,9 +395,9 @@ def test_selection_reset_and_duplicate(gui):
     first = panel.shapes_to_draw[0]
     panel.set_current_selection(first)
     n = len(panel.shapes_to_draw)
-    _menu_action(gui, "Selection", "Duplicate Selection").trigger()
+    _menu_action(gui, "Edit", "Duplicate Selection").trigger()
     assert len(panel.shapes_to_draw) == n + 1
-    _menu_action(gui, "Selection", "Reset Selection").trigger()
+    _menu_action(gui, "Edit", "Reset Selection").trigger()
     assert not panel.selected_shape
 
 
@@ -416,7 +416,7 @@ def test_remove_annotation_kinds(gui, label, gone):
     before = set(_annot_types(gui))
     assert before & gone, before
     gui.paint.EZFIG_panel.set_current_selection(None)
-    _menu_action(gui, "Annotations", label).trigger()
+    _menu_action(gui, "Annotations", "Remove", label).trigger()
     after = set(_annot_types(gui))
     assert not (after & gone), after
     assert after == before - gone                     # nothing else touched
@@ -426,7 +426,7 @@ def test_remove_all_texts_keeps_panel_letters(gui):
     texts = _texts(gui)
     assert any(not letter for _t, letter in texts) and any(letter for _t, letter in texts)
     gui.paint.EZFIG_panel.set_current_selection(None)
-    _menu_action(gui, "Annotations", "Remove all texts").trigger()
+    _menu_action(gui, "Annotations", "Remove", "Remove all texts").trigger()
     after = _texts(gui)
     assert after and all(letter for _t, letter in after)
 
@@ -434,13 +434,14 @@ def test_remove_all_texts_keeps_panel_letters(gui):
 def test_remove_all_annotations(gui):
     assert _annot_types(gui)
     gui.paint.EZFIG_panel.set_current_selection(None)
-    _menu_action(gui, "Annotations", "Remove all annotations (ROIs, scale bars, texts, ...)").trigger()
+    _menu_action(gui, "Annotations", "Remove",
+                 "Remove all annotations (ROIs, scale bars, texts, ...)").trigger()
     assert set(_annot_types(gui)) <= {"TAText2D"}
     assert all(letter for _t, letter in _texts(gui))
 
 
 def test_lettering_parameters_dialog(gui, dialogs):
-    _menu_action(gui, "Lettering", "Parameters").trigger()
+    _menu_action(gui, "Annotations", "Panel letters (A, B, C…)…").trigger()
     assert dialogs["dialog"][-1] == "CustomDialog"
 
 
@@ -552,7 +553,7 @@ def test_help_entries(gui, dialogs, qapp):
     assert dialogs["dialog"][-3:] == ["AboutDialog", "QDialog", "TipDialog"]
     _menu_action(gui, "Help", "User Guide").trigger()
     assert dialogs["browser"] and dialogs["browser"][-1].startswith("file://")
-    _menu_action(gui, "Help", "Show color-blind assistant").trigger()
+    _menu_action(gui, "QC", "Show color-blind assistant").trigger()
     assert gui.color_assistant is not None and gui.color_assistant.isVisible()
     gui.color_assistant.close()
 
@@ -580,3 +581,159 @@ def test_poster_designer_opens_once(gui):
     _menu_action(gui, "Tools", "Poster / collage designer…").trigger()
     assert gui._poster_window is w1
     w1.close()
+
+
+# ---------------------------------------------------------------------------
+# 3. discoverability (2026-10-20): Insert menu, tooltips, hints, stacks
+# ---------------------------------------------------------------------------
+
+def test_menu_layout_groups_what_adds_panels(gui):
+    tops = [a.text() for a in gui.menuBar.actions()]
+    assert tops == ["File", "Edit", "Insert", "Annotations", "QC", "Tools", "View", "Help"], tops
+    insert = [a.text() for a in _menu_action(gui, "Insert").menu().actions() if not a.isSeparator()]
+    for item in ("Images from files", "Data plot from CSV…", "Multi-channel merge…", "Stack views",
+                 "LUT colour bar…", "Add equation (LaTeX)…", "Add LaTeX code panel…",
+                 "Add image from URL / OME-Zarr / OMERO…"):
+        assert item in insert, (item, insert)
+    annots = [a.text() for a in _menu_action(gui, "Annotations").menu().actions() if not a.isSeparator()]
+    assert annots[-1] == "Remove"                      # destructive entries last, in a submenu
+    assert _menu_action(gui, "File", "Convert figure to template")
+    assert _menu_action(gui, "File", "Review comments", "Export for review…")
+    assert _menu_action(gui, "Tools", "MCP call history / undo…")
+    assert _menu_action(gui, "QC", "Preview figure under colour-blindness…")
+    split = [a.text() for a in _menu_action(gui, "Insert", "Stack views").menu().actions()]
+    assert "Channel split (Magenta/Green mode)…" in split
+
+
+def test_every_menu_action_and_toolbar_control_explains_itself(gui):
+    from qtpy.QtWidgets import QWidget
+    for w in (gui.size_spinbox, gui.main_space_spinner, gui.auto_lettering_checkbox,
+              gui.letter_line_edit, gui.page_bounds_checkbox, gui.unit_combobox,
+              gui.force_update_layout_button_associated):
+        assert w.toolTip(), w
+    for label, act in _all_actions(gui):
+        if label.split(" > ")[0] in ("Insert", "Annotations") and not label.endswith("—"):
+            assert act.toolTip() and act.toolTip() != act.text(), label
+
+
+def test_width_label_says_what_it_applies_to_and_mm(gui, qapp):
+    panel = gui.paint.EZFIG_panel
+    panel.set_current_selection(None)
+    gui.selectionUpdated()
+    assert gui.force_update_layout_button_associated.text() == "→ whole figure"
+    panel.set_current_selection(panel.shapes_to_draw[0])
+    gui.selectionUpdated()
+    assert gui.force_update_layout_button_associated.text() == "→ selection only"
+    assert "Double-click a panel" in gui.statusBar().currentMessage()
+    gui.size_spinbox.setValue(720)                   # 10 inches at 72 px per inch
+    gui.unit_combobox.setCurrentText("mm")
+    assert gui.value_label.text().endswith("254.0"), gui.value_label.text()
+
+
+def _wait_images(qapp, g, n, timeout=30):
+    t0 = time.time()
+    while time.time() - t0 < timeout and (len(_images(g)) < n or getattr(g, "_active_img_loaders", None)):
+        qapp.processEvents()
+        time.sleep(0.005)
+    for _ in range(5):
+        qapp.processEvents()
+
+
+def test_insert_images_from_files_matches_the_drop_choices(gui, qapp, tmp_path, monkeypatch, dialogs):
+    from pyfigures.gui import pfgui
+    a = _tif(tmp_path / "n1.tif", 30)
+    b = _tif(tmp_path / "n2.tif", 90)
+    monkeypatch.setattr(pfgui, "openFileNamesDialog", lambda *x, **k: [a, b])
+    n0 = len(_images(gui))
+    n_top = len(gui.paint.EZFIG_panel.shapes_to_draw)
+    _menu_action(gui, "Insert", "Images from files", "To a new row…").trigger()
+    _wait_images(qapp, gui, n0 + 2)
+    assert len(_images(gui)) == n0 + 2
+    assert len(gui.paint.EZFIG_panel.shapes_to_draw) == n_top + 1     # one new row
+    # next to the selected panel: needs a selection
+    gui.paint.EZFIG_panel.set_current_selection(None)
+    assert gui.add_images_from_files_action("with_row") is False
+    assert dialogs["msg"][-1] == ("information", "Select a panel")
+    # cancelled file dialog: nothing happens
+    monkeypatch.setattr(pfgui, "openFileNamesDialog", lambda *x, **k: None)
+    assert gui.add_images_from_files_action("single") is False
+
+
+def test_new_z_stack_shows_max_projection_time_series_its_first_frame(gui, qapp, tmp_path):
+    from batoolset.img import Img
+    z = np.zeros((4, 30, 40), np.uint8)
+    z[2, 5:10, 5:10] = 200                       # only in slice 2: invisible in slice 0
+    Img(z, dimensions="dhw").save(str(tmp_path / "z.tif"))
+    t = np.zeros((4, 30, 40), np.uint8)
+    Img(t, dimensions="thw").save(str(tmp_path / "t.tif"))
+    gui.max_proj_action.setChecked(True)      # the smoke test toggles every checkable action
+    n0 = len(_images(gui))
+    gui.add_images_to_new_row([str(tmp_path / "z.tif"), str(tmp_path / "t.tif")])
+    _wait_images(qapp, gui, n0 + 2)
+    new = {os.path.basename(i.filename): i for i in _images(gui)[-2:]}
+    from batoolset.img import guess_dimensions
+    dims = guess_dimensions(new["z.tif"].img)
+    if "d" in dims:
+        assert new["z.tif"].projection == "max"
+    if "t" in guess_dimensions(new["t.tif"].img):
+        assert new["t.tif"].projection is None
+    # switched off in View: first slice again
+    gui.max_proj_action.setChecked(False)
+    from pyfigures.gui.user_prefs import load_max_project_z_stacks
+    assert load_max_project_z_stacks() is False
+    gui.add_images_to_new_row([str(tmp_path / "z.tif")])
+    _wait_images(qapp, gui, n0 + 3)
+    assert _images(gui)[-1].projection is None
+    gui.max_proj_action.setChecked(True)
+
+
+def test_edit_hint_bubble_once_and_dont_show_again(gui, qapp):
+    from pyfigures.gui.user_prefs import load_show_edit_hint
+    gui._edit_hint_shown = False
+    gui.edit_hint_action.setChecked(True)
+    box = gui._maybe_show_edit_hint()
+    assert box is not None and "Double-click an image" in box.text()
+    assert gui._maybe_show_edit_hint() is None               # once per session
+    gui._edit_hint_check.setChecked(True)                    # "Don't show this again"
+    assert not gui.edit_hint_action.isChecked() and load_show_edit_hint() is False
+    box.close()
+    gui._edit_hint_shown = False
+    assert gui._maybe_show_edit_hint() is None               # switched off: never shown
+    gui.edit_hint_action.setChecked(True)
+    assert load_show_edit_hint() is True
+
+
+def test_a_single_dropped_stack_offers_a_montage(gui, qapp, tmp_path, monkeypatch):
+    from batoolset.img import Img
+    Img(np.zeros((5, 30, 40), np.uint8), dimensions="thw").save(str(tmp_path / "movie.tif"))
+    flat = _tif(tmp_path / "flat.tif", 50)
+
+    def labels(files):
+        gui.add_image_from_an_external_source_context_menu(files, None)
+        return [a.text() for a in gui.paint.EZFIG_panel.contextMenu.actions()]
+    assert any("Montage of frames" in t for t in labels([str(tmp_path / "movie.tif")]))
+    assert not any("Montage" in t for t in labels([flat]))
+    assert not any("Montage" in t for t in labels([str(tmp_path / "movie.tif"), flat]))
+    # the montage dialog opens for a file that is not on the canvas
+    seen = []
+    monkeypatch.setattr(gui, "_stack_montage_dialog",
+                        lambda sel, keep_crop_from=None: seen.append(sel.filename) or True)
+    assert gui.montage_from_file(str(tmp_path / "movie.tif")) is True
+    assert seen == [str(tmp_path / "movie.tif")]
+    # a plain image: told so and added as one image
+    n0 = len(_images(gui))
+    assert gui.montage_from_file(flat) is False
+    _wait_images(qapp, gui, n0 + 1)
+    assert len(_images(gui)) == n0 + 1
+
+
+def test_edit_image_and_magenta_green_split_need_a_selection(gui, monkeypatch, dialogs):
+    panel = gui.paint.EZFIG_panel
+    panel.set_current_selection(None)
+    assert gui.edit_selected_image_action() is False
+    assert gui._channel_split_selected(gray=False) is False
+    opened = []
+    monkeypatch.setattr(panel, "update_image_annotations", lambda image2d=None: opened.append(image2d))
+    first = _images(gui)[0]
+    panel.set_current_selection(first)
+    assert gui.edit_selected_image_action() is True and opened == [first]

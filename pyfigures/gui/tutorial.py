@@ -1797,7 +1797,7 @@ def advanced_steps() -> list[TutorialStep]:
                 'Assign a colour palette to each channel. LUTs work on single-channel '
                 'images too — a grey image can be shown in any colour.<br><br>'
                 'Click <b>Ok</b> to apply. Appearance ▶ → <b>"Reset LUT(s)"</b> reverts it.<br><br>'
-                '<i>Tip: see <b>Help → Show color-blind assistant</b> for accessible palettes.</i>'
+                '<i>Tip: see <b>QC → Show color-blind assistant</b> for accessible palettes.</i>'
             ),
             get_target=lambda win: win.paint,
             completion_check=_has_lut,
@@ -1901,7 +1901,7 @@ def advanced_steps() -> list[TutorialStep]:
             message=(
                 'You have explored the full depth of PyFigures.<br><br>'
                 'More to discover:<br>'
-                '• <b>Annotations → Remove all…</b> — bulk-remove shapes, scale bars, or insets<br>'
+                '• <b>Annotations → Remove</b> — bulk-remove shapes, scale bars, or insets<br>'
                 '• <b>Right-click a row → Crop &amp; size ▶ → Force same width and height</b><br>'
                 '• <b>Help → Stacks, Channels &amp; Movies</b> tutorial — channel split, projections, video<br>'
                 '• <b>File → Export as PDF / TIF / PNG</b> — for submission or presentations'
@@ -2097,7 +2097,7 @@ def medium_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 11 — Convert to template',
             message=(
-                'Go to <b>Template → Convert figure to template</b>.<br><br>'
+                'Go to <b>File → Convert figure to template</b>.<br><br>'
                 'Images become grey placeholders — layout, annotations, '
                 'scale bars, and LUTs are all preserved.<br><br>'
                 'Templates let you reuse the same layout with new images.'
@@ -2148,7 +2148,7 @@ def medium_steps() -> list[TutorialStep]:
                 '• <b>Save And Consolidate</b> — portable archive of figure + images<br>'
                 '• <b>Color-blind assistant</b> — Help menu<br>'
                 '• <b>Set LUTs</b> — right-click a group for channel colors<br>'
-                '• <b>Lettering → Parameters</b> — font, size, case<br>'
+                '• <b>Annotations → Panel letters (A, B, C…)</b> — font, size, case<br>'
                 '• <b>Help</b> menu → Advanced Tutorial'
             ),
             get_target=None,
@@ -2227,7 +2227,7 @@ def publication_steps() -> list[TutorialStep]:
             title='Step 4 — Add a LUT colour bar',
             message=(
                 'For an intensity-coded (pseudocolour) panel, open '
-                '<b>Annotations → "Add LUT colour bar…"</b>.<br><br>'
+                '<b>Insert → "LUT colour bar…"</b>.<br><br>'
                 'A calibrated colour scale is generated and placed next to the '
                 'figure so readers can map colour back to intensity.<br><br>'
                 'Click <b>Next</b> when done.'
@@ -2242,7 +2242,7 @@ def publication_steps() -> list[TutorialStep]:
             title='Step 5 — Add a data plot from a CSV',
             message=(
                 'Quantification belongs in the same figure as the images. Open '
-                '<b>Annotations → "Add data plot from CSV…"</b>.<br><br>'
+                '<b>Insert → "Data plot from CSV…"</b>.<br><br>'
                 'Pick a <b>CSV</b> of measurements and a plot type '
                 '(<b>bar / box / violin / scatter / grouped</b>). PyFigures runs '
                 'the right statistical test automatically — Welch <i>t</i> / '
@@ -2402,7 +2402,7 @@ def publication_steps() -> list[TutorialStep]:
                 'Your figure is submission-ready.<br><br>'
                 'Related tools worth a look:<br>'
                 '• <b>QC → Remap image paths…</b> — fix broken links after moving files<br>'
-                '• <b>Annotations → Remove all…</b> — bulk-clear ROIs, scale bars, texts<br>'
+                '• <b>Annotations → Remove</b> — bulk-clear ROIs, scale bars, texts<br>'
                 '• <b>Help</b> menu → <b>Sharing, Review &amp; Accessibility</b> tutorial'
             ),
             get_target=None,
@@ -2450,7 +2450,7 @@ def sharing_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 2 — Export for review',
             message=(
-                'Open <b>Review → "Export for review…"</b>.<br><br>'
+                'Open <b>File → Review comments → "Export for review…"</b>.<br><br>'
                 'It writes one self-contained <b>HTML page</b> of the figure. Your '
                 'co-authors open it in any browser (no PyFigures needed), click on the '
                 'figure to pin comments, and send the file back — PyFigures can open '
@@ -2467,7 +2467,7 @@ def sharing_steps() -> list[TutorialStep]:
             title='Step 3 — Import review comments',
             message=(
                 'When comments come back, open '
-                '<b>Review → "Import review comments…"</b> and select the file.<br><br>'
+                '<b>File → Review comments → "Import review comments…"</b> and select the file.<br><br>'
                 'The comments are attached to the figure so you can address them '
                 'panel by panel.<br><br>'
                 'Click <b>Next</b>.'
@@ -2481,7 +2481,7 @@ def sharing_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 4 — View review comments',
             message=(
-                'Open <b>Review → "View review comments"</b> to see the imported '
+                'Open <b>File → Review comments → "View review comments"</b> to see the imported '
                 'notes overlaid on the figure.<br><br>'
                 'Work through them, then re-export an updated review copy if needed.<br><br>'
                 'Click <b>Next</b>.'
@@ -2525,7 +2525,7 @@ def sharing_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 7 — Colour-blind assistant',
             message=(
-                'Open <b>Help → "Show color-blind assistant"</b>.<br><br>'
+                'Open <b>QC → "Show color-blind assistant"</b>.<br><br>'
                 'It recommends colour-blind-safe LUT/palette combinations — avoid '
                 'red/green pairings that ~8% of male readers cannot distinguish.<br><br>'
                 'Click <b>Next</b>.'
@@ -2539,7 +2539,7 @@ def sharing_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 8 — Preview under colour-blindness',
             message=(
-                'Open <b>Help → "Preview figure under colour-blindness…"</b>.<br><br>'
+                'Open <b>QC → "Preview figure under colour-blindness…"</b>.<br><br>'
                 'It simulates how your figure looks to deuteranope / protanope / '
                 'tritanope readers so you can catch unreadable colour coding before '
                 'submission.<br><br>'
@@ -2729,7 +2729,7 @@ def stacks_steps() -> list[TutorialStep]:
             title='Step 3 — Channel split',
             message=(
                 '<b>Click</b> the multi-channel image to select it, then open '
-                '<b>Annotations → Stack views → "Channel split (each channel + merge)…"</b>.<br><br>'
+                '<b>Insert → Stack views → "Channel split (each channel + merge)…"</b>.<br><br>'
                 'Name each channel and pick its colour; click <b>Ok</b>. A new row shows '
                 'every channel in grey with its name in colour, then the merge.<br><br>'
                 '<i>Right-click → <b>Split ▶</b> on the image gives a quick split too.</i>'
@@ -2744,7 +2744,7 @@ def stacks_steps() -> list[TutorialStep]:
             title='Step 4 — Montage of frames',
             message=(
                 'Select the <b>time-lapse</b> (or the Z stack) and open '
-                '<b>Annotations → Stack views → "Montage of frames (time / Z)…"</b>.<br><br>'
+                '<b>Insert → Stack views → "Montage of frames (time / Z)…"</b>.<br><br>'
                 'Choose how many frames (e.g. <code>6</code>, <code>all</code> or '
                 '<code>0:20:5</code>), panels per row and the time stamps; click '
                 '<b>Ok</b>. A new row shows the frames side by side.'
@@ -2759,7 +2759,7 @@ def stacks_steps() -> list[TutorialStep]:
             title='Step 5 — Kymograph',
             message=(
                 'Select the <b>time-lapse</b> and open '
-                '<b>Annotations → Stack views → "Kymograph along a line…"</b>.<br><br>'
+                '<b>Insert → Stack views → "Kymograph along a line…"</b>.<br><br>'
                 'Give the two ends of the line (x1, y1 → x2, y2, in pixels) and how '
                 'many pixels to average across it; click <b>Ok</b>.<br><br>'
                 'The kymograph — position along the line against time, time running '
@@ -2776,7 +2776,7 @@ def stacks_steps() -> list[TutorialStep]:
             title='Step 6 — Orthogonal views',
             message=(
                 'Select the <b>Z stack</b> and open '
-                '<b>Annotations → Stack views → "Orthogonal views (XZ / YZ)…"</b>.<br><br>'
+                '<b>Insert → Stack views → "Orthogonal views (XZ / YZ)…"</b>.<br><br>'
                 'Choose where to cut (x, y), which XY slice to show (or the max '
                 'projection), and the <b>Z step / pixel size</b> ratio so the side views '
                 'are not squashed; click <b>Ok</b>.<br><br>'
@@ -2792,7 +2792,7 @@ def stacks_steps() -> list[TutorialStep]:
             title='Step 7 — Merge separate channel files',
             message=(
                 'Channels saved as <b>separate files</b>? Open '
-                '<b>Annotations → "Add multi-channel merge…"</b>, pick one file per '
+                '<b>Insert → "Multi-channel merge…"</b>, pick one file per '
                 'channel and a colour for each; click <b>Ok</b>.<br><br>'
                 'The merged colour image is added to the figure — the source files '
                 'stay untouched.<br><br>'

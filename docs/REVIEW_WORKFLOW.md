@@ -22,7 +22,7 @@ where you remain the sole editor sidesteps that entirely.
 ## Step by step
 
 **1. Export for review.**
-`Review > Export for review…` renders the current figure to an image and
+`File > Review comments > Export for review…` renders the current figure to an image and
 packages it into a single self-contained HTML file (the image is embedded as
 base64 — no separate image files, nothing to keep track of).
 
@@ -51,7 +51,7 @@ owner side: it only opens a compose window, it never sends anything by
 itself.
 
 **5. Import their comments.**
-`Review > Import review comments…`, pick the file they sent back. Their
+`File > Review comments > Import review comments…`, pick the file they sent back. Their
 comments are extracted and merged into a small sidecar file next to your
 `.pyf` (`<name>.review.json`) — never inside the `.pyf` itself, so this never
 touches PyFigures' own save/load format. A dialog immediately shows the
@@ -67,7 +67,7 @@ Edit the figure normally with PyFigures' regular tools. The imported comments
 are just a reference list — nothing here edits the figure automatically.
 
 **8. Clean up or go again.**
-`Review > View review comments` reopens the pin/comment dialog at any time;
+`File > Review comments > View review comments` reopens the pin/comment dialog at any time;
 "Clear all (resolved)" wipes the sidecar once you're done with a round. For a
 second pass, just export again — nothing carries over unless you explicitly
 re-import.

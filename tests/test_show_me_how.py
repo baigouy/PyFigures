@@ -179,10 +179,10 @@ def test_split_guide_follows_the_user_through_the_real_menu(win, qapp):
     assert win._tutorial._index == 0                     # nothing selected yet
     win.paint.EZFIG_panel.selected_shape = _images(win)[0]
     _pump(qapp, 1700)                                     # poll + auto-advance
-    assert win._tutorial._index == 1                     # now: open Annotations
+    assert win._tutorial._index == 1                     # now: open Insert
     menu_step = win._tutorial._steps[1]
     anchor = menu_step.get_target(win)
-    action = resolve_menu_path(win, ["Annotations"])[0][1]
+    action = resolve_menu_path(win, ["Insert"])[0][1]
     assert anchor.geometry().adjusted(0, 0, 1, 1) == win.menuBar.actionGeometry(action)
 
     accepted = []

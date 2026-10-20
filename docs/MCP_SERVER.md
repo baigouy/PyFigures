@@ -451,7 +451,7 @@ Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent)
 
 A stack added with `add_image` shows **one** image (a frame / slice, or a Z
 projection via `configure_image(projection="max")`). These tools are for when the
-figure should show more of it. GUI: Annotations → Stack views.
+figure should show more of it. GUI: Insert → Stack views.
 
 | Tool | Description |
 |------|-------------|
@@ -628,7 +628,7 @@ key: guides are interactive by nature.
 |------|-------------|
 | `check_source_changes(pyf_path, accept)` | List source images / CSVs changed or missing since the figure was last saved; `accept=True` makes the current files the reference. GUI: QC → Check for changed source files… (and a notice when a figure opens) |
 | `copy_style(source_pyf, target_pyf, aspects, dry_run)` | Give a figure the look of another (e.g. an accepted one): `fonts`, `letters` (size/weight/colour/corner/case), `scale_bars` (colour, corner, label style), `spacing` (per nesting level), `plots` (chart font size, line widths). Content untouched. GUI: File → Copy style from another figure… |
-| `list_history(pyf_path, last)` | Every MCP call made on the figure, newest last: tool, arguments, status, whether it changed the figure, whether it was undone. GUI: QC → MCP call history / undo…; command line: `python -m pyfigures.history fig.pyf` |
+| `list_history(pyf_path, last)` | Every MCP call made on the figure, newest last: tool, arguments, status, whether it changed the figure, whether it was undone. GUI: Tools → MCP call history / undo…; command line: `python -m pyfigures.history fig.pyf` |
 | `undo_last(pyf_path, steps, force)` | Put the figure (`.pyf` and sidecars) back as it was before the last *steps* changing MCP calls; refused when the figure was changed since outside the server (GUI…) unless `force=True`. GUI: the same dialog; command line: `python -m pyfigures.history fig.pyf --undo 2` |
 
 | `mcp_server_info()` | The Python running the server, the number of tools, which MCP clients have it registered and whether the HTTP server runs. Read-only. GUI: Tools → MCP server…; command line: `python -m pyfigures.mcp_control status` |
