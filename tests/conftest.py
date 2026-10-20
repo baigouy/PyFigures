@@ -116,6 +116,13 @@ def pytest_sessionfinish(session, exitstatus):
 # --clean-tmp  option
 # ---------------------------------------------------------------------------
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "gui_e2e: end-to-end GUI layer (real Qt events, saved-state checks); "
+        "run alone with  pytest -m gui_e2e  (see docs/GUI_E2E_TESTS.md)")
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--clean-tmp",

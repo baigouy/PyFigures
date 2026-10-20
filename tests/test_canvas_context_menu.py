@@ -247,13 +247,14 @@ def test_image_in_row_menu(gui, cap):
     labels = _labels(right_click(gui, cap, img))
     for expected in ("Edit", "Edit Image", "Selection", "Add Empty Image", "Duplicate Selection",
                      "Convert to template", "Extrude (remove from group)", "Arrange",
-                     "Reshape to panel (if possible)", "Add labels ▶", "Add labels ▶ / Above the row",
+                     "Add labels ▶", "Add labels ▶ / Above the row",
                      "Add labels ▶ / Left / top of row/col", "Remove annotations ▶",
                      "Remove annotations ▶ / Scale bars", "Crop & size ▶",
                      "Crop & size ▶ / Reset crop only", "Appearance ▶", "Appearance ▶ / Set LUT(s)",
                      "Text & lettering ▶", "Ignore"):
         assert expected in labels, (expected, labels)
     assert "Split ▶" not in labels                      # plain grey image: nothing to split
+    assert "Reshape to panel (if possible)" not in labels   # one image: nothing to reshape
     assert "Change space between elements" not in labels
 
 

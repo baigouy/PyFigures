@@ -2967,6 +2967,10 @@ class EZFIG_GUI(QMainWindow):
         """[(axis letter, size)] of the time / Z axes of an image file with
         more than one frame ([] for a plain image or an unreadable file)."""
         from pyfigures.stack_info import stack_info
+        if isinstance(path, str) and path.lower().endswith(('.svg', '.pdf')):
+            # vector panels (equations, PDF pages) are never stacks — reading
+            # them here, just to build the drop menu, started Fiji's JVM
+            return []
         try:
             info = stack_info(path, serie)
         except Exception:

@@ -1461,6 +1461,44 @@ class MyWidget(QWidget):
         self.update()
         self.update_size()
 
+    def _container_of(self, shape):
+        """The list holding *shape*: the canvas list or its group's content."""
+        if any(s is shape for s in self.shapes_to_draw):
+            return self.shapes_to_draw
+        stack = list(self.shapes_to_draw)
+        while stack:
+            s = stack.pop()
+            content = getattr(s, 'content', None)
+            if isinstance(content, list):
+                if any(c is shape for c in content):
+                    return content
+                stack.extend(content)
+        return None
+
+    def swap_images(self, item1, item2):
+        """Exchange two panels wherever they sit (two rows, a row and the
+        canvas...): each takes the other's place, its own annotations kept."""
+        c1 = self._container_of(item1)
+        c2 = self._container_of(item2)
+        if c1 is None or c2 is None or item1 is item2:
+            return False
+        tops = [self.get_top_parent_of_shape(item1) or item1, self.get_top_parent_of_shape(item2) or item2]
+        i1 = next(i for i, s in enumerate(c1) if s is item1)
+        i2 = next(i for i, s in enumerate(c2) if s is item2)
+        c1[i1] = item2
+        c2[i2] = item1
+        for top in tops:
+            if hasattr(top, 'update'):
+                top.update()
+            self.force_update_size_of_parent.emit(top)
+        self.set_current_selection(None)
+        self.update_size()
+        self.update()
+        self.update_letters_required.emit()
+        self.update_text_rows.emit()
+        self.undo_redo_save_required.emit()
+        return True
+
     def swap(self, item1, item2, immediate_parent_of_sel, top_parent_of_sel, top_parent_of_drop_target):
         # print('SWAP'*20)
         # print('swap called with', item1, '-', item2, immediate_parent_of_sel, top_parent_of_sel, top_parent_of_drop_target) # un groupe et un groupe et une image
@@ -1515,14 +1553,21 @@ class MyWidget(QWidget):
         else:
             # print('swap failed', item1, '-', item2, immediate_parent_of_sel, top_parent_of_sel, top_parent_of_drop_target)
             self.informative_message_required.emit('swap failed' +str(item1)+ '-'+str(item2)+ ' '+ str(immediate_parent_of_sel) +' '+ str(top_parent_of_sel) +' '+ str(top_parent_of_drop_target))
-
-            # see all the possible swaps
+            self.set_current_selection(None)
+            self.update_size()
+            self.update()
+            return
 
         # I need to detect and offer all the possible swaps
 
         self.set_current_selection(None)
         self.update_size()
         self.update()
+        # a swap is an edit like any other: letters follow the new order and
+        # Undo must be able to take it back (no checkpoint was recorded)
+        self.update_letters_required.emit()
+        self.update_text_rows.emit()
+        self.undo_redo_save_required.emit()
 
         # print('TODO IMPLEMENT SWAP IN A SIMPLER MANNER ') # just by getting the top parent of various shapes involved
         # print('END-SWAP' * 10)
@@ -2388,8 +2433,10 @@ class MyWidget(QWidget):
                 convert_sel_to_col.triggered.connect(lambda: self._add_as_new_group(self.selected_shape, orientation='Y', remove_from_parents=True))
                 convert_sel_to_panel = self.contextMenu.addAction("▦  To panel")
                 convert_sel_to_panel.triggered.connect(lambda: self._create_panel_real(self.selected_shape))
-            reorganize_sel_as_panel = self.contextMenu.addAction("Reshape to panel (if possible)")
-            reorganize_sel_as_panel.triggered.connect(self.reorganize_as_panel)
+            if not isinstance(self.selected_shape, Image2D):
+                # one image cannot be reshaped: the entry did nothing at all there
+                reorganize_sel_as_panel = self.contextMenu.addAction("Reshape to panel (if possible)")
+                reorganize_sel_as_panel.triggered.connect(self.reorganize_as_panel)
             if not isinstance(self.selected_shape, Image2D):
                 change_space_action = self.contextMenu.addAction("Change space between elements")
                 change_space_action.triggered.connect(self.set_space)
@@ -2644,6 +2691,13 @@ class MyWidget(QWidget):
                             swap3 = self.contextMenu.addAction("Swap")
                             swap3.triggered.connect(partial(self.swap, self.selected_shape, drop_target, immediate_parent_of_sel,
                                         top_parent_of_sel, top_parent_of_drop_target))
+                        elif top_parent_of_sel is not self.selected_shape and isinstance(tmp[-1], Image2D) \
+                                and not tmp[-1].isText and not self.selected_shape.isText:
+                            # an image of one row dropped onto an image of another
+                            # row: the two images trade places
+                            self.contextMenu.addSeparator()
+                            swap_imgs = self.contextMenu.addAction("Swap")
+                            swap_imgs.triggered.connect(partial(self.swap_images, self.selected_shape, tmp[-1]))
                     elif isinstance(self.selected_shape, Group) and isinstance(tmp[0], Image2D) and not self.selected_shape.contains(tmp[0]):
                         # same as above but kinda inveretd
                         if self.selected_shape == tmp[-1]:  # do I need to keep that ???
@@ -2811,6 +2865,13 @@ class MyWidget(QWidget):
         lst = [elm for elm in lst if not(isinstance(elm, Group) and elm.isText)]
 
         if lst is not None:
+            # the new group takes the place of the first row it is made from
+            # (it used to be appended at the very end: combining a dropped image
+            # with row 1 moved row 1 to the bottom of the figure)
+            before = list(self.shapes_to_draw)
+            before_ids = [id(s) for s in before]
+            tops = [self.get_top_parent_of_shape(elm) or elm for elm in lst]
+            positions = [before_ids.index(id(t)) for t in tops if id(t) in before_ids]
             if remove_from_parents:
                 for elm in lst:
                     try:
@@ -2831,7 +2892,12 @@ class MyWidget(QWidget):
                         pass
 
             grp = Group(*lst, orientation=orientation)
-            self.shapes_to_draw.append(grp)
+            if positions:
+                kept = {id(s) for s in self.shapes_to_draw}
+                at = sum(1 for s in before[:min(positions)] if id(s) in kept)
+                self.shapes_to_draw.insert(at, grp)
+            else:
+                self.shapes_to_draw.append(grp)
 
             # grp.update()
             self.update()
@@ -3584,6 +3650,8 @@ class MyWidget(QWidget):
             if custom_dialog.exec_() != QDialog.Accepted:
                 return
         else:
+            self.informative_message_required.emit(
+                'Reshape to panel needs a row, a column or several selected panels')
             return
 
         values = panel_creator.get_values()
