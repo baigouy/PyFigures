@@ -72,6 +72,9 @@ def make_files(d) -> dict:
     Image.fromarray(_blobs(2)).save(f["png2"])
     f["tif8"] = _save(os.path.join(d, "gray8.tif"), _blobs(3), "hw")
     f["tif16"] = _save(os.path.join(d, "gray16.tif"), _blobs(4, dtype=np.uint16, top=40000), "hw")
+    # big enough to draw on in the image editor (it ignores shapes < 40 screen px)
+    f["big"] = os.path.join(d, "big.png")
+    Image.fromarray(_blobs(30, h=200, w=300)).save(f["big"])
     rgb = np.stack([_blobs(5), _blobs(6), _blobs(7)], -1)
     f["rgb"] = _save(os.path.join(d, "rgb.tif"), rgb, "hwc")
     z = np.zeros((4, 40, 60), np.uint8)
@@ -149,10 +152,38 @@ def base_figure(d, files) -> str:
 # window
 # ---------------------------------------------------------------------------
 
-def new_gui(qapp, size=(1300, 900)):
+def _original_show_tips():
     from pyfigures.gui.pfgui import EZFIG_GUI
-    EZFIG_GUI.show_tips = lambda self: None
-    g = EZFIG_GUI()
+    f = EZFIG_GUI.__dict__.get("show_tips")
+    return f if getattr(f, "__name__", "") == "show_tips" else None
+
+
+_REAL_SHOW_TIPS = _original_show_tips()    # before any test stubs it
+
+
+def real_show_tips(g):
+    """(spec hook) Help > Show Tips is wired to the real show_tips in e2e
+    windows: nothing to do, kept so the spec reads what it relies on."""
+    assert _REAL_SHOW_TIPS is not None, "show_tips was stubbed before the harness was imported"
+
+
+def new_gui(qapp, size=(1300, 900)):
+    """A main window as the user gets it — except the start-up tips, which
+    are switched off through the preference (other test files stub the
+    class's show_tips; the e2e window keeps the real one for Help > Show Tips)."""
+    from pyfigures.gui import user_prefs
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    stub = EZFIG_GUI.__dict__.get("show_tips")
+    old_pref = user_prefs.load_auto_show_tips
+    if _REAL_SHOW_TIPS is not None:
+        EZFIG_GUI.show_tips = _REAL_SHOW_TIPS
+    user_prefs.load_auto_show_tips = lambda *a, **k: False
+    try:
+        g = EZFIG_GUI()
+    finally:
+        user_prefs.load_auto_show_tips = old_pref
+        if stub is not None:
+            EZFIG_GUI.show_tips = stub
     g.resize(*size)
     g.show()
     g._edit_hint_shown = True               # the once-per-session hint is tested on its own
@@ -229,11 +260,32 @@ def settle(qapp, g, cond=None, timeout=30):
         time.sleep(0.003)
     for _ in range(4):
         qapp.processEvents()
+    # the canvas places panels when it paints: a user always sees (and so
+    # clicks) a painted canvas; offscreen nothing paints unless asked
+    try:
+        panel(g).grab()
+    except RuntimeError:
+        pass
 
 
 def load(qapp, g, pyf):
-    g._start_pyf_loader([pyf], append=False, reset_undo=True)
-    settle(qapp, g, lambda: bool(g.undo_stack))
+    """Open *pyf* as File > Open does; a figure with scripted panels (merge,
+    colour bar, plot) asks for confirmation first: answered Yes."""
+    # a debounced edit of the previous scenario (width typed in the toolbar,
+    # spacing) must not land in this one
+    for name in ("value_changed_timer", "main_space_spinner_changed_timer"):
+        t = getattr(g, name, None)
+        if t is not None:
+            t.stop()
+    t = getattr(panel(g), "timer", None)
+    if t is not None:
+        t.stop()
+    pilot = DialogPilot(always=("Security Warning",))
+    try:
+        g._start_pyf_loader([pyf], append=False, reset_undo=True)
+        settle(qapp, g, lambda: bool(g.undo_stack))
+    finally:
+        pilot.stop()
     g.current_file = pyf
     g._mark_clean()
 
@@ -264,7 +316,12 @@ class Watch:
 
     def __enter__(self):
         self._old_hook = sys.excepthook
-        sys.excepthook = lambda t, v, tb: self.problems.append(f"exception {t.__name__}: {v}")
+        def hook(t, v, tb):
+            import traceback
+            where = traceback.extract_tb(tb)[-3:] if tb is not None else []
+            at = " <- ".join(f"{os.path.basename(f.filename)}:{f.lineno} {f.name}" for f in reversed(where))
+            self.problems.append(f"exception {t.__name__}: {v} [at {at}]")
+        sys.excepthook = hook
 
         def qt_handler(mode, ctx, msg):
             name = getattr(mode, "name", str(mode))
@@ -351,6 +408,8 @@ def _panel_state(img):
         "rois": rois,
         "insets": sum(1 for a in kids if a.tag == "Image2D"),
         "size": (round(float(img.findtext("width") or 0)), round(float(img.findtext("height") or 0))),
+        # displayed size = source size × scale (resizing changes only this)
+        "scale": round(float(img.findtext("scale") or 1), 3),
     }
 
 
@@ -415,6 +474,27 @@ def diff(a, b):
 def check_invariants(qapp, g, d, before, after, undo=True, roundtrip=True):
     """After an action that turned *before* into *after*:
     undo gives *before* back, redo *after*, and a save / reopen keeps *after*."""
+    assert_no_shared_panels(g)
+    with dialogs():                       # scripted panels: the reload confirmation
+        _check_invariants(qapp, g, d, before, after, undo, roundtrip)
+
+
+def assert_no_shared_panels(g):
+    """No shape may sit in two places of the figure tree (it is then drawn,
+    lettered and saved twice; a drag once left a moved image in its old group)."""
+    seen, twice = set(), []
+    stack = list(panel(g).shapes_to_draw)
+    while stack:
+        s = stack.pop()
+        if id(s) in seen:
+            twice.append(s)
+            continue
+        seen.add(id(s))
+        stack.extend(getattr(s, "content", None) or [])
+    assert not twice, f"shapes present twice in the figure: {[getattr(s, 'filename', s) for s in twice]}"
+
+
+def _check_invariants(qapp, g, d, before, after, undo, roundtrip):
     if undo and not same(before, after):
         g.undo()
         settle(qapp, g)
@@ -463,14 +543,20 @@ class MenuPilot:
         self.trees = []
         self.menus = []
         self.pick = None
+        self.missing = None          # the pick the menu did not offer (menu dismissed)
         pilot = self
 
         def fake_exec(menu, *a, **k):
             pilot.trees.append(tree_of(menu))
             pilot.menus.append(menu)
+            pilot.missing = None
             if pilot.pick is None:
                 return None
-            act = find_action(menu, pilot.pick)
+            try:
+                act = find_action(menu, pilot.pick)
+            except AssertionError:
+                pilot.missing = pilot.pick
+                return None
             act.trigger()               # what a real click does before exec() returns
             return act
         monkeypatch.setattr(QMenu, "exec", fake_exec)
@@ -482,7 +568,11 @@ class MenuPilot:
 
 
 def find_action(menu, path):
-    """The action at *path* ('Sub ▶ / Entry'; labels may contain ' / ' too)."""
+    """The action at *path* ('Sub ▶ / Entry'; labels may contain ' / ' too).
+
+    Tolerant of how the GUI evolves: labels are compared by ``label_key``
+    (case, '…', arrows, emoji, shortcuts ignored), and an entry that moved
+    to another submenu is still found when its name is unique in the menu."""
     if not isinstance(path, str):
         path = " / ".join(path)
 
@@ -490,16 +580,105 @@ def find_action(menu, path):
         for a in acts:
             if a.isSeparator():
                 continue
-            if a.menu() is None and a.text() == rest:
+            if a.menu() is None and label_key(a.text()) == label_key(rest):
                 return a
-            if a.menu() is not None and rest.startswith(a.text() + " / "):
-                hit = search(a.menu().actions(), rest[len(a.text()) + 3:])
-                if hit is not None:
-                    return hit
+            if a.menu() is not None:
+                parts = rest.split(" / ")
+                for i in range(1, len(parts)):
+                    if label_key(" / ".join(parts[:i])) == label_key(a.text()):
+                        hit = search(a.menu().actions(), " / ".join(parts[i:]))
+                        if hit is not None:
+                            return hit
         return None
     act = search(menu.actions(), path)
+    if act is None:                          # moved: the same entry name, once, anywhere
+        leaf = path.split(" / ")[-1]
+        hits = [a for a in _all_leaf_actions(menu) if label_key(a.text()) == label_key(leaf)]
+        act = hits[0] if len(hits) == 1 else None
     assert act is not None, f"{path!r} not in {list(leaves(tree_of(menu)))}"
     return act
+
+
+def _all_leaf_actions(menu):
+    out = []
+    for a in menu.actions():
+        if a.isSeparator():
+            continue
+        if a.menu() is not None:
+            out += _all_leaf_actions(a.menu())
+        else:
+            out.append(a)
+    return out
+
+
+_COSMETIC = re.compile(r"[^\w\s()/+\-,.:'&]", re.UNICODE)
+
+
+def label_key(text):
+    """A label with its cosmetics removed, to compare labels across GUI
+    versions: shortcut text, '&' accelerators, '…' / '...', arrows, emoji
+    and other symbols, letter case and spacing."""
+    t = str(text or "").split("\t")[0].replace("&", "")
+    t = t.replace("…", " ").replace("...", " ")
+    t = _COSMETIC.sub(" ", t)
+    return re.sub(r"\s+", " ", t).strip(" .:").lower()
+
+
+def resolve_key(keys, wanted):
+    """The key of *keys* meaning *wanted*: equal, equal once cosmetics are
+    ignored (``label_key`` on each ' > ' / ' / ' part), or — for an entry
+    that moved to another menu — the only key with the same last part.
+    None when it cannot be told."""
+    keys = list(keys)
+    if wanted in keys:
+        return wanted
+
+    def parts(k):
+        head, _, rest = k.partition(": ")
+        return head, [label_key(p) for p in re.split(r" > | / ", rest)]
+    wh, wp = parts(wanted)
+    same = [k for k in keys if parts(k) == (wh, wp)]
+    if len(same) == 1:
+        return same[0]
+    moved = [k for k in keys if parts(k)[0] == wh and parts(k)[1][-1:] == wp[-1:]]
+    return moved[0] if len(moved) == 1 else None
+
+
+def missing_entries(expected, offered):
+    """The *expected* menu entries the live menu no longer offers, labels
+    compared without cosmetics and moved entries found by their last part.
+    Entries the GUI added are not an error here: the coverage guard asks for
+    a behaviour test for them and the generic sweep already runs them."""
+    live = [f"x: {o}" for o in offered]
+    return [e for e in expected if resolve_key(live, f"x: {e}") is None]
+
+
+def offered_as(offered, entry):
+    """The live label meaning *entry* (renamed / moved), or None."""
+    hit = resolve_key([f"x: {o}" for o in offered], f"x: {entry}")
+    return hit[3:] if hit else None
+
+
+class _Resolving(dict):
+    """{key: action} whose lookups follow renames and moves (resolve_key)."""
+
+    def __getitem__(self, key):
+        found = resolve_key(self.keys(), key)
+        assert found is not None, f"no live action for {key!r}"
+        return dict.__getitem__(self, found)
+
+
+def actions(g):
+    return _Resolving(menu_actions(g))
+
+
+def action(g, key):
+    """The live QAction (menu bar / toolbar) for registry *key*, followed
+    through renames and moves (see resolve_key)."""
+    acts = dict(menu_actions(g))
+    found = resolve_key(acts, key)
+    assert found is not None, f"no live action for {key!r}"
+    return acts[found]
 
 
 # ---------------------------------------------------------------------------
@@ -559,9 +738,22 @@ def toolbar_widgets(g):
 # canvas right-click
 # ---------------------------------------------------------------------------
 
+def shown_rect(shape):
+    """Where the canvas draws *shape* (what it paints and hit-tests:
+    getRect(all=True)); boundingRect() can still hold a lazily loaded
+    image's placeholder size."""
+    try:
+        r = shape.getRect(all=True)
+        if r is not None and r.width() > 0 and r.height() > 0:
+            return r
+    except TypeError:
+        pass
+    return shape.boundingRect()
+
+
 def centre(g, shape, dx=0.0, dy=0.0):
     p = panel(g)
-    r = shape.boundingRect()
+    r = shown_rect(shape)
     return QPointF((r.x() + r.width() / 2 + dx) * p.scale, (r.y() + r.height() / 2 + dy) * p.scale)
 
 
@@ -661,7 +853,9 @@ def drop_choices(g):
 def click_drop_choice(g, label):
     m = drop_menu(g)
     assert m is not None, "no drop menu"
-    btn = next((b for b in m.findChildren(QPushButton) if b.text() == label), None)
+    btns = m.findChildren(QPushButton)
+    btn = next((b for b in btns if b.text() == label), None) or \
+        next((b for b in btns if label_key(b.text()) == label_key(label)), None)
     assert btn is not None, (label, drop_choices(g))
     btn.click()
     QApplication.processEvents()
@@ -676,6 +870,58 @@ def dismiss_drop_menu(g):
 # dialogs: real exec(), answered by clicking their buttons
 # ---------------------------------------------------------------------------
 
+DIALOG_DWELL = 0.0      # seconds a dialog stays open before it is answered
+
+_DIALOG_METHODS = ("exec", "exec_", "open", "question", "warning", "information", "critical", "about",
+                   "getText", "getInt", "getDouble", "getItem", "getMultiLineText", "getColor")
+
+
+def _qt_dialog_methods():
+    """{(class, name): Qt's own method} — taken when this module is imported,
+    i.e. while the suite is collected, before any test stubs a dialog."""
+    import inspect
+    from qtpy.QtWidgets import QColorDialog, QDialog, QInputDialog
+    out = {}
+    for cls in (QMessageBox, QInputDialog, QColorDialog, QDialog):
+        for name in _DIALOG_METHODS:
+            getattr(cls, name, None)              # (sip fills the class dict lazily)
+            attr = cls.__dict__.get(name)
+            if attr is not None and not inspect.isfunction(getattr(attr, "__func__", attr)):
+                out[(cls, name)] = attr
+    return out
+
+
+_QT_DIALOG_METHODS = _qt_dialog_methods()
+
+
+def ensure_real_dialogs():
+    """Remove Python stubs another test left on Qt's dialog classes (e.g. a
+    plain ``QMessageBox.exec = lambda self: None``): e2e dialogs must really
+    show. Qt's own methods are C++ wrappers, never Python functions; qtpy's
+    compatibility aliases (``QDialog.exec_`` on PyQt6) are Python functions
+    of a qtpy module and are kept — removing them broke every later exec_().
+    A stub that replaced Qt's method (QMessageBox.warning) is replaced by
+    that method again, never just deleted: deleting it left the class with
+    no 'warning' at all and every later test failed."""
+    import inspect
+    from qtpy.QtWidgets import QColorDialog, QDialog, QInputDialog
+    removed = []
+    for cls in (QMessageBox, QInputDialog, QColorDialog, QDialog):
+        for name in _DIALOG_METHODS:
+            attr = cls.__dict__.get(name)
+            func = getattr(attr, "__func__", attr)
+            if attr is not None and inspect.isfunction(func) \
+                    and not (getattr(func, "__module__", "") or "").startswith("qtpy"):
+                if (cls, name) in _QT_DIALOG_METHODS:
+                    setattr(cls, name, _QT_DIALOG_METHODS[(cls, name)])
+                else:
+                    delattr(cls, name)
+                removed.append(f"{cls.__name__}.{name}")
+    if not hasattr(QDialog, "exec_"):        # a stub had replaced qtpy's alias
+        QDialog.exec_ = lambda self, *args, **kwargs: self.exec(*args, **kwargs)
+    return removed
+
+
 class DialogPilot:
     """Answers modal dialogs that really run (exec / static QMessageBox):
     a timer finds the active modal widget, calls the next handler queued
@@ -686,10 +932,15 @@ class DialogPilot:
     or the class name; *handler(dialog)* returns nothing (it accepts itself).
     """
 
-    def __init__(self, interval=15):
+    def __init__(self, interval=15, accept_all=False, always=("Security Warning",)):
+        ensure_real_dialogs()
         self.queue = []
         self.seen = []
         self.unexpected = []
+        self.accept_all = accept_all      # exploring: accept whatever opens (recorded)
+        # accepted each time they show, never "unexpected": the confirmation
+        # a figure with scripted panels asks for on every (re)load / undo
+        self.always = tuple(always)
         self._timer = QTimer()
         self._timer.setInterval(interval)
         self._timer.timeout.connect(self._tick)
@@ -700,28 +951,86 @@ class DialogPilot:
         return self
 
     def _tick(self):
-        w = QApplication.activeModalWidget()
-        if w is None or not w.isVisible() or getattr(w, "_e2e_handled", False):
+        # the active modal widget, else any visible modal dialog not answered
+        # yet (a dialog shown before its exec() — QColorDialog in the
+        # background picker — is not always reported as the active modal one)
+        from qtpy.QtWidgets import QDialog
+        cands = [QApplication.activeModalWidget()] + [
+            d for d in QApplication.topLevelWidgets() if isinstance(d, QDialog)]
+
+        def waiting(c):
+            try:
+                if c is None or not c.isVisible() or getattr(c, "_e2e_handled", False):
+                    return False
+                if type(c).__name__ == "PleaseWaitDialog":    # a progress window: closes itself
+                    return False
+                return c is cands[0] or c.isModal()
+            except RuntimeError:              # wrapper of a dialog Qt already deleted
+                return False
+        cands = [c for c in cands if waiting(c)]
+        if not cands:
             return
+        w = cands[0]
         w._e2e_handled = True
         title = w.windowTitle()
         cls = type(w).__name__
+        if any(m in title for m in self.always):
+            QTimer.singleShot(0, lambda d=w: accept(d))
+            return
         self.seen.append(title or cls)
         for i, (match, handler) in enumerate(self.queue):
-            if match in title or match == cls:
+            if match in title or match == cls or (label_key(match) and label_key(match) in label_key(title)):
                 del self.queue[i]
-                QTimer.singleShot(0, lambda h=handler, d=w: h(d))
+                QTimer.singleShot(0, lambda h=handler, d=w: self._run(h, d))
                 return
         self.unexpected.append(title or cls)
-        QTimer.singleShot(0, lambda d=w: reject(d))
+        QTimer.singleShot(0, lambda d=w: (accept if self.accept_all and not _outward(d) else reject)(d))
+
+    def _run(self, handler, d):
+        """A failing handler must not leave its modal dialog open (the test
+        would hang in exec()): the dialog is cancelled and the error kept."""
+        t0 = time.time()
+        while DIALOG_DWELL and time.time() - t0 < DIALOG_DWELL:    # a user takes a moment:
+            QApplication.processEvents()                          # pollers see the dialog
+            time.sleep(0.02)
+        try:
+            handler(d)
+        except Exception as e:
+            self.unexpected.append(f"handler for {d.windowTitle() or type(d).__name__} failed: "
+                                   f"{type(e).__name__}: {e}")
+            try:
+                if d.isVisible():
+                    reject(d)
+            except RuntimeError:
+                pass
 
     def stop(self):
         self._timer.stop()
 
 
+_OUTWARD = ("install", "download", "pypi", "send", "e-mail", "email", "upload", "register", "delete",
+            "purchase", "log in", "login", "sign in")
+
+
+def _outward(d):
+    """A dialog whose accepting would reach outside the test (download or
+    install software, send mail, register a server, delete files): the
+    generic sweep never accepts it — it is cancelled instead."""
+    try:
+        words = [d.windowTitle()] + [b.text() for b in _buttons(d)]
+        if isinstance(d, QMessageBox):
+            words += [d.text(), d.informativeText()]
+    except RuntimeError:
+        return True
+    text = " ".join(words).lower()
+    return any(w in text for w in _OUTWARD)
+
+
 def _buttons(d):
     from qtpy.QtWidgets import QAbstractButton
-    return [b for b in d.findChildren(QAbstractButton) if b.isVisible() and b.isEnabled()]
+    # only the dialog's own buttons: a closed child dialog (QColorDialog
+    # created by a swatch) still has its OK / Cancel among the descendants
+    return [b for b in d.findChildren(QAbstractButton) if b.isVisible() and b.isEnabled() and b.window() is d]
 
 
 def click_button(d, *texts):
@@ -741,9 +1050,16 @@ def accept(d):
                 if d.buttonRole(b) == role:
                     b.click()
                     return
-    box = d.findChild(QDialogButtonBox)
+    box = next((b for b in d.findChildren(QDialogButtonBox) if b.window() is d), None)
     if box is not None and box.button(QDialogButtonBox.StandardButton.Ok) is not None:
-        box.button(QDialogButtonBox.StandardButton.Ok).click()
+        okb = box.button(QDialogButtonBox.StandardButton.Ok)
+        t0 = time.time()
+        while not okb.isEnabled() and time.time() - t0 < 10:     # e.g. waits for a preview
+            QApplication.processEvents()
+            time.sleep(0.02)
+        if not okb.isEnabled():
+            raise AssertionError(f"{d.windowTitle()}: OK stays disabled")
+        okb.click()
         return
     if not click_button(d, "OK", "Ok", "Apply", "Yes", "Save", "Add", "Insert", "Create", "Done", "Close"):
         d.accept()
@@ -794,8 +1110,8 @@ def widget_by(d, cls, name=None, label=None, index=0):
 
 
 @contextmanager
-def dialogs():
-    pilot = DialogPilot()
+def dialogs(accept_all=False):
+    pilot = DialogPilot(accept_all=accept_all)
     try:
         yield pilot
     finally:

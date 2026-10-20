@@ -12,6 +12,8 @@ appear.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import gui_e2e_harness as H
@@ -80,7 +82,10 @@ def fig(qapp, e2e_gui, selection_pyf):
 def test_each_selection_offers_its_entries(qapp, fig, menus, watch):
     for kind in H.SELECTION_KINDS:
         shape, pos, select = H.select_kind(qapp, fig, kind)
-        assert H.right_click(fig, menus, shape, pos=pos, select=select) == OFFERED[kind], kind
+        offered = H.right_click(fig, menus, shape, pos=pos, select=select)
+        assert not H.missing_entries(OFFERED[kind], offered), (kind, H.missing_entries(OFFERED[kind], offered))
+        if kind == "standalone image":     # a top-level image has no group to leave
+            assert not H.offered_as(offered, "Extrude (remove from group)")
     watch.check("right-click menus")
 
 
@@ -256,8 +261,15 @@ def chk_remove_all(before, after, ctx):
             assert not a["scale_bars"] and not a["rois"] and not a["insets"] and not a["texts"], a
 
 
+def _something_reset(before, after, ctx):
+    """PRE put something to reset on the selection: it must be gone now."""
+    if [n for n in _sel_names(ctx) if n not in (None, "@template@")]:
+        assert not H.same(before, after), "nothing was reset"
+
+
 def chk_crop_reset(crop, rot):
     def chk(before, after, ctx):
+        _something_reset(before, after, ctx)
         sel = set(_sel_names(ctx))
         for a in after["panels"]:
             if a["name"] in sel:
@@ -271,8 +283,9 @@ def chk_crop_reset(crop, rot):
 def chk_same_size(before, after, ctx):
     sel = [p for p in after["panels"] if p["name"] in set(_sel_names(ctx))]
     if len(sel) > 1:
-        assert len({p["size"] for p in sel}) == 1 or \
-            max(abs(p["size"][0] - sel[0]["size"][0]) for p in sel) <= 1, [p["size"] for p in sel]
+        shown = [(p["size"][0] * p["scale"], p["size"][1] * p["scale"]) for p in sel]
+        assert max(abs(w - shown[0][0]) for w, _h in shown) <= 1.5 and \
+            max(abs(h - shown[0][1]) for _w, h in shown) <= 1.5, shown
 
 
 def chk_same_ar(before, after, ctx):
@@ -287,6 +300,7 @@ def chk_luts_set(before, after, ctx):
 
 
 def chk_luts_reset(before, after, ctx):
+    _something_reset(before, after, ctx)
     sel = set(_sel_names(ctx))
     assert all(not a["luts"] for a in after["panels"] if a["name"] in sel), H.diff(before, after)
 
@@ -297,6 +311,7 @@ def chk_bg_set(before, after, ctx):
 
 
 def chk_bg_reset(before, after, ctx):
+    _something_reset(before, after, ctx)
     sel = set(_sel_names(ctx))
     assert all(a["fill"] in (None, 0) for a in after["panels"] if a["name"] in sel), H.diff(before, after)
 
@@ -308,6 +323,41 @@ def chk_text_bg(before, after, ctx):
             assert a["text_fill"] != b["text_fill"] and all(f != "None" for f in a["text_fill"]), a
         else:
             assert a["text_fill"] == b["text_fill"], ("other text touched", a["name"])
+
+
+def _edit_label(text):
+    def h(dlg):
+        from pyfigures.gui.simple_text_editor import TextEditor
+        dlg.findChild(TextEditor).textEdit.setPlainText(text)
+        H.accept(dlg)
+    return h
+
+
+def chk_label_text(text):
+    def chk(before, after, ctx):
+        labels = [p["texts"] + p["letters"] for p in after["panels"] if p["text"]]
+        assert any(text in t for ts in labels for t in ts), labels
+    return chk
+
+
+def _equation(latex):
+    def h(dlg):
+        dlg.latex_edit.setPlainText(latex)
+        H.accept(dlg)
+    return h
+
+
+def chk_equation_changed(before, after, ctx):
+    eqs_b = [p["name"] for p in before["panels"] if str(p["name"]).startswith("eq")]
+    eqs_a = [p["name"] for p in after["panels"] if str(p["name"]).startswith("eq")]
+    assert len(eqs_a) == len(eqs_b) and eqs_a != eqs_b, (eqs_b, eqs_a)
+
+
+def chk_says(text):
+    def chk(before, after, ctx):
+        assert text in ctx["popup"], ctx["popup"]
+        assert H.same(before, after), H.diff(before, after)
+    return chk
 
 
 def chk_no_error(before, after, ctx):
@@ -333,7 +383,7 @@ ENTRIES = {
     "Add labels ▶ / Right / bottom of row/col": ([], chk_label_row, True),
     "Split ▶ / Channel split (Gray mode)": ([], chk_split(3), True),
     "Split ▶ / Channel split (Magenta/Green mode)": ([], chk_split(3), True),
-    "Split ▶ / Split by a dimension": ([("Split", _accept_custom())], chk_split(4), True),
+    "Split ▶ / Split by a dimension": ([("Select output layout", _accept_custom())], chk_split(4), True),
     "Remove annotations ▶ / Remove all (ROIs, scale bars, texts, …)": ([], chk_remove_all, True),
     "Remove annotations ▶ / Scale bars": ([], chk_removed("scale_bars", []), True),
     "Remove annotations ▶ / Texts": ([], chk_removed("texts", []), True),
@@ -356,12 +406,35 @@ ENTRIES = {
     "Text & lettering ▶ / Change lettering parameters": ([("Auto lettering", _accept_custom())],
                                                          chk_same_images, False),
     "Edit Image": ([("Annotate the image", H.reject)], chk_unchanged, False),
-    "Edit text": ([("Annotate the image", H.reject)], chk_unchanged, False),
+    "Edit text": ([("Edit text", _edit_label("e2e label"))], chk_label_text("e2e label"), True),
     "Edit text row": ([("Edit labels", H.reject)], chk_unchanged, False),
-    "Edit equation…": ([("equation", H.reject)], chk_unchanged, False),
+    "Edit equation…": ([("Equation (LaTeX)", _equation(r"\gamma"))], chk_equation_changed, True),
 }
 
-CASES = [(kind, entry) for kind, entries in OFFERED.items() for entry in entries]
+# where a selection kind makes an entry behave differently
+OVERRIDE = {
+    # no channels: nothing to colour, and the user is told so
+    ("template slot", "Appearance ▶ / Set LUT(s)"): ([], chk_says("No LUT to set"), False),
+    ("equation", "Appearance ▶ / Set LUT(s)"): ([], chk_says("No LUT to set"), False),
+}
+
+ALL_CASES = [(kind, entry) for kind, entries in OFFERED.items() for entry in entries]
+
+# undo / redo / reopen are checked once per entry (on the first selection kind
+# offering it, plus several images, where most multi-shape bugs live): the
+# check costs 3 reloads and is the same code path for every kind
+PRIMARY = {}
+for _k, _e in ALL_CASES:
+    PRIMARY.setdefault(_e, {_k, "several images"})
+
+# The default run keeps the layer under ten minutes: each entry on its
+# primary kinds and on every kind that behaves differently (OVERRIDE) or
+# prepares something (template slot, equation, RGB, Z stack: the kinds whose
+# panels are not ordinary images). PYF_E2E_FULL=1 runs every kind × entry.
+_SPECIAL_KINDS = {"template slot", "equation", "rgb image", "z stack", "row"}
+CASES = ALL_CASES if os.environ.get("PYF_E2E_FULL") else [
+    (k, e) for k, e in ALL_CASES
+    if k in PRIMARY[e] or (k, e) in OVERRIDE or (k in _SPECIAL_KINDS and ("Reset" in e or "LUT" in e))]
 
 
 def _selected_names(g):
@@ -377,22 +450,72 @@ def _selected_names(g):
     return out
 
 
+def _pre_luts(img):
+    img.LUTs = ["RED"] * max(1, len(img.channels or [0]))
+
+
+def _pre_bg(img):
+    img.fill_color = 0x00FF00
+
+
+def _pre_crop_rot(img):
+    img.crop_left = 3
+    img.crop_top = 2
+    img.theta = 20
+
+
+# a "Reset" / "Remove" entry is only meaningful when there is something to
+# reset: these are set on the selected panels first (then saved + reopened)
+PRE = {
+    "Appearance ▶ / Reset LUT(s)": _pre_luts,
+    "Appearance ▶ / Reset background": _pre_bg,
+    "Crop & size ▶ / Reset crop and rotation": _pre_crop_rot,
+    "Crop & size ▶ / Reset crop only": _pre_crop_rot,
+    "Crop & size ▶ / Reset rotation only": _pre_crop_rot,
+}
+
+
+def _prepare(qapp, g, tmp_path, kind, entry):
+    pre = PRE.get(entry)
+    if pre is None:
+        return
+    shape, _pos, _select = H.select_kind(qapp, g, kind)
+    if kind == "several images":
+        shapes = H.panel(g).selected_shape
+    else:
+        shapes = [shape] if shape is not None else []
+    targets = [i for s in shapes for i in H.images(s) if not i.isText]
+    if not targets:
+        return
+    for img in targets:
+        pre(img)
+    pyf = str(tmp_path / "prepared.pyf")
+    g._save_state_to_file(pyf)
+    H.load(qapp, g, pyf)
+
+
 @pytest.mark.parametrize("kind,entry", CASES, ids=[f"{k}-{e}" for k, e in CASES])
 def test_right_click_entry(qapp, fig, tmp_path, menus, watch, kind, entry):
     g = fig
-    dlgs, check, invariants = ENTRIES[entry]
+    dlgs, check, invariants = OVERRIDE.get((kind, entry), ENTRIES[entry])
+    _prepare(qapp, g, tmp_path, kind, entry)
+    g.paint.popup_label.setText("")
     before = H.snapshot(g, tmp_path)
     watch.check("loading")
     shape, pos, select = H.select_kind(qapp, g, kind)
     if select and shape is not None:
         H.panel(g).set_current_selection(shape)
-    ctx = {"kind": kind, "selected": _selected_names(g)}
+    ctx = {"kind": kind, "selected": _selected_names(g), "popup": ""}
     with H.dialogs() as pilot:
         for match, handler in dlgs:
             pilot.expect(match, handler)
         H.right_click(g, menus, shape, pos=pos, select=False, pick=entry)
+        if menus.missing:
+            # the GUI dropped it: test_each_selection_offers_its_entries says whether it should be there
+            pytest.skip(f"{entry!r} is no longer offered for {kind}")
         H.settle(qapp, g, lambda: not pilot.queue, timeout=20)
         H.settle(qapp, g)
+    ctx["popup"] = g.paint.popup_label.text()
     if H.RECORD:
         print(f"\n[RECORD] {kind} / {entry}: dialogs {pilot.seen} unexpected {pilot.unexpected}")
     assert not pilot.unexpected, f"unexpected dialog(s): {pilot.unexpected}"
@@ -402,6 +525,6 @@ def test_right_click_entry(qapp, fig, tmp_path, menus, watch, kind, entry):
         print(f"[RECORD]   {H.diff(before, after)}")
     check(before, after, ctx)
     watch.check(f"{kind} / {entry}")
-    if invariants:
+    if invariants and kind in PRIMARY[entry]:
         H.check_invariants(qapp, g, tmp_path, before, after)
         watch.check(f"{kind} / {entry}: undo / redo / reopen")

@@ -41,11 +41,38 @@ def _build_gui(pyf_path: str):
 
     from pyfigures.gui.pfgui import EZFIG_GUI
     EZFIG_GUI.show_tips = lambda self: None
+    # no prompt may block a headless call; Qt's own warning comes back in
+    # _release(): it used to stay replaced for good, so in a process that
+    # also runs the GUI (the tests, an MCP host) every later warning was
+    # answered "Yes" without being shown
+    getattr(QMessageBox, 'warning')                 # (sip fills the class dict lazily)
+    real_warning = QMessageBox.__dict__.get('warning')
     QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Yes)
 
-    gui = EZFIG_GUI()
-    gui.reload_state(pyf_path, append=False)
+    try:
+        gui = EZFIG_GUI()
+        gui._headless_real_warning = real_warning
+        gui.reload_state(pyf_path, append=False)
+    except BaseException:
+        _restore_warning(real_warning)
+        raise
     return app, gui
+
+
+def _restore_warning(real_warning):
+    from qtpy.QtWidgets import QMessageBox
+    if real_warning is not None:
+        QMessageBox.warning = real_warning
+
+
+def _release(gui):
+    """End of a headless call: clean, hidden, loaders stopped, Qt's
+    QMessageBox.warning back."""
+    gui._dirty = False
+    gui.hide()
+    # a loader thread still running when the window is freed kills the process
+    gui._stop_all_img_loaders()
+    _restore_warning(getattr(gui, '_headless_real_warning', None))
 
 
 def export_video(pyf_path: str, out_path: str, frame_mode: str = "freeze",
@@ -65,10 +92,7 @@ def export_video(pyf_path: str, out_path: str, frame_mode: str = "freeze",
             _os.makedirs(out_dir, exist_ok=True)
         panel.save_video(out_path, frame_mode=frame_mode, bg_color=tuple(bg_color))
     finally:
-        gui._dirty = False
-        gui.hide()
-        # a loader thread still running when the window is freed kills the process
-        gui._stop_all_img_loaders()
+        _release(gui)
     if not _os.path.isfile(out_path) or _os.path.getsize(out_path) == 0:
         raise RuntimeError("video rendering produced no output")
     return out_path
@@ -107,10 +131,7 @@ def export_latex(pyf_path: str, out_path: str, image_format: str = "pdf",
             out_path, image_format=image_format,
             caption=caption, caption_title=caption_title)
     finally:
-        gui._dirty = False
-        gui.hide()
-        # a loader thread still running when the window is freed kills the process
-        gui._stop_all_img_loaders()
+        _release(gui)
     if not (_os.path.isfile(img_path) and _os.path.isfile(tex_path)):
         raise RuntimeError("LaTeX export produced no output")
     return img_path, tex_path
@@ -141,10 +162,7 @@ def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
             _, assets = write_jsx(scene, out_path)
             summary["assets"] = assets
     finally:
-        gui._dirty = False
-        gui.hide()
-        # a loader thread still running when the window is freed kills the process
-        gui._stop_all_img_loaders()
+        _release(gui)
     if not _os.path.isfile(out_path):
         raise RuntimeError("editable export produced no output")
     summary["path"] = out_path
@@ -204,10 +222,7 @@ def consolidate(pyf_path: str, out_pyf: str, download_remote: bool = False, fail
         if src_base != dst_base:
             gui._copy_sidecars(src_base, dst_base)
     finally:
-        gui._dirty = False
-        gui.hide()
-        # a loader thread still running when the window is freed kills the process
-        gui._stop_all_img_loaders()
+        _release(gui)
     if not _os.path.isfile(out_pyf):
         raise RuntimeError("consolidation produced no .pyf output")
     return out_pyf

@@ -61,9 +61,9 @@ class TestListImageFilesInFolder:
 
 class TestFolderDrop:
     @pytest.fixture
-    def gui(self, qapp):
+    def gui(self, qapp, monkeypatch):
         from qtpy.QtWidgets import QMessageBox
-        QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Yes)
+        monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: QMessageBox.Yes))
         from pyfigures.gui.pfgui import EZFIG_GUI
         EZFIG_GUI.show_tips = lambda self: None
         g = EZFIG_GUI()

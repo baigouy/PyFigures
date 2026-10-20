@@ -90,9 +90,18 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, c
     #   - the "unsaved changes" warning on reload
     #   - the "choose a DPI" dialog inside the raster save branch
     EZFIG_GUI.show_tips = lambda self: None
+    # (restored in the finally below: it used to stay replaced for good, so in
+    # a process that also runs the GUI every later warning answered "Yes")
+    getattr(QMessageBox, 'warning')                 # (sip fills the class dict lazily)
+    real_warning = QMessageBox.__dict__.get('warning')
     QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Yes)
 
-    gui = EZFIG_GUI()
+    try:
+        gui = EZFIG_GUI()
+    except BaseException:
+        if real_warning is not None:
+            QMessageBox.warning = real_warning
+        raise
     try:
         # Synchronous load (a real path takes the non-dialog branch of
         # reload_state, which also runs arrange_text_rows so label rows and
@@ -129,6 +138,8 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, c
         gui.hide()
         if _keep_alive is not None:
             _keep_alive.append(gui)
+        if real_warning is not None:
+            QMessageBox.warning = real_warning
 
     if not _os.path.isfile(out_path) or _os.path.getsize(out_path) == 0:
         raise RuntimeError(

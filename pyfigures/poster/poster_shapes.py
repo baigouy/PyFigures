@@ -614,5 +614,6 @@ class PosterText:
         font_scale = min(box_w_px / nat_w_px, box_h_px / nat_h_px)
         painter.translate(-box_w_px / 2.0, -box_h_px / 2.0)
         painter.scale(font_scale, font_scale)
-        self._layout_doc().drawContents(painter)
+        from batoolset.drawings.shapes.txt2d import draw_document
+        draw_document(self._layout_doc(), painter)     # (black text whatever the UI theme)
         painter.restore()

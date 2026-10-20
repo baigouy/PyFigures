@@ -244,8 +244,13 @@ def render_svg(latex: str, out_path: str, font_size: float = 12.0, color: str = 
     check(text, fontset)
     settings = {"latex": latex.strip(), "font_size": float(font_size), "color": color,
                 "fontset": fontset}
-    with matplotlib.rc_context({"svg.fonttype": "path", "mathtext.fontset": fontset,
-                                "svg.hashsalt": "pyfigures"}):
+    # from Matplotlib's defaults: a data plot made earlier in the session
+    # (staplot styles change the global rcParams: fonts, dpi, tight bbox)
+    # changed the size of every equation typeset after it
+    with matplotlib.rc_context():
+        matplotlib.rcdefaults()
+        matplotlib.rcParams.update({"svg.fonttype": "path", "mathtext.fontset": fontset,
+                                    "svg.hashsalt": "pyfigures"})
         fig = Figure(figsize=(1, 1))
         FigureCanvasSVG(fig)
         fig.text(0, 0, text, fontsize=float(font_size), color=color)

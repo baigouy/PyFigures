@@ -78,13 +78,14 @@ def test_keyboard_interrupt_delegated(monkeypatch):
     assert called.get('delegated') and not called.get('dialog')
 
 
-def test_slot_exception_does_not_abort(qapp):
+def test_slot_exception_does_not_abort(qapp, monkeypatch):
     """End-to-end: an exception raised inside a real Qt timer slot must not kill
     the process when the handler is installed."""
     from qtpy.QtCore import QTimer
     from qtpy.QtWidgets import QMessageBox, QApplication
-    QMessageBox.exec_ = lambda self: None
-    QMessageBox.exec = lambda self: None
+    # (monkeypatch: a lasting QMessageBox.exec stub silenced every later test's boxes)
+    monkeypatch.setattr(QMessageBox, "exec_", lambda self: None, raising=False)
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: None)
     install_global_exception_handler()
 
     fired = {'n': 0}

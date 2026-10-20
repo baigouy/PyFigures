@@ -678,6 +678,20 @@ class _DialogInjector(QObject):
             return False
 
     def _inject(self, dialog):
+        # runs 150 ms after the dialog showed: a quick QInputDialog / QMessageBox
+        # may be closed AND deleted by then — touching it raised in this timer
+        # slot, which aborts a PyQt6 app
+        try:
+            from PyQt6 import sip
+        except ImportError:
+            sip = None
+        if sip is not None and sip.isdeleted(dialog):
+            return
+        try:
+            if not dialog.isVisible():
+                return
+        except RuntimeError:
+            return
         key = id(dialog)
         if key in self._hints:
             return

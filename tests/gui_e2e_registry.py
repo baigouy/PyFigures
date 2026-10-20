@@ -1,0 +1,82 @@
+"""Which test checks the RESULT of each user action of the figure editor.
+
+Keys (see gui_e2e_harness):
+    'menu: File > Export As > PNG'            a menu-bar entry
+    'toolbar: Undo'                           a toolbar button / Background menu entry
+    'toolbar-widget: size_spinbox'            a toolbar spin box, combo, check box…
+    'right-click: Crop & size ▶ / Reset crop only'   a canvas right-click entry
+    'drop [onto a group]: ↕  To column (with image below)'   a drop-menu button
+    'drag [row onto row]: Swap'               an internal-drag menu entry
+
+Values: the tests ('file.py::test_name') that perform the action and check
+what it produced. Most keys come from the e2e test tables themselves (a
+table row IS the behaviour test); ``LINKED`` adds the actions whose result
+is checked by an older, focused test. test_gui_e2e_coverage.py fails when
+an action reachable in the GUI has no entry here.
+"""
+from __future__ import annotations
+
+import gui_e2e_harness as H
+
+# menu-bar actions whose result is checked by a focused test outside the
+# e2e tables (each of those tests runs the action and asserts on its output)
+LINKED = {
+    # the button only opens its menu: each entry of that menu has its test
+    "toolbar-widget: page_background_button": ["test_gui_e2e_menus.py::test_menu_action"],
+    # a model reads the guidelines: the editor is driven with a fake model there
+    "menu: QC > Journal styles (from a journal's guidelines)…": [
+        "test_journal_styles.py::test_qc_menu_opens_the_editor",
+        "test_journal_styles.py::test_editor_import_edit_review_save_and_use_in_the_journal_dialog"],
+    # downloads TinyTeX: the download is faked there
+    "menu: Help > Install LaTeX for PyFigures…": ["test_tex_install.py::test_gui_menu_and_tex_drop_offer",
+                                                 "test_tex_install.py::test_gui_offer_and_progress"],
+    # registers servers in the user's client configs: done in a fake home there
+    "menu: Tools > MCP server…": ["test_mcp_control.py::test_gui_menu_opens_the_dialog",
+                                  "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
+    "menu: Tools > MCP call history / undo…": [
+        "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
+}
+
+
+def _test_file_of(module):
+    return module.__name__ + ".py"
+
+
+def registry() -> dict:
+    reg = {}
+
+    def add(key, test):
+        tests = reg.setdefault(key, [])
+        if test not in tests:
+            tests.append(test)
+
+    import test_gui_e2e_context_menu as C
+    for _kind, entry in C.ALL_CASES:
+        add(H.ctx_key(entry), "test_gui_e2e_context_menu.py::test_right_click_entry")
+    import test_gui_e2e_dnd as D
+    for row in D.DROPS:
+        add(H.drop_key(row[0], row[4]), "test_gui_e2e_dnd.py::test_drop")
+    for situation, *_rest in D.DROP_OFFERS:
+        add(H.drop_key(situation, "✕  Cancel"), "test_gui_e2e_dnd.py::test_drop_menu_offers_what_each_situation_allows")
+    for situation, choice, _rows in D.DRAGS:
+        add(H.drag_key(situation, choice), "test_gui_e2e_dnd.py::test_internal_drag")
+    import test_gui_e2e_menus as M
+    for key in M.ACTIONS:
+        add(key, "test_gui_e2e_menus.py::test_menu_action")
+    for key in M.WIDGETS:
+        add(key, "test_gui_e2e_menus.py::test_toolbar_widget")
+    for key, tests in M.ELSEWHERE.items():
+        for t in tests:
+            add(key, t)
+    import test_gui_e2e_tutorials as T
+    for key in T.TUTORIAL_KEYS:
+        add(key, "test_gui_e2e_tutorials.py::test_tutorial_end_to_end")
+    for key in T.GUIDE_KEYS:
+        add(key, "test_gui_e2e_tutorials.py::test_show_me_how_guide")
+    for key, tests in T.ELSEWHERE.items():
+        for t in tests:
+            add(key, t)
+    for key, tests in LINKED.items():
+        for t in tests:
+            add(key, t)
+    return reg

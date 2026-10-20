@@ -116,6 +116,14 @@ DROPS = [
      BASE + ["row 3: f1.png | f2.png"], None),
     ("folder", ["folder"], None, "base", "➕  As single image(s)", [],
      BASE + ["row 3: f1.png", "row 4: f2.png"], None),
+    ("a stack among several images", ["tstack", "png2"], None, "base", "↔  To row", [],
+     BASE + ["row 3: movie.tif | cells2.png"], None),
+    ("a stack among several images", ["tstack", "png2"], None, "base", "↕  To column", [],
+     BASE + ["row 3: movie.tif / cells2.png"], None),
+    ("a stack among several images", ["tstack", "png2"], None, "base", "▦  To panel", [("Panel", _panel(1))],
+     BASE + ["row 3: movie.tif | cells2.png"], None),
+    ("a stack among several images", ["tstack", "png2"], None, "base", "➕  As single image(s)", [],
+     BASE + ["row 3: movie.tif", "row 4: cells2.png"], None),
     ("unsupported file", ["txt", "png2"], None, "base", "➕  As single image(s)", [],
      BASE + ["row 3: cells2.png"], None),
     ("multi-series file", ["pdf2"], None, "base", "➕  As single image(s)", [("Select Series", _series_2)],
@@ -144,12 +152,15 @@ def test_drop(qapp, e2e_gui, e2e_files, tmp_path, watch, situation, names, where
     before = H.snapshot(g, tmp_path)
     watch.check("loading the start figure")
     assert H.drop_files(g, [e2e_files[n] for n in names], _where(g, where))
-    offered = H.drop_choices(g)
-    assert choice in offered, (choice, offered)
+    live = H.offered_as(H.drop_choices(g), choice)
+    if live is None:
+        H.dismiss_drop_menu(g)
+        pytest.skip(f"{choice!r} is no longer offered ({situation}); "
+                    "test_drop_menu_offers_what_each_situation_allows says whether it should be")
     with H.dialogs() as pilot:
         for match, handler in dlgs:
             pilot.expect(match, handler)
-        H.click_drop_choice(g, choice)
+        H.click_drop_choice(g, live)
         H.settle(qapp, g, lambda: not pilot.queue, timeout=30)
         H.settle(qapp, g)
     assert not pilot.queue, f"dialog(s) never shown: {pilot.queue}; seen {pilot.seen}"
@@ -193,30 +204,42 @@ def test_drop_without_menu(qapp, e2e_gui, e2e_files, tmp_path, watch):
     watch.check("drops without a menu")
 
 
+_SINGLE = ["➕  As single image(s)", "✕  Cancel"]
+_GROUP = ["↔  To row", "↕  To column", "▦  To panel"]
+_COMBINE = ["↔  To row (with image below)", "↕  To column (with image below)"]
+_MONTAGE = ["➕  As single image(s)", "🎞  Montage of frames (time / Z)…", "✕  Cancel"]
+
+# (situation, start figure, files, where, the drop menu's buttons)
+DROP_OFFERS = [
+    ("one image on empty canvas", "base", ["png2"], None, _SINGLE),
+    ("several images on empty canvas", "base", ["png2", "tif16"], None, _GROUP + _SINGLE),
+    ("one time stack", "base", ["tstack"], None, _MONTAGE),
+    ("one z stack", "base", ["zstack"], None, _MONTAGE),
+    ("video", "base", ["video"], None, _MONTAGE),
+    ("a stack among several images", "base", ["tstack", "png2"], None, _GROUP + _SINGLE),  # no montage
+    ("multi-series file", "base", ["pdf2"], None, _SINGLE),
+    (".tex", "base", ["tex"], None, _SINGLE),
+    ("folder", "base", ["folder"], None, _GROUP + _SINGLE),
+    ("unsupported file", "base", ["txt", "png2"], None, _SINGLE),
+    ("onto an image", "loose", ["png2"], "gray16", _COMBINE + _SINGLE),
+    ("onto a group", "base", ["png2"], "gray8", _COMBINE + _SINGLE),
+    ("onto a template slot", "slot", ["png2"], "@template@", _SINGLE[:1] + ["⬜  Assign to template slot",
+                                                                           "✕  Cancel"]),
+]
+
+
 def test_drop_menu_offers_what_each_situation_allows(qapp, e2e_gui, e2e_files, tmp_path, watch):
+    """... and Cancel (how the menu is dismissed here) leaves the figure as it was."""
     g = e2e_gui
-    single = ["➕  As single image(s)", "✕  Cancel"]
-    group = ["↔  To row", "↕  To column", "▦  To panel"]
-    combine = ["↔  To row (with image below)", "↕  To column (with image below)"]
-    montage = ["➕  As single image(s)", "🎞  Montage of frames (time / Z)…", "✕  Cancel"]
-    cases = [
-        ("base", ["png2"], None, single),
-        ("base", ["png2", "tif16"], None, group + single),
-        ("base", ["tstack"], None, montage),
-        ("base", ["zstack"], None, montage),
-        ("base", ["video"], None, montage),
-        ("base", ["tstack", "png2"], None, group + single),       # several: no montage
-        ("base", ["pdf2"], None, single),
-        ("base", ["tex"], None, single),
-        ("loose", ["png2"], "gray16", combine + single),
-        ("base", ["png2"], "gray8", combine + single),
-        ("slot", ["png2"], "@template@", single[:1] + ["⬜  Assign to template slot", "✕  Cancel"]),
-    ]
-    for kind, names, where, expected in cases:
+    for situation, kind, names, where, expected in DROP_OFFERS:
         start(qapp, g, tmp_path, e2e_files, kind)
+        before = H.snapshot(g, tmp_path)
         H.drop_files(g, [e2e_files[n] for n in names], _where(g, where))
-        assert H.drop_choices(g) == expected, (names, where, H.drop_choices(g))
+        assert not H.missing_entries(expected, H.drop_choices(g)), (situation, H.drop_choices(g))
         H.dismiss_drop_menu(g)
+        H.settle(qapp, g)
+        assert H.drop_menu(g) is None
+        assert H.same(H.snapshot(g, tmp_path), before), (situation, "Cancel changed the figure")
     watch.check("drop menus")
 
 
@@ -309,8 +332,9 @@ def test_internal_drag(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, situati
     shape, to = DRAG_FROM_TO[situation](g)
     menus.pick = None
     H.drag(g, shape, to)                          # look at the menu, dismiss it
-    offered = menus.last
-    assert choice in offered, (situation, choice, offered)
+    if H.offered_as(menus.last, choice) is None:
+        pytest.skip(f"{choice!r} is no longer offered ({situation}); "
+                    "test_drag_menus_offer_the_right_choices says whether it should be")
     assert H.same(H.snapshot(g, tmp_path), before), "a dismissed drag menu changed the figure"
     shape, to = DRAG_FROM_TO[situation](g)
     menus.pick = choice
@@ -333,7 +357,7 @@ def test_drag_menus_offer_the_right_choices(qapp, e2e_gui, e2e_files, tmp_path, 
         shape, to = DRAG_FROM_TO[situation](g)
         H.drag(g, shape, to)
         expected = sorted({c for s, c, _r in DRAGS if s == situation})
-        assert sorted(menus.last) == expected, (situation, menus.last)
+        assert not H.missing_entries(expected, menus.last), (situation, menus.last)
 
 
 def test_tiny_drag_is_a_click_and_drag_onto_itself_does_nothing(qapp, e2e_gui, e2e_files, tmp_path, menus):

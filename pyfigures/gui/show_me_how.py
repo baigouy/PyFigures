@@ -134,6 +134,7 @@ class GuideRunner:
             img = self._target_image
             if img is None or self._image_state0 is None:
                 return False
+            img = self._current_version(img)
             k = 0 if kind == "lut_changed" else 1
             return self._image_state(img)[k] != self._image_state0[k]
         if kind == "dialog_closed":
@@ -142,6 +143,19 @@ class GuideRunner:
                 return False
             return self._saw_dialog
         return False
+
+    def _current_version(self, img):
+        """The panel now standing for *img*: the image editor (Ok) replaces
+        the edited panel by its edited clone, so the guide watching the
+        old object never saw the crop it asked for."""
+        imgs = list(_image_stack(self.win))
+        if any(i is img for i in imgs):
+            return img
+        sel = _selected(self.win)
+        if sel is not None and getattr(sel, "filename", None) == getattr(img, "filename", None):
+            return sel
+        same = [i for i in imgs if getattr(i, "filename", None) == getattr(img, "filename", None)]
+        return same[0] if len(same) == 1 else img
 
     # ---- highlight helpers -----------------------------------------------
     def _anchor(self, container, action, fallback):

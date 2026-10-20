@@ -23,9 +23,9 @@ def sample_tif():
 
 
 @pytest.fixture
-def panel_with_four(qapp, sample_tif):
+def panel_with_four(qapp, sample_tif, monkeypatch):
     from qtpy.QtWidgets import QMessageBox
-    QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Yes)
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: QMessageBox.Yes))
     from pyfigures.gui.pfgui import EZFIG_GUI
     from batoolset.drawings.shapes.image2d import Image2D
     EZFIG_GUI.show_tips = lambda self: None

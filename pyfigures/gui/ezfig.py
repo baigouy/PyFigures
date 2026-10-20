@@ -1427,6 +1427,7 @@ class MyWidget(QWidget):
         # print('group of sel', top_parent_of_sel, 'group of dest', top_parent_of_drop_target)
 
         # will only work for group (and not image2D or alike) otherwise will need to create a shape -−> MEGA TODO
+        source_top = self.get_top_parent_of_shape(item1)
         item2.extend(item1)
 
         # we remove the drawn shape from all
@@ -1452,6 +1453,7 @@ class MyWidget(QWidget):
 
         item2.update()
         self.force_update_size_of_parent.emit(item2)
+        self._refit_row_left(source_top, item1, item2)
         self.update_letters_required.emit()
         self.update_text_rows.emit()
         self.undo_redo_save_required.emit()
@@ -1460,6 +1462,15 @@ class MyWidget(QWidget):
 
         self.update()
         self.update_size()
+
+    def _refit_row_left(self, source_top, moved, target):
+        """The row a panel was dragged out of keeps the figure width: it was
+        left shrunk on screen (and laid out differently once reopened)."""
+        if source_top is None or source_top is moved or source_top is target:
+            return
+        if any(s is source_top for s in self.shapes_to_draw) and getattr(source_top, 'content', None):
+            source_top.update()
+            self.force_update_size_of_parent.emit(source_top)
 
     def _container_of(self, shape):
         """The list holding *shape*: the canvas list or its group's content."""
@@ -1472,6 +1483,18 @@ class MyWidget(QWidget):
             if isinstance(content, list):
                 if any(c is shape for c in content):
                     return content
+                stack.extend(content)
+        return None
+
+    def _group_of(self, shape):
+        """The Group whose content holds *shape* (None for a top-level shape)."""
+        stack = list(self.shapes_to_draw)
+        while stack:
+            s = stack.pop()
+            content = getattr(s, 'content', None)
+            if isinstance(s, Group) and isinstance(content, list):
+                if any(c is shape for c in content):
+                    return s
                 stack.extend(content)
         return None
 
@@ -1708,6 +1731,7 @@ class MyWidget(QWidget):
             # print('group of sel', top_parent_of_sel, 'group of dest', top_parent_of_drop_target)
 
             # will only work for group (and not image2D or alike) otherwise will need to create a shape -−> MEGA TODO
+            source_top = self.get_top_parent_of_shape(item1)
             item2.add(item1)
 
             # we remove the drawn shape from all
@@ -1737,6 +1761,7 @@ class MyWidget(QWidget):
 
             item2.update()
             self.force_update_size_of_parent.emit(item2)
+            self._refit_row_left(source_top, item1, item2)
             self.update_letters_required.emit()
             self.update_text_rows.emit()
             self.undo_redo_save_required.emit()
@@ -1750,6 +1775,7 @@ class MyWidget(QWidget):
 
 
         current_space_of_new_group = 3
+        sources = [self.get_top_parent_of_shape(item1), self.get_top_parent_of_shape(item2)]
         # hack in order not to create subgroups if they are not necessary  # this makes it redundant to have add or extend to a group then
         content_merge = []
         if isinstance(item1, Group) and item1.orientation == orientation and item1.space == current_space_of_new_group: # if rows to merge have same orientation and space then dissociate them and regroup them (that should work as the user intends in most cases)
@@ -1779,20 +1805,20 @@ class MyWidget(QWidget):
             self.shapes_to_draw.remove(item2)
         except Exception:
             pass
-        try:
-            top_parent = self.get_top_parent_of_shape(item1)
-            if top_parent is not None:
-                top_parent.remove(item1)
-                top_parent.update()
-        except Exception:
-            pass
-        try:
-            top_parent = self.get_top_parent_of_shape(item2)
-            if top_parent is not None:
-                top_parent.remove(item2)
-                top_parent.update()
-        except Exception:
-            pass
+        # take each item out of the group that really holds it: removing it from
+        # its TOP parent missed an item inside a nested group, which then stayed
+        # there too (the same image shown twice)
+        for it in (item1, item2):
+            holder = self._group_of(it)
+            if holder is None:
+                continue
+            holder.content[:] = [s for s in holder.content if s is not it]
+            if not holder.content:              # an emptied sub-group goes too
+                outer = self._container_of(holder)
+                if outer is not None and outer is not self.shapes_to_draw:
+                    outer[:] = [s for s in outer if s is not holder]
+            else:
+                holder.update()
 
         # marche presque mais faut que je focus dessus et que je la mette à la bonne taille
         # if single image shall I unpack it ??? --> maybe yes TODO
@@ -1810,6 +1836,8 @@ class MyWidget(QWidget):
         self.update_size()
 
         self.force_update_size_of_parent.emit(new_grp)
+        for source_top, moved in zip(sources, (item1, item2)):
+            self._refit_row_left(source_top, moved, new_grp)
         self.set_current_selection(new_grp)
         self.focus_required.emit()
 
@@ -3254,6 +3282,16 @@ class MyWidget(QWidget):
         # i need to get all the groups and their progeny from the selection
 
         selected_groups = self.get_groups_from_sel(ignore_text_grps=True)
+        if not selected_groups and isinstance(self.selected_shape, list):
+            # several panels of a row: the space between them is their row's
+            # (the entry is offered there and used to do nothing at all)
+            for shape in self.selected_shape:
+                grp = self._group_of(shape)
+                if grp is not None and not grp.isText and all(g is not grp for g in selected_groups):
+                    selected_groups.append(grp)
+        if not selected_groups:
+            self.informative_message_required.emit('Change space needs a row, a column or panels inside one')
+            return
 
         if selected_groups:
 
@@ -3363,8 +3401,17 @@ class MyWidget(QWidget):
 
             # now I need to open a Lut window then to
             if not max_channels:
-                # print('no channels --> quitting immediately')
-
+                # template slots / vector panels have no channels: a LUT set on
+                # them earlier must still go when reset, and Set says why it
+                # does nothing (it used to stay silent)
+                if force_reset:
+                    for elm in tmp:
+                        if getattr(elm, 'LUTs', None) is not None:
+                            elm.LUTs = None
+                    self.finalize_and_update()
+                else:
+                    self.informative_message_required.emit(
+                        'No LUT to set: the selection has no image channels (template slot or vector panel)')
                 return
 
             luts = None

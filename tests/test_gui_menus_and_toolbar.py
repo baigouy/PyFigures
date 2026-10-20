@@ -165,14 +165,19 @@ def _annot_types(g):
 
 
 def _all_actions(g):
-    seen, out = set(), []
+    # wrappers are kept alive while walking: once a temporary wrapper dies its
+    # id() is reused, and whole submenus (Insert > Images from files, Stack
+    # views, Help > Show me how…) used to be skipped as "already seen"
+    seen, out, keep = set(), [], []
 
     def walk(actions, where):
         for a in actions:
+            keep.append(a)
             if id(a) in seen or a.isSeparator():
                 continue
             seen.add(id(a))
             if a.menu() is not None:
+                keep.append(a.menu())
                 walk(a.menu().actions(), where + [a.text()])
             else:
                 out.append((" > ".join(where + [a.text()]), a))

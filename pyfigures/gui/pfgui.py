@@ -178,6 +178,17 @@ class _PyfLoaderWorker(QObject):
         self.finished.emit()
 
 
+def _same_file_content(a, b):
+    """True when files *a* and *b* hold the same bytes (undo checkpoints)."""
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+        with open(a, 'rb') as fa, open(b, 'rb') as fb:
+            return fa.read() == fb.read()
+    except OSError:
+        return False
+
+
 def _qt_alive(obj):
     """False once the C++ side of a Qt wrapper has been destroyed — a queued
     loader callback arriving after its window was deleted must not touch it
@@ -1423,18 +1434,25 @@ class EZFIG_GUI(QMainWindow):
         annots.addSeparator()
         rm_menu = annots.addMenu("Remove")
         rm_all_annots = QAction("Remove all annotations (ROIs, scale bars, texts, ...)", self)
+        rm_all_annots.setToolTip("Delete the ROIs, scale bars, texts and insets of the selected panel, or of every "
+                                 "panel when nothing is selected (the images stay; Undo brings them back)")
         rm_menu.addAction(rm_all_annots)
         rm_all_annots.triggered.connect(self.paint.EZFIG_panel.remove_all_annotations)
         rm_all_scale = QAction("Remove all scale bars", self)
+        rm_all_scale.setToolTip("Delete the scale bars of the selected panel, or of every panel when nothing is selected")
         rm_menu.addAction(rm_all_scale)
         rm_all_scale.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=ScaleBar))
         rm_all_texts = QAction("Remove all texts", self)
+        rm_all_texts.setToolTip("Delete the texts of the selected panel, or of every panel when nothing is selected")
         rm_menu.addAction(rm_all_texts)
         rm_all_texts.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=TAText2D))
         rm_all_ROIs = QAction("Remove all ROIs", self)
+        rm_all_ROIs.setToolTip("Delete the ROIs (rectangles, circles, lines, polygons…) of the selected panel, "
+                               "or of every panel when nothing is selected")
         rm_menu.addAction(rm_all_ROIs)
         rm_all_ROIs.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=[Circle2D, Ellipse2D,Freehand2D,  Line2D,Point2D, Polygon2D, PolyLine2D, Rectangle2D,Square2D]))
         rm_all_insets = QAction("Remove all insets", self)
+        rm_all_insets.setToolTip("Delete the insets of the selected panel, or of every panel when nothing is selected")
         rm_menu.addAction(rm_all_insets)
         rm_all_insets.triggered.connect(lambda:self.paint.EZFIG_panel.remove_stuff(type_of_stuff=Image2D))
 
@@ -1719,6 +1737,7 @@ class EZFIG_GUI(QMainWindow):
         if color == self.paint.EZFIG_panel.page_background:
             return
         self._set_page_background(color)
+        self.paint.EZFIG_panel.undo_redo_save_required.emit()   # was not undoable
         self._mark_dirty()
 
     def on_page_bounds_changed(self):
@@ -2849,6 +2868,7 @@ class EZFIG_GUI(QMainWindow):
         self._reflow_after_lazy_load()
         self.paint.EZFIG_panel.update_size()
         self.paint.EZFIG_panel.update()
+        self.paint.EZFIG_panel.undo_redo_save_required.emit()   # was not undoable
         self._mark_dirty()
 
     def _latex_code_dialog(self, code=""):
@@ -2905,6 +2925,7 @@ class EZFIG_GUI(QMainWindow):
         self._reflow_after_lazy_load()
         self.paint.EZFIG_panel.update_size()
         self.paint.EZFIG_panel.update()
+        self.paint.EZFIG_panel.undo_redo_save_required.emit()   # was not undoable
         self._mark_dirty()
         return True
 
@@ -3154,6 +3175,17 @@ class EZFIG_GUI(QMainWindow):
             self.counter += 1
             self._save_state_to_file(file_path, popup='State Saved' if show_popup else None)
 
+            # an action that asks for two checkpoints (Insert > LaTeX code panel)
+            # recorded the same figure twice: the first Undo then seemed to do
+            # nothing. A checkpoint identical to the current one is dropped.
+            prev = self.undo_stack[self.current_index - 1] if 0 < self.current_index <= len(self.undo_stack) else None
+            if prev is not None and prev == self.last_called_state and _same_file_content(prev, file_path):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                return prev     # (callers such as templatify read the state file returned)
+
             # print('checks before', self.current_index, self.last_called_state, file_path, self.undo_stack, self.redo_stack)
 
             self.undo_stack = self.undo_stack[:self.current_index]
@@ -3277,7 +3309,8 @@ class EZFIG_GUI(QMainWindow):
                 # as drag-and-drop): the layout appears immediately and images fill in
                 # one by one. The security prompt for script files and the undo reset
                 # happen in _on_pyf_file_ready.
-                self._start_pyf_loader([path_to_xml_file], append=append, reset_undo=True)
+                # (a merge keeps the history: it is one undoable step)
+                self._start_pyf_loader([path_to_xml_file], append=append, reset_undo=not append)
             return
 
         if path_to_xml_file:
@@ -3776,6 +3809,8 @@ class EZFIG_GUI(QMainWindow):
         else:
             # merged / multi-file open: ambiguous target, treat as unsaved
             self.current_file = None
+            if getattr(self, '_pyf_append', False):
+                self.save_state(show_popup=False)      # File > Merge: one undo step
             self._mark_dirty()
         # safety net: if no progressive image loading is pending, make sure the
         # wait cursor set in _start_pyf_loader is cleared (e.g. after errors)

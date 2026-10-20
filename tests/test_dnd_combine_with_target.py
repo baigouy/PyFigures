@@ -23,9 +23,9 @@ def sample_tif():
 
 
 @pytest.fixture
-def gui(qapp):
+def gui(qapp, monkeypatch):
     from qtpy.QtWidgets import QMessageBox
-    QMessageBox.warning = staticmethod(lambda *a, **k: QMessageBox.Yes)
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: QMessageBox.Yes))
     from pyfigures.gui.pfgui import EZFIG_GUI
     EZFIG_GUI.show_tips = lambda self: None
     g = EZFIG_GUI()
