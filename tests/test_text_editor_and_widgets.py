@@ -309,13 +309,19 @@ def test_inset_widget(qapp, dialogs):
 def test_page_limits_widget_units(qapp):
     from pyfigures.gui.pagelimitswidget import PageLimitsWidget
     w = PageLimitsWidget()
+    assert w.unit_combobox.currentText() == "mm"            # journals give widths in mm
+    assert w.width_spinbox.suffix() == " mm" and w.width_spinbox.value() == pytest.approx(210.0)
+    px_mm = w.get_values()
+    w.unit_combobox.setCurrentText("cm")
+    assert w.width_spinbox.suffix() == " cm" and w.width_spinbox.value() == pytest.approx(21.0, abs=0.02)
     px_cm = w.get_values()
+    assert px_cm[0] == pytest.approx(px_mm[0], rel=0.01)
     w.unit_combobox.setCurrentText("inches")
     assert w.width_spinbox.suffix() == " in" and w.width_spinbox.value() == pytest.approx(21 / 2.54, abs=0.01)
     px_in = w.get_values()
     assert px_in[0] == pytest.approx(px_cm[0], rel=0.01)    # same page, other unit
-    w.unit_combobox.setCurrentText("cm")
-    assert w.width_spinbox.value() == pytest.approx(21.0, abs=0.02)
+    w.unit_combobox.setCurrentText("mm")
+    assert w.width_spinbox.value() == pytest.approx(210.0, abs=0.2)
 
 
 @pytest.mark.parametrize("n,rows,cols", [(10, 2, 5), (7, 3, 3), (1, 1, 1)])

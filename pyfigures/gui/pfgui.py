@@ -1052,7 +1052,7 @@ class EZFIG_GUI(QMainWindow):
 
         # Create combobox for units
         self.unit_combobox = QComboBox(self)
-        self.unit_combobox.addItems(["Cm", "Inches", "mm"])
+        self.unit_combobox.addItems(["mm", "Cm", "Inches"])      # mm by default, as journals
         self.unit_combobox.setToolTip("Unit of the printed size shown on the left (journals give "
                                       "widths in mm; QC → Apply journal guidelines sets them)")
         self.unit_combobox.currentIndexChanged.connect(self.update_size_in_unit)

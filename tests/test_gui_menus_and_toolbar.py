@@ -472,6 +472,8 @@ def test_size_spinbox_resizes_selection(gui, qapp):
     gui.on_size_spinbox_value_changed_delayed()
     qapp.processEvents()
     assert abs(row.boundingRect().width() - 300) <= 2
+    assert gui.unit_combobox.currentText() == "mm"      # default, as journals
+    assert gui.value_label.text().endswith("105.8")     # 300 px at 72 dpi
     gui.unit_combobox.setCurrentText("Inches")
     assert gui.value_label.text().endswith("4.2")       # 300 px at 72 dpi
     gui.unit_combobox.setCurrentText("Cm")
