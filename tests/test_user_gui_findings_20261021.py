@@ -306,3 +306,21 @@ def test_force_same_size_is_greyed_out_when_already_the_case(gui, qapp, tmp_path
     _all_images(gui)[1].crop_left = 10
     panel.selected_shape = row
     assert not {"size", "crop"} & panel._already_matching()
+
+
+# --- rulers span the whole visible canvas, not just the figure (~400 px at start) ----------
+
+def test_the_canvas_and_its_rulers_fill_the_visible_area(gui, qapp):
+    area = gui.paint.scrollArea
+    canvas = gui.paint.EZFIG_panel
+    gui.resize(1400, 1000)
+    gui.show()
+    qapp.processEvents()
+    vp = area.viewport().size()
+    assert vp.width() > 600 and vp.height() > 500
+    assert canvas.width() >= vp.width() and canvas.height() >= vp.height()
+    # exactly the visible area: no scroll bar for an empty figure
+    assert not area.horizontalScrollBar().isVisible() and not area.verticalScrollBar().isVisible()
+    gui.resize(1700, 1200)                  # follows the window
+    qapp.processEvents()
+    assert canvas.width() >= area.viewport().width() > vp.width()

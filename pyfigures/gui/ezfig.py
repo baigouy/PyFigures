@@ -136,7 +136,7 @@ import traceback
 import copy # used to clone class instances
 from qtpy.QtCore import QSize, QRect, QRectF, QPoint, QPointF, Qt, QSizeF, Signal, QTimer,QObject,QEvent
 from qtpy.QtSvg import QSvgGenerator
-from qtpy.QtWidgets import QMenu, QDialog,QWidget,QApplication, QVBoxLayout, QPushButton,QScrollArea,QLabel,QInputDialog, QMessageBox,QSpinBox
+from qtpy.QtWidgets import QMenu, QDialog,QWidget,QApplication, QVBoxLayout, QPushButton,QScrollArea,QLabel,QInputDialog, QMessageBox,QSpinBox,QAbstractScrollArea
 from qtpy.QtGui import QBrush, QPen, QColor, QTransform,QPainter, QColor,QFontMetrics,QImage,QPdfWriter,QPageSize,QTextCursor, QFont, QTextCharFormat, QRegion
 from batoolset.drawings.shapes.freehand2d import Freehand2D
 from batoolset.drawings.shapes.scalebar import ScaleBar
@@ -1332,6 +1332,12 @@ class MyWidget(QWidget):
                 size.setWidth(int(mouse_pos.x()+self._EXTRA_PADDING))
             if mouse_pos.y()>size.height():
                 size.setHeight(int(mouse_pos.y()+self._EXTRA_PADDING))
+
+        # fill the visible part of the scroll area so the rulers span it all
+        # (cheap: painting is limited to the exposed region)
+        viewport = self.parentWidget()
+        if viewport is not None and isinstance(viewport.parentWidget(), QAbstractScrollArea):
+            size = size.expandedTo(viewport.size())
 
         self.resize(size)
 

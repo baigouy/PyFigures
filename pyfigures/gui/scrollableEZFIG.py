@@ -11,7 +11,7 @@ from batoolset.img import Img
 from batoolset.drawings.shapes.group import Group, set_to_size
 import numpy as np
 import random
-from qtpy.QtCore import QSize, Qt, Signal
+from qtpy.QtCore import QSize, Qt, Signal, QEvent
 from qtpy.QtGui import QPalette,QKeySequence
 from qtpy.QtWidgets import QScrollArea, QVBoxLayout, QWidget, QToolBar, QStatusBar, QHBoxLayout, QAction,QShortcut
 import qtawesome as qta
@@ -35,6 +35,14 @@ class ClickableScrollArea(QScrollArea):
         """
         super().mousePressEvent(event)
         self.clicked.emit()
+
+    def viewportEvent(self, event):
+        # the canvas fills the visible area (rulers to the edge): follow its size
+        if event.type() == QEvent.Type.Resize:
+            canvas = self.widget()
+            if canvas is not None and hasattr(canvas, 'update_size'):
+                canvas.update_size()
+        return super().viewportEvent(event)
 
 class scrollable_EZFIG(QWidget):
 
