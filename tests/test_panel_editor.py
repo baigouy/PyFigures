@@ -287,6 +287,8 @@ def test_typing_a_z_range_waits_for_a_pause_and_survives_a_style_change(qapp, tm
     (recomputing each time) and the box came back to 1; changing Max → Avg
     must keep the range."""
     from qtpy.QtTest import QTest
+    from qtpy.QtCore import QEvent, Qt
+    from qtpy.QtGui import QFocusEvent
     from pyfigures import mcp_server as M
     from pyfigures.gui.pfgui import EZFIG_GUI
     stack = _img(tmp_path / "big.tif", np.stack([np.full((40, 50), v % 250, np.uint8) for v in range(300)]), "dhw")
@@ -303,6 +305,8 @@ def test_typing_a_z_range_waits_for_a_pause_and_survives_a_style_change(qapp, tm
         QApplication.processEvents()
         seen["while_typing"] = bg.projection_z_start          # nothing applied mid-typing
         ed.proj_z_end_spin.setFocus()                         # leaves the box: applied at once
+        # an inactive offscreen window gets no focus-out from setFocus(): deliver the one a click sends
+        QApplication.sendEvent(start, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason))
         QApplication.processEvents()
         seen["after"] = (start.value(), bg.projection_z_start, bg.projection_z_end)
         ed.projection_combo_box.setCurrentIndex(ed.projection_combo_box.findData("avg"))

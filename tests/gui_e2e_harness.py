@@ -841,7 +841,7 @@ def drop_files(g, paths, canvas_point=None):
 
 def drop_menu(g):
     frames = [f for f in g.findChildren(QFrame) if f.isVisible() and f.parent() is g
-              and f.findChildren(QPushButton)]
+              and f.objectName() != "hintBubble" and f.findChildren(QPushButton)]
     return frames[-1] if frames else None
 
 

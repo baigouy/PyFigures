@@ -2292,7 +2292,9 @@ class MainWindow(QWidget):
         if self.ignore_changes:
             return
         self._proj_range_sender = self.sender()
-        if self._proj_range_sender is not None and self._proj_range_sender.hasFocus():
+        sender = self._proj_range_sender
+        # the window's focus widget, not hasFocus(): the latter is False while the window is inactive
+        if sender is not None and sender.window().focusWidget() in (sender, sender.lineEdit()):
             self.timer_proj_range.start()       # being typed / stepped: wait for a pause
         else:
             self.apply_proj_z_range()           # set from code: at once

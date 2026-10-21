@@ -154,7 +154,7 @@ def drop(g, paths, panel_point=None):
 def drop_menu(g):
     """The in-window drop menu (a QFrame of buttons) currently shown."""
     frames = [f for f in g.findChildren(QFrame) if f.isVisible() and f.parent() is g
-              and f.findChildren(QPushButton)]
+              and f.objectName() != "hintBubble" and f.findChildren(QPushButton)]
     return frames[-1] if frames else None
 
 
