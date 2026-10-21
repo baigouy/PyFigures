@@ -108,7 +108,7 @@ _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label", "latex", "colors"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
-_MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "channel", "lut",
+_MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
                  "stamp_color", "time_zero", "series"}
 _SPLIT_KEYS = {"names", "colors", "gray", "merge", "merge_label", "projection", "frame",

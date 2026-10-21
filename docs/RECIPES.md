@@ -496,8 +496,10 @@ one letter.
 | `montage` | path | The stack. |
 | `axis` | `t` (default) or `z` (also `time`, `depth`) | Which axis to lay out. |
 | `frames` | (6 evenly spaced) | Which frames — see below. Frame numbers start at **0**. |
-| `columns` | all in one row | Wrap into rows of this many frames. |
-| `projection` | `max` (default), `min`, `avg`, `none` | For a time montage of a 3-D stack: how each time point's Z is shown (`none` = first slice). |
+| `columns` | one row up to 6 frames, then rows of at most 6 | Wrap into rows of this many frames. A short last row is padded with empty panels so every frame keeps the same size. |
+| `projection` | `max` (default), `min`, `avg`, `none` | For a time montage of a 3-D stack: how each time point's Z is shown (`none` = one slice, see `z_slice`). |
+| `z_range` | `[first, last)` slice numbers (all) | Z slices the projection uses, e.g. `[5, 20]`. |
+| `z_slice` | slice number (0) | Z slice shown when `projection: none`. |
 | `channel` | channel number (from 0) | Show only this channel. Default: all channels. |
 | `lut` | name or list per channel | Colours. |
 | `interval` | number | Time (or Z step) per frame; overrides the file's value. |

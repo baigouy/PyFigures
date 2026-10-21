@@ -455,8 +455,11 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
     _, root = _load(pyf_path)
     stats = _read_stats(pyf_path)
     title, _cap = _read_caption(pyf_path)
+    from .core import _is_empty_placeholder
     panels = []          # [letter, kind, base, labels, extras, count]
     for img in _iter_panel_elements(root):
+        if _is_empty_placeholder(img):
+            continue                    # padding of a grid / montage row: not a panel
         annots = img.find("annotations")
         letter = ""
         if annots is not None:

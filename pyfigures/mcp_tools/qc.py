@@ -59,6 +59,8 @@ def _is_raster_panel(img) -> bool:
     if isinstance(fn, str) and fn.lower().endswith((".svg", ".pdf")):
         return False
     script = getattr(img, "custom_loading_script", None)
+    if not fn and not script and getattr(img, "img", None) is None:
+        return False                    # empty placeholder (pads a grid / montage row)
     if isinstance(script, str) and ("staplot" in script or "ColorbarBase(" in script) \
             and "_pyfigures_image_panel" not in script:
         return False
@@ -134,8 +136,9 @@ def _micrographs_without_bar(root) -> tuple[list, int]:
     from .core import _iter_panel_elements
     parent = {c: p for p in root.iter() for c in p}
     units: dict = {}
+    from .core import _is_empty_placeholder
     for img in _iter_panel_elements(root):
-        if _child_text(img, "isText") is not False:
+        if _child_text(img, "isText") is not False or _is_empty_placeholder(img):
             continue
         script = _child_text(img, "custom_loading_script")
         if isinstance(script, str) and script not in ("", "None"):

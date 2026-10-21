@@ -111,6 +111,68 @@ def test_montage_dialog_fits_its_content_and_explains_its_options(gui, tmp_path,
     assert not {"Time between frames:", "Z projection of each time point:"} & set(seen["hidden_time"])
 
 
+def test_montage_dialog_all_frames_wrapped_z_controls_and_interval_explained(gui, qapp, tmp_path,
+                                                                             monkeypatch):
+    """All frames by default, at most 6 per row (rows added as needed), Z range
+    of the projection or a Z slider without projection, a visible line saying
+    what 'time between frames' is."""
+    from qtpy.QtWidgets import QSlider, QSpinBox
+    from batoolset.GUI.customdialog import CustomDialog
+    from pyfigures.gui.pfgui import QDialog
+    seen = {}
+
+    def exec_(dlg, *a, **k):
+        frame = dlg.main_widget
+        frames = frame.findChildren(QLineEdit)[0]
+        columns, z_from, z_to = frame.findChildren(QSpinBox)[:3]
+        proj = frame.findChildren(QComboBox)[1]
+        slider = frame.findChildren(QSlider)[0]
+        shown = lambda: {lab.text() for lab in frame.findChildren(QLabel) if not lab.isHidden()}
+        seen["frames"] = frames.text()
+        seen["columns"] = columns.text()
+        seen["labels"] = shown()
+        seen["z_to"] = z_to.value()
+        proj.setCurrentText("none")
+        seen["labels_none"] = shown()
+        slider.setValue(2)
+        frames.setText("7")
+        seen["labels_7"] = shown()
+        frames.setText("all")
+        return QDialog.Accepted
+    monkeypatch.setattr(CustomDialog, "exec_", exec_, raising=False)
+    monkeypatch.setattr(CustomDialog, "exec", exec_)
+    stack = _stack(tmp_path / "zt.tif", "TZYX", (8, 4, 30, 40))
+    assert gui.montage_from_file(stack) is True
+    assert seen["frames"] == "all" and seen["columns"].startswith("auto")
+    assert "8 frame(s): 2 rows of 4" in seen["labels"]
+    assert "Z slices projected:" in seen["labels"] and "Z slice shown:" not in seen["labels"]
+    assert seen["z_to"] == 4
+    assert any(t.startswith("Frame interval of the movie") and "not stored" in t for t in seen["labels"])
+    assert "Z slice shown:" in seen["labels_none"] and "Z slices projected:" not in seen["labels_none"]
+    assert "7 frame(s): 2 rows of 4" in seen["labels_7"]
+    rows = gui.paint.EZFIG_panel.shapes_to_draw[-1].content
+    assert [len(r.content) for r in rows] == [4, 4]
+    panels = [p for r in rows for p in r.content]
+    assert [p.dimensions["values"] for p in panels] == [[t, 2] for t in range(8)]   # slice 2
+    assert all(p.projection in (None, "None") for p in panels)
+
+
+def test_a_padded_montage_opens_with_equal_frames(gui, qapp, tmp_path):
+    """7 frames = 4 + 3: the empty panel keeps the last row's frames the size
+    of the others."""
+    from pyfigures import mcp_server as M
+    stack = _stack(tmp_path / "z.tif", "ZYX", (7, 30, 40))
+    pyf = str(tmp_path / "m.pyf")
+    M.create_figure(pyf)
+    assert not M.add_stack_montage(pyf, stack, axis="z", frames="all").startswith("ERROR")
+    gui.reload_state(pyf, append=False)
+    qapp.processEvents()
+    rows = gui.paint.EZFIG_panel.shapes_to_draw[-1].content
+    widths = [round(p.boundingRect().width(), 1) for r in rows for p in r.content]
+    assert len(widths) == 8 and max(widths) - min(widths) <= 0.5, widths
+    assert rows[1].content[-1].filename is None
+
+
 def test_small_form_dialogs_are_not_full_screen():
     import inspect
     from pyfigures.gui import pfgui

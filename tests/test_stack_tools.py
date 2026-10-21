@@ -128,6 +128,73 @@ def test_montage_z_uses_voxel_depth_and_columns(tmp_path):
     assert all(i.findtext("projection") in ("None", '""None""') for i in imgs)
 
 
+def test_montage_wraps_at_six_per_row_and_pads_the_last_row(tmp_path):
+    from pyfigures.mcp_tools.stacks import auto_columns
+    assert [auto_columns(n) for n in (1, 5, 6, 7, 10, 12, 13, 40)] == [1, 5, 6, 4, 5, 6, 5, 6]
+    stack = _zstack(str(tmp_path / "z.tif"), Z=7)
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=0)
+    res = M.add_stack_montage(pyf, stack, axis="z", frames="all")
+    assert "2 row(s)" in res, res
+    root = ET.parse(pyf).getroot()
+    block = [g for g in root if g.tag == "Group"][-1]
+    rows = [g for g in block.find("content") if g.tag == "Group"]
+    panels = [[i for i in r.find("content") if i.tag == "Image2D"] for r in rows]
+    assert [len(p) for p in panels] == [4, 4]                   # 4 + 3 frames + 1 empty panel
+    pad = panels[1][-1]
+    assert pad.findtext("filename") == "None"
+    assert (float(pad.findtext("width")), float(pad.findtext("height"))) == (50.0, 30.0)
+    assert not pad.find("annotations").findall("TAText2D")      # no stamp on the empty panel
+    one = str(tmp_path / "one.pyf")
+    M.create_figure(one, num_groups=0)
+    assert "1 row(s)" in M.add_stack_montage(one, stack, axis="z", frames="all", columns=7)
+
+
+def test_the_empty_padding_panel_is_not_reported_as_a_panel(tmp_path, qapp):
+    stack = _zstack(str(tmp_path / "z.tif"), Z=7)
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf)
+    M.add_stack_montage(pyf, stack, axis="z", frames="all")
+    alt = json.loads(M.generate_alt_text(pyf))
+    assert "empty panel" not in alt["long"] and alt["panels"] == 1
+    audit = json.loads(M.audit_figure(pyf))
+    assert all(p["filename"] for p in audit["panels_missing_label"] + audit["panels_missing_scale_bar"])
+    assert json.loads(M.check_scale_consistency(pyf))["panels_without_scale"] == 0
+
+
+def test_montage_z_range_and_z_slice(tmp_path):
+    stack = _hyperstack(str(tmp_path / "h.tif"))
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf)
+    assert not M.add_stack_montage(pyf, stack, axis="t", frames=2, z_range=[1, 3]).startswith("ERROR")
+    imgs = _panels(pyf)
+    assert [(i.findtext("projection_z_start"), i.findtext("projection_z_end")) for i in imgs] \
+        == [("1", "3")] * 2
+    pyf2 = str(tmp_path / "g.pyf")
+    M.create_figure(pyf2)
+    assert not M.add_stack_montage(pyf2, stack, axis="t", frames=2, projection="none",
+                                   z_slice=2).startswith("ERROR")
+    dims = [ast.literal_eval(i.findtext("dimensions"))["values"] for i in _panels(pyf2)]
+    assert dims == [[0, 2], [4, 2]]                             # [t, z]
+    for bad in (dict(z_range=[3, 3]), dict(z_range=[0, 9]), dict(z_slice=1),
+                dict(projection="none", z_slice=4), dict(axis="z", z_slice=1)):
+        assert M.add_stack_montage(pyf2, stack, **{"axis": "t", **bad}).startswith("ERROR"), bad
+
+
+def test_recipe_montage_z_range_and_z_slice(tmp_path, qapp):
+    from pyfigures.recipe import build_figure_from_recipe
+    _hyperstack(str(tmp_path / "h.tif"))
+    (tmp_path / "r.yaml").write_text(
+        "output: f.pyf\nrows:\n"
+        "  - - {montage: h.tif, axis: t, frames: 2, z_range: [1, 3]}\n"
+        "  - - {montage: h.tif, axis: t, frames: 2, projection: none, z_slice: 2}\n",
+        encoding="utf-8")
+    build_figure_from_recipe(str(tmp_path / "r.yaml"))
+    imgs = _panels(str(tmp_path / "f.pyf"))
+    assert [i.findtext("projection_z_start") for i in imgs[:2]] == ["1", "1"]
+    assert [ast.literal_eval(i.findtext("dimensions"))["values"][1] for i in imgs[2:]] == [2, 2]
+
+
 def test_montage_errors(tmp_path):
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf)

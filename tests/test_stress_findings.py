@@ -105,7 +105,7 @@ def test_squeezed_panels_and_extra_frames_are_reported(tmp_path, qapp):
     tifffile.imwrite(stack, np.zeros((40, 32, 32), np.uint8), imagej=True, metadata={"axes": "TYX"})
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf)
-    res = M.add_stack_montage(pyf, str(stack), axis="t", frames=500, spacing=20)
+    res = M.add_stack_montage(pyf, str(stack), axis="t", frames=500, spacing=20, columns=40)
     assert "40 are shown" in res
     assert "less than" in res and "too narrow" in res
 

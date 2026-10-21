@@ -49,7 +49,7 @@ from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTran
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit, QInputDialog, \
-    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout
+    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout, QSlider
 from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool, QUrl
 import qtawesome as qta
 import logging
@@ -4803,24 +4803,72 @@ class EZFIG_GUI(QMainWindow):
             axis.addItem(f"{n} ({info['sizes'][k]} frames)", 't' if k == 't' else 'z')
         add_row('Frames along:', axis, 'Which axis the panels step through: one panel per time '
                 'point, or one per Z slice.')
-        frames = QLineEdit('6', frame)
-        add_row('Which frames:', frames, 'A number N = N evenly spaced frames (first and last '
-                'included); "all"; "0:20:5" = from 0 to 20 every 5; or a list "0, 4, 9" '
+        frames = QLineEdit('all', frame)
+        add_row('Which frames:', frames, '"all" (default); a number N = N evenly spaced frames '
+                '(first and last included); "0:20:5" = from 0 to 20 every 5; or a list "0, 4, 9" '
                 '(frame numbers start at 0).')
         columns = self._spin(frame, 0, 100, 0)
-        columns.setSpecialValueText('all in one row')
-        add_row('Panels per row:', columns, 'Wrap the montage after this many panels (e.g. 3 '
-                'for 6 frames gives 2 rows of 3).')
+        columns.setSpecialValueText('auto (up to 6 per row)')
+        add_row('Panels per row:', columns, 'Wrap the montage after this many panels. Auto: one '
+                'row up to 6 frames, then rows of at most 6 (e.g. 10 frames = 2 rows of 5).')
+        layout_note = QLabel(frame)
+        layout_note.setStyleSheet('color: gray;')
+        grid.addWidget(layout_note, grid.rowCount(), 1)
         proj = QComboBox(frame)
         proj.addItems(['max', 'avg', 'min', 'none'])
         proj_label = add_row('Z projection of each time point:', proj,
                              'For a time montage of a Z stack: how each time point\'s Z slices '
-                             'are combined into one image (none = the first slice).')
+                             'are combined into one image (none = one Z slice, chosen below).')
+        n_z = info['sizes'].get('d', 1) if 'd' in info['order'] else 1
+        z_range = QFrame(frame)
+        z_row = QHBoxLayout(z_range)
+        z_row.setContentsMargins(0, 0, 0, 0)
+        z_from = self._spin(z_range, 0, max(0, n_z - 1), 0)
+        z_to = self._spin(z_range, 1, max(1, n_z), max(1, n_z))
+        z_row.addWidget(z_from)
+        z_row.addWidget(QLabel('to', z_range))
+        z_row.addWidget(z_to)
+        z_range_label = add_row('Z slices projected:', z_range,
+                                'First Z slice (from 0) and last one (excluded) used by the '
+                                f'projection; default all {n_z}. Same as in the panel editor.')
+
+        def keep_order(changed):
+            if z_from.value() >= z_to.value():
+                if changed is z_from:
+                    z_to.setValue(z_from.value() + 1)
+                else:
+                    z_from.setValue(z_to.value() - 1)
+        z_from.valueChanged.connect(lambda _v: keep_order(z_from))
+        z_to.valueChanged.connect(lambda _v: keep_order(z_to))
+        z_slice = QSlider(Qt.Orientation.Horizontal, frame)
+        z_slice.setRange(0, max(0, n_z - 1))
+        z_slice_value = QLabel('0', frame)
+        z_slice_box = QFrame(frame)
+        z_slice_row = QHBoxLayout(z_slice_box)
+        z_slice_row.setContentsMargins(0, 0, 0, 0)
+        z_slice_row.addWidget(z_slice)
+        z_slice_row.addWidget(z_slice_value)
+        z_slice.valueChanged.connect(lambda v: z_slice_value.setText(str(v)))
+        z_slice_label = add_row('Z slice shown:', z_slice_box,
+                                'Without projection: which Z slice of each time point is shown '
+                                '(from 0).')
         interval = self._spin(frame, 0, 1e6, float(info.get('interval') or 0), double=True)
         interval.setSpecialValueText('unknown: stamp frame numbers')
-        interval_label = add_row('Time between frames:', interval,
-                                 'Read from the file when it is stored there; used to stamp '
-                                 'each panel with its time (0 min, 2 min…).')
+        interval_tip = ('Time elapsed between two consecutive time points of the movie (the '
+                        'frame interval), e.g. 2 with unit "min" for one image every 2 minutes. '
+                        'Used to stamp each panel with its time: 0 min, 2 min, 4 min… '
+                        'Read from the file when it is stored there.')
+        interval_label = add_row('Time between frames:', interval, interval_tip)
+        interval_note = QLabel(frame)
+        interval_note.setWordWrap(True)
+        interval_note.setStyleSheet('color: gray;')
+        interval_note.setToolTip(interval_tip)
+        interval_note.setText(
+            'Frame interval of the movie, used for the time stamps — '
+            + (f"read from the file: {info['interval']:g} {info.get('time_unit') or ''}."
+               if info.get('interval') else 'not stored in the file: left at 0, the stamps '
+               'are frame numbers.'))
+        grid.addWidget(interval_note, grid.rowCount(), 0, 1, 2)
         unit = QLineEdit(info.get('time_unit') or '', frame)
         unit_label = add_row('Time unit:', unit, 'Unit of the time between frames, e.g. s, min, h.')
         stamps = QCheckBox('Stamp each panel with its time or depth (0 min, 2 min… / z 0…)', frame)
@@ -4833,28 +4881,61 @@ class EZFIG_GUI(QMainWindow):
             grid.addWidget(keep_crop, grid.rowCount(), 0, 1, 2)
         has_z = info['sizes'].get('d', 1) > 1 and 'd' in info['order']
 
+        def frame_spec():
+            spec = frames.text().strip() or None
+            if spec and spec.isdigit():
+                spec = int(spec)
+            return spec
+
+        def show_layout():
+            """'12 frames: 2 rows of 6' under the panels-per-row box."""
+            from pyfigures.stack_info import parse_frames
+            from pyfigures.mcp_tools.stacks import auto_columns
+            n_axis = info['sizes']['t' if axis.currentData() == 't' else 'd']
+            try:
+                n = len(parse_frames(frame_spec(), n_axis))
+            except ValueError as e:
+                layout_note.setText(str(e))
+                return
+            cols = min(columns.value() or auto_columns(n), n)
+            rows = -(-n // cols)
+            layout_note.setText(f'{n} frame(s): ' + (f'one row of {n}' if rows == 1 else
+                                                     f'{rows} rows of {cols}'))
+
         def show_relevant():
-            """Only the options that apply to the chosen axis."""
+            """Only the options that apply to the chosen axis / projection."""
             along_time = axis.currentData() == 't'
+            projectable = along_time and has_z
             for w in (proj_label, proj):
-                w.setVisible(along_time and has_z)
-            for w in (interval_label, interval, unit_label, unit):
+                w.setVisible(projectable)
+            for w in (z_range_label, z_range):
+                w.setVisible(projectable and proj.currentText() != 'none')
+            for w in (z_slice_label, z_slice_box):
+                w.setVisible(projectable and proj.currentText() == 'none')
+            for w in (interval_label, interval, interval_note, unit_label, unit):
                 w.setVisible(along_time)
+            show_layout()
         axis.currentIndexChanged.connect(show_relevant)
+        proj.currentIndexChanged.connect(show_relevant)
+        frames.textChanged.connect(show_layout)
+        columns.valueChanged.connect(show_layout)
         show_relevant()
         cd = CustomDialog(title="Stack montage",
                           message="Hover over an option for help.",
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return False
-        spec = frames.text().strip() or None
-        if spec and spec.isdigit():
-            spec = int(spec)
         ax = axis.currentData()
+        spec = frame_spec()
         kw = dict(stack_path=sel.filename, axis=ax, frames=spec,
                   columns=columns.value() or None, projection=proj.currentText(),
                   stamps=stamps.isChecked(),
                   series=getattr(sel, 'serie_to_open', None))
+        if ax == 't' and has_z:
+            if proj.currentText() == 'none':
+                kw['z_slice'] = z_slice.value()
+            elif (z_from.value(), z_to.value()) != (0, n_z):
+                kw['z_range'] = [z_from.value(), z_to.value()]
         if ax == 't' and interval.value() > 0:
             kw['interval'] = interval.value()
             kw['unit'] = unit.text().strip() or None

@@ -164,6 +164,28 @@ def _projection_for(info, axis_shown, projection):
     return p
 
 
+MAX_AUTO_COLUMNS = 6
+
+
+def auto_columns(n: int) -> int:
+    """Panels per row of an n-frame montage: one row up to 6 frames, then
+    rows of at most 6, as even as possible (7 -> 4 + 3, 13 -> 5 + 5 + 3)."""
+    if n <= MAX_AUTO_COLUMNS:
+        return max(1, n)
+    rows = math.ceil(n / MAX_AUTO_COLUMNS)
+    return math.ceil(n / rows)
+
+
+def _placeholder_panel(info):
+    """Empty panel the size of a frame: pads a short last row so every frame
+    of a multi-row montage keeps the same size (as the GUI's grid does)."""
+    img = _new_image2d("")
+    _set_child_text(img, "filename", "None")
+    _set_child_text(img, "width", repr(float(info["sizes"]["w"])))
+    _set_child_text(img, "height", repr(float(info["sizes"]["h"])))
+    return img
+
+
 def _lut_list(lut, n_channels):
     """LUTs field for a panel: one name for every channel, or a per-channel list."""
     if lut is None:
@@ -187,6 +209,8 @@ def add_stack_montage(
     columns: int | None = None,
     parent_group_path: list[int] | None = None,
     projection: str | None = "max",
+    z_range: list[int] | None = None,
+    z_slice: int | None = None,
     channel: int | None = None,
     lut: str | list[str] | None = None,
     interval: float | None = None,
@@ -213,11 +237,15 @@ def add_stack_montage(
     *frames*: which frames — None = 6 evenly spaced frames incl. first and last;
       an int N = N evenly spaced frames; "all"; "start:stop:step" (stop
       exclusive, "::5" = every 5th frame); or a list [0, 5, 10].
-    *columns*: wrap into several rows of this many panels (default one row).
+    *columns*: panels per row; default: one row up to 6 frames, then rows of
+      at most 6 (a short last row is padded with empty panels so every frame
+      keeps the same size). columns=len(frames) forces a single row.
     *parent_group_path*: None = add as a new top-level row (or block of rows);
       [i] = nest inside that group.
     *projection*: for a time montage of a 3-D stack, how each time point's Z
-      stack is shown ("max", "min", "avg", or "none" = first slice).
+      stack is shown ("max", "min", "avg", or "none" = one slice, *z_slice*).
+    *z_range*: [first, last) Z slices the projection uses (default all).
+    *z_slice*: Z slice shown when projection is "none" (default 0).
     *channel*: show only this channel (0-based) of a multi-channel stack.
     *lut*: LUT for the panels (e.g. "GRAY", "MATPLOTLIB_magma"), or a list per
       channel.
@@ -255,6 +283,19 @@ def add_stack_montage(
             _warn(f"{frames} frames asked for, but the stack has {n} along "
                   f"{'time' if axis_l == 't' else 'Z'}: all {n} are shown.")
         proj = _projection_for(info, axis_l, projection)
+        nz = sizes.get("d", 1) if "d" in order else 1
+        if z_range is not None:
+            if proj is None:
+                raise ValueError("z_range applies to a projection (max / min / avg) of a "
+                                 "time montage of a Z stack")
+            if len(z_range) != 2 or not 0 <= int(z_range[0]) < int(z_range[1]) <= nz:
+                raise ValueError(f"z_range must be [first, last) with 0 <= first < last <= {nz}")
+        if z_slice is not None:
+            if axis_l != "t" or nz < 2 or proj is not None:
+                raise ValueError("z_slice applies to a time montage of a Z stack without "
+                                 "projection (projection='none')")
+            if not 0 <= int(z_slice) < nz:
+                raise ValueError(f"z_slice must be between 0 and {nz - 1}")
         nch = sizes.get("c", 1)
         chans = None
         if channel is not None:
@@ -283,8 +324,9 @@ def add_stack_montage(
         return format_stamp((f - t0) * float(step), s_unit, stamp_format)
 
     tree, root = _load(pyf_path)
-    per_row = columns if columns else len(idx)
+    per_row = columns if columns else auto_columns(len(idx))
     rows = [idx[i:i + per_row] for i in range(0, len(idx), per_row)]
+    fixed = {} if z_slice is None else {"d": int(z_slice)}
     gid = _next_group_id(root)
     if len(rows) == 1:
         outer = _new_group_elem("X", spacing, gid)
@@ -305,13 +347,19 @@ def add_stack_montage(
         for f in row:
             k += 1
             img = _stack_panel(
-                info, _plane_values(info, {axis_l: f}, proj), proj, chans, luts, series,
+                info, _plane_values(info, {**fixed, axis_l: f}, proj), proj, chans, luts, series,
                 comment=f"{SERIES_MARK}{k}/{len(idx)}] montage of {base}, "
                         f"{'t' if axis_l == 't' else 'z'}={f}")
+            if z_range is not None:
+                _set_child_text(img, "projection_z_start", str(int(z_range[0])))
+                _set_child_text(img, "projection_z_end", str(int(z_range[1])))
             if stamps:
                 img.find("annotations").append(
                     _new_tatext2d(stamp(f), stamp_placement, is_letter=False, color=scol))
             grp.find("content").append(img)
+        if len(rows) > 1:
+            for _ in range(per_row - len(row)):
+                grp.find("content").append(_placeholder_panel(info))
     _crop_panels(outer.iter("Image2D"), crop)
     _save(tree, pyf_path, recompute=True)
     stamps_note = ""

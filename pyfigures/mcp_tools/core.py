@@ -2293,6 +2293,17 @@ def _restyle_letters(root: ET.Element, **attrs) -> tuple[int, str | None]:
     return len(letters), None
 
 
+def _is_empty_placeholder(img: ET.Element) -> bool:
+    """An Image2D with nothing in it: no file, no script, not text — the empty
+    panel padding a grid or montage row so its panels keep the same size."""
+    if img.findtext("isText", "False") == "True":
+        return False
+    fn = _decode(img.findtext("filename"))
+    script = _decode(img.findtext("custom_loading_script"))
+    svg = img.findtext("_raw_svg_bytes")
+    return fn in (None, "", "None") and script in (None, "", "None") and svg in (None, "", "None")
+
+
 def _iter_panel_elements(root: ET.Element):
     """Yield Image2D elements that are real layout panels — not the ones nested
     inside a panel's annotations / insets / ScaleBar."""

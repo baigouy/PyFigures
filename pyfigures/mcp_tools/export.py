@@ -286,9 +286,11 @@ def audit_figure(pyf_path: str) -> str:
     missing_bar = [{"group_path": p["group_path"], "image_index": p["image_index"],
                     "filename": p["filename"]}
                    for p, el in zip(panels, elems) if el in needing]
+    from .core import _is_empty_placeholder
     missing_label = [{"group_path": p["group_path"], "image_index": p["image_index"],
                       "filename": p["filename"]}
-                     for p in panels if p["n_labels"] == 0]
+                     for p, el in zip(panels, elems)
+                     if p["n_labels"] == 0 and not _is_empty_placeholder(el)]
     # text burned into a source near its edge (an info line left in the figure)
     from ..burned_text import burned_text_warning
     from .core import _child_text
