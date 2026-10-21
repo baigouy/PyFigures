@@ -168,7 +168,7 @@ def test_adjustment_ledger_report(gui, ui):
 def test_fonts_report(gui, ui):
     gui.fonts_report_action()
     title, text = ui["reports"][-1]
-    assert title.startswith("Fonts") and "bundled_families" in text
+    assert title.startswith("Fonts") and "Fonts bundled with PyFigures" in text and "{" not in text
 
 
 def test_changed_sources_report(gui, ui, monkeypatch, tmp_path):

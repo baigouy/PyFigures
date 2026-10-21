@@ -67,6 +67,20 @@ def _is_raster_panel(img) -> bool:
     return True
 
 
+def _where(img, loc):
+    """'panel B (group 0, img 1)': the letter the reader sees, then where
+    the MCP tools find it; just *loc* for a panel without a letter."""
+    for a in getattr(img, "annotations", None) or []:
+        if getattr(a, "is_letter", False):
+            try:
+                letter = a.getPlainText().strip()
+            except Exception:
+                letter = ""
+            if letter:
+                return f"panel {letter} ({loc})"
+    return loc
+
+
 def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
     """Return one dict per raster panel describing its effective print resolution
     if the figure were printed *target_mm* wide. Vector (svg) and text panels are
@@ -111,14 +125,14 @@ def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
         for ii, img in enumerate(_imgs_in(grp)):
             if not _is_real_raster(img):
                 continue
-            results.append(_one(img, denom, f"group {gi}, img {ii}"))
+            results.append(_one(img, denom, _where(img, f"group {gi}, img {ii}")))
 
     if free_imgs:
         canvas_w = max((im.x() + im.width(all=True)) for im in free_imgs)
         for ii, img in enumerate(free_imgs):
             if not _is_real_raster(img):
                 continue
-            results.append(_one(img, canvas_w, f"canvas img {ii}"))
+            results.append(_one(img, canvas_w, _where(img, f"canvas img {ii}")))
 
     return results
 
@@ -307,10 +321,10 @@ def _scale_consistency_panels(pyf_path: str) -> list[dict]:
     for gi, grp in enumerate(top_groups):
         for ii, img in enumerate(_imgs_in(grp)):
             if _is_real_raster(img):
-                results.append(_one(img, f"group {gi}, img {ii}"))
+                results.append(_one(img, _where(img, f"group {gi}, img {ii}")))
     for ii, img in enumerate(free_imgs):
         if _is_real_raster(img):
-            results.append(_one(img, f"canvas img {ii}"))
+            results.append(_one(img, _where(img, f"canvas img {ii}")))
     return results
 
 

@@ -71,7 +71,9 @@ def collect_panels(pyf_path):
     for img in _iter_image_elements(root):
         fn_el = img.find("filename")
         fn = _decode(fn_el.text) if fn_el is not None else None
-        if not fn or fn == "@template@":
+        if not fn or fn in ("@template@", "None"):
+            # "None": a data plot (drawn by its script) or an empty padding panel,
+            # not an image file ("file not found" was reported for them)
             continue
         # letter label if the panel carries one (first is_letter annotation)
         label = None

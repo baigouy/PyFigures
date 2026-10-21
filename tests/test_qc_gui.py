@@ -89,7 +89,10 @@ def test_audit_report(gui):
     captured = {}
     gui._show_report = lambda title, text: captured.setdefault(title, text)
     gui.audit_figure_report()
-    assert "n_panels" in captured.get("Figure audit", "")
+    text = captured.get("Figure audit", "")
+    # plain text naming the panels, not the JSON meant for the MCP server
+    assert text.startswith("Figure audit: 2 panels") and "{" not in text and "group_path" not in text
+    assert "A (a.tif)" in text and "Add scale bar to all panels" in text
 
 
 def test_journal_compliance_report(gui, monkeypatch):

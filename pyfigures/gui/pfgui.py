@@ -5564,6 +5564,9 @@ class EZFIG_GUI(QMainWindow):
 
     def _show_report(self, title, text):
         """Show a read-only, scrollable text report in a modal dialog."""
+        from pyfigures.gui.qc_reports import humanize
+        text = humanize(str(text))      # panels by letter, no advice meant for the MCP server
+        self._last_report = text
         frame = QFrame(self)
         lay = QVBoxLayout(frame)
         view = QTextBrowser(frame)
@@ -5652,7 +5655,8 @@ class EZFIG_GUI(QMainWindow):
         from pyfigures.mcp_server import audit_figure
         try:
             p = self._save_current_to_temp_pyf()
-            self._show_report("Figure audit", audit_figure(p))
+            from pyfigures.gui.qc_reports import audit_report
+            self._show_report("Figure audit", audit_report(audit_figure(p)))
         except Exception:
             logger.error('audit failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Audit failed', 'Could not audit (see log).')
@@ -5780,7 +5784,8 @@ class EZFIG_GUI(QMainWindow):
             return
         QApplication.restoreOverrideCursor()
         self.statusBar().clearMessage()
-        self._show_report('Image integrity', res)
+        from pyfigures.gui.qc_reports import integrity_report
+        self._show_report('Image integrity', integrity_report(res))
 
     def check_scale_consistency_action(self):
         """Flag panels whose displayed physical scale is inconsistent
@@ -5799,7 +5804,7 @@ class EZFIG_GUI(QMainWindow):
             self._show_report('Scale-bar consistency', raw)
             return
         d = json.loads(raw)
-        lines = [d.get('summary', ''), '']
+        lines = [d.get('summary') or d.get('note', ''), '']
         ref = d.get('reference_scale')
         if ref:
             lines.append(f"Reference displayed scale: {ref:.4g} units / on-figure pixel "
@@ -5875,7 +5880,8 @@ class EZFIG_GUI(QMainWindow):
         from pyfigures.mcp_server import export_adjustment_ledger
         try:
             p = self._save_current_to_temp_pyf()
-            self._show_report('Adjustment provenance ledger', export_adjustment_ledger(p))
+            from pyfigures.gui.qc_reports import ledger_report
+            self._show_report('Adjustment provenance ledger', ledger_report(export_adjustment_ledger(p)))
         except Exception:
             logger.error('adjustment ledger failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not build the ledger (see log).')
@@ -5957,11 +5963,10 @@ class EZFIG_GUI(QMainWindow):
     def fonts_report_action(self):
         """Show the portable-font situation (MCP: list_fonts)."""
         try:
-            import json
             from pyfigures.gui.portable_fonts import register_portable_fonts, font_report
+            from pyfigures.gui.qc_reports import fonts_report
             register_portable_fonts(QApplication.instance())
-            self._show_report('Fonts (portable / Helvetica)',
-                              json.dumps(font_report(), indent=2))
+            self._show_report('Fonts (portable / Helvetica)', fonts_report(font_report()))
         except Exception:
             logger.error('fonts report failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not read the fonts (see log).')
