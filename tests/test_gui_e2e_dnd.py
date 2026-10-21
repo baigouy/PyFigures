@@ -273,31 +273,25 @@ DRAG_FROM_TO = {
     "row onto loose image": lambda g: (H.rows(g)[0], H.centre(g, _loose(g)[0])),
     "image to empty space": lambda g: (H.by_name(g, "cells"), H.empty_point(g)),
     "loose image onto image in row": lambda g: (_loose(g)[0], H.centre(g, H.by_name(g, "rgb"))),
+    # the user's case: 'd' (last image of the top row) dropped on 'e' (an image alone)
+    "image in row onto loose image": lambda g: (H.by_name(g, "cells"), H.centre(g, _loose(g)[0])),
 }
 
 R1, R2 = "gray8.tif | cells.png", "rgb.tif | zstack.tif"
 DRAGS = [
     ("image onto image of another row", "Swap",
      ["row 1: rgb.tif | cells.png", "row 2: gray8.tif | zstack.tif", "row 3: gray16.tif", "row 4: cells2.png"]),
-    ("image onto image of another row", "Add to group (keep dragged shape layout)",
-     ["row 1: cells.png", "row 2: rgb.tif | zstack.tif | gray8.tif", "row 3: gray16.tif", "row 4: cells2.png"]),
-    ("image onto image of another row", "Add to group (don't keep dragged shape layout)",
-     ["row 1: cells.png", "row 2: rgb.tif | zstack.tif | gray8.tif", "row 3: gray16.tif", "row 4: cells2.png"]),
     # a row inside a new row is the same row: "To row" onto a row extends it
+    # ("Join this row" / "… panel by panel" give the same: not offered, see
+    # test_drag_menu_shows_each_result_once)
     ("image onto image of another row", "To row",
      ["row 1: cells.png", "row 2: rgb.tif | zstack.tif | gray8.tif", "row 3: gray16.tif", "row 4: cells2.png"]),
     ("image onto image of another row", "To column",
      ["row 1: cells.png", "row 2: (rgb.tif | zstack.tif) / gray8.tif", "row 3: gray16.tif", "row 4: cells2.png"]),
     ("row onto row", "Swap",
      [f"row 1: {R2}", f"row 2: {R1}", "row 3: gray16.tif", "row 4: cells2.png"]),
-    ("row onto row", "Add to group (keep dragged shape layout)",
-     [f"row 1: {R2} | ({R1})", "row 2: gray16.tif", "row 3: cells2.png"]),
-    ("row onto row", "Add to group (don't keep dragged shape layout)",
-     [f"row 1: {R2} | {R1}", "row 2: gray16.tif", "row 3: cells2.png"]),
     ("row onto row", "To row",
      [f"row 1: {R2} | {R1}", "row 2: gray16.tif", "row 3: cells2.png"]),
-    ("row onto row", "To column",
-     [f"row 1: ({R2}) / ({R1})", "row 2: gray16.tif", "row 3: cells2.png"]),
     ("loose image onto loose image", "Swap",
      [f"row 1: {R1}", f"row 2: {R2}", "row 3: cells2.png", "row 4: gray16.tif"]),
     ("loose image onto loose image", "To row",
@@ -305,26 +299,28 @@ DRAGS = [
     ("loose image onto loose image", "To column",
      [f"row 1: {R1}", f"row 2: {R2}", "row 3: cells2.png / gray16.tif"]),
     # the dragged row takes the loose image in, where the row is
-    ("row onto loose image", "Add to group",
+    ("row onto loose image", "Take E into the dragged row",
      [f"row 1: {R1} | gray16.tif", f"row 2: {R2}", "row 3: cells2.png"]),
     ("row onto loose image", "To row",
      [f"row 1: {R2}", f"row 2: gray16.tif | {R1}", "row 3: cells2.png"]),
-    ("row onto loose image", "To column",
-     [f"row 1: {R2}", f"row 2: gray16.tif / ({R1})", "row 3: cells2.png"]),
     ("row onto loose image", "Swap",
      [f"row 1: gray16.tif", f"row 2: {R2}", f"row 3: {R1}", "row 4: cells2.png"]),
     ("image to empty space", "Extrude",
      ["row 1: gray8.tif", f"row 2: {R2}", "row 3: gray16.tif", "row 4: cells2.png", "row 5: cells.png"]),
-    ("loose image onto image in row", "Add to group (keep dragged shape layout)",
-     [f"row 1: {R1}", f"row 2: {R2} | gray16.tif", "row 3: cells2.png"]),
-    ("loose image onto image in row", "Add to group (don't keep dragged shape layout)",
-     [f"row 1: {R1}", f"row 2: {R2} | gray16.tif", "row 3: cells2.png"]),
     ("loose image onto image in row", "To row",
      [f"row 1: {R1}", f"row 2: {R2} | gray16.tif", "row 3: cells2.png"]),
     ("loose image onto image in row", "To column",
      [f"row 1: {R1}", f"row 2: ({R2}) / gray16.tif", "row 3: cells2.png"]),
     ("loose image onto image in row", "Swap",
      [f"row 1: {R1}", "row 2: gray16.tif", "row 3: rgb.tif | zstack.tif", "row 4: cells2.png"]),
+    # only Swap used to be offered (and did nothing): the images trade places, or
+    # the image leaves its row and pairs with the loose one
+    ("image in row onto loose image", "Swap",
+     ["row 1: gray8.tif | gray16.tif", f"row 2: {R2}", "row 3: cells.png", "row 4: cells2.png"]),
+    ("image in row onto loose image", "To row",
+     ["row 1: gray8.tif", f"row 2: {R2}", "row 3: gray16.tif | cells.png", "row 4: cells2.png"]),
+    ("image in row onto loose image", "To column",
+     ["row 1: gray8.tif", f"row 2: {R2}", "row 3: gray16.tif / cells.png", "row 4: cells2.png"]),
 ]
 
 
@@ -362,6 +358,39 @@ def test_drag_menus_offer_the_right_choices(qapp, e2e_gui, e2e_files, tmp_path, 
         H.drag(g, shape, to)
         expected = sorted({c for s, c, _r in DRAGS if s == situation})
         assert not H.missing_entries(expected, menus.last), (situation, menus.last)
+
+
+DRAG_OFFERED = {
+    "image onto image of another row": ["To row", "To column", "Swap"],
+    "row onto row": ["Swap", "To row"],
+    "loose image onto loose image": ["Swap", "To row", "To column"],
+    "row onto loose image": ["Take E into the dragged row", "To row", "Swap"],
+    "image to empty space": ["Extrude"],
+    "loose image onto image in row": ["To row", "To column", "Swap"],
+    "image in row onto loose image": ["Swap", "To row", "To column"],
+}
+
+
+def test_drag_menu_shows_each_result_once_with_a_sketch(qapp, e2e_gui, e2e_files, tmp_path, menus):
+    """Entries giving the same layout (Join this row = To row, a column of
+    two rows = the two rows swapped) or no change at all are offered once /
+    not at all; every entry shows a sketch of its result, all different, and
+    a tooltip naming the panels."""
+    g = e2e_gui
+    assert set(DRAG_OFFERED) == set(H.DRAG_SITUATIONS)
+    for situation in H.DRAG_SITUATIONS:
+        _drag_start(qapp, g, tmp_path, e2e_files)
+        shape, to = DRAG_FROM_TO[situation](g)
+        menus.pick = None
+        H.drag(g, shape, to)
+        acts = [a for a in menus.menus[-1].actions() if not a.isSeparator()]
+        assert sorted(a.text() for a in acts) == sorted(DRAG_OFFERED[situation]), (situation, [a.text() for a in acts])
+        images = []
+        for a in acts:
+            assert not a.icon().isNull(), (situation, a.text())
+            assert a.toolTip(), (situation, a.text())
+            images.append(a.icon().pixmap(72, 48).toImage())
+        assert all(images[i] != images[j] for i in range(len(images)) for j in range(i + 1, len(images))), situation
 
 
 def test_tiny_drag_is_a_click_and_drag_onto_itself_does_nothing(qapp, e2e_gui, e2e_files, tmp_path, menus):

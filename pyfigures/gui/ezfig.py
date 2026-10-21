@@ -1516,6 +1516,14 @@ class MyWidget(QWidget):
         i2 = next(i for i, s in enumerate(c2) if s is item2)
         c1[i1] = item2
         c2[i2] = item1
+        # refit what holds each panel AFTER the swap: a loose panel that went into
+        # a row must not be fitted alone to the figure width (it then broke the
+        # row), and the panel that came out of the row needs its own fit
+        tops = []
+        for it in (item1, item2):
+            now = self.get_top_parent_of_shape(it) or it
+            if all(now is not t for t in tops):
+                tops.append(now)
         for top in tops:
             if hasattr(top, 'update'):
                 top.update()
@@ -1850,6 +1858,39 @@ class MyWidget(QWidget):
         self.update_letters_required.emit()
         self.set_current_selection(new_grp)
         self.undo_redo_save_required.emit()
+
+    def _drag_entry(self, kind, method, *args, moved=None, target=None):
+        """A drag-and-drop menu entry: its label and tooltip say what it does
+        with which panels; drag_sketch later drops the entries giving the same
+        layout as another and draws a sketch of the result on each."""
+        from pyfigures.gui.drag_sketch import name_of
+        m = name_of(moved) if moved is not None else ""
+        t = name_of(target) if target is not None else ""
+        grp = target if isinstance(target, Group) else None
+        what = ("row" if grp is None or grp.orientation == 'X' else "column")
+        if kind == 'join' and method == 'add' and args and args[0] is target:
+            # a row dragged onto a loose panel: the panel joins the dragged row
+            what = "row" if not isinstance(moved, Group) or moved.orientation == 'X' else "column"
+            label = f"Take {t} into the dragged {what}"
+            tip = f"{t} becomes the last panel of the dragged {what} ({m})."
+        else:
+            label, tip = {
+                'row': ("To row", f"A new row: {t} | {m}."),
+                'col': ("To column", f"A new column: {t} above {m}."),
+                'swap': ("Swap", f"{m} and {t} trade places."),
+                'join': (f"Join this {what}" + (" as one block" if isinstance(moved, Group) else ""),
+                         f"{m} goes into the {what} {t}"
+                         + (", keeping its own layout (a block inside it)." if isinstance(moved, Group) else ".")),
+                'join_each': (f"Join this {what} panel by panel",
+                              f"The panels of {m} go into the {what} {t} one by one (its layout is not kept)."),
+                'extrude': ("Extrude", f"{m} leaves its row and gets a row of its own."),
+            }[kind]
+        act = self.contextMenu.addAction(label)
+        act.triggered.connect(partial(getattr(self, method), *args))
+        act.setData('drag:' + kind)
+        act.setToolTip(tip)
+        self._drag_entries.append((act, kind, method, args, moved, target))
+        return act
 
     def create_row_with(self, item1, item2):
         # print('create_row_with add with', item1, item2, 'TODO IMPLEMENT THAT --> # TODO --> call the parent Combine horizontally (Row)') # -−> see how to do I could pass the parent in init and call the method or copy the code of the parent here ??? -−> at least try to gather all the functions to make it simpler to use!
@@ -2376,6 +2417,7 @@ class MyWidget(QWidget):
         self.reset_position()
 
         self.contextMenu = QMenu(self)
+        self._drag_entries = []             # filled by _drag_entry (drag-and-drop choices)
 
         # No selection — minimal menu
         if not self.selected_shape:
@@ -2609,8 +2651,8 @@ class MyWidget(QWidget):
             if top_parent_of_sel and not self.selected_shape==top_parent_of_sel and is_left_click:
                 # Add a separator
                 self.contextMenu.addSeparator()
-                add_as_new_row = self.contextMenu.addAction("Extrude")
-                add_as_new_row.triggered.connect(partial(self.extrude, self.selected_shape, top_parent_of_sel))
+                self._drag_entry('extrude', 'extrude', self.selected_shape, top_parent_of_sel,
+                                 moved=self.selected_shape)
 
             # print('self.dragging inside dabu', self.dragging)
             if self.check_if_context_menu_is_empty():  # if menu is empty skip this because it is all useless
@@ -2673,19 +2715,13 @@ class MyWidget(QWidget):
 
 
                     if self.selected_shape != drop_target and isinstance(self.selected_shape, Image2D) and isinstance(drop_target, Image2D) and is_left_click:
+                        sel = self.selected_shape
                         self.contextMenu.addSeparator()
-                        # create_row = self.contextMenu.addAction("Create a row with sel and drop")
-                        create_row = self.contextMenu.addAction("To row")
-                        create_row.triggered.connect(partial(self.create_row_with, drop_target,self.selected_shape))
-
-                        # create_col = self.contextMenu.addAction("Create a row with sel and drop")
-                        create_col = self.contextMenu.addAction("To column")
-                        create_col.triggered.connect(partial(self.create_col_with, drop_target,self.selected_shape))
-                        # maybe offer add or alike and if they have no parent
-
+                        self._drag_entry('row', 'create_row_with', drop_target, sel, moved=sel, target=drop_target)
+                        self._drag_entry('col', 'create_col_with', drop_target, sel, moved=sel, target=drop_target)
                         self.contextMenu.addSeparator()
-                        swap2images = self.contextMenu.addAction("Swap")
-                        swap2images.triggered.connect(partial(self.swap, self.selected_shape, drop_target, immediate_parent_of_sel, top_parent_of_sel, top_parent_of_drop_target))
+                        self._drag_entry('swap', 'swap', sel, drop_target, immediate_parent_of_sel, top_parent_of_sel,
+                                         top_parent_of_drop_target, moved=sel, target=drop_target)
                     else:
 
                     # if all_encounters_in_shape_below_mouse[-1] == self.selected_shape:
@@ -2714,32 +2750,24 @@ class MyWidget(QWidget):
 
                         # print('MENU HERE IS CHANGED', self.selected_shape, tmp, tmp[0], tmp[-1], self.selected_shape == tmp[-1])
 
+                        sel = self.selected_shape
                         self.contextMenu.addSeparator()
-                        append = self.contextMenu.addAction("Add to group (keep dragged shape layout)")
-                        append.triggered.connect(partial(self.add, self.selected_shape, tmp[0]))
-                        extend = self.contextMenu.addAction("Add to group (don't keep dragged shape layout)")
-                        extend.triggered.connect(partial(self.extend, self.selected_shape, tmp[0]))
-
+                        self._drag_entry('join', 'add', sel, tmp[0], moved=sel, target=tmp[0])
+                        self._drag_entry('join_each', 'extend', sel, tmp[0], moved=sel, target=tmp[0])
                         self.contextMenu.addSeparator()
-                        # add_to_grp2 = self.contextMenu.addAction("Create new row with sel and drop target as columns")
-                        add_to_grp2 = self.contextMenu.addAction("To row")
-                        add_to_grp2.triggered.connect(partial(self.create_row_with, tmp[0],self.selected_shape))
-                        # add_to_grp3 = self.contextMenu.addAction("Create new col with sel and drop target as rows")
-                        add_to_grp3 = self.contextMenu.addAction("To column")
-                        add_to_grp3.triggered.connect(partial(self.create_col_with, tmp[0],self.selected_shape))
+                        self._drag_entry('row', 'create_row_with', tmp[0], sel, moved=sel, target=tmp[0])
+                        self._drag_entry('col', 'create_col_with', tmp[0], sel, moved=sel, target=tmp[0])
 
                         if self.selected_shape == top_parent_of_sel and drop_target == top_parent_of_drop_target: # if an object is there then offer swap
                             self.contextMenu.addSeparator()
-                            swap3 = self.contextMenu.addAction("Swap")
-                            swap3.triggered.connect(partial(self.swap, self.selected_shape, drop_target, immediate_parent_of_sel,
-                                        top_parent_of_sel, top_parent_of_drop_target))
+                            self._drag_entry('swap', 'swap', sel, drop_target, immediate_parent_of_sel,
+                                             top_parent_of_sel, top_parent_of_drop_target, moved=sel, target=drop_target)
                         elif top_parent_of_sel is not self.selected_shape and isinstance(tmp[-1], Image2D) \
                                 and not tmp[-1].isText and not self.selected_shape.isText:
                             # an image of one row dropped onto an image of another
                             # row: the two images trade places
                             self.contextMenu.addSeparator()
-                            swap_imgs = self.contextMenu.addAction("Swap")
-                            swap_imgs.triggered.connect(partial(self.swap_images, self.selected_shape, tmp[-1]))
+                            self._drag_entry('swap', 'swap_images', sel, tmp[-1], moved=sel, target=tmp[-1])
                     elif isinstance(self.selected_shape, Group) and isinstance(tmp[0], Image2D) and not self.selected_shape.contains(tmp[0]):
                         # same as above but kinda inveretd
                         if self.selected_shape == tmp[-1]:  # do I need to keep that ???
@@ -2747,25 +2775,17 @@ class MyWidget(QWidget):
                             self.reset_position()
                             self.update()
                             return None
+                        sel = self.selected_shape
                         self.contextMenu.addSeparator()
-                        append = self.contextMenu.addAction("Add to group")
-                        append.triggered.connect(partial(self.add, tmp[0],self.selected_shape))
-                        # extend = self.contextMenu.addAction("Add to group (don't keep dragged shape layout)")
-                        # extend.triggered.connect(partial(self.extend,tmp[0], self.selected_shape))
-
+                        self._drag_entry('join', 'add', tmp[0], sel, moved=sel, target=tmp[0])
                         self.contextMenu.addSeparator()
-                        # add_to_grp2 = self.contextMenu.addAction("Create new row with sel and drop target as columns")
-                        add_to_grp2 = self.contextMenu.addAction("To row")
-                        add_to_grp2.triggered.connect(partial(self.create_row_with, tmp[0],self.selected_shape))
-                        # add_to_grp3 = self.contextMenu.addAction("Create new col with sel and drop target as rows")
-                        add_to_grp3 = self.contextMenu.addAction("To column")
-                        add_to_grp3.triggered.connect(partial(self.create_col_with, tmp[0],self.selected_shape))
+                        self._drag_entry('row', 'create_row_with', tmp[0], sel, moved=sel, target=tmp[0])
+                        self._drag_entry('col', 'create_col_with', tmp[0], sel, moved=sel, target=tmp[0])
 
                         if self.selected_shape == top_parent_of_sel and drop_target == top_parent_of_drop_target: # if an object is there then offer swap
                             self.contextMenu.addSeparator()
-                            swap3 = self.contextMenu.addAction("Swap")
-                            swap3.triggered.connect(partial(self.swap, self.selected_shape, drop_target, immediate_parent_of_sel,
-                                        top_parent_of_sel, top_parent_of_drop_target))
+                            self._drag_entry('swap', 'swap', sel, drop_target, immediate_parent_of_sel,
+                                             top_parent_of_sel, top_parent_of_drop_target, moved=sel, target=drop_target)
                     else:
                         can_swap = self.can_swap(self.selected_shape, tmp[0])
                         # print('can_swap', can_swap)
@@ -2796,33 +2816,35 @@ class MyWidget(QWidget):
                                 self.informative_message_required.emit('Use keyboard arrows to rearrange elements within a group')
                             else:
                                 self.contextMenu.addSeparator()
-                                do_new_stuff = self.contextMenu.addAction("Swap")
-                                do_new_stuff.triggered.connect(partial(self.swap, self.selected_shape, tmp, immediate_parent_of_sel, top_parent_of_sel, top_parent_of_drop_target))
+                                if isinstance(self.selected_shape, Image2D) and isinstance(tmp[-1], Image2D) \
+                                        and (top_parent_of_sel is not self.selected_shape
+                                             or top_parent_of_drop_target is not tmp[-1]):
+                                    # an image of a row and another image: swap() only swaps
+                                    # top-level shapes ("swap failed", nothing happened)
+                                    self._drag_entry('swap', 'swap_images', self.selected_shape, tmp[-1],
+                                                     moved=self.selected_shape, target=tmp[-1])
+                                else:
+                                    self._drag_entry('swap', 'swap', self.selected_shape, tmp, immediate_parent_of_sel,
+                                                     top_parent_of_sel, top_parent_of_drop_target,
+                                                     moved=self.selected_shape, target=tmp[0])
 
-                        if isinstance(tmp[0], Image2D) and isinstance(self.selected_shape, Image2D) and tmp[0] in self.shapes_to_draw and self.selected_shape in self.shapes_to_draw:
+                        sel = self.selected_shape
+                        # two images (an image of a row dropped on another image too: it
+                        # leaves its row), unless both are in the same row (arrows do that)
+                        same_row = top_parent_of_sel is top_parent_of_drop_target and isinstance(top_parent_of_sel, Group)
+                        if isinstance(tmp[0], Image2D) and isinstance(self.selected_shape, Image2D) \
+                                and tmp[0] is not self.selected_shape and not same_row and is_left_click:
                             self.contextMenu.addSeparator()
-                            # add_to_grp2 = self.contextMenu.addAction("Create new row with sel and drop target as columns")
-                            add_to_grp2 = self.contextMenu.addAction("To row")
-                            add_to_grp2.triggered.connect(partial(self.create_row_with, tmp[0],self.selected_shape))
-                            # add_to_grp3 = self.contextMenu.addAction("Create new col with sel and drop target as rows")
-                            add_to_grp3 = self.contextMenu.addAction("To column")
-                            add_to_grp3.triggered.connect(partial(self.create_col_with, tmp[0],self.selected_shape))
+                            self._drag_entry('row', 'create_row_with', tmp[0], sel, moved=sel, target=tmp[0])
+                            self._drag_entry('col', 'create_col_with', tmp[0], sel, moved=sel, target=tmp[0])
 
                         if isinstance(tmp[0], Group) and isinstance(self.selected_shape, (Group, Image2D)) and is_left_click:
                             self.contextMenu.addSeparator()
-                            add_to_grp = self.contextMenu.addAction("Add to group (keep dragged shape layout)")
-                            add_to_grp.triggered.connect(partial(self.add, self.selected_shape, tmp[0])) # very good --> I can do that with partials so I can implement the whole logic
-
-                            add_to_grp4 = self.contextMenu.addAction("Add to group (don't keep dragged shape layout)")
-                            add_to_grp4.triggered.connect(partial(self.extend, self.selected_shape, tmp[0]))  # very good --> I can do that with partials so I can implement the whole logic
-
+                            self._drag_entry('join', 'add', sel, tmp[0], moved=sel, target=tmp[0])
+                            self._drag_entry('join_each', 'extend', sel, tmp[0], moved=sel, target=tmp[0])
                             self.contextMenu.addSeparator()
-                            # add_to_grp2 = self.contextMenu.addAction("Create new row with sel and drop target as columns")
-                            add_to_grp2 = self.contextMenu.addAction("To row")
-                            add_to_grp2.triggered.connect(partial(self.create_row_with, tmp[0],self.selected_shape))
-                            # add_to_grp3 = self.contextMenu.addAction("Create new col with sel and drop target as rows")
-                            add_to_grp3 = self.contextMenu.addAction("To column")
-                            add_to_grp3.triggered.connect(partial(self.create_col_with, tmp[0],self.selected_shape))
+                            self._drag_entry('row', 'create_row_with', tmp[0], sel, moved=sel, target=tmp[0])
+                            self._drag_entry('col', 'create_col_with', tmp[0], sel, moved=sel, target=tmp[0])
 
                         # if isinstance(tmp[0], (Group, Image2D)) and isinstance(self.selected_shape, Group):
                         #     self.contextMenu.addSeparator()
@@ -2835,8 +2857,8 @@ class MyWidget(QWidget):
             else:
                 # print('accepted pos6')
                 if is_left_click:
-                    add_as_new_row = self.contextMenu.addAction("Add as new Row/Extrude from group")
-                    add_as_new_row.triggered.connect(partial(self.extrude,self.selected_shape, top_parent_of_sel))
+                    self._drag_entry('extrude', 'extrude', self.selected_shape, top_parent_of_sel,
+                                     moved=self.selected_shape)
 
         # go = self.contextMenu.addAction("go")
 
@@ -3901,6 +3923,14 @@ class MyWidget(QWidget):
         self.undo_redo_save_required.emit()
 
     def _run_context_menu_at_click(self, event=None):
+        entries = getattr(self, '_drag_entries', None)
+        if entries:
+            self._drag_entries = []
+            try:
+                from pyfigures.gui.drag_sketch import finish_drag_menu
+                finish_drag_menu(self, self.contextMenu, entries)
+            except Exception:
+                traceback.print_exc()           # the menu still works without sketches
         if event is not None:
             # Map the position of the drop event to global coordinates
             global_pos = self.mapToGlobal(event.pos())

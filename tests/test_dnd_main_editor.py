@@ -406,12 +406,10 @@ def test_drag_image_onto_other_rows_image_offers_choices(canvas_fig, ui):
     drag(g, _by_name(g, "f0"), _centre(panel, _by_name(g, "f2")))
     offered = _offered(ui)
     assert offered, "no menu after dropping an image onto another row"
-    assert set(offered) & {"Swap", "To row", "To column", "Add to group (keep dragged shape layout)"}
+    assert {"Swap", "To row", "To column"} <= set(offered), offered
 
 
-@pytest.mark.parametrize("choice", ["Swap", "To row", "To column",
-                                    "Add to group (keep dragged shape layout)",
-                                    "Add to group (don't keep dragged shape layout)"])
+@pytest.mark.parametrize("choice", ["Swap", "To row", "To column"])     # "Join this row" = To row here: not offered
 def test_each_drop_choice_keeps_every_image(canvas_fig, ui, choice):
     g, _ = canvas_fig
     panel = g.paint.EZFIG_panel
@@ -427,7 +425,7 @@ def test_each_drop_choice_keeps_every_image(canvas_fig, ui, choice):
     _no_overlap(g)
     a, c = _by_name(g, "f0"), _by_name(g, "f2")
     top = panel.get_top_parent_of_shape
-    if choice.startswith("Add to group"):
+    if choice == "To row":
         assert top(a) is top(c)
     if choice == "Swap":
         assert top(a) is not top(_by_name(g, "f1"))    # A left its row...

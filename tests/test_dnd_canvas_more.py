@@ -86,14 +86,19 @@ def test_loose_onto_loose_swap(loose_fig, ui):
 # a row onto a loose image, a loose image onto a row
 # ---------------------------------------------------------------------------
 
+def _take_into(offered):
+    return next((x for x in offered if x.startswith("Take ") and x.endswith("into the dragged row")), None)
+
+
 def test_row_onto_loose_image_offers_add_to_group(loose_fig, ui):
     g = loose_fig
     row = groups(g)[0]
     offered = _drop(g, ui, row, loose(g)[0])
-    assert {"Add to group", "To row", "To column"} <= set(offered), offered
+    # "To column" looks exactly like Swap here (the loose image above the row): shown once
+    assert _take_into(offered) and {"To row", "Swap"} <= set(offered), offered
 
 
-@pytest.mark.parametrize("choice", ["Add to group", "To row", "To column"])
+@pytest.mark.parametrize("choice", ["take into", "To row", "Swap"])
 def test_row_onto_loose_image_choices_keep_every_image(loose_fig, ui, choice):
     g = loose_fig
     panel = g.paint.EZFIG_panel
@@ -101,16 +106,18 @@ def test_row_onto_loose_image_choices_keep_every_image(loose_fig, ui, choice):
     row = groups(g)[0]
     row_imgs = list(row.content)
     target = loose(g)[0]
+    if choice == "take into":
+        choice = _take_into(_drop(g, ui, row, target))
     _drop(g, ui, row, target, pick=choice)
     assert _inventory(g) == before, choice
-    assert target not in panel.shapes_to_draw              # the loose image joined a group
     top = panel.get_top_parent_of_shape(target)
-    if choice == "Add to group":
-        assert top is row
+    if choice.startswith("Take "):
+        assert top is row and target not in panel.shapes_to_draw
     elif choice == "To row":                               # a row into a row: merged flat
         assert top.orientation == "X" and all(i in top.content for i in row_imgs + [target])
-    else:                                                  # a row into a column: kept as a row
-        assert top.orientation == "Y" and row in top.content
+    else:                                                  # swapped: still on its own, now above the row
+        assert target in panel.shapes_to_draw
+        assert panel.shapes_to_draw.index(target) < panel.shapes_to_draw.index(row)
     _no_overlap(g)
 
 
@@ -121,12 +128,14 @@ def test_loose_image_onto_image_in_row(loose_fig, ui):
     e = loose(g)[0]
     offered = _drop(g, ui, e, row.content[0])
     assert offered, "no menu when a loose image is dropped onto a row"
-    add = next((x for x in offered if x.startswith("Add to group")), None)
-    assert add, offered
+    # "Join this row" gives the same as "To row" (the image at the end of the row): shown once
+    assert "To row" in offered and not any(x.startswith("Join") for x in offered), offered
+    row_imgs = list(row.content)
     before = _inventory(g)
-    _drop(g, ui, e, row.content[0], pick=add)
+    _drop(g, ui, e, row.content[0], pick="To row")
     assert _inventory(g) == before
-    assert panel.get_top_parent_of_shape(e) is row
+    top = panel.get_top_parent_of_shape(e)
+    assert top.orientation == "X" and list(top.content) == row_imgs + [e]
     _no_overlap(g)
 
 

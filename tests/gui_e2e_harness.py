@@ -1131,7 +1131,7 @@ DROP_SITUATIONS = ("one image on empty canvas", "several images on empty canvas"
 
 DRAG_SITUATIONS = ("image onto image of another row", "row onto row",
                    "loose image onto loose image", "row onto loose image", "image to empty space",
-                   "loose image onto image in row")
+                   "loose image onto image in row", "image in row onto loose image")
 
 
 def select_kind(qapp, g, kind):

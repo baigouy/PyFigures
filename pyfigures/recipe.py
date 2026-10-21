@@ -1235,12 +1235,15 @@ def _last_series_panel(pyf, group_path):
     grp, err = _navigate_group(ET.parse(pyf).getroot(), group_path)
     if err:
         raise RecipeError(err)
+    from pyfigures.mcp_tools.core import _is_empty_placeholder
     path = list(group_path)
     while True:
         content = list(grp.find("content"))
         imgs = [c for c in content if c.tag == "Image2D"]
-        if imgs:
-            return path, len(imgs) - 1
+        # the last frame, not the empty panel padding a montage's last row
+        real = [i for i, c in enumerate(imgs) if not _is_empty_placeholder(c)]
+        if real:
+            return path, real[-1]
         subs = [c for c in content if c.tag == "Group"]
         if not subs:
             raise RecipeError(f"group {group_path} has no panels")

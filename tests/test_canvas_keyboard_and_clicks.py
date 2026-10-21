@@ -328,9 +328,11 @@ def test_text_font_applies_to_non_letter_text_only(gui, cap, ui):
 def test_zoom_in_shortcuts(gui, seq):
     panel = gui.paint.EZFIG_panel
     gui.paint.zoom_reset()
-    w0 = panel.width()
+    b = panel.updateBounds()
     press_key(gui, seq)
-    assert abs(panel.scale - 1.1) < 1e-6 and panel.width() > w0
+    # the canvas holds the zoomed figure (it is also never smaller than the
+    # visible area, so a small figure does not make it wider)
+    assert abs(panel.scale - 1.1) < 1e-6 and panel.width() >= (b.x() + b.width()) * 1.1
 
 
 @pytest.mark.parametrize("seq", ["Ctrl+-", "Ctrl+Shift+-"])
