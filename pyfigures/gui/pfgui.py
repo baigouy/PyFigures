@@ -49,7 +49,7 @@ from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTran
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit, QInputDialog, \
-    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout, QSlider
+    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout, QSlider, QProgressDialog
 from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool, QUrl
 import qtawesome as qta
 import logging
@@ -5571,11 +5571,47 @@ class EZFIG_GUI(QMainWindow):
         lay = QVBoxLayout(frame)
         view = QTextBrowser(frame)
         view.setPlainText(text)
-        view.setMinimumSize(560, 420)
+        view.setMinimumSize(420, 220)
         lay.addWidget(view)
+        # auto_adjust: without it the dialog took 85 % of the screen
         dlg = CustomDialog(title=title, message="", main_widget=frame,
-                           options=['Ok'], parent=self)
+                           options=['Ok'], parent=self, auto_adjust=True)
+        if hasattr(dlg, 'resize'):          # (tests stand in a bare object for the dialog)
+            dlg.resize(min(720, max(480, int(self.width() * 0.6))), min(520, max(300, int(self.height() * 0.6))))
         dlg.exec_()
+
+    def _run_busy(self, message, fn, *args, **kwargs):
+        """fn(*args, **kwargs) in a worker thread while a busy bar shows: the QC
+        tools can take a while (they read every source image) and the window
+        looked hung. Exceptions are re-raised here."""
+        import threading
+        from qtpy.QtCore import QEventLoop
+        box = {}
+
+        def work():
+            try:
+                box['res'] = fn(*args, **kwargs)
+            except BaseException as e:      # handed back to the GUI thread
+                box['err'] = e
+        worker = threading.Thread(target=work, daemon=True)
+        busy = QProgressDialog(message, None, 0, 0, self)
+        busy.setWindowTitle('Please wait')
+        busy.setWindowModality(Qt.WindowModal)
+        busy.setCancelButton(None)
+        busy.setMinimumDuration(200)
+        self._busy_dialog = busy
+        worker.start()
+        try:
+            while worker.is_alive():
+                QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
+                worker.join(0.03)
+        finally:
+            busy.close()
+            busy.deleteLater()
+            self._busy_dialog = None
+        if 'err' in box:
+            raise box['err']
+        return box.get('res')
 
     def mcp_history_dialog(self):
         """Show the MCP calls logged for the saved figure, with an 'Undo last
@@ -5656,7 +5692,8 @@ class EZFIG_GUI(QMainWindow):
         try:
             p = self._save_current_to_temp_pyf()
             from pyfigures.gui.qc_reports import audit_report
-            self._show_report("Figure audit", audit_report(audit_figure(p)))
+            raw = self._run_busy('Auditing the figure…', audit_figure, p)
+            self._show_report("Figure audit", audit_report(raw))
         except Exception:
             logger.error('audit failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Audit failed', 'Could not audit (see log).')
@@ -5677,7 +5714,8 @@ class EZFIG_GUI(QMainWindow):
         try:
             p = self._save_current_to_temp_pyf()
             self._show_report("Journal compliance",
-                              check_journal_compliance(p, **kwargs))
+                              self._run_busy('Checking the journal rules…', check_journal_compliance,
+                                             p, **kwargs))
         except Exception:
             logger.error('compliance failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Check failed', 'Could not check (see log).')
@@ -5699,7 +5737,9 @@ class EZFIG_GUI(QMainWindow):
                       if k in v}
         try:
             p = self._save_current_to_temp_pyf()
-            self._show_report("Print resolution", check_resolution(p, **res_kwargs))
+            self._show_report("Print resolution",
+                              self._run_busy('Checking the print resolution…', check_resolution,
+                                             p, **res_kwargs))
         except Exception:
             logger.error('resolution failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Check failed', 'Could not check (see log).')
@@ -5775,7 +5815,8 @@ class EZFIG_GUI(QMainWindow):
             p = self._save_current_to_temp_pyf()
             self.statusBar().showMessage('Checking image integrity, please wait...')
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            res = check_image_integrity(p)
+            res = self._run_busy('Checking image integrity (every panel is compared)…',
+                                 check_image_integrity, p)
         except Exception:
             QApplication.restoreOverrideCursor()
             self.statusBar().clearMessage()
@@ -5794,7 +5835,7 @@ class EZFIG_GUI(QMainWindow):
         import json
         try:
             p = self._save_current_to_temp_pyf()
-            raw = check_scale_consistency(p)
+            raw = self._run_busy('Checking the scale bars…', check_scale_consistency, p)
         except Exception:
             logger.error('scale consistency check failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Check failed',
@@ -5835,7 +5876,8 @@ class EZFIG_GUI(QMainWindow):
             p = self._save_current_to_temp_pyf()
             self.statusBar().showMessage('Running pre-submission checks, please wait...')
             QApplication.setOverrideCursor(Qt.WaitCursor)
-            raw = figure_review_brief(p)
+            raw = self._run_busy('Running every check (this reads all the source images)…',
+                                 figure_review_brief, p)
         except Exception:
             QApplication.restoreOverrideCursor()
             self.statusBar().clearMessage()
@@ -5881,7 +5923,8 @@ class EZFIG_GUI(QMainWindow):
         try:
             p = self._save_current_to_temp_pyf()
             from pyfigures.gui.qc_reports import ledger_report
-            self._show_report('Adjustment provenance ledger', ledger_report(export_adjustment_ledger(p)))
+            raw = self._run_busy('Collecting the image adjustments…', export_adjustment_ledger, p)
+            self._show_report('Adjustment provenance ledger', ledger_report(raw))
         except Exception:
             logger.error('adjustment ledger failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not build the ledger (see log).')

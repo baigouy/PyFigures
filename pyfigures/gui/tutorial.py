@@ -647,12 +647,20 @@ class _DialogInjector(QObject):
         super().__init__()
         self._ctrl = controller
         self._hints: dict = {}   # id(dialog) → _InDialogHint
+        self._shown: set = set()   # id(dialog) of dialogs not destroyed yet
 
     def eventFilter(self, obj, event):
         if isinstance(obj, QDialog):
             t = event.type()
             if t == QEvent.Show:
-                QTimer.singleShot(150, lambda d=obj: self._inject(d))
+                # a dialog made by Qt itself is not tracked by sip: its wrapper
+                # survives the C++ object and isdeleted() says False (access
+                # violation in _inject) — the destroyed signal is reliable
+                key = id(obj)
+                if key not in self._shown:
+                    self._shown.add(key)
+                    obj.destroyed.connect(lambda *_a, k=key: self._shown.discard(k))
+                QTimer.singleShot(150, lambda d=obj, k=key: self._inject(d) if k in self._shown else None)
             elif t in (QEvent.Hide, QEvent.Close):
                 self._remove(obj)
             elif t == QEvent.Resize:

@@ -566,7 +566,7 @@ ACTIONS = {
     "menu: QC > Show color-blind assistant": spec(chk_window("color_assistant"), inv=False),
     "menu: QC > Check image integrity (duplicates / clones)…": spec(report_says("panel"),
                                                                    [("Image integrity", "report")], inv=False),
-    "menu: QC > Check scale-bar consistency…": spec(report_says("no pixel size set", "group 1, img 1"),
+    "menu: QC > Check scale-bar consistency…": spec(report_says("no pixel size set", "panel D"),
                                                     [("Scale-bar consistency", "report")],
                                                     inv=False),
     "menu: QC > Pre-submission review (all checks)…": spec(report_says("Mechanical checks", "Reviewer questions"),

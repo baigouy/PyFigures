@@ -96,6 +96,45 @@ def test_ledger_and_fonts_reports_are_plain(fig):
     assert "no real Helvetica" in fonts
 
 
+@pytest.fixture
+def gui(qapp, monkeypatch):
+    from qtpy.QtWidgets import QMessageBox
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    EZFIG_GUI.show_tips = lambda self: None
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    g = EZFIG_GUI()
+    g.resize(1400, 1000)
+    yield g
+    g._dirty = False
+    g.close()
+
+
+def test_qc_runs_with_a_busy_bar(gui):
+    seen = []
+
+    def slow(x):
+        import time
+        time.sleep(0.4)
+        seen.append(gui._busy_dialog is not None)
+        return x * 2
+    assert gui._run_busy("Working…", slow, 21) == 42
+    assert seen == [True] and gui._busy_dialog is None
+
+    def boom():
+        raise ValueError("bad figure")
+    with pytest.raises(ValueError, match="bad figure"):
+        gui._run_busy("Working…", boom)
+
+
+def test_report_window_is_not_screen_sized(gui, monkeypatch):
+    from batoolset.GUI import customdialog
+    sizes = []
+    monkeypatch.setattr(customdialog.CustomDialog, "exec_", lambda self: sizes.append(self.size()) or 1)
+    gui._show_report("Figure audit", "line\n" * 5)
+    # it opened at 85 % of the screen, bigger than the main window
+    assert sizes and sizes[0].width() <= 720 and sizes[0].height() <= 520
+
+
 def test_scale_consistency_note_in_gui_words():
     from pyfigures.gui.qc_reports import humanize
     t = humanize("No panel has a pixel size set. Set px_to_unit via set_scale_bar or configure_image.\n"

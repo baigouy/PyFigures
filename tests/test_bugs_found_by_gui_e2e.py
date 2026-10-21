@@ -273,6 +273,43 @@ def test_tutorial_hint_injector_ignores_a_dialog_already_deleted(qapp):
     inj._inject(dlg)                          # must not raise
 
 
+def test_tutorial_hint_timer_skips_a_destroyed_dialog(qapp):
+    """A dialog Qt made itself is not tracked by sip: isdeleted() stays False
+    after it is destroyed and the 150 ms timer touched freed memory (access
+    violation during Review → Import comments). The timer now checks that the
+    dialog was not destroyed."""
+    import time
+    from qtpy.QtCore import QEvent
+    from qtpy.QtWidgets import QDialog
+    from pyfigures.gui.tutorial import _DialogInjector
+
+    class Ctrl:
+        class _bubble:
+            @staticmethod
+            def isVisible():
+                return True
+    inj = _DialogInjector(Ctrl())
+    touched = []
+    inj._inject = lambda d: touched.append(d)
+    dlg = QDialog()
+    inj.eventFilter(dlg, QEvent(QEvent.Type.Show))
+    dlg.deleteLater()
+    from qtpy.QtCore import QCoreApplication
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    t0 = time.time()
+    while time.time() - t0 < 0.4:
+        qapp.processEvents()
+        time.sleep(0.01)
+    assert touched == []
+    alive = QDialog()
+    inj.eventFilter(alive, QEvent(QEvent.Type.Show))
+    t0 = time.time()
+    while time.time() - t0 < 0.4:
+        qapp.processEvents()
+        time.sleep(0.01)
+    assert touched == [alive]
+
+
 def test_crop_guide_follows_the_panel_the_editor_replaced(qapp, two_rows):
     """Show me how › Crop: the image editor replaces the edited panel by its
     clone, so the guide watching the old object never saw the crop."""
