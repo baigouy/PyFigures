@@ -216,6 +216,44 @@ def test_letters_without_ascender_are_not_lower_than_b(tmp_path, qapp):
     assert ink_top("a", "bottom left") > ink_top("b", "bottom left") + 5
 
 
+def test_pinned_elements_keep_a_gap_from_the_edge_but_insets_sit_flush(qapp):
+    from qtpy.QtGui import QImage, QPainter
+    from batoolset.drawings.shapes.Position import Position
+    from batoolset.drawings.shapes.image2d import EDGE_MARGIN, Image2D
+    from batoolset.drawings.shapes.txt2d import TAText2D
+    panel = Image2D(np.zeros((200, 300), np.uint8))
+    panel.setTopLeft(10, 20)
+    letter = TAText2D("a", placement=Position("top left"), is_letter=True)
+    label = TAText2D("label", placement=Position("bottom right"))
+    inset = Image2D(np.zeros((40, 60), np.uint8))
+    inset.placement = Position("top right")
+    inset.fraction_of_parent_image_width_if_image_is_inset = 0.2
+    panel.annotations = [letter, label, inset]
+    img = QImage(400, 300, QImage.Format.Format_RGB32)
+    p = QPainter(img)
+    panel.draw(p)
+    p.end()
+    assert EDGE_MARGIN == 2
+    assert (letter.x(), letter.y()) == (10 + 2, 20 + 2)
+    assert label.x() + label.width(all=True) == pytest.approx(10 + panel.width(all=True) - 2)
+    assert label.y() + label.height(all=True) == pytest.approx(20 + panel.height(all=True) - 2)
+    assert inset.y() == 20 and inset.x() + inset.width(all=True) == pytest.approx(10 + panel.width(all=True))
+
+
+def test_the_tip_bubble_closes_on_a_double_click(gui, qapp):
+    from qtpy.QtCore import Qt
+    from qtpy.QtTest import QTest
+    gui._edit_hint_shown = False
+    gui.edit_hint_action.setChecked(True)
+    box = gui._maybe_show_edit_hint()
+    assert box.isVisible()
+    QTest.mouseDClick(gui.paint, Qt.MouseButton.LeftButton)        # double click on the canvas
+    QApplication.processEvents()
+    assert not box.isVisible()
+    QTest.mouseDClick(gui.paint, Qt.MouseButton.LeftButton)        # the filter is gone: no error
+    gui._edit_hint_shown = True
+
+
 # --- scale bar ---------------------------------------------------------------------
 
 def test_scale_bar_has_no_text_unless_one_is_typed(qapp):

@@ -242,6 +242,17 @@ class _HintBubble(QFrame):
         layout.addWidget(self.dont)
         self.setFixedWidth(340)
         QTimer.singleShot(timeout_ms, lambda: _qt_alive(self) and self.close())
+        # a double click anywhere (on a panel: the tip was followed) closes it
+        QApplication.instance().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonDblClick:
+            self.close()
+        return False
+
+    def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)
 
     def text(self):
         return self.label.text()
