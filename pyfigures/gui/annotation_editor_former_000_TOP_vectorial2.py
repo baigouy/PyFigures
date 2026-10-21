@@ -1287,8 +1287,16 @@ class MainWindow(QWidget):
             self.proj_z_range_widget.setVisible(False)
             self.image_projection_box_layout.addWidget(self.proj_z_range_widget)
 
-            self.proj_z_start_spin.valueChanged.connect(self.proj_z_range_changed)
-            self.proj_z_end_spin.valueChanged.connect(self.proj_z_range_changed)
+            # typing "100" goes through 1 and 10: the range is applied once the
+            # user pauses (or leaves the box / presses Enter), not per keystroke
+            self.timer_proj_range = QTimer(self)
+            self.timer_proj_range.setSingleShot(True)
+            self.timer_proj_range.setInterval(400)
+            self.timer_proj_range.timeout.connect(self.apply_proj_z_range)
+            self._proj_range_sender = None
+            for spin in (self.proj_z_start_spin, self.proj_z_end_spin):
+                spin.valueChanged.connect(self.proj_z_range_changed)
+                spin.editingFinished.connect(self.apply_proj_z_range)
 
             layout_comments.addWidget(self.image_projection_box)
 
@@ -2267,6 +2275,8 @@ class MainWindow(QWidget):
                     pass
         self.proj_z_range_widget.setVisible(has_proj and has_z)
         if has_proj and has_z:
+            if self.timer_proj_range.isActive():
+                self.apply_proj_z_range()       # what is being typed wins over a refresh
             self.ignore_changes = True
             self.proj_z_start_spin.setMaximum(n_z - 1)
             self.proj_z_end_spin.setMaximum(n_z)
@@ -2277,18 +2287,30 @@ class MainWindow(QWidget):
             self.ignore_changes = False
 
     def proj_z_range_changed(self):
-        """Called when either Z-range spinbox changes."""
+        """Called when either Z-range spinbox changes: applied after a short
+        pause (see timer_proj_range)."""
         if self.ignore_changes:
             return
+        self._proj_range_sender = self.sender()
+        if self._proj_range_sender is not None and self._proj_range_sender.hasFocus():
+            self.timer_proj_range.start()       # being typed / stepped: wait for a pause
+        else:
+            self.apply_proj_z_range()           # set from code: at once
+
+    def apply_proj_z_range(self):
+        """Apply the Z range typed in the two spin boxes to the image."""
+        self.timer_proj_range.stop()
         bg = self.qt_viewer.background
-        if bg is None:
+        if bg is None or self.ignore_changes:
             return
         z_start = self.proj_z_start_spin.value()
         z_end   = self.proj_z_end_spin.value()
+        if (z_start, z_end) == (getattr(bg, 'projection_z_start', None), getattr(bg, 'projection_z_end', None)):
+            return
         # Keep start < end
         if z_start >= z_end:
             self.ignore_changes = True
-            if self.sender() is self.proj_z_start_spin:
+            if self._proj_range_sender is self.proj_z_start_spin:
                 self.proj_z_end_spin.setValue(z_start + 1)
                 z_end = z_start + 1
             else:

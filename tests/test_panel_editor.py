@@ -282,6 +282,56 @@ def test_projection_and_z_range(fig, ui, proj):
     assert img.projection is None and img.projection_z_start is None
 
 
+def test_typing_a_z_range_waits_for_a_pause_and_survives_a_style_change(qapp, tmp_path, ui):
+    """Typing 100 in 'Z from' of a 300-slice stack went through 1 and 10
+    (recomputing each time) and the box came back to 1; changing Max → Avg
+    must keep the range."""
+    from qtpy.QtTest import QTest
+    from pyfigures import mcp_server as M
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    stack = _img(tmp_path / "big.tif", np.stack([np.full((40, 50), v % 250, np.uint8) for v in range(300)]), "dhw")
+    seen = {}
+
+    def do(ed):
+        ed.projection_combo_box.setCurrentIndex(ed.projection_combo_box.findData("max"))
+        bg = ed.qt_viewer.background
+        start = ed.proj_z_start_spin
+        ed.show()
+        start.setFocus()
+        start.lineEdit().selectAll()
+        QTest.keyClicks(start, "100")
+        QApplication.processEvents()
+        seen["while_typing"] = bg.projection_z_start          # nothing applied mid-typing
+        ed.proj_z_end_spin.setFocus()                         # leaves the box: applied at once
+        QApplication.processEvents()
+        seen["after"] = (start.value(), bg.projection_z_start, bg.projection_z_end)
+        ed.projection_combo_box.setCurrentIndex(ed.projection_combo_box.findData("avg"))
+        seen["after_avg"] = (start.value(), ed.proj_z_end_spin.value(), bg.projection_z_start)
+    pyf = str(tmp_path / "big.pyf")
+    M.create_figure(pyf, mode="groups", num_groups=1, orientation="X", spacing=3)
+    M.add_image(pyf, [0], stack)
+    EZFIG_GUI.show_tips = lambda self: None
+    g = EZFIG_GUI()
+    g.show()
+    g._start_pyf_loader([pyf], append=False, reset_undo=True)
+    t0 = time.time()
+    while time.time() - t0 < 60:
+        qapp.processEvents()
+        ims = _imgs(g)
+        if ims and ims[0].img is not None and not getattr(g, "_active_img_loaders", None):
+            break
+        time.sleep(0.005)
+    try:
+        edit(g, ui, "big", do)
+        assert seen["while_typing"] is None, seen
+        assert seen["after"] == (100, 100, 300), seen
+        assert seen["after_avg"] == (100, 300, 100), seen
+    finally:
+        g._dirty = False
+        g._stop_all_img_loaders()
+        g.close()
+
+
 def test_z_start_not_past_end(fig, ui):
     def do(ed):
         ed.projection_combo_box.setCurrentIndex(ed.projection_combo_box.findData("max"))
