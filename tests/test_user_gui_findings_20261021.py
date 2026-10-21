@@ -190,6 +190,32 @@ def test_recipe_letters_follow_the_figure_rule(tmp_path, qapp):
     assert colours == ["ffffff", "000000", "ffffff"], colours
 
 
+def test_letters_without_ascender_are_not_lower_than_b(tmp_path, qapp):
+    """'a' and 'c' sat lower in the corner than 'b': the line box leaves room
+    above letters with no ascender. Their ink top now lines up with b's."""
+    from qtpy.QtGui import QImage, QPainter
+    from batoolset.drawings.shapes.Position import Position
+    from batoolset.drawings.shapes.txt2d import TAText2D
+
+    def ink_top(text, placement="top left"):
+        letter = TAText2D(f'<span style="font-family:Arial; font-size:40pt; color:#000000">{text}</span>',
+                          placement=Position(placement), is_letter=True)
+        img = QImage(200, 200, QImage.Format.Format_RGB32)
+        img.fill(0xFFFFFF)
+        p = QPainter(img)
+        letter.draw(p)
+        p.end()
+        arr = np.frombuffer(img.constBits().asstring(img.sizeInBytes()), np.uint8).reshape(200, img.bytesPerLine() // 4, 4)
+        return int(np.flatnonzero((arr[..., :3].min(axis=2) < 128).any(axis=1))[0])
+
+    b = ink_top("b")
+    for t in ("a", "c", "e", "s"):
+        assert abs(ink_top(t) - b) <= 1, (t, ink_top(t), b)
+    assert abs(ink_top("A") - ink_top("B")) <= 1
+    # bottom letters sit on the baseline: not moved
+    assert ink_top("a", "bottom left") > ink_top("b", "bottom left") + 5
+
+
 # --- scale bar ---------------------------------------------------------------------
 
 def test_scale_bar_has_no_text_unless_one_is_typed(qapp):

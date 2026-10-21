@@ -697,7 +697,10 @@ def test_edit_hint_bubble_once_and_dont_show_again(gui, qapp):
     gui._edit_hint_shown = False
     gui.edit_hint_action.setChecked(True)
     box = gui._maybe_show_edit_hint()
-    assert box is not None and "Double-click an image" in box.text()
+    assert box is not None and "double-click an image" in box.text()
+    # a bubble inside the window, not a (modal) dialog: the user keeps working
+    assert box.parent() is gui and not box.isWindow() and QApplication.activeModalWidget() is None
+    assert gui.rect().contains(box.geometry())
     assert gui._maybe_show_edit_hint() is None               # once per session
     gui._edit_hint_check.setChecked(True)                    # "Don't show this again"
     assert not gui.edit_hint_action.isChecked() and load_show_edit_hint() is False
@@ -706,6 +709,12 @@ def test_edit_hint_bubble_once_and_dont_show_again(gui, qapp):
     assert gui._maybe_show_edit_hint() is None               # switched off: never shown
     gui.edit_hint_action.setChecked(True)
     assert load_show_edit_hint() is True
+    gui._edit_hint_shown = False
+    box = gui._maybe_show_edit_hint()
+    from qtpy.QtCore import Qt
+    from qtpy.QtTest import QTest
+    QTest.mouseClick(box, Qt.MouseButton.LeftButton)           # a click on the bubble closes it
+    assert not box.isVisible()
 
 
 def test_a_single_dropped_stack_offers_a_montage(gui, qapp, tmp_path, monkeypatch):

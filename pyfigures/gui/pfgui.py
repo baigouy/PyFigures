@@ -42,14 +42,14 @@ from batoolset.drawings.shapes.group import Group, set_to_size, set_to_width, se
 from pyfigures.gui.group_builder_GUI import PanelOrRow
 from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 from batoolset.img import Img, guess_dimensions, get_series_info, is_forbidden_image_file, list_image_files_in_folder, \
-    is_image_file
+    is_image_file, IMAGE_FILE_EXTS
 import traceback
 from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTransform, QDesktopServices, \
     QIcon, QPixmap
 from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QScrollArea, QVBoxLayout, QPushButton, \
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit, QInputDialog, \
-    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog
+    QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout
 from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool, QUrl
 import qtawesome as qta
 import logging
@@ -213,6 +213,58 @@ def _qt_alive(obj):
             return False
 
 
+class _HintBubble(QFrame):
+    """A tip floating over the bottom-right corner of the editor: not a window
+    and not modal, so the user keeps working; a click on it (or ✕) closes it,
+    and it fades by itself after a while."""
+
+    def __init__(self, parent, html, timeout_ms=25000):
+        super().__init__(parent)
+        self.setObjectName('hintBubble')
+        self.setStyleSheet('#hintBubble { background: #fff8d6; border: 1px solid #c9b458; '
+                           'border-radius: 8px; } QLabel, QCheckBox { color: #333; }')
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip('Click to close')
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 8, 8)
+        top = QHBoxLayout()
+        self.label = QLabel(html, self)
+        self.label.setWordWrap(True)
+        top.addWidget(self.label, 1)
+        close = QPushButton('✕', self)
+        close.setFlat(True)
+        close.setFixedSize(22, 22)
+        close.setToolTip('Close this tip')
+        close.clicked.connect(self.close)
+        top.addWidget(close, 0, Qt.AlignTop)
+        layout.addLayout(top)
+        self.dont = QCheckBox("Don't show this again", self)
+        layout.addWidget(self.dont)
+        self.setFixedWidth(340)
+        QTimer.singleShot(timeout_ms, lambda: _qt_alive(self) and self.close())
+
+    def text(self):
+        return self.label.text()
+
+    def show_in(self, area):
+        """Show it at the bottom-right of *area* (a widget of the window)."""
+        self.adjustSize()
+        corner = area.mapTo(self.parentWidget(), area.rect().bottomRight())
+        self.move(max(0, corner.x() - self.width() - 16), max(0, corner.y() - self.height() - 16))
+        self.show()
+        self.raise_()
+
+    def mousePressEvent(self, event):
+        self.close()
+
+
+class _LoadFailed:
+    """What the loader keeps for a file none of the readers could open."""
+
+    def __init__(self, error):
+        self.error = error
+
+
 class _ImgLoaderWorker(QObject):
     """Loads Img pixel data for a list of file paths in a background thread.
     Results are stored directly in *results* dict to avoid Qt signal serialization
@@ -246,8 +298,8 @@ class _ImgLoaderWorker(QObject):
                 else:
                     serie = self._series_map.get(path)
                     img = Img(path, serie_to_open=serie)
-            except Exception:
-                img = None
+            except Exception as e:
+                img = _LoadFailed(e)      # not a panel: the GUI says the file could not be read
             self._results[path] = img   # write before signalling
             self.img_ready.emit(path)
         self.finished.emit()
@@ -2576,10 +2628,15 @@ class EZFIG_GUI(QMainWindow):
             self.pbar.hide()
             self.statusBar().clearMessage()
             result = []
+            unreadable = []
             for item in pending:
                 path, serie = _item_path_serie(item)
                 if path is not None:
                     img = loaded_imgs.get(path)
+                    if isinstance(img, _LoadFailed):
+                        unreadable.append(os.path.basename(path))
+                        logger.warning('Could not read ' + path + ': ' + str(img.error))
+                        continue
                     Image2D._lazy_mode = True
                     try:
                         img2d = Image2D(path, serie_to_open=serie)
@@ -2592,8 +2649,11 @@ class EZFIG_GUI(QMainWindow):
                 else:
                     img2d = item
                 result.append(img2d)
-            callback(result)
+            if unreadable:
+                self.statusBar().showMessage('Could not read (no reader opens this file): '
+                                             + ', '.join(unreadable), 10000)
             if result:
+                callback(result)
                 QTimer.singleShot(0, self._maybe_show_edit_hint)
             thread.quit()
             try:
@@ -3037,8 +3097,8 @@ class EZFIG_GUI(QMainWindow):
             panel._add_as_new_group(combined, orientation=orientation, remove_from_parents=True)
         self._load_images_then_callback(lst, _combine)
 
-    _IMAGE_FILTER = ("Images (*.tif *.tiff *.png *.jpg *.jpeg *.bmp *.gif *.czi *.lif *.lsm *.nd2 "
-                     "*.oib *.oif *.ome.tif *.mp4 *.avi *.mkv);;All Files (*)")
+    # every format the drop accepts (the image formats Fiji opens)
+    _IMAGE_FILTER = ("Images (" + " ".join("*" + e for e in IMAGE_FILE_EXTS) + ");;All Files (*)")
 
     def add_images_from_files_action(self, how):
         """Insert → Images from files: pick files, then do what the matching
@@ -3159,21 +3219,13 @@ class EZFIG_GUI(QMainWindow):
             QTimer.singleShot(1500, lambda: _qt_alive(self) and self._maybe_show_edit_hint())
             return None
         self._edit_hint_shown = True
-        box = QMessageBox(self)
-        box.setWindowTitle('Tip: editing a panel')
-        box.setIcon(QMessageBox.Information)
-        box.setText('<b>Double-click an image</b> to crop, rotate, change its colours or draw '
-                    'on it (ROIs, text, arrows, scale bar).<br><br>'
-                    'Drag a panel onto another to swap or group them; right-click for more.')
-        # parented and referenced: an orphan checkbox wrapper was collected and
-        # box.checkBox() then crashed (access violation)
-        dont = QCheckBox("Don't show this again", box)
-        box.setCheckBox(dont)
-        self._edit_hint_check = dont
-        box.setStandardButtons(QMessageBox.Ok)
-        box.setModal(False)
-        dont.toggled.connect(lambda on: self.edit_hint_action.setChecked(not on))
-        box.show()
+        box = _HintBubble(self, '<b>Tip: double-click an image</b> to crop, rotate, change its '
+                                'colours or draw on it (ROIs, text, arrows, scale bar).<br>'
+                                'Drag a panel onto another to swap or group them; right-click '
+                                'for more.')
+        self._edit_hint_check = box.dont
+        box.dont.toggled.connect(lambda on: self.edit_hint_action.setChecked(not on))
+        box.show_in(self.centralWidget() or self)
         self._edit_hint_box = box
         return box
 
@@ -4448,7 +4500,7 @@ class EZFIG_GUI(QMainWindow):
         composite panel (MCP: add_channel_merge — a scripted, re-rendering panel)."""
         files = openFileNamesDialog(
             parent_window=self,
-            extensions="Images (*.tif *.tiff *.png *.jpg *.jpeg *.czi *.lif *.lsm);;All Files (*)")
+            extensions=self._IMAGE_FILTER)
         if not files:
             return
         if len(files) < 2:

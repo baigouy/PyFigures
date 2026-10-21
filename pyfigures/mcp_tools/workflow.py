@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from textwrap import indent
 from mcp.server.fastmcp import FastMCP, Image
+from batoolset.img import is_image_file
 from .app import (
     mcp,
 )
@@ -54,10 +55,6 @@ from .overlays import (
 # Folder-to-figure workflow
 # ===========================================================================
 
-_IMAGE_EXTENSIONS: frozenset[str] = frozenset({
-    ".tif", ".tiff", ".lif", ".czi", ".nd2", ".ims",
-    ".oib", ".oif", ".jpg", ".jpeg", ".png", ".bmp",
-})
 
 _FLUORESCENCE_LUTS: dict[int, list[str]] = {
     1: ["GRAY"],
@@ -167,7 +164,7 @@ def _collect_image_files(
                 continue
             if not fnmatch.fnmatch(name.lower(), pattern.lower()):
                 continue
-            if catch_all and Path(name).suffix.lower() not in _IMAGE_EXTENSIONS:
+            if catch_all and not is_image_file(name):       # the formats the GUI drop takes
                 continue
             files.append(fpath)
     return natsorted(files)
