@@ -632,6 +632,8 @@ key: guides are interactive by nature.
 | `undo_last(pyf_path, steps, force)` | Put the figure (`.pyf` and sidecars) back as it was before the last *steps* changing MCP calls; refused when the figure was changed since outside the server (GUI…) unless `force=True`. GUI: the same dialog; command line: `python -m pyfigures.history fig.pyf --undo 2` |
 
 | `mcp_server_info()` | The Python running the server, the number of tools, which MCP clients have it registered and whether the HTTP server runs. Read-only. GUI: Tools → MCP server…; command line: `python -m pyfigures.mcp_control status` |
+| `list_bug_recordings(folder=None)` | The bug recordings the user made in the GUI (Help → Debug → Start recording a bug…), newest first: folder, date, steps, Python errors, what went wrong. Recordings stay in the user's own folder, never in a repository. Command line: `python -m pyfigures.gui.bug_recorder list` |
+| `read_bug_recording(path)` | One recording step by step: menu actions, right-click / drop-menu choices, drops, dialogs with their values, file pickers, double-clicks and drags, the figure's rows after each step, errors with tracebacks, the steps marked wrong, what went wrong and what was expected, screenshot paths. `python -m pyfigures.gui.bug_recorder make-test <folder> <tests/recordings/name>` turns it into a regression test (replayed by tests/test_recordings.py). |
 
 **Call history.** Every tool call that reaches the server and names a figure
 (any `.pyf` argument, or a recipe's `output`) is appended to

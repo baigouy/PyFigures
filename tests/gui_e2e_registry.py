@@ -35,6 +35,13 @@ LINKED = {
                                   "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
+    # records the user's own clicks: real events are sent through the application there
+    "menu: Help > Debug > Start recording a bug…": [
+        "test_bug_recorder.py::test_a_session_is_recorded_as_replayable_steps"],
+    "menu: Help > Debug > Stop recording and describe the bug…": [
+        "test_bug_recorder.py::test_a_session_is_recorded_as_replayable_steps",
+        "test_bug_recorder.py::test_report_dialog_notes_and_discard"],
+    "menu: Help > Debug > Open the recordings folder": ["test_bug_recorder.py::test_help_menu_entries"],
 }
 
 

@@ -189,6 +189,12 @@ def _same_file_content(a, b):
         return False
 
 
+def _nobody_to_ask():
+    """Offscreen (headless tests, scripted runs): no dialog can be answered."""
+    from pyfigures.gui.pdf_support import _nobody_to_ask as nobody
+    return nobody()
+
+
 def _qt_alive(obj):
     """False once the C++ side of a Qt wrapper has been destroyed — a queued
     loader callback arriving after its window was deleted must not touch it
@@ -1617,6 +1623,24 @@ class EZFIG_GUI(QMainWindow):
                                  '.tex documents and LaTeX data plots')
         install_latex.triggered.connect(self.install_latex_action)
         help_menu.addAction(install_latex)
+
+        debug_menu = help_menu.addMenu('Debug')
+        debug_menu.setToolTip('Record what you do when something goes wrong: the steps become a '
+                              'regression test')
+        debug_menu.setToolTipsVisible(True)
+        self.record_bug_action = QAction('Start recording a bug…', self)
+        self.record_bug_action.setToolTip('Logs your next steps (menus, drops, dialogs, clicks) with the '
+                                          'figure and a screenshot after each; on Stop you say what '
+                                          'went wrong. Kept on this computer only.')
+        self.record_bug_action.triggered.connect(self.start_bug_recording)
+        debug_menu.addAction(self.record_bug_action)
+        self.stop_record_action = QAction('Stop recording and describe the bug…', self)
+        self.stop_record_action.setEnabled(False)
+        self.stop_record_action.triggered.connect(self.stop_bug_recording)
+        debug_menu.addAction(self.stop_record_action)
+        open_records = QAction('Open the recordings folder', self)
+        open_records.triggered.connect(self.open_bug_recordings_folder)
+        debug_menu.addAction(open_records)
 
         help_menu.addSeparator()
         from pyfigures.guides import GUIDES
@@ -3437,7 +3461,49 @@ class EZFIG_GUI(QMainWindow):
         self.undo_button.setEnabled(self.current_index > 0)
         self.redo_button.setEnabled(len(self.redo_stack) > 0)
 
+    # ------------------------------------------------------------------
+    # Help > Debug > Record a bug (pyfigures/gui/bug_recorder.py)
+    # ------------------------------------------------------------------
+    def start_bug_recording(self):
+        from pyfigures.gui.bug_recorder import BugRecorder
+        rec = getattr(self, '_bug_recorder', None)
+        if rec is not None and rec.active:
+            return rec.folder
+        self._bug_recorder = BugRecorder(self)
+        folder = self._bug_recorder.start()
+        self.record_bug_action.setEnabled(False)
+        self.stop_record_action.setEnabled(True)
+        self.statusBar().showMessage('Recording: do what went wrong, then Help → Debug → Stop recording', 8000)
+        return folder
+
+    def stop_bug_recording(self, ask=True):
+        rec = getattr(self, '_bug_recorder', None)
+        if rec is None or not rec.active:
+            return None
+        folder = rec.stop(ask=ask and not _nobody_to_ask())
+        self.record_bug_action.setEnabled(True)
+        self.stop_record_action.setEnabled(False)
+        if folder and ask and not _nobody_to_ask():
+            QMessageBox.information(self, 'Bug report saved',
+                                    f'Saved in:\n{folder}\n\nIt stays on this computer. To turn it into '
+                                    'a test: python -m pyfigures.gui.bug_recorder make-test <folder> '
+                                    '<tests/recordings/name>, or ask the MCP server (read_bug_recording).')
+        return folder
+
+    def open_bug_recordings_folder(self):
+        from pyfigures.gui.bug_recorder import recordings_dir
+        folder = recordings_dir()
+        os.makedirs(folder, exist_ok=True)
+        from qtpy.QtCore import QUrl
+        from qtpy.QtGui import QDesktopServices
+        if not _nobody_to_ask():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        return folder
+
     def closeEvent(self, event):
+        # quitting while recording a bug: describe it first (the recording ends here)
+        if getattr(self, '_bug_recorder', None) is not None and self._bug_recorder.active:
+            self.stop_bug_recording(ask=not _nobody_to_ask())
         # offer to save unsaved changes before quitting
         if not self._maybe_save_before_discard('quitting'):
             event.ignore()

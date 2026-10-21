@@ -596,3 +596,38 @@ def mcp_server_info() -> str:
     n_tools = len(mcp._tool_manager.list_tools())
     return (f"PyFigures MCP server, {n_tools} tools, Python {sys.executable}\n"
             + mcp_control.describe())
+
+
+# ---------------------------------------------------------------------------
+# bug recordings (GUI Help > Debug > Record a bug; pyfigures/gui/bug_recorder.py)
+# ---------------------------------------------------------------------------
+@mcp.tool()
+def list_bug_recordings(folder: str | None = None) -> str:
+    """The bug recordings the user made in the GUI (Help > Debug > Start
+    recording a bug…), newest first: folder, date, number of steps, Python
+    errors caught and what the user said went wrong. *folder*: another
+    recordings folder (default: the user's own, outside any source tree).
+    Read one with read_bug_recording."""
+    from pyfigures.gui.bug_recorder import list_recordings, recordings_dir
+    recs = list_recordings(folder)
+    return json.dumps({"folder": folder or recordings_dir(), "recordings": recs},
+                      ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def read_bug_recording(path: str) -> str:
+    """One bug recording, step by step: what the user did (menu actions,
+    right-click / drop-menu choices, drops, dialogs with their values, file
+    pickers, canvas double-clicks and drags), the figure's rows after each
+    step, Python errors with tracebacks, the steps the user ticked as wrong,
+    what went wrong and what was expected, and the screenshot of each step
+    (paths: open them to see). The starting figure is start.pyf in the
+    folder. A regression test is made from it with
+    python -m pyfigures.gui.bug_recorder make-test <folder> <tests/recordings/name>."""
+    from pyfigures.gui.bug_recorder import read_recording
+    if not os.path.exists(path):
+        return f"ERROR: no such recording: {path}"
+    try:
+        return json.dumps(read_recording(path), ensure_ascii=False, indent=1)
+    except (OSError, ValueError, KeyError) as e:
+        return f"ERROR: could not read {path}: {e}"

@@ -9,3 +9,8 @@ dist/
 # generated at build time by packaging/collect_licenses.py
 third_party/
 corresponding-source/
+# raw bug recordings (Help > Debug) live in the user's folder; one copied here
+# by mistake is never committed (tests/recordings/ holds only small test copies
+# made by make-test, which have no screenshots)
+/recordings/
+shots/
