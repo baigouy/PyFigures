@@ -70,10 +70,11 @@ def _record_a_session(qapp, g, tmp_path):
     g.start_bug_recording()
     rec = g._bug_recorder
     assert rec.active and g.stop_record_action.isEnabled() and not g.record_bug_action.isEnabled()
+    n = len(H.images(g))                    # a second session on the same window adds to the first
     _drop(g, [a])
     btn = next(b for b in H.drop_menu(g).findChildren(QPushButton) if b.text() == "➕  As single image(s)")
     _click(btn)
-    H.settle(qapp, g, lambda: len(H.images(g)) == 1)
+    H.settle(qapp, g, lambda: len(H.images(g)) == n + 1)
     QApplication.processEvents()
     rec._snapshot()
     return rec, a
