@@ -2325,9 +2325,18 @@ class EZFIG_GUI(QMainWindow):
             }
         """)
 
-        layout = QVBoxLayout(fake_menu)
-        layout.setContentsMargins(2, 2, 2, 2)
+        from qtpy.QtWidgets import QHBoxLayout
+        from pyfigures.gui.drop_sketch import SketchPreviewPane
+        outer = QHBoxLayout(fake_menu)
+        outer.setContentsMargins(2, 2, 2, 2)
+        outer.setSpacing(4)
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        outer.addLayout(layout)
+        # the sketch of the hovered choice, large, on the right
+        preview = SketchPreviewPane(fake_menu)
+        fake_menu._sketch_preview = preview
 
         def close_menu():
             fake_menu.hide()
@@ -2362,8 +2371,14 @@ class EZFIG_GUI(QMainWindow):
                 btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
                 if action.toolTip() and action.toolTip() != action.text().replace('&', ''):
                     btn.setToolTip(action.toolTip())      # what the choice does
+                if not action.icon().isNull():
+                    btn.setIcon(action.icon())
+                    btn.setIconSize(preview.icon_size())
+                    preview.watch(btn, action)
                 btn.clicked.connect(make_action_handler(action))
                 layout.addWidget(btn)
+        if preview.has_entries():
+            outer.addWidget(preview)
 
         # Close button at the bottom so user can always dismiss
         # sep = QFrame()
@@ -2438,15 +2453,24 @@ class EZFIG_GUI(QMainWindow):
             act.setEnabled(False)
             return act
 
+        # (action, op, files, target, montage): each gets a sketch of what it gives
+        sketches = []
+
         # ── Group: arrange multiple images ───────────────────────────────
         if len(lst) > 1:
             add_header("Arrange as group")
             add_to_new_row = self.paint.EZFIG_panel.contextMenu.addAction("↔  To row")
+            add_to_new_row.setToolTip(f"The {len(lst)} images side by side in a new row")
             add_to_new_row.triggered.connect(_with_series(self.add_images_to_new_row))
             add_to_new_col = self.paint.EZFIG_panel.contextMenu.addAction("↕  To column")
+            add_to_new_col.setToolTip(f"The {len(lst)} images one above the other in a new column")
             add_to_new_col.triggered.connect(_with_series(self.add_images_to_new_col))
             add_as_panel = self.paint.EZFIG_panel.contextMenu.addAction("▦  To panel")
+            add_as_panel.setToolTip("A grid of the images; rows and columns are chosen next "
+                                    "(sketch: the dialog's default, 2 rows)")
             add_as_panel.triggered.connect(_with_series(self.create_panel))
+            sketches += [(add_to_new_row, 'row', lst, None, None), (add_to_new_col, 'col', lst, None, None),
+                         (add_as_panel, 'panel', lst, None, None)]
             self.paint.EZFIG_panel.contextMenu.addSeparator()
 
         # ── Group: combine with the image/group under the drop ───────────
@@ -2470,6 +2494,10 @@ class EZFIG_GUI(QMainWindow):
             combine_col = self.paint.EZFIG_panel.contextMenu.addAction("↕  To column (with image below)")
             combine_col.triggered.connect(_with_series(
                 lambda resolved, t=combine_target: self.add_images_combined_with_target(resolved, t, 'Y')))
+            combine_row.setToolTip("The panel dropped on, then the new image(s), in one row")
+            combine_col.setToolTip("The panel dropped on, then the new image(s) below it, in one column")
+            sketches += [(combine_row, 'with_row', lst, combine_target, None),
+                         (combine_col, 'with_col', lst, combine_target, None)]
             self.paint.EZFIG_panel.contextMenu.addSeparator()
 
         # ── Group: add individually ──────────────────────────────────────
@@ -2485,6 +2513,8 @@ class EZFIG_GUI(QMainWindow):
             act = menu.addAction("🎞  Montage of frames (time / Z)…")
             act.setToolTip("Several frames side by side in a new row, with time or depth stamps")
             act.triggered.connect(_with_series(lambda resolved: self.montage_from_file(resolved[0])))
+            from pyfigures.gui.drop_sketch import file_size
+            sketches.append((act, 'montage', lst, None, (n, file_size(lst[0]) or (100, 100))))
         if k == 't':
             # a time series: a montage first (or one panel that plays as a movie
             # in a video export); its max projection is offered, never imposed
@@ -2496,7 +2526,11 @@ class EZFIG_GUI(QMainWindow):
             projected.setToolTip("One panel showing the brightest value of each pixel over "
                                  + ("all Z slices" if k == 'd' else "all time points"))
             projected.triggered.connect(_with_series(self.add_images_as_max_projection))
+            sketches.append((projected, 'single', lst, None, None))
         all_as_single_images = menu.addAction("➕  As single image(s)")
+        if not k:
+            all_as_single_images.setToolTip("Each image on its own, one below the other, at the full figure width")
+        sketches.append((all_as_single_images, 'single', lst, None, None))
         if k == 't':
             all_as_single_images.setToolTip("One panel showing the first time point; it plays as a "
                                             "movie in File → Export As → Video (animate time-stacks)")
@@ -2517,10 +2551,17 @@ class EZFIG_GUI(QMainWindow):
                     "⬜  Assign to template slot")
                 set_image_in_template.triggered.connect(
                     lambda: self.assign_to_template(potential_target, self.list))
+                set_image_in_template.setToolTip("The image takes the place of the empty template slot")
+                sketches.append((set_image_in_template, 'template', lst, potential_target, None))
 
         # ── Cancel ───────────────────────────────────────────────────────
         self.paint.EZFIG_panel.contextMenu.addSeparator()
         self.paint.EZFIG_panel.contextMenu.addAction("Ignore")
+        try:
+            from pyfigures.gui.drop_sketch import finish_file_drop_menu
+            finish_file_drop_menu(self.paint.EZFIG_panel, self.paint.EZFIG_panel.contextMenu, sketches)
+        except Exception:
+            traceback.print_exc()           # a sketch never blocks the drop
 
     def assign_to_template(self, template, filenames_to_assign):
         # get it and clone it and replace it

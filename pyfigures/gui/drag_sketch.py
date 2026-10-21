@@ -21,15 +21,17 @@ import os
 import traceback
 import types
 
-from qtpy.QtCore import QRectF, Qt
+from qtpy.QtCore import QRectF, QSize, Qt
 from qtpy.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
-from qtpy.QtWidgets import QApplication, QProxyStyle, QStyle
+from qtpy.QtWidgets import QApplication, QFrame, QLabel, QProxyStyle, QStyle, QVBoxLayout
 
 from batoolset.drawings.shapes.group import Group, set_to_width
 from batoolset.drawings.shapes.image2d import Image2D
 
 SKETCH_W = 72
 SKETCH_H = 48
+PREVIEW_W = 240              # the enlarged sketch beside the menu
+PREVIEW_H = 160
 _MOVED = QColor(70, 130, 220)
 _TARGET = QColor(235, 150, 50)
 _OTHER = QColor(170, 170, 170)
@@ -278,11 +280,7 @@ def sketch(shapes, moved, target, dpr=1.0):
         bound = bound.united(r)
     if bound.width() <= 0 or bound.height() <= 0:
         return None
-    pm = QPixmap(int(SKETCH_W * dpr), int(SKETCH_H * dpr))
-    pm.setDevicePixelRatio(dpr)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pm, p = sketch_canvas(dpr)
     k = min((SKETCH_W - 2) / bound.width(), (SKETCH_H - 2) / bound.height())
     ox = (SKETCH_W - bound.width() * k) / 2
     oy = (SKETCH_H - bound.height() * k) / 2
@@ -306,6 +304,20 @@ def sketch(shapes, moved, target, dpr=1.0):
     return QIcon(pm)
 
 
+def sketch_canvas(dpr=1.0):
+    """(pixmap, painter) for a sketch: drawn in SKETCH_W x SKETCH_H units on
+    a PREVIEW_W x PREVIEW_H pixmap, so the same icon reads in the menu and,
+    enlarged, in the preview beside it."""
+    pm = QPixmap(int(PREVIEW_W * dpr), int(PREVIEW_H * dpr))
+    pm.setDevicePixelRatio(dpr)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    p.scale(PREVIEW_W / SKETCH_W, PREVIEW_H / SKETCH_H)
+    return pm, p
+
+
 class SketchMenuStyle(QProxyStyle):
     """Bigger menu icons, so the sketches can be read."""
 
@@ -313,6 +325,51 @@ class SketchMenuStyle(QProxyStyle):
         if metric == QStyle.PixelMetric.PM_SmallIconSize:
             return SKETCH_W
         return super().pixelMetric(metric, option, widget)
+
+
+def preview_pixmap(icon):
+    return icon.pixmap(QSize(PREVIEW_W, PREVIEW_H))
+
+
+def attach_preview(menu):
+    """The sketch of the hovered entry, large, beside *menu*, with what the
+    entry does under it."""
+    pop = QFrame(menu, Qt.WindowType.ToolTip)
+    pop.setObjectName("sketchPreview")
+    pop.setFrameShape(QFrame.Shape.Box)
+    pop.setStyleSheet("QFrame#sketchPreview { background: palette(base); border: 1px solid palette(mid); }")
+    lay = QVBoxLayout(pop)
+    lay.setContentsMargins(6, 6, 6, 6)
+    pic = QLabel(pop)
+    text = QLabel(pop)
+    text.setWordWrap(True)
+    text.setMaximumWidth(PREVIEW_W)
+    lay.addWidget(pic)
+    lay.addWidget(text)
+
+    def show(act):
+        icon = act.icon()
+        if icon.isNull() or not menu.isVisible():
+            pop.hide()
+            return
+        pic.setPixmap(preview_pixmap(icon))
+        tip = act.toolTip()
+        text.setText(tip if tip and tip != act.text().replace("&", "") else act.text())
+        pop.adjustSize()
+        g = menu.geometry()
+        x = g.right() + 4
+        try:
+            screen = menu.screen().availableGeometry()
+            if x + pop.width() > screen.right():
+                x = g.left() - pop.width() - 4
+        except Exception:
+            pass
+        pop.move(x, g.top() + menu.actionGeometry(act).top())
+        pop.show()
+    menu.hovered.connect(show)
+    menu.aboutToHide.connect(pop.hide)
+    menu._sketch_preview = pop
+    return pop
 
 
 def finish_drag_menu(canvas, menu, entries):
@@ -360,6 +417,7 @@ def finish_drag_menu(canvas, menu, entries):
         menu.setStyle(style)
         menu._sketch_style = style            # keep it alive with the menu
         menu.setToolTipsVisible(True)
+        attach_preview(menu)
 
 
 def _drop_empty_separators(menu):

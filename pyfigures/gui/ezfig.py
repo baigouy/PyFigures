@@ -2934,7 +2934,14 @@ class MyWidget(QWidget):
             # with row 1 moved row 1 to the bottom of the figure)
             before = list(self.shapes_to_draw)
             before_ids = [id(s) for s in before]
+            def holds(shape, elm):
+                if shape is elm:
+                    return True
+                return isinstance(shape, Group) and any(holds(c, elm) for c in shape.content)
+            # get_top_parent_of_shape goes by geometry: a newly loaded image (at 0, 0)
+            # "is in" the first row, and a dropped row went above it instead of last
             tops = [self.get_top_parent_of_shape(elm) or elm for elm in lst]
+            tops = [t for t, elm in zip(tops, lst) if holds(t, elm)]
             positions = [before_ids.index(id(t)) for t in tops if id(t) in before_ids]
             if remove_from_parents:
                 for elm in lst:

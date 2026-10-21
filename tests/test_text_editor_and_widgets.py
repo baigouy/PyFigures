@@ -371,7 +371,7 @@ def test_simple_value_widgets(qapp, dialogs):
     d.combo_box.setCurrentIndex(1)
     assert d.get_current_dimension() == "h"
     r = PanelOrRow()
-    r.orientation_combo.setCurrentText("Y")
+    r.orientation_combo.setCurrentIndex(r.orientation_combo.findData("Y"))
     r.space_spinbox.setValue(11)
     assert r.get_parameters() == ("Y", 512, 11)
     f = FontSelector()

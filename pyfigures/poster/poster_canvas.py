@@ -14,10 +14,12 @@ import contextlib
 import hashlib
 import math
 import os
+import random
 import re
 import subprocess
 import sys
 import tempfile
+import traceback
 
 from qtpy.QtCore import Qt, QRectF, QPointF, QSize, QSizeF, Signal, QBuffer, QIODevice, QMarginsF
 from qtpy.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPdfWriter, QPageSize, QPageLayout, QTransform, QPalette
@@ -1698,6 +1700,11 @@ class PosterCanvas(QWidget):
         menu = QMenu(self)
         add_action = menu.addAction('Add to page')
         bg_action = menu.addAction('Set as background')
+        try:
+            from pyfigures.gui.drop_sketch import finish_poster_drop_menu
+            finish_poster_drop_menu(self, menu, {}, [path], single={add_action: 'add', bg_action: 'background'})
+        except Exception:
+            traceback.print_exc()           # a sketch never blocks the drop
         chosen = menu.exec(global_pos)
         if chosen is None:
             return  # dismissed: nothing added, page unchanged
@@ -1733,6 +1740,13 @@ class PosterCanvas(QWidget):
         action_for_key = {}
         for label, key in choices:
             action_for_key[menu.addAction(label)] = key
+        # the scatter sketch is the throw the drop will make
+        seed = random.randrange(1 << 30)
+        try:
+            from pyfigures.gui.drop_sketch import finish_poster_drop_menu
+            finish_poster_drop_menu(self, menu, action_for_key, paths, seed=seed, empty_slots=empty_slots)
+        except Exception:
+            traceback.print_exc()           # a sketch never blocks the drop
 
         chosen = menu.exec(global_pos)
         if chosen is None:
@@ -1755,9 +1769,9 @@ class PosterCanvas(QWidget):
         paths = readable
         if not paths:
             return
-        self.apply_drop_arrangement(paths, key, empty_slots=empty_slots, origins=origins)
+        self.apply_drop_arrangement(paths, key, empty_slots=empty_slots, origins=origins, seed=seed)
 
-    def apply_drop_arrangement(self, paths, key, empty_slots=None, origins=None):
+    def apply_drop_arrangement(self, paths, key, empty_slots=None, origins=None, seed=None):
         """Add *paths* to the current page and arrange them as *key* (one of
         'fill_slots', 'scatter', 'fan', 'grid', 'layout', 'none') — what the
         multi-file drop menu does once a choice is made, as one undo step."""
@@ -1782,7 +1796,7 @@ class PosterCanvas(QWidget):
             if key == 'scatter':
                 from pyfigures.poster.poster_layouts import scatter_layout
                 scatter_layout(self.shapes_to_draw, self.page_width_mm, self.page_height_mm,
-                               indices=indices)
+                               indices=indices, seed=seed)
             elif key == 'fan':
                 from pyfigures.poster.poster_layouts import arc_layout, fan_defaults
                 arc_layout(self.shapes_to_draw, indices=indices,

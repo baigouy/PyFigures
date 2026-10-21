@@ -137,7 +137,7 @@ def _column(dlg):
             return
     for c in dlg.findChildren(QComboBox):
         for i in range(c.count()):
-            if c.itemText(i).strip().upper() in ("Y", "COLUMN", "VERTICAL"):
+            if c.itemText(i).strip().upper() in ("Y", "COLUMN", "VERTICAL") or c.itemData(i) == "Y":
                 c.setCurrentIndex(i)
                 return
     raise AssertionError("no column choice")
