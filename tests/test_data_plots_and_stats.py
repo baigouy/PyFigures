@@ -177,6 +177,29 @@ def test_data_plot_script_executes_to_figure(tmp_path):
 
 
 @needs_staplot
+@pytest.mark.parametrize("kind", ["bar", "box", "violin", "scatter"])
+def test_data_plot_has_no_title_unless_one_is_given(tmp_path, kind):
+    """Journals rarely want titles on figure panels: a data plot used to be
+    titled with the CSV name; now only a title the user gives is shown."""
+    from pyfigures.mcp_tools.content import _make_data_plot_script
+    import matplotlib.pyplot as plt
+
+    rng = np.random.default_rng(5)
+    csvp = _wide_csv(os.path.join(str(tmp_path), "c.csv"),
+                     {"A": rng.normal(5, 1, 8).tolist(),
+                      "B": rng.normal(9, 1, 8).tolist()})
+
+    def titles(title):
+        ns = {"self": type("S", (), {"img": None})()}
+        exec(_make_data_plot_script(csvp, kind, "sem", True, True, title, "", ""),
+             {"np": np, "plt": plt}, ns)
+        return [ax.get_title() for ax in ns["self"].img.axes if ax.get_visible()]
+    assert set(titles("")) == {""}
+    assert "Day 3" in titles("Day 3")
+    plt.close("all")
+
+
+@needs_staplot
 def test_scale_bar_all_skips_data_plot_panels(tmp_path):
     """A chart has no pixel size: set_scale_bar_all must not give it a scale bar."""
     from pyfigures.mcp_server import create_figure, add_data_plot, add_image, set_scale_bar_all
@@ -301,6 +324,7 @@ def test_add_data_plot_action_adds_panel(qapp, monkeypatch, tmp_path):
     g.add_data_plot_action()
     imgs = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)]
     assert len(imgs) == n0 + 1
+    assert imgs[-1].img.axes[0].get_title() == ""  # Title field left empty
     g._dirty = False
 
 

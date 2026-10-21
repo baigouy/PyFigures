@@ -296,7 +296,8 @@ else:
                               only_significant={bool(only_significant)!r},
                               stats_mode={stats_mode!r},
                               colors={list(colors) if colors else None!r},
-                              title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r})
+                              title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r},
+                              show_title={bool(title)!r})
     fig._pyf_rc = _rc
     self.img = fig
 """
@@ -395,7 +396,8 @@ def add_data_plot(
     *only_significant*: draw brackets only for p<0.05 pairs (default) — keeps the
       panel uncluttered; all comparisons are still stored in the sidecar.
     *label*: optional panel corner label (e.g. "D").
-    *title* / *ylabel* / *xlabel*: axis text.
+    *title* / *ylabel* / *xlabel*: axis text. No title unless *title* is given
+      (journals rarely want titles on figure panels; a talk slide may).
     *stats_mode*: "auto" (choose parametric vs non-parametric by a normality
       check — default), "parametric", or "nonparametric". Applies to bar/box/
       violin group comparisons; scatter always uses correlation and grouped uses

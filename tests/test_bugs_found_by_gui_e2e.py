@@ -360,8 +360,9 @@ def test_equation_size_does_not_depend_on_an_earlier_data_plot(tmp_path):
         return re.search(r'width="([\d.]+)pt" height="([\d.]+)pt"', s).groups()
     with matplotlib.rc_context():
         render_svg(r"\alpha + \beta", str(tmp_path / "a.svg"), 40)
+        # staplot no longer changes the global rcParams: do what it used to do
         from staplot.plots import styles
-        styles.apply()
+        matplotlib.rcParams.update(styles.rc())
         render_svg(r"\alpha + \beta", str(tmp_path / "b.svg"), 40)
     assert size(tmp_path / "a.svg") == size(tmp_path / "b.svg")
 

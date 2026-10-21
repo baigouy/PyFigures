@@ -5068,13 +5068,18 @@ class EZFIG_GUI(QMainWindow):
         only_sig_cb.setChecked(True)
         grid.addWidget(only_sig_cb, 4, 0, 1, 2)
 
-        grid.addWidget(QLabel('Y-axis label:', frame), 5, 0)
-        ylabel_edit = QLineEdit('', frame)
-        grid.addWidget(ylabel_edit, 5, 1)
+        grid.addWidget(QLabel('Title:', frame), 5, 0)
+        title_edit = QLineEdit('', frame)
+        title_edit.setPlaceholderText('none (journals rarely want plot titles)')
+        grid.addWidget(title_edit, 5, 1)
 
-        grid.addWidget(QLabel('Panel label:', frame), 6, 0)
+        grid.addWidget(QLabel('Y-axis label:', frame), 6, 0)
+        ylabel_edit = QLineEdit('', frame)
+        grid.addWidget(ylabel_edit, 6, 1)
+
+        grid.addWidget(QLabel('Panel label:', frame), 7, 0)
         label_edit = QLineEdit('', frame)
-        grid.addWidget(label_edit, 6, 1)
+        grid.addWidget(label_edit, 7, 1)
 
         from batoolset.latex_tools import latex_available
         latex_cb = QCheckBox('Typeset the text with LaTeX (axis labels, ticks, title)', frame)
@@ -5082,7 +5087,7 @@ class EZFIG_GUI(QMainWindow):
         latex_cb.setToolTip('Full LaTeX in the labels, e.g. $D$ (\\si{\\micro\\metre\\squared\\per\\second})'
                             if latex_available() else
                             'Needs a LaTeX installation (TeX Live, MiKTeX or MacTeX)')
-        grid.addWidget(latex_cb, 7, 0, 1, 2)
+        grid.addWidget(latex_cb, 8, 0, 1, 2)
         if not latex_available():
             install_btn = QPushButton('Install LaTeX…', frame)
             install_btn.setToolTip('Download TinyTeX (a small TeX Live, about 75 MB)')
@@ -5095,7 +5100,7 @@ class EZFIG_GUI(QMainWindow):
                     latex_cb.setToolTip('')
                     install_btn.hide()
             install_btn.clicked.connect(_install)
-            grid.addWidget(install_btn, 8, 0, 1, 2)
+            grid.addWidget(install_btn, 9, 0, 1, 2)
 
         cd = CustomDialog(
             title="Add data plot from CSV",
@@ -5212,6 +5217,7 @@ class EZFIG_GUI(QMainWindow):
     def _show_report(self, title, text):
         """Show a read-only, scrollable text report in a modal dialog."""
         frame = QFrame(self)
+            title=title_edit.text().strip(),
         lay = QVBoxLayout(frame)
         view = QTextBrowser(frame)
         view.setPlainText(text)
