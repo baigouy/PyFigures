@@ -2541,12 +2541,20 @@ class MyWidget(QWidget):
                 # ── Crop & size ▶ (submenu) ───────────────────────────
                 crop_menu = self.contextMenu.addMenu("Crop & size ▶")
                 crop_menu.addSection("Match first image")
+                matched = self._already_matching()
                 all_same_wh = crop_menu.addAction("Force same width and height")
                 all_same_wh.triggered.connect(self.same_width_and_height)
                 all_same_ar = crop_menu.addAction("Force same aspect ratio")
                 all_same_ar.triggered.connect(self.same_AR_as_first)
                 all_same_cr = crop_menu.addAction("Force same crop, rotation and bg")
                 all_same_cr.triggered.connect(self.same_crop_and_rotation_as_first)
+                # greyed out when they would change nothing (e.g. the panels of
+                # a split, the same size by construction)
+                for act, key in ((all_same_wh, 'size'), (all_same_ar, 'ratio'), (all_same_cr, 'crop')):
+                    if key in matched:
+                        act.setEnabled(False)
+                        act.setToolTip("Already the case for the selected images")
+                crop_menu.setToolTipsVisible(True)
                 crop_menu.addSection("Reset")
                 reset_crop_n_rot = crop_menu.addAction("Reset crop and rotation")
                 reset_crop_n_rot.triggered.connect(lambda: self.reset_crop_and_rotation(crop=True, rotation=True))
@@ -2964,6 +2972,38 @@ class MyWidget(QWidget):
 
         self.remove_all_empty_groups()
 
+
+    def _already_matching(self):
+        """Which 'Match first image' actions would change nothing for the
+        selection: a set of 'size', 'ratio', 'crop' (all three for a single image)."""
+        sel = self.selected_shape
+        if isinstance(sel, Image2D):
+            images = [sel]
+        else:
+            try:
+                _, images = self.get_full_list_ofimages2D_for_consolidation(
+                    stuff_to_consolidate=sel, include_insets=False, exclude_images_without_filename=False)
+            except Exception:
+                return set()
+        images = [im for im in images or [] if isinstance(im, Image2D) and not im.isText]
+        if len(images) < 2:
+            return {'size', 'ratio', 'crop'} if images else set()
+        sizes = []
+        for im in images:
+            rect = im.getRect(all=True)
+            scale = getattr(im, 'scale', 1) or 1
+            sizes.append((rect.width() * scale, rect.height() * scale))
+        w0, h0 = sizes[0]
+        found = set()
+        if all(abs(w - w0) < 0.5 and abs(h - h0) < 0.5 for w, h in sizes):
+            found.add('size')
+        if h0 and all(h and abs(w / h - w0 / h0) < 1e-3 for w, h in sizes):
+            found.add('ratio')
+        first = images[0]
+        keys = ('crop_left', 'crop_right', 'crop_top', 'crop_bottom', 'theta', 'fill_color')
+        if all(getattr(im, k, None) == getattr(first, k, None) for im in images for k in keys):
+            found.add('crop')
+        return found
 
     def same_width_and_height(self):
         # I can do the same with AR because it is super easy

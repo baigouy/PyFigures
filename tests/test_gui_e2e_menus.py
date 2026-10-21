@@ -476,6 +476,8 @@ ACTIONS = {
                                                                      inv=False),
     "menu: File > Export As > VectorCraft (editable)…": spec(wrote(".vectorcraft"),
                                                             files={"save": "out:saved.vectorcraft"}, inv=False),
+    "menu: File > Export As > DeckCraft slide (editable)…": spec(wrote(".deckcraft", magic=b"PK"),
+                                                                files={"save": "out:saved.deckcraft"}, inv=False),
     "menu: File > Export As > PNG": spec(wrote(".png", raster=True), [("QInputDialog", number_input("150"))],
                                          files={"save": "out:saved.png"}, inv=False),
     "menu: File > Export As > TIF": spec(wrote(".tif", raster=True), [("QInputDialog", number_input("150"))],

@@ -28,6 +28,7 @@ class ScaleBarEditor(QWidget):
         if self.scale_bar:
             self.size_spinner.setValue(self.scale_bar.bar_width_in_units)
 
+        self.text_editor.textEdit.setPlaceholderText('Legend, e.g. 10 µm (leave empty for no text)')
         self.check_box = QCheckBox('Enable Text', self)
         self.check_box.setChecked(True)
 
@@ -145,17 +146,26 @@ class ScaleBarEditor(QWidget):
             self.text_editor.setHidden(False)
             # self.text_editor.textEdit.setEnabled(False)
 
+    def _legend(self):
+        """The typed legend, or None when text is off or nothing was typed (an
+        empty legend left a blank gap above the bar; '' crashed the drawing)."""
+        text = self.text_editor.associated_text
+        if not self.check_box.isChecked() or not isinstance(text, TAText2D) \
+                or not text.getPlainText().strip():
+            return None
+        return text
+
     def getScaleBar(self):
         if self.scale_bar is None:
             return ScaleBar(bar_width_in_units=self.size_spinner.value(),
-                            legend=self.text_editor.associated_text if self.check_box.isChecked() else '',
+                            legend=self._legend(),
                             placement=self._chosen_placement())
         else:
             self.scale_bar.setBarWidth(self.size_spinner.value())
 
             # print('changing scale bar size to:',self.size_spinner.value())
 
-            self.scale_bar.legend=self.text_editor.associated_text if self.check_box.isChecked() else ''
+            self.scale_bar.setLegend(self._legend())
             self.scale_bar.update_bar_at_scale(1.)
             return self.scale_bar
 

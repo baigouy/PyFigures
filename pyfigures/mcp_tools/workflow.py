@@ -26,6 +26,7 @@ from .core import (
     _restyle_letters,
     _apply_scalebar_to_img,
     _child_text,
+    _corner_brightness,
     _decode,
     _iter_panel_elements,
     _load,
@@ -34,6 +35,7 @@ from .core import (
     _scale_bar_legend_html,
     _set_child_text,
     _top_groups,
+    letter_colours,
 )
 from .structure import (
     add_image,
@@ -485,6 +487,7 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
     tree, root = _load(pyf_path)
     letters = string.ascii_uppercase
     lettered = bars = i = 0
+    new_letters = []                        # (annots, letter, brightness under it)
     for img in _iter_panel_elements(root):
         fn = _decode(img.findtext("filename"))
         script = img.findtext("custom_loading_script")
@@ -507,18 +510,26 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
             has_letter = any(a.findtext("is_letter") in ("True", "b'True'")
                              for a in annots.iter("TAText2D"))
             if not has_letter and i < len(letters):
-                # visible on its panel even when exported headless (the GUI's
-                # auto-lettering recolours letters on screen, export does not):
-                # black on white data-plot charts, white on image data
+                # coloured below, for the whole figure at once (white on a
+                # bright-field image vanished; a data-plot chart is white)
                 is_chart = bool(script) and "from staplot import api" in (_decode(script) or "")
-                ta = _new_tatext2d(letters[i], placement, is_letter=True,
-                                   color=None if is_chart else 0xFFFFFF)
-                # first, so pack2 keeps the letter in the corner and stacks
-                # any label sharing that corner (e.g. "WT") below it
-                annots.insert(0, ta)
+                if is_chart:
+                    bright = 1.0
+                elif is_raster:
+                    bright = _corner_brightness(img, placement)
+                else:
+                    bright = None           # merges / scripted panels: figure colour
+                new_letters.append((annots, letters[i], bright))
                 lettered += 1
         if not series_tail:
             i += 1
+    # visible on each panel even when exported headless, one colour for the
+    # figure where possible (core.letter_colours, as the GUI's auto-lettering)
+    colours = letter_colours([b for _, _, b in new_letters])
+    for (annots, letter, _), colour in zip(new_letters, colours):
+        # first, so pack2 keeps the letter in the corner and stacks
+        # any label sharing that corner (e.g. "WT") below it
+        annots.insert(0, _new_tatext2d(letter, placement, is_letter=True, color=colour))
     if lettered:
         font = _figure_font(root)           # new letters in the figure's own font
         if font:

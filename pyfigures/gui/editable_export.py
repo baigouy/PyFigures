@@ -1190,6 +1190,171 @@ def write_vectorcraft(scene, out_path, title=None):
     return out_path
 
 
+# ---------------------------------------------------------------------------
+# DeckCraft (.deckcraft: a zip of presentation.json + media/<id>)
+# ---------------------------------------------------------------------------
+# DeckCraft, the open-source PowerPoint replacement, also opens the .pptx
+# export; its own format keeps the slide exactly the figure's size. Masters,
+# layouts and theme come from a blank deck DeckCraft saved itself
+# (deckcraft_blank.json); shapes are written as DeckCraft writes them, in
+# points with y down, like the scene.
+DECKCRAFT_MIMETYPE = "application/vnd.storyteller.deckcraft+zip"
+
+
+def _dc_color(c, alpha=1.0):
+    return {"base": {"kind": "rgb", "rgb": {"r": int(c[0]), "g": int(c[1]), "b": int(c[2]),
+                                            "a": int(round(255 * max(0.0, min(1.0, alpha))))}}}
+
+
+def _dc_fill(c, alpha=1.0):
+    return {"kind": "solid", "color": _dc_color(c, alpha)} if c is not None else {"kind": "none"}
+
+
+def _dc_xfrm(x, y, w, h, rotation=0.0):
+    out = {"x": _r(x), "y": _r(y), "w": _r(max(w, 0.01)), "h": _r(max(h, 0.01))}
+    if abs(rotation) > 0.01:
+        out["rot"] = _r(rotation % 360)
+    return out
+
+
+def _dc_shape(sid, name, xfrm, kind, **fields):
+    shape = {"id": sid, "name": name, "xfrm": xfrm, "kind": kind,
+             "geom": {"kind": "preset", "name": "rect"}, "ph": None, "fill": None, "line": None,
+             "effects": None, "style": None, "text": None, "hidden": False, "locked": False,
+             "textBox": False, "descr": "", "title": "", "decorative": False, "click": None,
+             "hover": None}
+    shape.update(fields)
+    return shape
+
+
+def _dc_body():
+    return {"insetL": 0.0, "insetT": 0.0, "insetR": 0.0, "insetB": 0.0, "anchor": None,
+            "anchorCtr": None, "wrap": False, "autofit": {"kind": "none"}, "vert": None, "rot": None,
+            "columns": None, "colSpacing": None, "warp": None, "rtlCol": None, "upright": None}
+
+
+def _dc_run(run, color):
+    return {"text": run["text"],
+            "props": {"font": run.get("family") or "Arial", "fontEa": None, "fontCs": None,
+                      "fontSym": None, "size": round((run.get("size") or 12.0) * 2) / 2,
+                      "bold": bool(run.get("bold")), "italic": bool(run.get("italic")),
+                      "underline": None, "underlineColor": None, "strike": None, "baseline": None,
+                      "caps": None, "spacing": None, "kern": None,
+                      "fill": _dc_fill(run.get("color") or color), "outline": None,
+                      "highlight": None, "link": None, "lang": None, "shadow": None, "glow": None,
+                      "noProof": None}}
+
+
+def deckcraft_document(scene, title="PyFigures figure"):
+    """(presentation.json as a dict, [(media id, png bytes)]) of *scene*: one
+    slide the size of the figure, one group per panel, pictures, freeform
+    vector paths and editable text boxes."""
+    with open(os.path.join(os.path.dirname(__file__), "deckcraft_blank.json"), encoding="utf-8") as f:
+        skeleton = json.load(f)
+    pres = skeleton["presentation"]
+    slide = pres["slides"][0]
+    W = float(scene["width"])
+    H = float(scene["height"])
+    pres["slideSize"] = {"width": _r(max(W, 1.0)), "height": _r(max(H, 1.0))}
+    pres["props"]["title"] = title
+    next_id = [int(pres["nextId"])]
+    media = []
+
+    def nid():
+        next_id[0] += 1
+        return next_id[0] - 1
+
+    def shape_of(it):
+        if it["kind"] == "image":
+            mid = nid()
+            media.append((mid, it["png"]))
+            pres["media"].append({"id": mid, "name": "image%d.png" % len(media),
+                                  "contentType": "image/png", "link": None})
+            fill = {"media": mid, "crop": [0.0, 0.0, 0.0, 0.0],
+                    "mode": {"kind": "stretch", "fill_rect": [0.0, 0.0, 0.0, 0.0]},
+                    "alpha": _r(it["opacity"]) if it.get("opacity", 1.0) < 0.999 else None,
+                    "adjust": {"brightness": 0.0, "contrast": 0.0, "saturation": None,
+                               "grayscale": False, "duotone": None, "clearColor": None,
+                               "sharpen": 0.0}}
+            return _dc_shape(nid(), "Picture", _dc_xfrm(it["cx"] - it["w"] / 2, it["cy"] - it["h"] / 2,
+                                                        it["w"], it["h"], it["rotation"]),
+                             {"type": "picture", "fill": fill}, descr="image.png")
+        if it["kind"] == "path":
+            x0, y0, x1, y1 = _bbox(it)
+            filled = it["fill"] is not None
+            d = []
+            for pts, closed in it["subpaths"]:
+                d.append("M %g %g" % (_r(pts[0][0] - x0), _r(pts[0][1] - y0)))
+                d.extend("L %g %g" % (_r(px - x0), _r(py - y0)) for px, py in pts[1:])
+                if closed or filled:
+                    d.append("Z")
+            line = None
+            if it["stroke"] is not None:
+                line = {"fill": _dc_fill(it["stroke"], it["stroke_opacity"]),
+                        "width": _r(max(0.25, it["stroke_width"])), "dash": None, "cap": None,
+                        "join": None, "compound": None, "head": None, "tail": None}
+            else:
+                line = {"fill": {"kind": "none"}, "width": None, "dash": None, "cap": None,
+                        "join": None, "compound": None, "head": None, "tail": None}
+            w = max(x1 - x0, 0.01)
+            h = max(y1 - y0, 0.01)
+            return _dc_shape(nid(), "Freeform", _dc_xfrm(x0, y0, w, h), {"type": "shape"},
+                             geom={"kind": "custom", "paths": [
+                                 {"w": _r(w), "h": _r(h), "d": " ".join(d), "fill": "norm",
+                                  "stroke": it["stroke"] is not None}]},
+                             fill=_dc_fill(it["fill"], it["fill_opacity"]) if filled else {"kind": "none"},
+                             line=line)
+        color = it.get("color") or (0, 0, 0)
+        w = text_width(it) * 1.15 + 2
+        h = it["size"] * 1.2
+        left, top = _rotated_box(it, w, h)
+        text = {"body": _dc_body(),
+                "paragraphs": [{"level": 0, "runs": [_dc_run(r, color) for r in _runs(it)]}]}
+        return _dc_shape(nid(), "TextBox", _dc_xfrm(left, top, w, h, it["rotation"]),
+                         {"type": "shape"}, fill={"kind": "none"}, text=text, textBox=True)
+
+    shapes = []
+    for g, items in _grouped(scene):
+        children = [shape_of(it) for it in items]
+        if g is not None and len(children) > 1:
+            xs = [(c["xfrm"]["x"], c["xfrm"]["y"], c["xfrm"]["x"] + c["xfrm"]["w"],
+                   c["xfrm"]["y"] + c["xfrm"]["h"]) for c in children]
+            box = _dc_xfrm(min(b[0] for b in xs), min(b[1] for b in xs),
+                           max(b[2] for b in xs) - min(b[0] for b in xs),
+                           max(b[3] for b in xs) - min(b[1] for b in xs))
+            shapes.append(_dc_shape(nid(), "Panel %d" % (g + 1), box,
+                                    {"type": "group", "children": children, "child": dict(box)}))
+        else:
+            shapes.extend(children)
+    slide["shapes"] = shapes
+    pres["nextId"] = next_id[0]
+    try:
+        from pyfigures.version import __VERSION__
+        generator = f"PyFigures {__VERSION__}"
+    except Exception:
+        generator = "PyFigures"
+    doc = {"format": skeleton["format"], "version": skeleton["version"], "generator": generator,
+           "presentation": pres}
+    return doc, media
+
+
+def write_deckcraft(scene, out_path, title=None):
+    """Write *scene* as a native DeckCraft deck (.deckcraft), one slide the size
+    of the figure: open it in DeckCraft with File → Open."""
+    import zipfile
+    doc, media = deckcraft_document(scene, title or os.path.splitext(os.path.basename(out_path))[0])
+    tmp = out_path + ".part"
+    with zipfile.ZipFile(tmp, "w") as z:
+        # the mimetype first and stored, as DeckCraft writes it
+        z.writestr(zipfile.ZipInfo("mimetype"), DECKCRAFT_MIMETYPE, compress_type=zipfile.ZIP_STORED)
+        z.writestr("presentation.json", json.dumps(doc, ensure_ascii=False),
+                   compress_type=zipfile.ZIP_DEFLATED)
+        for mid, png in media:
+            z.writestr("media/%d" % mid, png, compress_type=zipfile.ZIP_STORED)
+    os.replace(tmp, out_path)
+    return out_path
+
+
 def scene_summary(scene):
     kinds = {"image": 0, "path": 0, "text": 0}
     for it in scene["items"]:

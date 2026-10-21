@@ -280,7 +280,7 @@ def test_scale_bar_editor_with_and_without_bar(qapp):
     ed2.check_box.setChecked(False)
     assert ed2.text_editor.isHidden()
     out = ed2.getScaleBar()
-    assert out is bar and out.bar_width_in_units == 50 and out.legend == ""
+    assert out is bar and out.bar_width_in_units == 50 and out.legend is None
 
 
 def test_lut_widget(qapp):

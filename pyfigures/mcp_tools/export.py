@@ -1069,6 +1069,29 @@ def export_vectorcraft(pyf_path: str, out_path: str) -> str:
 
 
 @mcp.tool()
+def export_deckcraft(pyf_path: str, out_path: str) -> str:
+    """Export the figure as a native **DeckCraft** deck (.deckcraft) — DeckCraft
+    is the open-source PowerPoint replacement (github.com/storytold/deckcraft).
+    GUI: Export As → DeckCraft slide (editable).
+
+    One slide the size of the figure: one group per panel, the images (cropped
+    / rotated as shown) as pictures, letters, labels and scale-bar text as
+    editable text boxes, scale bars, ROIs, arrows and vector plots as freeform
+    shapes. Open it in DeckCraft with File → Open. DeckCraft also opens the
+    PowerPoint export (export_pptx).
+
+    Returns JSON: path, size in points and object counts.
+    """
+    if not out_path.lower().endswith(".deckcraft"):
+        return "ERROR: out_path must end in .deckcraft."
+    summary, err = _editable_export(pyf_path, out_path, "deckcraft")
+    if err:
+        return f"ERROR: {err}"
+    summary["usage"] = "DeckCraft: File > Open... and choose " + os.path.basename(out_path)
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def consolidate_figure(pyf_path: str, out_pyf: str, download_remote: bool = False) -> str:
     """Save a self-contained copy of the figure with every referenced image
     bundled next to it (GUI: File → Save And Consolidate).

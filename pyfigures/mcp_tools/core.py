@@ -1354,6 +1354,27 @@ def _read_corner_brightness(path, placement, crop):
     return float(np.clip((corner.mean() - lo) / (hi - lo), 0, 1))
 
 
+def letter_colours(brightness: list) -> list:
+    """Colours (0xRRGGBB) of panel letters without a box whose corners have
+    these *brightness* values (0 dark … 1 bright, None unknown). One colour for
+    the whole figure — white when most corners are dark, black when most are
+    bright — switched only on a panel where it would vanish (a first letter
+    came out black and the others white). Unknown corners take the figure
+    colour; all unknown: white. Shared by the GUI and the MCP server."""
+    known = [b for b in brightness if b is not None]
+    dark = sum(1 for b in known if b < 0.5)
+    base = 0xFFFFFF if dark * 2 >= len(known) else 0x000000
+    out = []
+    for b in brightness:
+        if b is not None and base == 0xFFFFFF and b > 0.6:
+            out.append(0x000000)
+        elif b is not None and base == 0x000000 and b < 0.4:
+            out.append(0xFFFFFF)
+        else:
+            out.append(base)
+    return out
+
+
 def _label_color_for(img: ET.Element, text: str, placement: str = "top left") -> int | None:
     """Default colour of a plain-text label on *img*: white on a dark corner
     (fluorescence: the black default was nearly invisible), black on a bright

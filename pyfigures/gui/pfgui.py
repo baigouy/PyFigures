@@ -760,7 +760,8 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.force_silent_spinner_update_in_parent.connect(self.force_silent_spinner_update_in_parent)
         # self.paint.EZFIG_panel.templatify_figure.connect(self.templatify_figure)
 
-        self.serializable_font = SerializableQFont()
+        # plain letters (no box): black or white, picked from the image under them
+        self.serializable_font = SerializableQFont(background=None)
 
         self.list = []  # now this is the currently dragged object
 
@@ -1242,6 +1243,14 @@ class EZFIG_GUI(QMainWindow):
             "replacement: one group per panel, live text, vector shapes, embedded images.")
         export_menu.addAction(export_as_vc_action)
         export_as_vc_action.triggered.connect(self.export_as_vectorcraft)
+
+        export_as_dc_action = QAction("DeckCraft slide (editable)…", self)
+        export_as_dc_action.setToolTip(
+            "A native .deckcraft deck for DeckCraft, the open-source PowerPoint replacement: "
+            "one slide the size of the figure, one group per panel, editable text and shapes. "
+            "DeckCraft also opens the PowerPoint export.")
+        export_menu.addAction(export_as_dc_action)
+        export_as_dc_action.triggered.connect(self.export_as_deckcraft)
 
         export_menu.addSeparator()
 
@@ -2177,6 +2186,14 @@ class EZFIG_GUI(QMainWindow):
         else:
             event.ignore()
 
+    def _close_dnd_menu(self):
+        """Remove the drop menu still on screen, if any."""
+        old = getattr(self, '_dnd_menu', None)
+        self._dnd_menu = None
+        if old is not None and _qt_alive(old):
+            old.hide()
+            old.deleteLater()
+
     def _show_dnd_menu(self, global_pos):
         """Show DND menu as a positioned child widget — bypasses Wayland popup grab."""
         from qtpy.QtWidgets import QFrame, QVBoxLayout, QPushButton, QSizePolicy, QLabel
@@ -2184,8 +2201,12 @@ class EZFIG_GUI(QMainWindow):
         menu = self.paint.EZFIG_panel.contextMenu
         if not menu or not menu.actions():
             return
+        # it is not a real popup (it stays until a choice is made): a second
+        # drop showed a second menu on top of the first, both clickable
+        self._close_dnd_menu()
 
         fake_menu = QFrame(self)
+        self._dnd_menu = fake_menu
         fake_menu.setFrameShape(QFrame.StyledPanel)
         fake_menu.setFrameShadow(QFrame.Raised)
         fake_menu.setStyleSheet("""
@@ -2224,6 +2245,8 @@ class EZFIG_GUI(QMainWindow):
         def close_menu():
             fake_menu.hide()
             fake_menu.deleteLater()
+            if getattr(self, '_dnd_menu', None) is fake_menu:
+                self._dnd_menu = None
 
         def make_action_handler(action):
             def handler():
@@ -2250,6 +2273,8 @@ class EZFIG_GUI(QMainWindow):
             else:
                 btn = QPushButton(action.text())
                 btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                if action.toolTip() and action.toolTip() != action.text().replace('&', ''):
+                    btn.setToolTip(action.toolTip())      # what the choice does
                 btn.clicked.connect(make_action_handler(action))
                 layout.addWidget(btn)
 
@@ -2362,13 +2387,38 @@ class EZFIG_GUI(QMainWindow):
 
         # ── Group: add individually ──────────────────────────────────────
         add_header("Add to canvas")
-        all_as_single_images = self.paint.EZFIG_panel.contextMenu.addAction("➕  As single image(s)")
+        menu = self.paint.EZFIG_panel.contextMenu
+        stack_axes = self._stack_axes_of_file(lst[0]) if len(lst) == 1 and isinstance(lst[0], str) else []
+        # the projection runs along the last extra axis (Z when there is one)
+        k, n = next((a for a in stack_axes if a[0] == 'd'), stack_axes[-1]) if stack_axes else (None, 0)
+
+        def add_montage():
+            # one time / Z stack dropped alone: a montage of its frames is likely
+            # wanted (several files dropped together rather want one image each)
+            act = menu.addAction("🎞  Montage of frames (time / Z)…")
+            act.setToolTip("Several frames side by side in a new row, with time or depth stamps")
+            act.triggered.connect(_with_series(lambda resolved: self.montage_from_file(resolved[0])))
+        if k == 't':
+            # a time series: a montage first (or one panel that plays as a movie
+            # in a video export); its max projection is offered, never imposed
+            add_montage()
+        if stack_axes and not (k == 'd' and self.max_proj_action.isChecked()):
+            # (a Z stack is already shown projected when the View setting is on)
+            over = f"Z ({n} slices)" if k == 'd' else f"time ({n} frames)"
+            projected = menu.addAction(f"▣  As max projection over {over}")
+            projected.setToolTip("One panel showing the brightest value of each pixel over "
+                                 + ("all Z slices" if k == 'd' else "all time points"))
+            projected.triggered.connect(_with_series(self.add_images_as_max_projection))
+        all_as_single_images = menu.addAction("➕  As single image(s)")
+        if k == 't':
+            all_as_single_images.setToolTip("One panel showing the first time point; it plays as a "
+                                            "movie in File → Export As → Video (animate time-stacks)")
+        elif k == 'd':
+            all_as_single_images.setToolTip("One panel: the max projection (View → Show new Z stacks "
+                                            "as max projection) or the first slice")
         all_as_single_images.triggered.connect(_with_series(self.all_images_directly))
-        # one time / Z stack dropped alone: a montage of its frames is likely
-        # wanted (several files dropped together rather want one image each)
-        if len(lst) == 1 and isinstance(lst[0], str) and self._stack_axes_of_file(lst[0]):
-            montage = self.paint.EZFIG_panel.contextMenu.addAction("🎞  Montage of frames (time / Z)…")
-            montage.triggered.connect(_with_series(lambda resolved: self.montage_from_file(resolved[0])))
+        if k == 'd':
+            add_montage()
 
         # ── Group: template assignment (only when dropping onto a template) ──
         if all_encounters_in_shape_below_mouse:
@@ -2617,6 +2667,20 @@ class EZFIG_GUI(QMainWindow):
         if not lst:
             return
         self._load_images_then_callback(lst, self._finish_add_single_images)
+
+    def add_images_as_max_projection(self, lst):
+        """Drop menu 'As max projection': each stack shows the max over its
+        last extra axis (Z, or time for a time series)."""
+        if not lst:
+            return
+
+        def _project(img2d_list):
+            for img2d in img2d_list:
+                if isinstance(getattr(img2d, 'img', None), np.ndarray):
+                    img2d.projection = 'max'
+                    img2d.update_qimage()
+            self._finish_add_single_images(img2d_list)
+        self._load_images_then_callback(lst, _project)
 
     def _finish_add_single_images(self, img2d_list):
         for img2d in img2d_list:
@@ -3065,6 +3129,10 @@ class EZFIG_GUI(QMainWindow):
         hinted at in the start-up tips before). Its "Don't show again" box
         and View → Show the 'double-click to edit' hint switch it off."""
         if getattr(self, '_edit_hint_shown', False) or not self.edit_hint_action.isChecked():
+            return None
+        if QApplication.activeModalWidget() is not None or getattr(self, '_dnd_menu', None) is not None:
+            # never a second popup over a dialog or the drop menu: try later
+            QTimer.singleShot(1500, lambda: _qt_alive(self) and self._maybe_show_edit_hint())
             return None
         self._edit_hint_shown = True
         box = QMessageBox(self)
@@ -4276,7 +4344,7 @@ class EZFIG_GUI(QMainWindow):
         cd = CustomDialog(
             title="Add colour bar",
             message="Configure the intensity calibration bar, then press Ok.",
-            main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+            main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -4361,7 +4429,7 @@ class EZFIG_GUI(QMainWindow):
 
         cd = CustomDialog(title="Add multi-channel merge",
                           message="Assign a colour to each channel, then press Ok.",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
 
@@ -4445,7 +4513,7 @@ class EZFIG_GUI(QMainWindow):
 
         cd = CustomDialog(title="Add zoom callout",
                           message="Region of interest in image pixels (x, y = top-left corner).",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         x, y = spins['x'].value(), spins['y'].value()
@@ -4548,7 +4616,7 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(QLabel('Label at the tail:', frame), 8, 0)
         grid.addWidget(label, 8, 1)
         cd = CustomDialog(title="Add arrow", message="Point an arrow at a feature.",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         from pyfigures.mcp_server import add_arrow
@@ -4585,41 +4653,69 @@ class EZFIG_GUI(QMainWindow):
             return
         frame = QFrame(self)
         grid = QGridLayout(frame)
+        dims = ', '.join(f"{n} {info['sizes'][k]}" for k, n in (('t', 'time points'), ('d', 'Z slices'),
+                                                              ('c', 'channels')) if k in info['order'])
+        about = QLabel(f"<b>{os.path.basename(sel.filename)}</b>: {info['sizes']['w']} x "
+                       f"{info['sizes']['h']} px, {dims}.<br>The montage puts several of its "
+                       "frames side by side as a new row (one figure panel, one letter).", frame)
+        about.setWordWrap(True)
+        grid.addWidget(about, 0, 0, 1, 2)
+
+        def add_row(label, widget, tip):
+            lab = QLabel(label, frame)
+            for w in (lab, widget):
+                w.setToolTip(tip)
+            r = grid.rowCount()
+            grid.addWidget(lab, r, 0)
+            grid.addWidget(widget, r, 1)
+            return lab
         axis = QComboBox(frame)
         for k, n in axes:
             axis.addItem(f"{n} ({info['sizes'][k]} frames)", 't' if k == 't' else 'z')
-        grid.addWidget(QLabel('Frames along:', frame), 0, 0)
-        grid.addWidget(axis, 0, 1)
+        add_row('Frames along:', axis, 'Which axis the panels step through: one panel per time '
+                'point, or one per Z slice.')
         frames = QLineEdit('6', frame)
-        frames.setToolTip('N = N evenly spaced frames; "all"; "0:20:5" (start:stop:step); '
-                          'or a list "0, 4, 9"')
-        grid.addWidget(QLabel('Which frames:', frame), 1, 0)
-        grid.addWidget(frames, 1, 1)
+        add_row('Which frames:', frames, 'A number N = N evenly spaced frames (first and last '
+                'included); "all"; "0:20:5" = from 0 to 20 every 5; or a list "0, 4, 9" '
+                '(frame numbers start at 0).')
         columns = self._spin(frame, 0, 100, 0)
-        columns.setSpecialValueText('one row')
-        grid.addWidget(QLabel('Panels per row:', frame), 2, 0)
-        grid.addWidget(columns, 2, 1)
+        columns.setSpecialValueText('all in one row')
+        add_row('Panels per row:', columns, 'Wrap the montage after this many panels (e.g. 3 '
+                'for 6 frames gives 2 rows of 3).')
         proj = QComboBox(frame)
         proj.addItems(['max', 'avg', 'min', 'none'])
-        grid.addWidget(QLabel('Z projection (time montage):', frame), 3, 0)
-        grid.addWidget(proj, 3, 1)
+        proj_label = add_row('Z projection of each time point:', proj,
+                             'For a time montage of a Z stack: how each time point\'s Z slices '
+                             'are combined into one image (none = the first slice).')
         interval = self._spin(frame, 0, 1e6, float(info.get('interval') or 0), double=True)
-        interval.setSpecialValueText('from file / frame numbers')
-        grid.addWidget(QLabel('Time per frame:', frame), 4, 0)
-        grid.addWidget(interval, 4, 1)
+        interval.setSpecialValueText('unknown: stamp frame numbers')
+        interval_label = add_row('Time between frames:', interval,
+                                 'Read from the file when it is stored there; used to stamp '
+                                 'each panel with its time (0 min, 2 min…).')
         unit = QLineEdit(info.get('time_unit') or '', frame)
-        grid.addWidget(QLabel('Time unit:', frame), 5, 0)
-        grid.addWidget(unit, 5, 1)
-        stamps = QCheckBox('Stamp each frame (0 min, 2 min…)', frame)
+        unit_label = add_row('Time unit:', unit, 'Unit of the time between frames, e.g. s, min, h.')
+        stamps = QCheckBox('Stamp each panel with its time or depth (0 min, 2 min… / z 0…)', frame)
+        stamps.setToolTip('A small label on each panel saying which frame it shows.')
         stamps.setChecked(True)
-        grid.addWidget(stamps, 6, 0, 1, 2)
+        grid.addWidget(stamps, grid.rowCount(), 0, 1, 2)
         keep_crop = self._keep_crop_checkbox(frame, keep_crop_from) \
             if keep_crop_from is not None else None
         if keep_crop is not None:
-            grid.addWidget(keep_crop, 7, 0, 1, 2)
+            grid.addWidget(keep_crop, grid.rowCount(), 0, 1, 2)
+        has_z = info['sizes'].get('d', 1) > 1 and 'd' in info['order']
+
+        def show_relevant():
+            """Only the options that apply to the chosen axis."""
+            along_time = axis.currentData() == 't'
+            for w in (proj_label, proj):
+                w.setVisible(along_time and has_z)
+            for w in (interval_label, interval, unit_label, unit):
+                w.setVisible(along_time)
+        axis.currentIndexChanged.connect(show_relevant)
+        show_relevant()
         cd = CustomDialog(title="Stack montage",
-                          message="Adds a new row showing several frames of the stack.",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          message="Hover over an option for help.",
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return False
         spec = frames.text().strip() or None
@@ -4693,7 +4789,7 @@ class EZFIG_GUI(QMainWindow):
         if keep_crop is not None:
             grid.addWidget(keep_crop, n + 3, 0, 1, 2)
         cd = CustomDialog(title="Channel split", message="Adds a new row: each channel, then the merge.",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         from pyfigures.mcp_server import add_channel_split
@@ -4760,7 +4856,7 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(channel, 5, 1)
         cd = CustomDialog(title="Kymograph",
                           message=f"Line on the image ({W} x {H} px); time runs downwards.",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         from pyfigures.mcp_server import add_kymograph
@@ -4799,7 +4895,7 @@ class EZFIG_GUI(QMainWindow):
             grid.addWidget(w, r, 1)
         cd = CustomDialog(title="Orthogonal views",
                           message=f"{W} x {H} px, {Z} slices. XY + YZ (right) + XZ (below).",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         from pyfigures.mcp_server import add_orthogonal_views
@@ -4955,7 +5051,7 @@ class EZFIG_GUI(QMainWindow):
         cd = CustomDialog(title="Copy style",
                           message=f"Apply the style of {os.path.basename(src)} to this figure "
                                   f"(content is not changed):",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         aspects = [k for k, cb in boxes.items() if cb.isChecked()]
@@ -5000,7 +5096,7 @@ class EZFIG_GUI(QMainWindow):
                                           long_edit.setPlainText(draft.get('long', ''))))
         lay.addWidget(regen)
         cd = CustomDialog(title="Alt text (accessibility)", message="",
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         res = set_alt_text(self.current_file, long_edit.toPlainText(), short.text() or None)
@@ -5106,7 +5202,7 @@ class EZFIG_GUI(QMainWindow):
             title="Add data plot from CSV",
             message=(f"{os.path.basename(csv_path)} — columns are groups (wide) or "
                      "'group,value' (long); 'grouped' needs 'factorA,factorB,value'."),
-            main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+            main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
 
@@ -5121,6 +5217,7 @@ class EZFIG_GUI(QMainWindow):
             annotate_stats=annotate_cb.isChecked(),
             only_significant=only_sig_cb.isChecked(),
             stats_mode=stats_combo.currentText(),
+            title=title_edit.text().strip(),
             ylabel=ylabel_edit.text().strip(),
             label=label_edit.text().strip() or None,
             latex=latex_cb.isChecked(),
@@ -5217,7 +5314,6 @@ class EZFIG_GUI(QMainWindow):
     def _show_report(self, title, text):
         """Show a read-only, scrollable text report in a modal dialog."""
         frame = QFrame(self)
-            title=title_edit.text().strip(),
         lay = QVBoxLayout(frame)
         view = QTextBrowser(frame)
         view.setPlainText(text)
@@ -5315,7 +5411,7 @@ class EZFIG_GUI(QMainWindow):
         dlg = _JournalDialog(self)
         cd = CustomDialog(title="Check journal compliance",
                           message="Choose the target journal / width.",
-                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -5336,7 +5432,7 @@ class EZFIG_GUI(QMainWindow):
         dlg = _JournalDialog(self)
         cd = CustomDialog(title="Check print resolution",
                           message="Choose the target journal / width.",
-                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -5359,7 +5455,7 @@ class EZFIG_GUI(QMainWindow):
         cd = CustomDialog(title="Apply journal guidelines",
                           message="This resizes the figure and adjusts fonts / "
                                   "labels to the journal's rules.",
-                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -5389,7 +5485,7 @@ class EZFIG_GUI(QMainWindow):
         dlg = _ScaleBarAllDialog(self)
         cd = CustomDialog(title="Add scale bar to all panels",
                           message="Add/update a scale bar on every panel.",
-                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -5405,7 +5501,7 @@ class EZFIG_GUI(QMainWindow):
         dlg = _RemapPathsDialog(self)
         cd = CustomDialog(title="Remap image paths",
                           message="Rewrite a path prefix on every image filename.",
-                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
         try:
@@ -5730,6 +5826,7 @@ class EZFIG_GUI(QMainWindow):
         # maybe need further remove the other stuff
 
         # Try to edit all the elements by adding a letter to them before updating them -−> TODO
+        lettered = []
         for elm in all_images:
             # list all image except insets
             # and add to each of them a letter --> should be easy in fact
@@ -5748,6 +5845,9 @@ class EZFIG_GUI(QMainWindow):
                     for l in [l for l in elm.annotations if isinstance(l, TAText2D) and l.is_letter]:
                         elm.annotations.remove(l)
                 continue
+            lettered.append(elm)
+        colours = self._figure_letter_colours(lettered) if shall_add_letter else {}
+        for elm in lettered:
             # reuse the existing letter annotation when possible: recreating a
             # QTextDocument-backed TAText2D per image on every refresh is expensive
             existing = None
@@ -5759,7 +5859,7 @@ class EZFIG_GUI(QMainWindow):
                     if l is not existing:
                         elm.annotations.remove(l)
             if shall_add_letter:
-                fg = self._letter_colour_override(elm)
+                fg = colours.get(id(elm))
                 html = self.serializable_font.get_letter_html(letter, foreground=fg)
                 if existing is not None:
                     # update in place, and only touch the document if something changed
@@ -5782,14 +5882,34 @@ class EZFIG_GUI(QMainWindow):
         letter is invisible on a data plot. On a micrograph the colour follows
         the corner the letter sits on, as for the MCP tools / recipes: black on
         a bright corner (bright field), white on a dark one (fluorescence, where
-        a black letter is invisible). None = use the figure font colour."""
+        a black letter is invisible). None = use the figure font colour, as
+        when the letters have a background box."""
         fg = getattr(self.serializable_font, 'foreground', None)
         if fg is None:
+            return None
+        if getattr(self.serializable_font, 'background', None) is not None:
+            # the letter sits on its own box (white by default): it must contrast
+            # with the box, not the image — white was chosen for a dark corner
+            # and drawn on the white box, so letters vanished
             return None
         rgb = int(fg) & 0xFFFFFF
         luminance = (0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF)
                      + 0.114 * (rgb & 0xFF))
         light = luminance >= 160
+        bright = EZFIG_GUI._letter_corner_brightness(self, elm)
+        if bright is None:
+            return None
+        if light and bright > 0.6:
+            return 0x000000
+        if not light and bright < 0.4:
+            return 0xFFFFFF
+        return None
+
+    def _letter_corner_brightness(self, elm):
+        """Brightness (0 dark … 1 bright) under the letter of *elm*: 1 for a
+        chart (matplotlib figure / SVG on white), the image corner for a
+        micrograph (read once per file and cached), None when unknown (merges
+        and scripted panels, URLs)."""
         from qtpy.QtSvg import QSvgRenderer
         img = getattr(elm, 'img', None)
         if isinstance(img, plt.Figure):
@@ -5799,27 +5919,35 @@ class EZFIG_GUI(QMainWindow):
             is_chart = isinstance(getattr(elm, 'renderer', None), QSvgRenderer) \
                 and not isinstance(img, np.ndarray)
         if is_chart:
-            return 0x000000 if light else None
+            return 1.0
         fn = getattr(elm, 'filename', None)
         if not isinstance(fn, str) or getattr(elm, 'custom_loading_script', None):
-            return None  # merges (fluorescence) and scripted panels keep the font colour
+            return None
         placement = getattr(self.serializable_font, 'placement', None)
         if isinstance(placement, Position):
             placement = ' '.join(placement.get_position())
         try:
             from pyfigures.mcp_tools.core import corner_brightness
-            bright = corner_brightness(fn, str(placement or 'top left'),
-                                       (elm.crop_left, elm.crop_right, elm.crop_top, elm.crop_bottom),
-                                       getattr(elm, 'LUTs', None))
+            return corner_brightness(fn, str(placement or 'top left'),
+                                     (elm.crop_left, elm.crop_right, elm.crop_top, elm.crop_bottom),
+                                     getattr(elm, 'LUTs', None))
         except Exception:
-            bright = None
-        if bright is None:
             return None
-        if light and bright > 0.6:
-            return 0x000000
-        if not light and bright < 0.4:
-            return 0xFFFFFF
-        return None
+
+    def _figure_letter_colours(self, panels):
+        """{id(panel): 0xRRGGBB or None} for the panels about to get a letter.
+        Letters without a box in black or white follow one colour for the
+        figure, switched only where it would vanish (core.letter_colours);
+        a coloured font or letters on a box keep the font colour (None)."""
+        font = self.serializable_font
+        fg = getattr(font, 'foreground', None)
+        auto = getattr(font, 'background', None) is None and fg is not None \
+            and int(fg) & 0xFFFFFF in (0x000000, 0xFFFFFF)
+        if not auto or not panels:
+            return {}
+        from pyfigures.mcp_tools.core import letter_colours
+        colours = letter_colours([self._letter_corner_brightness(p) for p in panels])
+        return {id(p): c for p, c in zip(panels, colours)}
 
     # def remove_all_annotations(self):
     #     print('remove all annotations called')
@@ -5944,7 +6072,7 @@ class EZFIG_GUI(QMainWindow):
         cd = CustomDialog(title="Draft figure from folder",
                           message=(f"{os.path.basename(folder)} — images become a grid, "
                                    "CSVs become data-plot panels."),
-                          main_widget=frame, options=['Ok', 'Cancel'], parent=self)
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
 
@@ -6776,15 +6904,24 @@ class EZFIG_GUI(QMainWindow):
         if output_file:
             self._export_editable(output_file, 'vectorcraft')
 
+    def export_as_deckcraft(self):
+        output_file = saveFileDialog(parent_window=self,
+                                     extensions="DeckCraft deck (*.deckcraft);;All Files (*)",
+                                     default_ext='.deckcraft')
+        if output_file:
+            self._export_editable(output_file, 'deckcraft')
+
     def _export_editable(self, output_file, fmt):
-        """Editable export (PowerPoint, Illustrator script or VectorCraft
-        document) of the current figure."""
-        from pyfigures.gui.editable_export import capture_scene, write_pptx, write_jsx, write_vectorcraft
+        """Editable export (PowerPoint, Illustrator script, VectorCraft document
+        or DeckCraft deck) of the current figure."""
+        from pyfigures.gui.editable_export import (capture_scene, write_pptx, write_jsx, write_vectorcraft,
+                                                   write_deckcraft)
         if not self.paint.EZFIG_panel.shapes_to_draw:
             QMessageBox.information(self, 'Nothing to export', 'The figure contains no panels.')
             return
         self._offer_vector_pdf('export')
-        name = {'pptx': 'PowerPoint', 'vectorcraft': 'VectorCraft document'}.get(fmt, 'Illustrator script')
+        name = {'pptx': 'PowerPoint', 'vectorcraft': 'VectorCraft document',
+                'deckcraft': 'DeckCraft deck'}.get(fmt, 'Illustrator script')
         self.statusBar().showMessage(f'Exporting {name}, please wait...')
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -6795,6 +6932,9 @@ class EZFIG_GUI(QMainWindow):
             elif fmt == 'vectorcraft':
                 write_vectorcraft(scene, output_file)
                 extra = '\n\nIn VectorCraft: File > Open…'
+            elif fmt == 'deckcraft':
+                write_deckcraft(scene, output_file)
+                extra = '\n\nIn DeckCraft: File > Open…'
             else:
                 _, assets = write_jsx(scene, output_file)
                 extra = ('\n\nKeep the folder ' + os.path.basename(assets) + ' next to it.\n'

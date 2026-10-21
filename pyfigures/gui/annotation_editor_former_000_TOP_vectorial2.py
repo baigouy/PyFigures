@@ -235,7 +235,7 @@ class VectorialDrawPane2(QWidget):
         elif 'oating' in sender:
             self.shape_to_draw = partial(TAText2D, text='<font color=#66FF66>Your text here</font>', placement=None)
         elif 'cale' in sender:
-            self.shape_to_draw = partial(ScaleBar, bar_width_in_units=100, legend=TAText2D('<font color=#FFFFFF>Double click scale bar to edit</font>'), placement='bottom-right')
+            self.shape_to_draw = partial(ScaleBar, bar_width_in_units=100, legend=TAText2D(''), placement='bottom-right')
         else:
             print(sender, 'Shape not supported yet!!!')
             self.shape_to_draw = None
@@ -2138,7 +2138,24 @@ class MainWindow(QWidget):
                 # print('force update sliders')
 
         self.ignore_changes = False
+        # projections only make sense for a Z / time stack: offered on a plain
+        # image they did nothing (kept visible if a saved projection is set)
+        self.image_projection_box.setVisible(self._has_projectable_axis()
+                                             or self.projection_combo_box.currentData() is not None)
         self.update_proj_z_range_widget()
+
+    def _has_projectable_axis(self):
+        """True if the image has an axis with several frames before h (Z, time)."""
+        bg = self.qt_viewer.background
+        img = getattr(bg, 'img', None)
+        if not isinstance(img, np.ndarray):
+            return False
+        try:
+            dims = guess_dimensions(img)
+            letter = find_letter_before_h(dims) if dims else None
+            return bool(letter) and img.shape[dims.index(letter)] > 1
+        except Exception:
+            return False
 
     def update_dimension_sliders(self):
         self.dimsliders = []
@@ -2216,6 +2233,12 @@ class MainWindow(QWidget):
                 self.qt_viewer.background.dimensions=None
 
 
+        # a plain 2-D image (or one whose only extra axis is projected) has no
+        # slider to show: the empty box was squeezed into an odd shape
+        self.image_dimension_browser_toolbox.setVisible(self.image_dimension_browser_toolbox_layout.count() > 0)
+        if hasattr(self, 'image_projection_box'):   # the file may have changed
+            self.image_projection_box.setVisible(self._has_projectable_axis()
+                                                 or self.projection_combo_box.currentData() is not None)
         # self.comments_widget.update()
         if self.projection_combo_box.currentData() and len(self.dimsliders)>1:
             self.image_dimension_browser_toolbox.adjustSize()
@@ -2371,7 +2394,9 @@ class MainWindow(QWidget):
         # Build a default scale bar pre-filled with the image's conversion factor
         default_sb = ScaleBar(
             bar_width_in_units=10 * (conversion_factor if conversion_factor else 1),
-            legend=TAText2D('<font color=#FFFFFF>Double click to edit</font>'),
+            # no legend unless the user types one: the old placeholder text
+            # ("Double click to edit") ended up in figures when left as is
+            legend=TAText2D(''),
             unit_to_pixel_conversion_factor=conversion_factor if conversion_factor else 1,
             placement='bottom-right',
         )

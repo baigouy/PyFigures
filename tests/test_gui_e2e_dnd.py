@@ -104,6 +104,8 @@ DROPS = [
      BASE + ["row 3: movie.tif"], lambda a: a["panels"][-1]["projection"] is None),
     ("one time stack", ["tstack"], None, "base", "🎞  Montage of frames (time / Z)…",
      [("Stack montage", _montage_all)], BASE + ["row 3: [movie.tif x5]"], None),
+    ("one time stack", ["tstack"], None, "base", "▣  As max projection over time (5 frames)", [],
+     BASE + ["row 3: movie.tif"], lambda a: a["panels"][-1]["projection"] == "max"),
     ("one z stack", ["zstack"], None, "base", "➕  As single image(s)", [],
      BASE + ["row 3: zstack.tif"], lambda a: a["panels"][-1]["projection"] == "max"),
     ("one z stack", ["zstack"], None, "base", "🎞  Montage of frames (time / Z)…",
@@ -131,6 +133,8 @@ DROPS = [
     ("video", ["video"], None, "base", "➕  As single image(s)", [], BASE + ["row 3: clip.mp4"], None),
     ("video", ["video"], None, "base", "🎞  Montage of frames (time / Z)…",
      [("Stack montage", _montage_all)], BASE + ["row 3: [clip.mp4 x6]"], None),
+    ("video", ["video"], None, "base", "▣  As max projection over time (6 frames)", [],
+     BASE + ["row 3: clip.mp4"], lambda a: a["panels"][-1]["projection"] == "max"),
 ]
 
 DROP_IDS = [f"{s[0]}-{s[4].strip('➕↔↕▦⬜🎞✕ ')}" for s in DROPS]

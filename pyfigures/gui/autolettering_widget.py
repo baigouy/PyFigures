@@ -19,6 +19,9 @@ class AutoLetteringOptions(QWidget):
 
         # Create the background color section
         self.bg_color_check = QCheckBox('Background color')
+        self.bg_color_check.setToolTip('A box behind each letter. Without it, black or white '
+                                       'letters switch colour where the image under them would '
+                                       'hide them (one colour for the figure where possible).')
         self.bg_color_check.setChecked(True)
         self.bg_color_button = QPushButton('Choose color')
         self.bg_color_button.setEnabled(True)

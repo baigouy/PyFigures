@@ -392,6 +392,11 @@ def test_gui_export_actions(qapp, tmp_path, monkeypatch, cropped_figure):
         assert os.path.isfile(out3) and msgs[-1] == ("information", "VectorCraft document exported")
         assert "VectorCraft (editable)…" in names or "VectorCraft (editable)…" in \
             [a.text() for a in g.findChildren(pfgui.QAction)]
+        out4 = str(tmp_path / "gui.deckcraft")
+        monkeypatch.setattr(pfgui, "saveFileDialog", lambda *a, **k: out4)
+        g.export_as_deckcraft()
+        assert os.path.isfile(out4) and msgs[-1] == ("information", "DeckCraft deck exported")
+        assert "DeckCraft slide (editable)…" in [a.text() for a in g.findChildren(pfgui.QAction)]
     finally:
         g._dirty = False
         g._stop_all_img_loaders()
@@ -519,3 +524,102 @@ def test_vectorcraft_itself_opens_the_exports(cropped_figure, tmp_path):
     png = str(tmp_path / "vc.png")
     out = subprocess.run([exe, "convert", vc, png], capture_output=True, text=True, timeout=120)
     assert out.returncode == 0 and os.path.getsize(png) > 1000, out.stderr
+
+
+# ---------------------------------------------------------------------------
+# DeckCraft (.deckcraft native deck)
+# ---------------------------------------------------------------------------
+def _deck(path):
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        names = z.namelist()
+        assert names[0] == "mimetype" and z.getinfo("mimetype").compress_type == zipfile.ZIP_STORED
+        assert z.read("mimetype").decode() == E.DECKCRAFT_MIMETYPE
+        return json.loads(z.read("presentation.json")), {n: z.read(n) for n in names if n.startswith("media/")}
+
+
+def test_write_deckcraft_native_deck(tmp_path):
+    out = str(tmp_path / "fig.deckcraft")
+    E.write_deckcraft(_scene(), out)
+    doc, media = _deck(out)
+    assert doc["format"] == "deckcraft" and doc["generator"].startswith("PyFigures")
+    pres = doc["presentation"]
+    assert pres["slideSize"] == {"width": 300.0, "height": 150.0}          # the figure's size
+    assert len(pres["slides"]) == 1 and pres["masters"]                    # from DeckCraft's own blank deck
+    group, box, label = pres["slides"][0]["shapes"]
+    assert group["name"] == "Panel 1" and group["kind"]["type"] == "group"
+    pic, bar, letter = group["kind"]["children"]
+    assert pic["kind"]["type"] == "picture" and pic["xfrm"] == {"x": 0, "y": 0, "w": 150, "h": 150}
+    mid = pic["kind"]["fill"]["media"]
+    assert media["media/%d" % mid] == _png()
+    assert {"id": mid, "name": "image1.png", "contentType": "image/png", "link": None} in pres["media"]
+    assert bar["geom"]["paths"][0]["d"] == "M 0 0 L 50 0" and bar["line"]["width"] == 3
+    run = letter["text"]["paragraphs"][0]["runs"][0]
+    assert run["text"] == "A" and run["props"]["bold"] is True and run["props"]["size"] == 12
+    assert run["props"]["fill"]["color"]["base"]["rgb"] == {"r": 255, "g": 255, "b": 255, "a": 255}
+    # outside every panel: no group; transparency kept; rotated italic text
+    assert box["fill"]["color"]["base"]["rgb"]["a"] == 128 and box["geom"]["paths"][0]["d"].endswith("Z")
+    assert label["xfrm"]["rot"] == 270 and label["text"]["paragraphs"][0]["runs"][0]["props"]["italic"]
+    ids = []
+
+    def walk(s):
+        ids.append(s["id"])
+        for ch in s["kind"].get("children", []):
+            walk(ch)
+    for s in pres["slides"][0]["shapes"]:
+        walk(s)
+    ids += [m["id"] for m in pres["media"]]
+    assert len(ids) == len(set(ids)) and pres["nextId"] > max(ids)
+
+
+def test_mcp_and_recipe_export_deckcraft(cropped_figure, tmp_path):
+    import pyfigures.mcp_server as M
+    res = json.loads(M.export_deckcraft(cropped_figure, str(tmp_path / "out.deckcraft")))
+    assert res["images"] == 2 and res["panel_groups"] == 2 and "File > Open" in res["usage"]
+    _, media = _deck(res["path"])
+    from PIL import Image
+    assert sorted(Image.open(io.BytesIO(v)).size for v in media.values()) == [(60, 80), (120, 80)]
+    assert M.export_deckcraft(cropped_figure, str(tmp_path / "x.pptx")).startswith("ERROR")
+    import tifffile
+    from pyfigures.recipe import build_figure_from_recipe
+    tifffile.imwrite(str(tmp_path / "a.tif"), np.zeros((32, 32), np.uint8))
+    (tmp_path / "r.json").write_text(json.dumps({"output": "r.pyf", "rows": [[{"image": "a.tif"}]],
+                                                  "exports": ["deckcraft"]}), encoding="utf-8")
+    build_figure_from_recipe(str(tmp_path / "r.json"))
+    assert os.path.isfile(str(tmp_path / "r.deckcraft"))
+
+
+def _deckcraft_cli():
+    import glob
+    exe = os.environ.get("DECKCRAFT_CLI")
+    if exe and os.path.isfile(exe):
+        return exe
+    for pattern in (r"C:\Softwares\deckcraft*\deckcraft-cli.exe",
+                    r"C:\Program Files\DeckCraft\deckcraft-cli.exe", "/usr/bin/deckcraft-cli"):
+        found = sorted(glob.glob(pattern))
+        if found:
+            return found[-1]
+    return None
+
+
+def test_deckcraft_itself_opens_the_deck(cropped_figure, tmp_path):
+    """With DeckCraft installed (or DECKCRAFT_CLI set), its own reader opens the
+    .deckcraft export and renders the slide at the figure's size."""
+    import subprocess
+    exe = _deckcraft_cli()
+    if exe is None:
+        pytest.skip("DeckCraft is not installed")
+    import pyfigures.mcp_server as M
+    deck = str(tmp_path / "f.deckcraft")
+    json.loads(M.export_deckcraft(cropped_figure, deck))
+    out = subprocess.run([exe, "info", deck], capture_output=True, text=True, timeout=120, encoding="utf-8")
+    assert out.returncode == 0, out.stderr
+    info = json.loads(out.stdout)
+    assert len(info["slides"]) == 1
+    png = str(tmp_path / "dc.png")
+    out = subprocess.run([exe, "render", deck, "--scale", "1", png], capture_output=True, text=True,
+                         timeout=120)
+    assert out.returncode == 0 and os.path.getsize(png) > 1000, out.stderr
+    from PIL import Image
+    w, h = Image.open(png).size
+    assert (w, h) == tuple(round(v) for v in info["slideSize"])
