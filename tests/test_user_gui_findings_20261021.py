@@ -212,6 +212,7 @@ def test_letters_without_ascender_are_not_lower_than_b(tmp_path, qapp):
     for t in ("a", "c", "e", "s"):
         assert abs(ink_top(t) - b) <= 1, (t, ink_top(t), b)
     assert abs(ink_top("A") - ink_top("B")) <= 1
+    assert b <= 1 and ink_top("a") <= 1        # the ink starts at the top of the letter's box
     # bottom letters sit on the baseline: not moved
     assert ink_top("a", "bottom left") > ink_top("b", "bottom left") + 5
 
