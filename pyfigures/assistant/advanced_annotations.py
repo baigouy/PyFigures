@@ -98,6 +98,12 @@ def prepare_text(obj, changes, substring=None, occurrence=None):
             found=doc.find(substring,found.selectionEnd())
         if not matches:
             raise ValueError('Requested text is absent')
+        if occurrence is None and len(matches)>1 and len(substring)>1 and substring.replace(' ','').isalpha():
+            # "treated" in "treated and untreated": the one whole word is meant.
+            # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
+            plain=doc.toPlainText()
+            whole=[m for m in matches if not (m[0]>0 and plain[m[0]-1].isalnum()) and not (m[1]<len(plain) and plain[m[1]].isalnum())]
+            if len(whole)==1:matches=whole
         if occurrence is None and len(matches)!=1:
             raise ValueError('CLARIFICATION_REQUIRED: Text occurs more than once; specify a 1-based occurrence')
         n=1 if occurrence is None else occurrence

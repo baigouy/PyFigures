@@ -61,11 +61,35 @@ def test_only_the_matched_word_turns_bold(fig):
     assert "untreated" in re.sub(r"<[^>]+>", "", html)
 
 
-def test_a_word_found_twice_asks_which_and_changes_nothing(fig):
-    before = _text_html(fig)
+def test_the_one_whole_word_is_meant(fig):
+    # "treated" is also inside "untreated", but only once a word of its own
     out = M.style_annotation(fig, [0], 0, 0, bold=True, match="treated")
+    assert not out.startswith("ERROR"), out
+    html = _text_html(fig)
+    bold = re.findall(r'<span style="[^"]*font-weight:\s*(?:700|bold)[^"]*">([^<]*)</span>', html)
+    assert bold == ["treated"], html
+
+
+def test_a_character_found_twice_asks_which_and_changes_nothing(fig):
+    # "2" in "CO2" and in "2 h": a lone 2 is not "the 2 in CO2", so ask
+    before = _text_html(fig)
+    out = M.style_annotation(fig, [0], 0, 0, vertical_align="subscript", match="2")
     assert out.startswith("ERROR") and "2 times" in out and "occurrence" in out, out
     assert _text_html(fig) == before
+
+
+def test_a_word_found_twice_on_its_own_asks_which(tmp_path):
+    from PIL import Image
+    png = tmp_path / "c.png"
+    Image.fromarray(np.full((50, 80), 80, np.uint8)).save(png)
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, mode="groups", num_groups=1)
+    M.add_image(pyf, [0], str(png))
+    M.add_annotation(pyf, [0], 0, "control vs control", placement="bottom left")
+    before = _text_html(pyf)
+    out = M.style_annotation(pyf, [0], 0, 0, bold=True, match="control")
+    assert out.startswith("ERROR") and "2 times" in out, out
+    assert _text_html(pyf) == before
 
 
 def test_subscript_of_one_character(fig):

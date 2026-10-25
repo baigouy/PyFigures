@@ -63,7 +63,8 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
     Only non-None attributes are applied; the rest of the formatting is kept.
     With *match* only that word/phrase changes (case-sensitive); when it occurs
     more than once, *occurrence* (1 = first) says which, otherwise ValueError —
-    the caller must ask rather than guess. *vertical_align*: superscript,
+    the caller must ask rather than guess. Exception: a word of letters found
+    once as a whole word ("treated" in "treated and untreated") is that one. *vertical_align*: superscript,
     subscript or normal. Requires a QApplication (QTextDocument needs fonts).
     """
     from qtpy.QtGui import (QTextDocument, QTextCursor, QTextCharFormat,
@@ -76,6 +77,14 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
         plain = doc.toPlainText()
         if not found:
             raise ValueError(f"{match!r} is not in the text {plain!r} (the match is case-sensitive).")
+        if occurrence is None and len(found) > 1 and len(match) > 1 and str(match).replace(" ", "").isalpha():
+            # "treated" in "treated and untreated": the one whole word is meant.
+            # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
+            whole = [c for c in found
+                     if not (c.selectionStart() > 0 and plain[c.selectionStart() - 1].isalnum())
+                     and not (c.selectionEnd() < len(plain) and plain[c.selectionEnd()].isalnum())]
+            if len(whole) == 1:
+                found = whole
         if occurrence is None and len(found) > 1:
             raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}; nothing was changed. "
                              f"Ask the user which one they mean, then pass occurrence (1 = first) — "

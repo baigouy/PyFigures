@@ -669,9 +669,11 @@ def style_annotation(
     case-sensitive); everything else keeps its formatting. E.g. "make only
     'treated' bold" → match="treated", bold=true; "the 2 in CO2 as subscript"
     → match="2", vertical_align="subscript" (occurrence picks which "2" when
-    there are several). When *match* occurs more than once and *occurrence*
-    (1 = first) is not given, nothing changes and the error says how many
-    there are — ask the user which one rather than guessing.
+    there are several). A word found once as a whole word is that one
+    ("treated" in "treated and untreated"). Otherwise, when *match* occurs
+    more than once and *occurrence* (1 = first) is not given, nothing changes
+    and the error says how many there are — ask the user which one rather
+    than guessing.
 
     To change the label *text* instead of its style, use set_annotation_text.
     *group_path*: [] free-canvas, [0] group 0, [0,1] sub-group.
