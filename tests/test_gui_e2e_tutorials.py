@@ -499,6 +499,16 @@ def _guide_context(c, guide_id):
         c.right_click(img, "Appearance ▶ / Set LUT(s)", [("Edit Look Up Tables (LUTs)", green)])
     elif guide_id == "crop_image":
         c.editor(img, lambda ed: ed.crop_left_spinbox.setValue(5))
+    elif guide_id == "reorder_panels":
+        # the → arrow moves the selected panel inside its row
+        from qtpy.QtCore import Qt
+        from qtpy.QtGui import QKeySequence
+        from qtpy.QtWidgets import QShortcut
+        seq = QKeySequence(Qt.Key.Key_Right)
+        hits = [s for s in c.g.findChildren(QShortcut) if s.key() == seq]
+        assert hits, "no shortcut for the right arrow"
+        hits[0].activated.emit()
+        H.settle(c.qapp, c.g)
     else:
         raise AssertionError(f"no context route for guide {guide_id}")
 

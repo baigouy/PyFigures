@@ -107,6 +107,84 @@ def test_gui_split_is_gray_and_skips_the_empty_channel(qapp, rgb_two):
         g.close()
 
 
+def test_gui_split_panels_get_automatic_letters(qapp, tmp_path):
+    """23 Oct report: with automatic lettering ticked, the split panels got
+    no letters of their own."""
+    from PIL import Image
+    rng = np.random.default_rng(3)
+    p = str(tmp_path / "three.png")
+    Image.fromarray((rng.random((60, 80, 3)) * 200).astype(np.uint8)).save(p)
+    g, img = _gui_with(qapp, p)
+    try:
+        g.auto_lettering_checkbox.setChecked(True)
+        g.update_letters()
+        g.paint.EZFIG_panel.selected_shape = img
+        g.paint.EZFIG_panel.split_channels(mode="gray")
+        for _ in range(10):
+            qapp.processEvents()
+        from pyfigures.gui.pfgui import Image2D
+        letters = []
+        stack = list(g.paint.EZFIG_panel.shapes_to_draw)
+        while stack:
+            s = stack.pop(0)
+            if isinstance(s, Image2D) and not s.isText:
+                letters.append([a.getPlainText() for a in (s.annotations or []) if getattr(a, "is_letter", False)])
+            stack[0:0] = list(getattr(s, "content", None) or [])
+        # the original panel + 3 singles + merge, each with one letter, all different
+        assert len(letters) == 5 and all(len(l) == 1 for l in letters), letters
+        assert len({l[0] for l in letters}) == 5, letters
+    finally:
+        g._dirty = False
+        g.close()
+
+
+def test_insert_channel_split_gets_automatic_letters(qapp, tmp_path, monkeypatch):
+    """Insert → Stack views → Channel split goes through the MCP tool and a
+    reload, which skipped automatic lettering: the new row had no letters."""
+    from PIL import Image
+    from qtpy.QtWidgets import QDialog
+    from pyfigures.gui import pfgui
+    rng = np.random.default_rng(4)
+    p = str(tmp_path / "three.tif")
+    from batoolset.img import Img
+    Img((rng.random((60, 80, 3)) * 200).astype(np.uint8), dimensions="hwc").save(p)
+    g, img = _gui_with(qapp, p)
+    try:
+        class _OK:
+            def __init__(self, *a, **k):
+                pass
+
+            def exec_(self):
+                return QDialog.Accepted
+        monkeypatch.setattr(pfgui, "CustomDialog", _OK)
+        g.auto_lettering_checkbox.setChecked(True)
+        g.paint.EZFIG_panel.selected_shape = img
+        g.add_channel_split_action()
+        from pyfigures.gui.pfgui import Image2D
+        letters = []
+        stack = list(g.paint.EZFIG_panel.shapes_to_draw)
+        while stack:
+            s = stack.pop(0)
+            if isinstance(s, Image2D) and not s.isText:
+                letters.append([a.getPlainText() for a in (s.annotations or []) if getattr(a, "is_letter", False)])
+            stack[0:0] = list(getattr(s, "content", None) or [])
+        comments = []
+        stack = list(g.paint.EZFIG_panel.shapes_to_draw)
+        while stack:
+            s = stack.pop(0)
+            if isinstance(s, Image2D) and not s.isText:
+                comments.append(s.user_comments)
+            stack[0:0] = list(getattr(s, "content", None) or [])
+        # as in recipes and the MCP server: a channel split is ONE figure panel,
+        # lettered on its first channel (it got no letter at all)
+        first = comments.index("[series 1/4] channel split of three.tif: Ch1")
+        assert len(letters[first]) == 1, (letters, comments)
+        assert sum(len(l) for l in letters) == 2, (letters, comments)      # the split + the original
+    finally:
+        g._dirty = False
+        g.close()
+
+
 @pytest.mark.skipif(not os.path.isfile(REAL), reason="the user's test image is not on this computer")
 def test_real_egg_chamber_file(tmp_path):
     from pyfigures.mcp_server import create_figure, add_channel_split

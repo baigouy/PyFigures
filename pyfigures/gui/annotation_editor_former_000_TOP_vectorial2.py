@@ -7,6 +7,7 @@ from batoolset.img import guess_dimensions
 from batoolset.strings.tools import reload_string_list, find_letter_before_h
 # import pzfconfig # this is to store the path to be used for the consolidated files
 from pyfigures.gui.scalebareditor import ScaleBarEditor
+from pyfigures.gui.zoom_links import zoom_links, follow_zoom_links
 from pyfigures.gui.widget_for_inset import InsetWidget
 import traceback
 from batoolset.drawings.shapes.rectangle2d import Rectangle2D
@@ -734,8 +735,14 @@ class VectorialDrawPane2(QWidget):
         if event.buttons() and Qt.LeftButton:
             if self.selected_shape and self.currently_drawn_shape is None:
                 logger.debug('moving' + str(self.selected_shape))
+                delta = event.position() / self.scale - self.lastPoint
                 for shape in self.selected_shape:
-                    shape.translate(event.position() / self.scale - self.lastPoint)
+                    # a zoom callout's leader lines (and the inset's crop when
+                    # the box moves) follow: they stayed behind
+                    links = zoom_links(self.shapes, shape, moving=self.selected_shape)
+                    shape.translate(delta)
+                    if links:
+                        follow_zoom_links(links, delta)
                 self.update_size()
                 self.update()
 
@@ -1581,6 +1588,7 @@ class MainWindow(QWidget):
             tab_widget.addTab(self.script_widget, "Script")
             tab_widget.addTab(pub_scroll, "Export style")
             tab_widget.addTab(self.list, "Layers")
+            self.tab_widget = tab_widget        # open_tab(): Draw ROIs… starts on the drawing tools
 
             mainLayout = QHBoxLayout(self)
             mainLayout.addWidget(self.scrollArea)
@@ -2166,6 +2174,18 @@ class MainWindow(QWidget):
             return bool(letter) and img.shape[dims.index(letter)] > 1
         except Exception:
             return False
+
+    def open_tab(self, name):
+        """Show the tab called *name* ('Annotations' holds the drawing tools:
+        ROIs, arrows, texts). True when found."""
+        tabs = getattr(self, 'tab_widget', None)
+        if tabs is None:
+            return False
+        for i in range(tabs.count()):
+            if tabs.tabText(i) == name:
+                tabs.setCurrentIndex(i)
+                return True
+        return False
 
     def update_dimension_sliders(self):
         self.dimsliders = []
@@ -3176,8 +3196,12 @@ class MainWindow(QWidget):
             # if the shape is a line then add to it
             if isinstance(self.qt_viewer.selected_shape[0], Line2D):
                 if self.qt_viewer.selected_shape[0].arrow:
-                    self.arrow_width_scaler.setValue(self.qt_viewer.selected_shape[0].arrowhead_width_scaler)
-                    self.arrow_height_scaler.setValue(self.qt_viewer.selected_shape[0].arrowhead_height_scaler)
+                    # arrows from Annotations → Add arrow… store float head
+                    # sizes: setValue(float) raised in this slot and left the
+                    # editor half updated (it looked frozen)
+                    shape = self.qt_viewer.selected_shape[0]
+                    self.arrow_width_scaler.setValue(int(round(float(shape.arrowhead_width_scaler or 0))))
+                    self.arrow_height_scaler.setValue(int(round(float(shape.arrowhead_height_scaler or 0))))
 
         self.ignore_changes = False
 

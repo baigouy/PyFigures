@@ -209,6 +209,19 @@ def test_vector_pdf_entry_shows_its_state(gui, monkeypatch):
     assert not gui.pdf_vector_action.isChecked() and "Not installed" in gui.pdf_vector_action.toolTip()
 
 
+def test_remove_menu_says_its_scope(gui, tmp_path):
+    """Annotations → Remove works on the selection, or on every panel when
+    nothing is selected: the menu now says which."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    panel = gui.paint.EZFIG_panel
+    panel.selected_shape = None
+    assert "every panel" in gui._update_remove_scope()
+    img = Image2D(width=30, height=20)
+    panel.selected_shape = img
+    assert "selected panel only" in gui._update_remove_scope()
+    panel.selected_shape = None
+
+
 def test_menu_bar_right_click_entries_have_names(gui):
     """Right-clicking the menu bar showed an entry without text (it hid the
     toolbar)."""

@@ -303,6 +303,29 @@ def test_pinned_elements_keep_a_gap_from_the_edge_but_insets_sit_flush(qapp):
     assert inset.y() == 20 and inset.x() + inset.width(all=True) == pytest.approx(10 + panel.width(all=True))
 
 
+def test_a_letter_on_a_box_sits_flush_on_the_edges(qapp):
+    """22 Oct report: with a background box behind the letter, the 2 px gap
+    left an ugly strip between the box and the image edges."""
+    from qtpy.QtGui import QImage, QPainter
+    from batoolset.drawings.shapes.Position import Position
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.txt2d import TAText2D
+    panel = Image2D(np.zeros((200, 300), np.uint8))
+    panel.setTopLeft(10, 20)
+    boxed = TAText2D("a", placement=Position("top left"), is_letter=True)
+    boxed.fill_color = 0xFFFFFF
+    corner = TAText2D("b", placement=Position("bottom right"), is_letter=True)
+    corner.fill_color = 0x000000
+    panel.annotations = [boxed, corner]
+    img = QImage(400, 300, QImage.Format.Format_RGB32)
+    p = QPainter(img)
+    panel.draw(p)
+    p.end()
+    assert (boxed.x(), boxed.y()) == (10, 20)
+    assert corner.x() + corner.width(all=True) == pytest.approx(10 + panel.width(all=True))
+    assert corner.y() + corner.height(all=True) == pytest.approx(20 + panel.height(all=True))
+
+
 def test_the_tip_bubble_closes_on_a_double_click(gui, qapp):
     from qtpy.QtCore import Qt
     from qtpy.QtTest import QTest

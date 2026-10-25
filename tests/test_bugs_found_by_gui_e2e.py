@@ -81,6 +81,20 @@ def test_image_dropped_on_an_image_of_another_row_can_swap_with_it(qapp, two_row
     assert H.snapshot(g, d)["rows"] == ["row 1: d.tif | b.tif", "row 2: c.tif | a.tif", "row 3: e.tif"]
 
 
+def test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row(qapp, two_rows):
+    """User report (missing_dnd_option.pyf): dropping C on B of the row A | B
+    offered no way to get A | (B / C) — To column made a new top-level
+    column and left A alone."""
+    g, H, menus, d = two_rows
+    menus.pick = "Stack with it (column in the row)"
+    H.drag(g, H.by_name(g, "e"), H.centre(g, H.by_name(g, "b")))
+    rows = H.snapshot(g, d)["rows"]
+    assert rows[0] == "row 1: a.tif | (b.tif / e.tif)" and len(rows) == 2, rows
+    g.undo()
+    H.settle(qapp, g)
+    assert "e.tif" in " ".join(H.snapshot(g, d)["rows"][2:])
+
+
 def test_a_new_group_takes_the_place_of_the_row_it_is_made_from(qapp, two_rows):
     """Dropping a file onto row 1 and choosing 'To row (with image below)'
     moved row 1 to the bottom of the figure."""

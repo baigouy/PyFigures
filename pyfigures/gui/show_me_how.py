@@ -110,7 +110,11 @@ class GuideRunner:
                         ann, "fraction_of_parent_image_width_if_image_is_inset", None):
                     insets += 1
         splits = sum(1 for i in imgs if "channel split of" in str(getattr(i, "user_comments", "")))
-        return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits}
+        # the panels in reading order, and the rows: order_changed compares them
+        order = tuple(id(i) for i in imgs)
+        rows = tuple(id(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
+        return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
+                "order": order, "rows": rows}
 
     def _image_state(self, img):
         if img is None:
@@ -130,6 +134,10 @@ class GuideRunner:
             return now["insets"] > b.get("insets", 0)
         if kind == "panel_added":
             return now["images"] > b.get("images", 0)
+        if kind == "order_changed":
+            # the same panels in another order (or the rows reordered)
+            same = sorted(now["order"]) == sorted(b.get("order", ()))
+            return same and (now["order"] != b.get("order") or now["rows"] != b.get("rows"))
         if kind in ("lut_changed", "crop_changed"):
             img = self._target_image
             if img is None or self._image_state0 is None:

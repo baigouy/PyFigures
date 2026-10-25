@@ -79,8 +79,10 @@ GUIDES: dict[str, dict] = {
         "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration"],
         "steps": [
             {"menu": ["Annotations", "Add scale bar to all panels…"]},
-            {"dialog": "Enter the pixel size and the bar length (for example 10 µm), choose "
-                       "the corner, then click <b>Ok</b>."},
+            {"dialog": "Enter the bar length (for example 10 µm) and choose the corner. Each "
+                       "image uses its own pixel size (from its file, or set in its editor); "
+                       "type one only for images that have none — an image without any gets "
+                       "a bar in pixels (10 px). Click <b>Ok</b>."},
         ],
         "alternative": "One panel only: double-click it (Edit Image) and use its scale-bar "
                        "settings.",
@@ -94,13 +96,31 @@ GUIDES: dict[str, dict] = {
         "steps": [
             {"select": "image", "text": "Click the panel that holds the detail you want to magnify."},
             {"menu": ["Annotations", "Add zoom callout to selected panel…"]},
-            {"dialog": "Set the region (x, y, width, height in image pixels), the corner and "
-                       "the inset size, then click <b>Ok</b>."},
+            {"dialog": "Drag on the picture to draw the region (or type x, y, width, height in "
+                       "image pixels), choose the corner, the inset size and the leader lines "
+                       "(0 when they would hide data), then click <b>Ok</b>."},
         ],
         "alternative": "Double-click the panel → Annotations tab: draw a rectangle, then "
                        "<b>Rect ROI → Inset</b>.",
         "done": "inset_added",
         "mcp": "add_zoom_callout",
+    },
+    "reorder_panels": {
+        "title": "Reorder panels or rows",
+        "summary": "Move a panel inside its row, swap two panels, or move a whole row up or down.",
+        "keywords": ["order", "reorder", "move", "rearrange", "swap", "exchange", "invert",
+                     "reverse", "first", "last", "position", "sort", "row up", "row down"],
+        "steps": [
+            {"select": "image",
+             "text": "Click the row once (the whole row is selected), then click the panel "
+                     "to move (now only that panel is selected)."},
+            {"context": "Press the <b>←</b> / <b>→</b> arrow keys to move the panel inside its "
+                        "row. With the whole row selected, <b>↑</b> / <b>↓</b> move the row. "
+                        "Or drag the panel onto another one and choose <b>Swap</b>."},
+        ],
+        "alternative": "Drag a row onto another row and choose Swap to exchange two rows.",
+        "done": "order_changed",
+        "mcp": "reorder_children",
     },
     "set_lut": {
         "title": "Change channel colours (LUTs)",

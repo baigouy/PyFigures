@@ -1564,7 +1564,7 @@ class EZFIG_GUI(QMainWindow):
         draw_hint_action.setToolTip("Opens the image editor of the selected panel — the same as "
                                     "double-clicking it")
         annots.addAction(draw_hint_action)
-        draw_hint_action.triggered.connect(self.edit_selected_image_action)
+        draw_hint_action.triggered.connect(lambda _checked=False: self.edit_selected_image_action())
         annots.addSeparator()
 
         figure_colors_action = QAction("Figure colours…", self)
@@ -1587,6 +1587,12 @@ class EZFIG_GUI(QMainWindow):
 
         annots.addSeparator()
         rm_menu = annots.addMenu("Remove")
+        # the scope changes with the selection: say it at the top of the menu
+        # (users had to discover that deselecting removes from every panel)
+        self.remove_scope_action = QAction("— Applies to every panel —", self)
+        self.remove_scope_action.setEnabled(False)
+        rm_menu.addAction(self.remove_scope_action)
+        rm_menu.aboutToShow.connect(self._update_remove_scope)
         rm_all_annots = QAction("Remove all annotations (ROIs, scale bars, texts, ...)", self)
         rm_all_annots.setToolTip("Delete the ROIs, scale bars, texts and insets of the selected panel, or of every "
                                  "panel when nothing is selected (the images stay; Undo brings them back)")
@@ -3332,9 +3338,10 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.split_channels(mode='gray' if gray else 'magenta')
         return True
 
-    def edit_selected_image_action(self):
+    def edit_selected_image_action(self, tab='Annotations'):
         """Annotations → Draw ROIs, text, crop or rotate: the image editor of
-        the selected panel (what double-clicking it opens)."""
+        the selected panel (what double-clicking it opens), on its drawing
+        tools tab (it opened on File infos)."""
         sel = self.paint.EZFIG_panel.selected_shape
         if isinstance(sel, list) and len(sel) == 1:
             sel = sel[0]
@@ -3342,7 +3349,7 @@ class EZFIG_GUI(QMainWindow):
             QMessageBox.information(self, 'Select an image',
                                     'Click one image panel first (or simply double-click it).')
             return False
-        self.paint.EZFIG_panel.update_image_annotations(image2d=sel)
+        self.paint.EZFIG_panel.update_image_annotations(image2d=sel, tab=tab or None)
         return True
 
     def _set_show_edit_hint(self, on):
@@ -4789,7 +4796,31 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(QLabel('Leader lines:', frame), 8, 0)
         conn = QComboBox(frame)
         conn.addItems(['2', '1', '0'])
+        conn.setToolTip("Lines joining the box to the inset; 0 when they would hide data")
         grid.addWidget(conn, 8, 1)
+        # draw the region on the image instead of guessing four numbers
+        from pyfigures.gui.region_picker import RegionPicker
+        try:
+            if getattr(sel, 'qimage', None) is None:
+                sel.update_qimage()
+            qimage = sel.qimage
+        except Exception:
+            qimage = None
+        picker = RegionPicker(qimage, (pw, ph), frame)
+        picker.set_region(*(spins[k].value() for k in ('x', 'y', 'width', 'height')))
+        grid.addWidget(QLabel('Or drag on the image:', frame), 0, 2)
+        grid.addWidget(picker, 1, 2, 8, 1)
+
+        def _from_picker(x, y, w, h):
+            for key, v in zip(('x', 'y', 'width', 'height'), (x, y, w, h)):
+                spins[key].blockSignals(True)
+                spins[key].setValue(v)
+                spins[key].blockSignals(False)
+        picker.regionChanged.connect(_from_picker)
+        for sb in spins.values():
+            sb.valueChanged.connect(lambda _v: picker.set_region(
+                *(spins[k].value() for k in ('x', 'y', 'width', 'height'))))
+        self._zoom_region_picker = picker      # (tests)
 
         cd = CustomDialog(title="Add zoom callout",
                           message="Region of interest in image pixels (x, y = top-left corner).",
@@ -4895,9 +4926,18 @@ class EZFIG_GUI(QMainWindow):
         label = QLineEdit('', frame)
         grid.addWidget(QLabel('Label at the tail:', frame), 8, 0)
         grid.addWidget(label, 8, 1)
+        # drawing it with the mouse is often simpler than typing a pixel
+        by_hand = QPushButton('Draw it with the mouse instead…', frame)
+        by_hand.setToolTip("Opens the image editor on its drawing tools: pick the arrow and "
+                           "drag it on the image")
+        grid.addWidget(by_hand, 9, 0, 1, 2)
         cd = CustomDialog(title="Add arrow", message="Point an arrow at a feature.",
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        chose_hand = []
+        by_hand.clicked.connect(lambda: (chose_hand.append(True), cd.reject()))
         if cd.exec_() != QDialog.Accepted:
+            if chose_hand:
+                self.paint.EZFIG_panel.update_image_annotations(image2d=sel, tab='Annotations')
             return
         from pyfigures.mcp_server import add_arrow
         kw = dict(group_path=group_path, image_index=image_index,
@@ -5785,6 +5825,11 @@ class EZFIG_GUI(QMainWindow):
                 return
             self._adopt_sidecars_from(p)
             self.reload_state(p, append=False)
+            if self.auto_lettering_checkbox.isChecked():
+                # panels the tool added (Insert → Channel split…) got no letter
+                # although automatic lettering was ticked: as after a drop
+                self.update_letters()
+                self.paint.EZFIG_panel.update()
             self.paint.EZFIG_panel.undo_redo_save_required.emit()
             self.statusBar().showMessage(success_msg)
             # done, but the tool has a remark (e.g. a zoom inset hiding its box)
@@ -7159,6 +7204,20 @@ class EZFIG_GUI(QMainWindow):
             self._mark_clean()  # figure now matches the file on disk
             return True
         return False
+
+    def _update_remove_scope(self):
+        """Annotations → Remove: its header says what will be cleaned."""
+        sel = self.paint.EZFIG_panel.selected_shape
+        if isinstance(sel, list):
+            sel = sel[0] if len(sel) == 1 else (sel or None)
+        if sel is None or sel == []:
+            text = "— Applies to every panel (nothing selected) —"
+        elif isinstance(sel, Image2D):
+            text = "— Applies to the selected panel only —"
+        else:
+            text = "— Applies to the panels of the selection only —"
+        self.remove_scope_action.setText(text)
+        return text
 
     def _update_vector_pdf_action(self):
         """Tools → Vector PDF panels: installed (greyed out) or the installer."""

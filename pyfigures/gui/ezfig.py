@@ -1869,7 +1869,13 @@ class MyWidget(QWidget):
         t = name_of(target) if target is not None else ""
         grp = target if isinstance(target, Group) else None
         what = ("row" if grp is None or grp.orientation == 'X' else "column")
-        if kind == 'join' and method == 'add' and args and args[0] is target:
+        if kind == 'nest':
+            holder = self._group_of(target)
+            inside = "row" if holder is None or holder.orientation == 'X' else "column"
+            label = "Stack with it (column in the row)" if inside == "row" else "Beside it (row in the column)"
+            tip = (f"{m} goes {'under' if inside == 'row' else 'next to'} {t}, both taking {t}'s place "
+                   f"in its {inside}.")
+        elif kind == 'join' and method == 'add' and args and args[0] is target:
             # a row dragged onto a loose panel: the panel joins the dragged row
             what = "row" if not isinstance(moved, Group) or moved.orientation == 'X' else "column"
             label = f"Take {t} into the dragged {what}"
@@ -1892,6 +1898,43 @@ class MyWidget(QWidget):
         act.setToolTip(tip)
         self._drag_entries.append((act, kind, method, args, moved, target))
         return act
+
+    def nest_with(self, target, moved):
+        """*moved* joins *target* INSIDE the row (or column) holding it: a
+        column of the two in a row, a row of the two in a column — A | (B / C)
+        when C is dropped on B of the row A | B. To row / To column made a new
+        top-level group, A left alone."""
+        holder = self._group_of(target)
+        if holder is None or target is moved:
+            return self.create_col_with(target, moved)
+        orientation = 'Y' if holder.orientation == 'X' else 'X'
+        source_top = self.get_top_parent_of_shape(moved)
+        self.set_current_selection(None)
+        # out of where it was (the canvas or its own group)
+        if any(s is moved for s in self.shapes_to_draw):
+            self.shapes_to_draw[:] = [s for s in self.shapes_to_draw if s is not moved]
+        else:
+            old = self._group_of(moved)
+            if old is not None:
+                old.content[:] = [s for s in old.content if s is not moved]
+                if not old.content:
+                    outer = self._container_of(old)
+                    if outer is not None:
+                        outer[:] = [s for s in outer if s is not old]
+                else:
+                    old.update()
+        index = next(i for i, s in enumerate(holder.content) if s is target)
+        nested = Group(target, moved, orientation=orientation)
+        holder.content[index] = nested
+        holder.update()
+        top = self.get_top_parent_of_shape(holder) or holder
+        self.update()
+        self.update_size()
+        self.force_update_size_of_parent.emit(top)
+        self._refit_row_left(source_top, moved, top)
+        self.update_letters_required.emit()
+        self.set_current_selection(nested)
+        self.undo_redo_save_required.emit()
 
     def create_row_with(self, item1, item2):
         # print('create_row_with add with', item1, item2, 'TODO IMPLEMENT THAT --> # TODO --> call the parent Combine horizontally (Row)') # -−> see how to do I could pass the parent in init and call the method or copy the code of the parent here ??? -−> at least try to gather all the functions to make it simpler to use!
@@ -2767,6 +2810,11 @@ class MyWidget(QWidget):
                         self.contextMenu.addSeparator()
                         self._drag_entry('row', 'create_row_with', tmp[0], sel, moved=sel, target=tmp[0])
                         self._drag_entry('col', 'create_col_with', tmp[0], sel, moved=sel, target=tmp[0])
+                        under = tmp[-1]
+                        if isinstance(under, Image2D) and not under.isText and not sel.isText \
+                                and under is not sel and self._group_of(under) is not None:
+                            # with the panel under the mouse, inside its row
+                            self._drag_entry('nest', 'nest_with', under, sel, moved=sel, target=under)
 
                         if self.selected_shape == top_parent_of_sel and drop_target == top_parent_of_drop_target: # if an object is there then offer swap
                             self.contextMenu.addSeparator()
@@ -4375,7 +4423,9 @@ class MyWidget(QWidget):
             # scroll in shape until I get the corresponding image -−> TODO
         # super().mouseDoubleClickEvent(event)
 
-    def update_image_annotations(self, image2d=None):
+    def update_image_annotations(self, image2d=None, tab=None):
+        """The image editor of *image2d* (double-click). *tab*: the tab it
+        opens on, e.g. 'Annotations' for the drawing tools."""
 
         # print('I AM INSIDE update_image_annotations')
 
@@ -4436,6 +4486,8 @@ class MyWidget(QWidget):
 
             if clone.custom_loading_script:
                 main.script_text_edit.setText(clone.custom_loading_script)
+            if tab:
+                main.open_tab(tab)
             # main =QWidget()
 
             # Create and show the custom dialog, passing the MainWindow widget as parent
