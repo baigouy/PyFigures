@@ -1710,6 +1710,12 @@ class EZFIG_GUI(QMainWindow):
                                   "background image. Independent from this figure editor and its files.")
         tools_menu.addAction(poster_action)
         poster_action.triggered.connect(self.open_poster_designer)
+        send_poster_action = QAction("Send this figure to the poster designer", self)
+        send_poster_action.setToolTip("Place this figure on the poster (as when it is dropped there): "
+                                      "shown from a 300 DPI render, drawn as vectors in the poster's "
+                                      "PDF / SVG exports. The figure is saved first.")
+        tools_menu.addAction(send_poster_action)
+        send_poster_action.triggered.connect(lambda _checked=False: self.send_to_poster_designer())
         album_action = QAction("Photo album designer…", self)
         album_action.setToolTip("Separate tool for photo books: a front cover, two-page spreads and "
                                 "a back cover, with freely placed and rotated photos on each page.")
@@ -7010,6 +7016,22 @@ class EZFIG_GUI(QMainWindow):
         self._poster_window.show()
         self._poster_window.raise_()
         self._poster_window.activateWindow()
+
+    def send_to_poster_designer(self):
+        """Tools > Send this figure to the poster designer (MCP:
+        add_poster_image with the .pyf; poster recipe: a .pyf item). The
+        poster links the saved .pyf, so unsaved work is saved first."""
+        if self._dirty or not self.current_file:
+            reply = QMessageBox.question(
+                self, 'Send to the poster designer',
+                "The poster shows the saved figure (and draws it as vectors in its PDF / SVG "
+                "exports). Save the figure first?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Save)
+            if reply != QMessageBox.StandardButton.Save or not self.save_pyfigures():
+                return None
+        self.open_poster_designer()
+        return self._poster_window.add_figure_file(self.current_file)
 
     def open_mcp_server_dialog(self):
         from pyfigures.gui.mcp_server_dialog import McpServerDialog

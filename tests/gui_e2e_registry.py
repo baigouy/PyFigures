@@ -41,6 +41,11 @@ LINKED = {
         "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
     "drag [image onto image of another row]: Stack with it (column in the row)": [
         "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
+    # opens the poster designer with the saved figure on it: done there
+    "menu: Tools > Send this figure to the poster designer": [
+        "test_send_to_poster.py::test_tools_menu_entry",
+        "test_send_to_poster.py::test_a_saved_figure_goes_onto_the_poster",
+        "test_send_to_poster.py::test_unsaved_work_is_saved_first_or_nothing_happens"],
     # serves the window on 127.0.0.1 (a plain window hands over to a shareable one): done there
     "menu: Tools > Share the open figure with the MCP server": [
         "test_assistant_live.py::test_tools_menu_share_toggle",

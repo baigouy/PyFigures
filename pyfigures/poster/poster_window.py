@@ -607,19 +607,29 @@ class PosterWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, 'Add image', '', ADD_IMAGE_FILE_FILTER)
         if not path:
             return
-        source_pyf = None
         if path.lower().endswith('.pyf'):
-            from pyfigures.poster.poster_canvas import _render_pyf_to_png
-            source_pyf = path
-            try:
-                path = _render_pyf_to_png(path, parent=self)
-            except Exception as exc:
-                QMessageBox.critical(self, 'Could not render figure', str(exc))
-                return
+            self.add_figure_file(path)
+            return
         try:
-            self.canvas.add_image(path, source_pyf=source_pyf)
+            self.canvas.add_image(path)
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, 'Could not add image', str(exc))
+
+    def add_figure_file(self, pyf_path):
+        """Add a .pyf scientific figure: shown from its flatten, remembered so
+        PDF/SVG exports draw it as vectors (also the figure editor's
+        Tools > Send this figure to the poster designer). Returns the shape."""
+        from pyfigures.poster.poster_canvas import _render_pyf_to_png
+        try:
+            png = _render_pyf_to_png(pyf_path, parent=self)
+        except Exception as exc:
+            QMessageBox.critical(self, 'Could not render figure', str(exc))
+            return None
+        try:
+            return self.canvas.add_image(png, source_pyf=pyf_path)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, 'Could not add image', str(exc))
+            return None
 
     def add_text(self, style='body'):
         shape = self.canvas.add_text(style=style)
