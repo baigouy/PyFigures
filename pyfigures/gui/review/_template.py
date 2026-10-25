@@ -19,6 +19,14 @@ TEMPLATE = """<!doctype html>
          display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;
          box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
   .pin span { transform: rotate(45deg); }
+  .box { position: absolute; border: 2px solid #e0442b; box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+         pointer-events: none; }
+  .box span { position: absolute; left: -2px; top: -20px; background: #e0442b; color: white;
+              font-size: 12px; font-weight: bold; padding: 1px 5px; border-radius: 3px; }
+  #drawing { position: absolute; border: 2px dashed #ffd400; pointer-events: none; display: none; }
+  #general { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 4px; background: #2a2a2a;
+             border: 1px solid #555; color: #eee; border-radius: 4px; min-height: 54px; font-family: inherit; }
+  #copied { font-size: 11px; color: #7fd47f; margin-top: 6px; display: none; }
   #sidebar { width: 320px; border-left: 1px solid #444; padding: 14px; overflow-y: auto; box-sizing: border-box; }
   #sidebar h2 { font-size: 15px; margin: 0 0 10px; }
   #sidebar input[type=text] { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 12px;
@@ -28,26 +36,32 @@ TEMPLATE = """<!doctype html>
   .comment .body { font-size: 13px; white-space: pre-wrap; }
   .comment .del { cursor: pointer; color: #e0442b; }
   #hint { font-size: 12px; color: #999; margin-bottom: 14px; }
-  #dl, #mail { width: 100%; padding: 10px; margin-top: 10px; background: #3a7afe; color: white; border: none;
+  #dl, #mail, #copy { width: 100%; padding: 10px; margin-top: 10px; background: #3a7afe; color: white; border: none;
         border-radius: 4px; cursor: pointer; font-size: 13px; }
-  #dl:hover, #mail:hover { background: #2a63e0; }
-  #mail { background: #3a3a3a; }
-  #mail:hover { background: #4a4a4a; }
+  #dl:hover, #mail:hover, #copy:hover { background: #2a63e0; }
+  #mail, #copy { background: #3a3a3a; }
+  #mail:hover, #copy:hover { background: #4a4a4a; }
 </style>
 </head>
 <body>
 <div id="main">
   <div id="imgwrap">
-    <img id="figimg" src="__IMAGE_DATA_URI__" alt="figure">
+    <img id="figimg" src="__IMAGE_DATA_URI__" alt="figure" draggable="false">
+    <div id="drawing"></div>
   </div>
 </div>
 <div id="sidebar">
   <h2>Review: __SOURCE_NAME__</h2>
-  <div id="hint">Click anywhere on the figure to drop a numbered comment. When you're done, click "Save reviewed copy" and send that file back.</div>
+  <div id="hint">Click on the figure to pin a numbered comment, or drag to draw a box around a
+    region and comment on it. When you're done, click "Save reviewed copy" and send that file back.</div>
   <input type="text" id="author" placeholder="Your name (optional)">
+  <div style="font-size:12px;color:#bbb;">About the whole figure:</div>
+  <textarea id="general" placeholder="A general comment (optional)"></textarea>
   <div id="list"></div>
   <button id="dl">Save reviewed copy</button>
-  <button id="mail">Send back by email</button>
+  <button id="copy" title="Copies your comments as text, to paste into any email or chat">Copy my comments</button>
+  <div id="copied">Copied: paste them into your email or chat.</div>
+  <button id="mail" title="Opens your computer's default mail program">Send back by email</button>
   <div id="mailhint" style="font-size:11px;color:#999;margin-top:8px;display:none;">
     A reviewed copy was saved to your downloads and an email draft was opened
     with your comments — please attach that downloaded file before sending.
@@ -65,14 +79,26 @@ TEMPLATE = """<!doctype html>
   var authorInput = document.getElementById('author');
   if (data.author) authorInput.value = data.author;
 
+  var general = document.getElementById('general');
+  if (data.general) general.value = data.general;
+
   function render() {
-    Array.prototype.slice.call(wrap.querySelectorAll('.pin')).forEach(function(p) { p.remove(); });
+    Array.prototype.slice.call(wrap.querySelectorAll('.pin, .box')).forEach(function(p) { p.remove(); });
     list.innerHTML = '';
     comments.forEach(function(c, i) {
       var pin = document.createElement('div');
-      pin.className = 'pin';
-      pin.style.left = (c.x * 100) + '%';
-      pin.style.top = (c.y * 100) + '%';
+      if (c.w && c.h) {
+        // a comment on a region: its box, numbered
+        pin.className = 'box';
+        pin.style.left = (c.x * 100) + '%';
+        pin.style.top = (c.y * 100) + '%';
+        pin.style.width = (c.w * 100) + '%';
+        pin.style.height = (c.h * 100) + '%';
+      } else {
+        pin.className = 'pin';
+        pin.style.left = (c.x * 100) + '%';
+        pin.style.top = (c.y * 100) + '%';
+      }
       pin.innerHTML = '<span>' + (i + 1) + '</span>';
       wrap.appendChild(pin);
 
@@ -101,20 +127,58 @@ TEMPLATE = """<!doctype html>
     return d.innerHTML;
   }
 
-  wrap.addEventListener('click', function(ev) {
+  // click: a pin; drag: a box around a region
+  var drawing = document.getElementById('drawing');
+  var start = null;
+  function frac(ev) {
     var rect = img.getBoundingClientRect();
-    var x = (ev.clientX - rect.left) / rect.width;
-    var y = (ev.clientY - rect.top) / rect.height;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
-    var text = window.prompt('Comment:');
+    return {x: Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)),
+            y: Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height)),
+            px: ev.clientX, py: ev.clientY};
+  }
+  wrap.addEventListener('mousedown', function(ev) {
+    if (ev.button !== 0) return;
+    start = frac(ev);
+    ev.preventDefault();
+  });
+  window.addEventListener('mousemove', function(ev) {
+    if (!start) return;
+    var p = frac(ev);
+    drawing.style.display = 'block';
+    drawing.style.left = (Math.min(start.x, p.x) * 100) + '%';
+    drawing.style.top = (Math.min(start.y, p.y) * 100) + '%';
+    drawing.style.width = (Math.abs(p.x - start.x) * 100) + '%';
+    drawing.style.height = (Math.abs(p.y - start.y) * 100) + '%';
+  });
+  window.addEventListener('mouseup', function(ev) {
+    if (!start) return;
+    var p = frac(ev), s = start;
+    start = null;
+    drawing.style.display = 'none';
+    var dragged = Math.abs(p.px - s.px) > 6 || Math.abs(p.py - s.py) > 6;
+    var text = window.prompt(dragged ? 'Comment on this region:' : 'Comment:');
     if (!text) return;
-    comments.push({x: x, y: y, text: text, author: authorInput.value || '', ts: new Date().toISOString()});
+    var c = {x: dragged ? Math.min(s.x, p.x) : s.x, y: dragged ? Math.min(s.y, p.y) : s.y,
+             text: text, author: authorInput.value || '', ts: new Date().toISOString()};
+    if (dragged) { c.w = Math.abs(p.x - s.x); c.h = Math.abs(p.y - s.y); }
+    comments.push(c);
     render();
   });
 
+  function commentLines() {
+    var lines = ['Review comments for __SOURCE_NAME__:', ''];
+    if (general.value.trim()) lines.push('Whole figure: ' + general.value.trim(), '');
+    comments.forEach(function(c, i) {
+      lines.push('#' + (i + 1) + (c.w ? ' (region)' : '') + (c.author ? ' (' + c.author + ')' : '') +
+                 ': ' + c.text);
+    });
+    return lines;
+  }
+
   function downloadReviewedCopy() {
     dataEl.textContent = JSON.stringify({
-      comments: comments, author: authorInput.value || '', owner_email: data.owner_email || ''
+      comments: comments, author: authorInput.value || '', owner_email: data.owner_email || '',
+      general: general.value || ''
     });
     var html = '<!doctype html>\\n' + document.documentElement.outerHTML;
     var blob = new Blob([html], {type: 'text/html'});
@@ -126,16 +190,29 @@ TEMPLATE = """<!doctype html>
 
   document.getElementById('dl').addEventListener('click', downloadReviewedCopy);
 
+  document.getElementById('copy').addEventListener('click', function() {
+    var text = commentLines().join('\\n');
+    function shown() { document.getElementById('copied').style.display = 'block'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(shown, function() { fallback(text); shown(); });
+    } else { fallback(text); shown(); }
+  });
+  function fallback(text) {
+    var t = document.createElement('textarea');
+    t.value = text;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    t.remove();
+  }
+
   document.getElementById('mail').addEventListener('click', function() {
-    if (!comments.length) {
+    if (!comments.length && !general.value.trim()) {
       window.alert('Add at least one comment first.');
       return;
     }
     downloadReviewedCopy();
-    var lines = ['Review comments for __SOURCE_NAME__:', ''];
-    comments.forEach(function(c, i) {
-      lines.push('#' + (i + 1) + (c.author ? ' (' + c.author + ')' : '') + ': ' + c.text);
-    });
+    var lines = commentLines();
     lines.push('', 'A reviewed copy (with pins) is attached — please attach the file ' +
                'just downloaded to your Downloads folder ("reviewed___SOURCE_NAME__.html") before sending.');
     var subject = 'Figure review comments — __SOURCE_NAME__';

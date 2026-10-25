@@ -7545,19 +7545,23 @@ class EZFIG_GUI(QMainWindow):
             except OSError:
                 pass
 
-        reply = QMessageBox.question(
-            self, "Exported for review",
-            f"Saved {output_file}\n\nOpen an email draft to send it to your reviewer(s) now?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
-        )
-        if reply != QMessageBox.Yes:
+        choice = self._review_send_choice(output_file)
+        subject, body = default_review_request_text(source_name, os.path.basename(output_file))
+        if choice == 'copy':
+            QApplication.clipboard().setText(f"{subject}\n\n{body}")
+            reveal_in_file_manager(output_file)
+            QMessageBox.information(
+                self, "Message copied",
+                "A ready message is on the clipboard: paste it into your email or chat, and "
+                f"attach {os.path.basename(output_file)} (its folder has been opened).")
+            return
+        if choice != 'mail':
             return
 
         recipients, ok = QInputDialog.getText(
             self, "Send for review", "Reviewer email address(es), comma-separated:")
         if not ok or not recipients.strip():
             return
-        subject, body = default_review_request_text(source_name, os.path.basename(output_file))
         url = build_mailto_url(recipients.split(","), subject, body)
         QDesktopServices.openUrl(QUrl(url))
         reveal_in_file_manager(output_file)
@@ -7566,6 +7570,21 @@ class EZFIG_GUI(QMainWindow):
             "An email draft should now be open, and the exported file's folder has been "
             f"opened for you — drag {os.path.basename(output_file)} into the email as an "
             "attachment, then hit Send. (PyFigures never sends anything on its own.)")
+
+    def _review_send_choice(self, output_file):
+        """'copy' (a ready message on the clipboard), 'mail' (an email draft)
+        or None. An email draft opens the computer's DEFAULT mail program
+        (Outlook for many): a copied message works with any mail or chat."""
+        box = QMessageBox(QMessageBox.Information, "Exported for review",
+                          f"Saved {output_file}\n\nSend it to your reviewer(s): attach this file "
+                          "to an email or a chat message.", parent=self)
+        copy_btn = box.addButton("Copy a ready message", QMessageBox.AcceptRole)
+        mail_btn = box.addButton("Open an email draft", QMessageBox.ActionRole)
+        box.addButton("Done", QMessageBox.RejectRole)
+        mail_btn.setToolTip("Opens your computer's default mail program")
+        box.setDefaultButton(copy_btn)
+        box.exec()
+        return {copy_btn: 'copy', mail_btn: 'mail'}.get(box.clickedButton())
 
     def import_review_comments(self):
         """Read back a reviewed HTML file and merge its comments into the

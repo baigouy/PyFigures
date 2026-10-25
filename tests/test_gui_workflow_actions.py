@@ -105,7 +105,7 @@ def test_review_export_email_draft_and_import(gui, saved, monkeypatch, tmp_path,
     html = str(tmp_path / "for_review.html")
     monkeypatch.setattr(pfgui, "saveFileDialog", lambda *a, **k: html)
     _answers(monkeypatch, text=[("  me@lab.org ", True), ("rev1@x.org, rev2@y.org", True)])
-    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes))
+    monkeypatch.setattr(gui, "_review_send_choice", lambda path: "mail")
     opened, revealed = [], []
     monkeypatch.setattr(pfgui.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url.toString())))
     monkeypatch.setattr(review, "reveal_in_file_manager", lambda p: revealed.append(p))
@@ -140,11 +140,50 @@ def test_review_export_declining_email_stops_there(gui, saved, monkeypatch, tmp_
     html = str(tmp_path / "r.html")
     monkeypatch.setattr(pfgui, "saveFileDialog", lambda *a, **k: html)
     _answers(monkeypatch, text=[("", False)])
-    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.No))
+    monkeypatch.setattr(gui, "_review_send_choice", lambda path: None)
     opened = []
     monkeypatch.setattr(pfgui.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url)))
     gui.export_for_review()
     assert os.path.isfile(html) and opened == []
+
+
+def test_review_export_copies_a_ready_message(gui, saved, monkeypatch, tmp_path, ui):
+    """22 Oct report: 'Send by email' opened Outlook, which the user does not
+    use; a ready message can be copied for any mail or chat instead."""
+    from pyfigures.gui import pfgui
+    import pyfigures.gui.review as review
+    from qtpy.QtWidgets import QApplication
+    html = str(tmp_path / "c.html")
+    monkeypatch.setattr(pfgui, "saveFileDialog", lambda *a, **k: html)
+    _answers(monkeypatch, text=[("", False)])
+    monkeypatch.setattr(gui, "_review_send_choice", lambda path: "copy")
+    monkeypatch.setattr(review, "reveal_in_file_manager", lambda p: None)
+    opened = []
+    monkeypatch.setattr(pfgui.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url)))
+    gui.export_for_review()
+    text = QApplication.clipboard().text()
+    assert opened == [] and "Figure review" in text and "c.html" in text
+    assert ui["msg"][-1][1] == "Message copied"
+
+
+def test_review_regions_and_whole_figure_comments_round_trip(tmp_path):
+    """Reviewers can comment on a drawn region and on the whole figure (only
+    point comments existed)."""
+    import pyfigures.gui.review as review
+    from PIL import Image
+    png = str(tmp_path / "f.png")
+    Image.new("RGB", (40, 30), "white").save(png)
+    seed = [{"x": None, "y": None, "general": True, "text": "Nice overall", "author": "r"},
+            {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4, "text": "this region", "author": "r", "ts": "t"}]
+    out = str(tmp_path / "r.html")
+    open(out, "w", encoding="utf-8").write(review.build_review_html(png, "f", comments=seed))
+    html = open(out, encoding="utf-8").read()
+    assert "Copy my comments" in html and 'id="general"' in html and "Comment on this region" in html
+    back = review.extract_comments(out)
+    assert back[0]["general"] and back[0]["text"] == "Nice overall"
+    assert back[1]["w"] == 0.3 and back[1]["text"] == "this region"
+    merged = review.merge_comments([], back)
+    assert len(review.merge_comments(merged, back)) == 2          # no duplicates, no crash on x=None
 
 
 def test_import_review_rejects_a_foreign_html(gui, saved, monkeypatch, tmp_path, ui):

@@ -33,7 +33,10 @@ def build_review_html(image_path: str, source_name: str = "figure", comments=Non
     mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
     data_uri = f"data:{mime};base64,{base64.b64encode(img_bytes).decode('ascii')}"
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", source_name) or "figure"
-    payload = json.dumps({"comments": comments or [], "author": author, "owner_email": owner_email})
+    placed = [c for c in comments or [] if c.get("x") is not None]
+    general = "\n".join(c.get("text", "") for c in comments or [] if c.get("x") is None)
+    payload = json.dumps({"comments": placed, "author": author, "owner_email": owner_email,
+                          "general": general})
     html = TEMPLATE
     html = html.replace("__IMAGE_DATA_URI__", data_uri)
     html = html.replace("__SOURCE_NAME__", safe_name)
@@ -48,13 +51,21 @@ def export_review_html(image_path: str, out_path: str, source_name: str = "figur
 
 def extract_comments(html_path: str) -> list:
     """Parse a (possibly reviewed) PyFigures review HTML file and return its
-    comment list: [{x, y, text, author, ts}, ...] with x/y in 0..1 fractions."""
+    comment list: [{x, y, text, author, ts}, ...] with x/y in 0..1 fractions; a
+    comment on a region also has w/h, one on the whole figure has general=True
+    and no position."""
     text = Path(html_path).read_text(encoding="utf-8")
     m = _COMMENT_BLOCK_RE.search(text)
     if not m:
         raise ValueError("This file doesn't contain PyFigures review data.")
     data = json.loads(m.group(1))
-    return data.get("comments", [])
+    comments = list(data.get("comments", []))
+    # a comment on the whole figure (no position) comes first
+    general = str(data.get("general") or "").strip()
+    if general:
+        comments.insert(0, {"x": None, "y": None, "general": True, "text": general,
+                            "author": data.get("author", ""), "ts": ""})
+    return comments
 
 
 def sidecar_path(pyf_path: str) -> str:
@@ -78,10 +89,12 @@ def save_sidecar_comments(pyf_path: str, comments: list):
 
 def merge_comments(existing: list, incoming: list) -> list:
     """Append incoming comments that aren't already present (by x/y/text/author/ts)."""
-    seen = {(round(c.get("x", 0), 4), round(c.get("y", 0), 4), c.get("text", ""), c.get("ts", "")) for c in existing}
+    def key_of(c):      # a whole-figure comment has no position
+        return (round(c.get("x") or 0, 4), round(c.get("y") or 0, 4), c.get("text", ""), c.get("ts", ""))
+    seen = {key_of(c) for c in existing}
     merged = list(existing)
     for c in incoming:
-        key = (round(c.get("x", 0), 4), round(c.get("y", 0), 4), c.get("text", ""), c.get("ts", ""))
+        key = key_of(c)
         if key not in seen:
             merged.append(c)
             seen.add(key)

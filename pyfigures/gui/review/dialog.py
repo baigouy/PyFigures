@@ -31,8 +31,14 @@ def show_review_comments_dialog(parent, image_path: str, comments: list, on_clea
         font.setPointSize(max(8, radius))
         painter.setFont(font)
         for i, c in enumerate(comments):
+            if c.get("x") is None:          # about the whole figure: listed only
+                continue
             cx = c.get("x", 0) * pixmap.width()
             cy = c.get("y", 0) * pixmap.height()
+            if c.get("w") and c.get("h"):   # a comment on a region: its box
+                painter.setBrush(Qt.NoBrush)
+                painter.setPen(QPen(QColor(224, 68, 43), max(2, radius // 4)))
+                painter.drawRect(int(cx), int(cy), int(c["w"] * pixmap.width()), int(c["h"] * pixmap.height()))
             painter.setBrush(QBrush(QColor(224, 68, 43)))
             painter.setPen(QPen(QColor(255, 255, 255), 2))
             painter.drawEllipse(int(cx - radius), int(cy - radius), radius * 2, radius * 2)
@@ -52,7 +58,8 @@ def show_review_comments_dialog(parent, image_path: str, comments: list, on_clea
     list_widget = QListWidget()
     for i, c in enumerate(comments):
         author = c.get("author") or "anonymous"
-        item_text = f"#{i + 1} — {author}\n{c.get('text', '')}"
+        where = " (whole figure)" if c.get("x") is None else " (region)" if c.get("w") else ""
+        item_text = f"#{i + 1}{where} — {author}\n{c.get('text', '')}"
         list_widget.addItem(QListWidgetItem(item_text))
     right.addWidget(QLabel(f"{len(comments)} comment(s)"))
     right.addWidget(list_widget)
