@@ -163,6 +163,7 @@ created as needed. Forward slashes work on every OS.
 | `spacing` | `3` | Gap between panels and between rows (points; a whole number ≥ 0). Also used inside montages and channel splits. |
 | `background` | none (transparent) | Colour of the whole figure behind the panels — i.e. of every gap between them. `white` keeps separators white in any viewer; `black` for dark figures. See §22. |
 | `label_background` | none | Filled box behind every label (letters, labels, time stamps, channel names), e.g. `black`. See §22. |
+| `text_style` | none | Restyle a family of texts at once: `{target: texts, font: Arial, size: 7, color: white, bold: true, italic: false}`, or a list of such. `target`: `texts` (labels on panels, not the letters), `letters`, `label_rows`, `scale_bars` or `all`; only the keys given change. |
 | `defaults` | none | Options applied to all panels (§5). |
 | `width_mm` / `width_cm` / `width_in` / `width_px` | none | An explicit figure width instead of a `journal` (give one, never with `journal`). §20. |
 | `dpi` | `300` | Resolution used for the size in physical units. |

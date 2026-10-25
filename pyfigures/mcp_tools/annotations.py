@@ -23,6 +23,7 @@ from .app import (
     _warn,
 )
 from .core import (
+    _restyle_html_batch,
     _roi_outside_note,
     _restyle_letters,
     _append_image,
@@ -1142,6 +1143,86 @@ def set_label_background(
     _save(tree, pyf_path)
     what = "removed from" if value == "None" else f"set to {color} on"
     return f"Label background {what} {n} label(s)."
+
+
+_TEXT_TARGETS = ("letters", "texts", "label_rows", "scale_bars", "all")
+
+
+@mcp.tool()
+def restyle_texts(
+    pyf_path: str,
+    target: str = "texts",
+    font_family: str | None = None,
+    font_size: float | None = None,
+    color: str | int | None = None,
+    bold: bool | None = None,
+    italic: bool | None = None,
+) -> str:
+    """Change the font / size / colour / bold / italic of a whole family of
+    texts at once, keeping each text's words (Panel letters only had such
+    controls).
+
+    *target*: "letters" (the panel letters A, B, C…), "texts" (texts on the
+      panels that are not letters: labels, channel names, time stamps, arrow
+      labels), "label_rows" (rows / columns of labels beside the panels),
+      "scale_bars" (scale-bar legends) or "all".
+    Only the attributes you give change. *color*: name, #rrggbb or int.
+    GUI: Annotations → Text style (letters, labels, scale bars…)….
+    """
+    target = str(target).strip().lower().replace(" ", "_").replace("-", "_")
+    target = {"letter": "letters", "text": "texts", "labels": "texts", "label_row": "label_rows",
+              "scalebars": "scale_bars", "scale_bar": "scale_bars", "everything": "all"}.get(target, target)
+    if target not in _TEXT_TARGETS:
+        return f"ERROR: target must be one of {list(_TEXT_TARGETS)}."
+    attrs = {"font_family": font_family, "font_size": font_size, "bold": bold, "italic": italic}
+    if color is not None:
+        try:
+            attrs["color"] = f"#{_color_to_int(color) & 0xFFFFFF:06x}"
+        except ValueError as e:
+            return f"ERROR: {e}"
+    attrs = {k: v for k, v in attrs.items() if v is not None}
+    if not attrs:
+        return "Nothing changed — give at least one of font_family, font_size, color, bold, italic."
+    tree, root = _load(pyf_path)
+    # (element, field) pairs holding rich text
+    found = {t: [] for t in _TEXT_TARGETS[:-1]}
+    for img in _iter_panel_elements(root):
+        annots = img.find("annotations")
+        is_text_panel = img.findtext("isText", "False") == "True"
+        for ta in (annots.findall("TAText2D") if annots is not None else []):
+            if is_text_panel:
+                found["label_rows"].append((ta, "text"))
+            elif (ta.findtext("is_letter") or "") in ("True", "b'True'"):
+                found["letters"].append((ta, "text"))
+            else:
+                found["texts"].append((ta, "text"))
+        for sb in (annots.findall("ScaleBar") if annots is not None else []):
+            if sb.find("legend") is not None and (_decode(sb.findtext("legend")) or "").strip():
+                found["scale_bars"].append((sb, "legend"))
+    chosen = [p for t in (_TEXT_TARGETS[:-1] if target == "all" else (target,)) for p in found[t]]
+    if not chosen:
+        return f"No {target.replace('_', ' ')} in this figure: nothing changed."
+    new = _restyle_html_batch([_decode(el.findtext(field)) or "" for el, field in chosen], **attrs)
+    if isinstance(new, str):
+        return f"ERROR: {new}"
+    for (el, field), html in zip(chosen, new):
+        _set_child_text(el, field, _encode_str(html))
+    if target in ("letters", "all"):
+        # the GUI re-applies the figure font to the letters: keep it in step
+        font_el = root.find("SerializableQFont")
+        if font_el is None:
+            font_el = ET.SubElement(root, "SerializableQFont")
+        if font_family:
+            _set_child_text(font_el, "family", _encode_str(font_family))
+        if font_size:
+            _set_child_text(font_el, "size", str(int(round(float(font_size)))))
+        if italic is not None:
+            _set_child_text(font_el, "italic", str(bool(italic)))
+        if "color" in attrs:
+            _set_child_text(font_el, "foreground", str(_color_to_int(color)))
+    _save(tree, pyf_path)
+    return (f"Restyled {len(chosen)} {target.replace('_', ' ')} text(s): "
+            + ", ".join(f"{k}={v}" for k, v in attrs.items()) + ".")
 
 
 # ---------------------------------------------------------------------------

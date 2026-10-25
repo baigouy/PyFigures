@@ -34,6 +34,8 @@ LINKED = {
     "menu: Tools > MCP server…": ["test_mcp_control.py::test_gui_menu_opens_the_dialog",
                                   "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
     "toolbar: MCP server (AI assistants)": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
+    "menu: Annotations > Text style (letters, labels, scale bars…)…": [
+        "test_restyle_texts.py::test_gui_text_style_dialog", "test_restyle_texts.py::test_restyle_labels_only"],
     # A | (B / C): a panel stacked with the one it is dropped on, inside its row
     "drag [loose image onto image in row]: Stack with it (column in the row)": [
         "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],

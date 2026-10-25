@@ -1588,6 +1588,13 @@ class EZFIG_GUI(QMainWindow):
         annots.addAction(lettering_parameters)
         lettering_parameters.triggered.connect(self.change_lettering_parameters)
 
+        text_style_action = QAction("Text style (letters, labels, scale bars…)…", self)
+        text_style_action.setToolTip("Font, size, colour, bold / italic of a whole family of texts: "
+                                     "the panel letters, the labels on panels, the label rows or "
+                                     "the scale-bar legends")
+        annots.addAction(text_style_action)
+        text_style_action.triggered.connect(lambda _checked=False: self.text_style_action())
+
         tidy_text_action = QAction("Tidy text typography (×, °, units, ranges…)", self)
         tidy_text_action.setToolTip('Apply safe typography fixes to every label: 2*3→2×3, '
                                     '37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5')
@@ -6440,6 +6447,76 @@ class EZFIG_GUI(QMainWindow):
         full_list_of_filenames_to_consolidate, _ = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(stuff_to_consolidate=None)
         ImageCentralStore.clean(full_list_of_filenames_to_consolidate)
 
+
+    def text_style_action(self):
+        """Annotations → Text style…: restyle letters / labels / label rows /
+        scale-bar legends at once (MCP: restyle_texts). Panel letters had
+        such controls, other texts did not."""
+        from qtpy.QtGui import QFont
+        from qtpy.QtWidgets import QFontComboBox
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        target = QComboBox(frame)
+        for text, key in (("Labels on the panels (not the letters)", "texts"),
+                          ("Panel letters (A, B, C…)", "letters"),
+                          ("Label rows / columns beside the panels", "label_rows"),
+                          ("Scale-bar legends", "scale_bars"),
+                          ("All of them", "all")):
+            target.addItem(text, key)
+        grid.addWidget(QLabel("Texts:", frame), 0, 0)
+        grid.addWidget(target, 0, 1)
+        family_check = QCheckBox("Font:", frame)
+        family = QFontComboBox(frame)
+        family.setCurrentFont(QFont("Arial"))
+        grid.addWidget(family_check, 1, 0)
+        grid.addWidget(family, 1, 1)
+        size_check = QCheckBox("Size (pt):", frame)
+        size = QDoubleSpinBox(frame)
+        size.setRange(4, 72)
+        size.setValue(8)
+        grid.addWidget(size_check, 2, 0)
+        grid.addWidget(size, 2, 1)
+        colour_check = QCheckBox("Colour:", frame)
+        colour = QComboBox(frame)
+        colour.addItems(["white", "black", "yellow", "red", "green", "cyan", "magenta"])
+        grid.addWidget(colour_check, 3, 0)
+        grid.addWidget(colour, 3, 1)
+        bold = QComboBox(frame)
+        bold.addItems(["(unchanged)", "bold", "not bold"])
+        italic = QComboBox(frame)
+        italic.addItems(["(unchanged)", "italic", "not italic"])
+        grid.addWidget(QLabel("Bold:", frame), 4, 0)
+        grid.addWidget(bold, 4, 1)
+        grid.addWidget(QLabel("Italic:", frame), 5, 0)
+        grid.addWidget(italic, 5, 1)
+        grid.addWidget(QLabel("<i>Only the ticked / chosen properties change; each text keeps its "
+                              "words and the rest of its formatting.</i>", frame), 6, 0, 1, 2)
+        # a value edited means the user wants it
+        family.currentFontChanged.connect(lambda _f: family_check.setChecked(True))
+        size.valueChanged.connect(lambda _v: size_check.setChecked(True))
+        colour.currentIndexChanged.connect(lambda _i: colour_check.setChecked(True))
+        self._text_style_widgets = dict(target=target, family_check=family_check, family=family,
+                                        size_check=size_check, size=size, colour_check=colour_check,
+                                        colour=colour, bold=bold, italic=italic)
+        cd = CustomDialog(title="Text style", message="Restyle a family of texts at once.",
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return
+        kw = {"target": target.currentData()}
+        if family_check.isChecked():
+            kw["font_family"] = family.currentFont().family()
+        if size_check.isChecked():
+            kw["font_size"] = size.value()
+        if colour_check.isChecked():
+            kw["color"] = colour.currentText()
+        if bold.currentIndex():
+            kw["bold"] = bold.currentIndex() == 1
+        if italic.currentIndex():
+            kw["italic"] = italic.currentIndex() == 1
+        if len(kw) == 1:
+            return
+        from pyfigures.mcp_server import restyle_texts
+        self._run_mcp_mutation(restyle_texts, f"Restyled: {target.currentText().lower()}.", **kw)
 
     def change_lettering_parameters(self):
         # start from the current lettering (it used to always open on the

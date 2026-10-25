@@ -15,6 +15,7 @@ Example (``fig1.yaml``)::
     caption: "WT vs KO gut, 63x."      # optional; omitted -> auto stub
     background: white                  # optional: colour of the gaps between panels
     label_background: black            # optional: box behind letters / labels
+    text_style: {target: texts, font: Arial, size: 7}   # optional: restyle labels / letters / scale bars
     defaults:                          # applied where a panel doesn't override
       px_to_unit: 0.1                  # um per pixel
       scale_bar: {units: 10, unit: "um"}
@@ -95,7 +96,7 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              "background",
              # sizing, typography and finishing
              "width_mm", "width_cm", "width_in", "width_px", "dpi", "font", "min_font_pt",
-             "fit_height", "max_height_mm", "colors",
+             "fit_height", "max_height_mm", "colors", "text_style",
              "tidy_text", "letter_placement", "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
@@ -925,6 +926,32 @@ def _check_top(recipe, base):
         raise RecipeError("'letter_placement' must be a corner such as 'top left'")
 
 
+_TEXT_STYLE_KEYS = {"target", "font", "size", "color", "bold", "italic"}
+
+
+def _text_styles(spec) -> list:
+    """text_style: one {target, font, size, color, bold, italic} or a list of
+    them → restyle_texts keyword arguments (MCP names)."""
+    if spec is None:
+        return []
+    items = spec if isinstance(spec, list) else [spec]
+    out = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise RecipeError("'text_style' takes {target: texts, font: Arial, size: 7, color: white, "
+                              "bold: true, italic: false} (or a list of them)")
+        bad = set(item) - _TEXT_STYLE_KEYS
+        if bad:
+            raise RecipeError(f"text_style: unknown key(s) {sorted(bad)}; use {sorted(_TEXT_STYLE_KEYS)}")
+        kw = {"target": item.get("target", "texts")}
+        for key, name in (("font", "font_family"), ("size", "font_size"), ("color", "color"),
+                          ("bold", "bold"), ("italic", "italic")):
+            if key in item:
+                kw[name] = item[key]
+        out.append(kw)
+    return out
+
+
 def _plan(recipe: dict, recipe_path: str) -> dict:
     """Validate the recipe and expand it into a concrete build plan (resolved
     paths, globs expanded, defaults merged). Raises RecipeError."""
@@ -1130,6 +1157,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "font": font,
         "min_font_pt": recipe.get("min_font_pt"),
         "colors": recipe.get("colors"),
+        "text_style": _text_styles(recipe.get("text_style")),
         "tidy_text": tidy,
         "auto_configure": recipe.get("auto_configure", False),
         "alt_text": recipe.get("alt_text"),
@@ -1971,6 +1999,8 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
     if plan["label_background"] is not None:
         warnings += _check(M.set_label_background(out, plan["label_background"]),
                            "label background")
+    for k, style in enumerate(plan["text_style"]):
+        warnings += _check(M.restyle_texts(out, **style), f"text_style {k + 1}")
     if plan["background"] is not None:
         warnings += _check(M.set_figure_properties(out, page_background=plan["background"]),
                            "figure background")
