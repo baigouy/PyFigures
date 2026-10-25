@@ -6399,14 +6399,13 @@ class EZFIG_GUI(QMainWindow):
             # TODO --> A FAIRE
             if elm.isText:  # do not label text labels
                 continue
-            # as in recipes and the MCP server (_finalize_draft): a montage / channel
-            # split is ONE figure panel (lettered on its first member only), and a
-            # LUT calibration bar belongs to the panel next to it (opening a recipe
-            # figure used to re-letter every frame A, B, C…)
-            comment = str(getattr(elm, 'user_comments', '') or '')
+            # as in recipes and the MCP server (_finalize_draft): a montage is ONE
+            # figure panel (lettered on its first frame; each channel-split panel
+            # has its own letter), and a LUT calibration bar belongs to the panel
+            # next to it (opening a recipe figure used to re-letter every frame)
+            from pyfigures.mcp_tools.stacks import shares_first_letter
             script = str(getattr(elm, 'custom_loading_script', '') or '')
-            if (comment.startswith('[series ') and not comment.startswith('[series 1/')) \
-                    or 'ColorbarBase(' in script:
+            if shares_first_letter(getattr(elm, 'user_comments', '')) or 'ColorbarBase(' in script:
                 if elm.annotations:
                     for l in [l for l in elm.annotations if isinstance(l, TAText2D) and l.is_letter]:
                         elm.annotations.remove(l)

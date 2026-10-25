@@ -277,8 +277,8 @@ def test_bar_longer_than_the_image_and_zoom_box_outside_are_refused(tmp_path, qa
 
 
 def test_caption_stub_matches_the_panel_letters(tmp_path, qapp):
-    """A channel split is one lettered panel: the stub listed (A)-(F) for a
-    figure lettered A-C."""
+    """One entry per letter: each channel-split panel names its channel (a
+    montage would be one entry)."""
     import numpy as np
     import tifffile
     from pyfigures.mcp_tools.workflow import _caption_stub
@@ -293,8 +293,8 @@ def test_caption_stub_matches_the_panel_letters(tmp_path, qapp):
         "  - - i.png\n    - {plot: d.csv, kind: box}\n"))
     assert not res.startswith("ERROR"), res
     stub = _caption_stub(str(tmp_path / "f.pyf"))
-    assert "(A) cells (GFP, RFP" in stub and "(B) i" in stub and "(C) data plot" in stub, stub
-    assert "(D)" not in stub
+    assert "(A) cells (GFP); (B) cells (RFP); (C) cells (merge); (D) i; (E) data plot" in stub, stub
+    assert "(F)" not in stub
 
 
 def test_bad_stats_mode_says_what_it_got(tmp_path, qapp):

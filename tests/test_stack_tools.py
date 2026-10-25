@@ -429,12 +429,13 @@ def test_alt_text_describes_panels(tmp_path):
     _finalize_draft(pyf, True, "top left", None, None, "")
     M.set_figure_caption(pyf, "text", title="Figure 2")
     d = json.loads(M.generate_alt_text(pyf))
-    assert d["panels"] == 3
-    assert d["short"].startswith("Figure 2: figure with 3 panels") and len(d["short"]) <= 250
+    # a montage is one lettered panel; each panel of a channel split has its letter
+    assert d["panels"] == 5
+    assert d["short"].startswith("Figure 2: figure with 5 panels") and len(d["short"]) <= 250
     long = d["long"]
     assert "Panel A: a montage of 3 frames (0 min to 8 min)" in long
-    assert "Panel B: the same field shown channel by channel (GFP and RFP), then merged" in long
-    assert "Panel C: box plot of length comparing WT and KO" in long
+    assert "Panels B–D: the same field shown channel by channel (GFP and RFP), then merged" in long
+    assert "Panel E: box plot of length comparing WT and KO" in long
     assert "significant" in long
     assert M.set_alt_text(pyf, "Custom. More.").startswith("Alt text saved")
     from pyfigures.mcp_tools.upkeep import read_alt_text
@@ -461,7 +462,7 @@ def test_recipe_stack_keys(tmp_path):
         ]}))
     res = build_figure_from_recipe(str(rec))
     assert res["stack_series"] == 2 and res["images"] == 2
-    assert res["lettered"] == 6                       # A montage, B split, C-F
+    assert res["lettered"] == 8                       # A montage, B-D split (G, R, merge), E-H
     imgs = _panels(res["output"])
     assert len(imgs) == 3 + 3 + 4
     src = imgs[6]

@@ -71,6 +71,15 @@ def _crop_panels(images, crop):
 
 SERIES_MARK = "[series "          # user_comments prefix of montage / split members
 
+
+def shares_first_letter(comment) -> bool:
+    """True for a montage frame after the first: a montage is ONE figure
+    panel, lettered on its first frame. Each panel of a channel split
+    (channels + merge) gets its own letter."""
+    comment = str(comment or "")
+    return (comment.startswith(SERIES_MARK) and not comment.startswith(SERIES_MARK + "1/")
+            and "] channel split of " not in comment)
+
 # colour name -> PyFigures LUT key, for tinting a channel natively
 _COLOR_LUTS = {"gray": "GRAY", "grey": "GRAY", "white": "GRAY", "red": "RED",
                "green": "GREEN", "blue": "BLUE", "cyan": "CYAN",

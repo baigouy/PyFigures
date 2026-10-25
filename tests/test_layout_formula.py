@@ -166,7 +166,7 @@ def test_named_panels_keep_their_settings(files, qapp):
     assert not isinstance(res, str), res
     t = _tree(str(files / "f.pyf"))
     assert t[0][0] == "X" and t[0][1][0][0] == "X"          # the split row kept as a group
-    assert [_letter(x) for x in t[1][1]] == ["a[C]", "b[D]"]  # A = split, B = plot
+    assert [_letter(x) for x in t[1][1]] == ["a[F]", "b[G]"]  # A-D = split (r, g, b, merge), E = plot
     assert M.get_image_property(str(files / "f.pyf"), [1], 0, "crop_left").endswith("10")
     assert "GREEN" in M.get_image_property(str(files / "f.pyf"), [1], 0, "LUTs")
     assert "scale bar" in M.describe_figure(str(files / "f.pyf")).lower()

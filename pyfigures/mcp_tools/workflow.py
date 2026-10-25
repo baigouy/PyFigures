@@ -446,9 +446,9 @@ def _caption_stub(pyf_path: str) -> str:
     _, root = _load(pyf_path)
     letters = string.ascii_uppercase
     parent = {c: p for p in root.iter() for c in p}
-    # one entry per lettered panel: a montage / channel split is ONE panel
-    # (lettered on its first frame) — the stub listed every frame, (A)-(F) for
-    # a figure lettered A-C; text panels carry no letter
+    # one entry per lettered panel: a montage is ONE panel (lettered on its
+    # first frame) — the stub listed every frame, (A)-(F) for a figure
+    # lettered A-C; each channel-split panel has its letter; text panels none
     entries: list[list] = []
     series_entry: dict = {}
     for img in _iter_panel_elements(root):
@@ -457,7 +457,8 @@ def _caption_stub(pyf_path: str) -> str:
         fn = _decode(img.findtext("filename"))
         base = (os.path.splitext(os.path.basename(str(fn)))[0]
                 if fn and fn not in ("None", "@template@") else "data plot")
-        if str(_decode(img.findtext("user_comments")) or "").startswith(SERIES_MARK):
+        comment = str(_decode(img.findtext("user_comments")) or "")
+        if comment.startswith(SERIES_MARK) and "] channel split of " not in comment:
             key = parent.get(img)
             names = [t for t in _panel_label_texts(img) if not (len(t) <= 2 and t.isalpha() and t.isupper())]
             if key in series_entry:
@@ -465,6 +466,8 @@ def _caption_stub(pyf_path: str) -> str:
                 continue
             series_entry[key] = [base, list(names)]
             entries.append(series_entry[key])
+        elif "] channel split of " in comment:
+            entries.append([base, [comment.rsplit(": ", 1)[-1]]])      # (B) cells (GFP)
         else:
             entries.append([base, []])
     parts = []
@@ -498,9 +501,10 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
                                    f"{sb_units:g} {sb_unit}".strip(),
                                    "bottom right", sb_color, float(px_to_unit))
             bars += 1
-        # a montage / channel split is ONE figure panel: letter its first member only
-        comment = _decode(img.findtext("user_comments")) or ""
-        series_tail = comment.startswith("[series ") and not comment.startswith("[series 1/")
+        # a montage is ONE figure panel: letter its first frame only (each
+        # panel of a channel split has its own letter)
+        from .stacks import shares_first_letter
+        series_tail = shares_first_letter(_decode(img.findtext("user_comments")))
         # a LUT calibration bar belongs to the panel next to it: no letter of its own
         is_colour_bar = bool(script) and "ColorbarBase(" in (_decode(script) or "")
         if letter_panels and not series_tail and not is_colour_bar:

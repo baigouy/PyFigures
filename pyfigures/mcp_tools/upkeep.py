@@ -474,6 +474,8 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
                     break
         kind, base, labels, extras = _panel_description(img, stats)
         comment = _decode(img.findtext("user_comments")) or ""
+        # a montage / channel split is described once; each split panel has
+        # its own letter ("Panels B–D: the same field shown channel by channel")
         if kind.startswith("series:") and not comment.startswith("[series 1/") and panels \
                 and panels[-1][1].startswith("series:"):
             prev = panels[-1]
@@ -482,14 +484,18 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
             else:
                 prev[3].extend(labels)
             prev[5] += 1
+            if letter:
+                prev[8].append(letter)
             if extras:
                 prev[4][:] = sorted(set(prev[4]) | set(extras))
             continue
-        panels.append([letter, kind, base, labels, extras, 1, comment, False])
+        panels.append([letter, kind, base, labels, extras, 1, comment, False, [letter] if letter else []])
 
     parts = []
-    for letter, kind, base, labels, extras, count, comment, has_merge in panels:
+    for letter, kind, base, labels, extras, count, comment, has_merge, letters in panels:
         who = f"Panel {letter}" if letter else "A panel"
+        if len(letters) > 1:
+            who = f"Panels {letters[0]}–{letters[-1]}"
         if kind.startswith("series:"):
             if "montage of" in comment:
                 what = f"a montage of {count} frames" + (f" ({labels[0]} to {labels[-1]})" if len(labels) > 1 else "")
@@ -512,7 +518,7 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
             sentence += f", with {_join(extras)}"
         parts.append(sentence + ".")
 
-    n = len(panels)
+    n = sum(max(1, len(p[8])) for p in panels)      # lettered panels (a split has several)
     kinds = Counter(p[1] for p in panels if not p[1].startswith("series:"))
     what = []
     for k, word in (("image", "micrograph"), ("merge", "merged image"), ("plot", "chart"),

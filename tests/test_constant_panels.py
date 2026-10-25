@@ -175,11 +175,10 @@ def test_insert_channel_split_gets_automatic_letters(qapp, tmp_path, monkeypatch
             if isinstance(s, Image2D) and not s.isText:
                 comments.append(s.user_comments)
             stack[0:0] = list(getattr(s, "content", None) or [])
-        # as in recipes and the MCP server: a channel split is ONE figure panel,
-        # lettered on its first channel (it got no letter at all)
-        first = comments.index("[series 1/4] channel split of three.tif: Ch1")
-        assert len(letters[first]) == 1, (letters, comments)
-        assert sum(len(l) for l in letters) == 2, (letters, comments)      # the split + the original
+        # as in recipes and the MCP server: each panel of a channel split has
+        # its own letter (it got no letter at all)
+        assert all(len(l) == 1 for l in letters), (letters, comments)
+        assert len(letters) == 5, (letters, comments)          # 3 channels + merge + the original
     finally:
         g._dirty = False
         g.close()
