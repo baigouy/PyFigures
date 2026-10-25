@@ -162,6 +162,28 @@ GUIDES: dict[str, dict] = {
         "done": "dialog_closed",
         "mcp": "set_annotation_text",
     },
+    "edit_roi": {
+        "title": "Change an existing ROI (outline, fill, dashes, position)",
+        "summary": "Recolour a box, ellipse, line or polygon already drawn on a panel, make its "
+                   "outline thicker or dashed, remove its fill, or move / resize it.",
+        "keywords": ["existing roi", "edit roi", "edit the roi", "outline", "thicker", "thinner",
+                     "dashed", "dotted", "remove the fill", "remove fill", "no fill", "box colour",
+                     "box color", "rectangle colour", "rectangle color", "change the rectangle",
+                     "change the box", "change the ellipse", "change the circle", "move the box",
+                     "resize the box", "roi colour", "roi color"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that has the ROI."},
+            {"context": "Double-click the panel: its editor opens on the <b>Annotations</b> tab. "
+                        "Click the ROI on the image to select it. <b>Contour</b> and <b>Fill</b> "
+                        "set its colours (<b>Reset</b> removes the fill), <b>Opacity</b> its "
+                        "transparency, <b>Stroke Size</b> and <b>Type</b> its outline width and "
+                        "dashes — they change the selected ROI only. Drag it to move it. Click "
+                        "<b>Ok</b>."},
+        ],
+        "alternative": "Several ROIs look alike? Select the one you mean on the image first.",
+        "done": "dialog_closed",
+        "mcp": "set_roi_properties",
+    },
     "edit_inset": {
         "title": "Change an existing inset (size, border)",
         "summary": "Resize an inset already on a panel, or change its border width and colour.",

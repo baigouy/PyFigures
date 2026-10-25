@@ -82,6 +82,9 @@ def test_bad_targets_are_refused(fig):
     ("make the existing inset bigger", "edit_inset"),
     ("change the inset border colour", "edit_inset"),
     ("add a zoom inset", "zoom_inset"),                       # creating one is still the callout
+    ("make the outline of the box thicker", "edit_roi"),
+    ("remove the fill of the rectangle", "edit_roi"),
+    ("make the existing roi dashed", "edit_roi"),
 ])
 def test_help_supplements_are_authored_guides(query, expected):
     from pyfigures import guides

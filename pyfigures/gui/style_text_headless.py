@@ -21,6 +21,9 @@ where params.json is UTF-8 JSON with keys:
     italic      (bool|None)
     underline   (bool|None)
     color       (str|None)      any Qt colour string, e.g. "#ff0000" / "red"
+    vertical_align (str|None)   superscript | subscript | normal
+    match       (str|None)      only this word/phrase (with ``html`` only)
+    occurrence  (int|None)      which match, 1 = first (needed when several)
 
 The restyled HTML is written (UTF-8) to <out.html>. With ``htmls`` (a list)
 instead of ``html``, every text gets the same attributes and <out.html> holds
@@ -37,20 +40,52 @@ import json
 import sys
 
 
+_VERTICAL = ("superscript", "subscript", "normal")
+
+
+def _find_all(doc, match):
+    """Cursors selecting every case-sensitive occurrence of *match*."""
+    from qtpy.QtGui import QTextDocument, QTextCursor
+    found = []
+    cur = QTextCursor(doc)
+    while True:
+        cur = doc.find(match, cur, QTextDocument.FindFlag.FindCaseSensitively)
+        if cur.isNull():
+            return found
+        found.append(QTextCursor(cur))
+
+
 def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
-                 italic=None, underline=None, color=None) -> str:
+                 italic=None, underline=None, color=None, vertical_align=None,
+                 match=None, occurrence=None) -> str:
     """Return *html* with the given character attributes merged over every run.
 
     Only non-None attributes are applied; the rest of the formatting is kept.
-    Requires a QApplication to exist (QTextDocument needs font metrics).
+    With *match* only that word/phrase changes (case-sensitive); when it occurs
+    more than once, *occurrence* (1 = first) says which, otherwise ValueError —
+    the caller must ask rather than guess. *vertical_align*: superscript,
+    subscript or normal. Requires a QApplication (QTextDocument needs fonts).
     """
     from qtpy.QtGui import (QTextDocument, QTextCursor, QTextCharFormat,
                             QFont, QColor)
 
     doc = QTextDocument()
     doc.setHtml(html or "")
-    cursor = QTextCursor(doc)
-    cursor.select(QTextCursor.Document)
+    if match:
+        found = _find_all(doc, str(match))
+        plain = doc.toPlainText()
+        if not found:
+            raise ValueError(f"{match!r} is not in the text {plain!r} (the match is case-sensitive).")
+        if occurrence is None and len(found) > 1:
+            raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}: give occurrence "
+                             f"(1 = first) to say which one.")
+        k = 1 if occurrence is None else int(occurrence)
+        if not 1 <= k <= len(found):
+            raise ValueError(f"occurrence {k} out of range: {match!r} occurs {len(found)} time(s).")
+        cursor = found[k - 1]
+    else:
+        cursor = QTextCursor(doc)
+        cursor.select(QTextCursor.Document)
 
     fmt = QTextCharFormat()
     if font_family is not None:
@@ -65,6 +100,12 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
         fmt.setFontUnderline(bool(underline))
     if color is not None:
         fmt.setForeground(QColor(str(color)))
+    if vertical_align is not None:
+        if vertical_align not in _VERTICAL:
+            raise ValueError(f"vertical_align must be one of {', '.join(_VERTICAL)}")
+        va = QTextCharFormat.VerticalAlignment
+        fmt.setVerticalAlignment({"superscript": va.AlignSuperScript, "subscript": va.AlignSubScript,
+                                  "normal": va.AlignNormal}[vertical_align])
 
     cursor.mergeCharFormat(fmt)
     return doc.toHtml()
@@ -86,7 +127,9 @@ def _main(argv=None) -> int:
         with open(params_path, "r", encoding="utf-8") as f:
             p = json.load(f)
         attrs = {k: p.get(k) for k in ("font_family", "font_size", "bold", "italic",
-                                        "underline", "color")}
+                                        "underline", "color", "vertical_align")}
+        if "html" in p:
+            attrs.update(match=p.get("match"), occurrence=p.get("occurrence"))
         if "htmls" in p:            # several texts at once: JSON out
             from qtpy.QtGui import QFontDatabase
             fam = attrs.get("font_family")
@@ -97,6 +140,9 @@ def _main(argv=None) -> int:
             out = restyle_html(p.get("html", ""), **attrs)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(out)
+    except ValueError as e:
+        sys.stderr.write(f"ERROR: {e}\n")
+        return 1
     except Exception as e:
         sys.stderr.write(f"ERROR: {type(e).__name__}: {e}\n")
         return 1

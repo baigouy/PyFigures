@@ -509,7 +509,7 @@ def _guide_context(c, guide_id):
         assert hits, "no shortcut for the right arrow"
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
-    elif guide_id in ("edit_text", "edit_inset"):
+    elif guide_id in ("edit_text", "edit_inset", "edit_roi"):
         # the panel's editor (double-click), accepted
         c.editor(img, lambda ed: None)
     elif guide_id == "stack_in_row":

@@ -643,8 +643,12 @@ def style_annotation(
     underline: bool | None = None,
     color: str | None = None,
     background: str | int | None = None,
+    vertical_align: str | None = None,
+    match: str | None = None,
+    occurrence: int | None = None,
 ) -> str:
-    """Restyle a text annotation's font WITHOUT losing its rich formatting.
+    """Restyle a text annotation (or ONE word / phrase of it) WITHOUT losing
+    its rich formatting — what the Edit text dialog does with a selection.
 
     Annotation text is a Qt rich-text document that may mix per-word colour,
     super/subscript and bold spans. This merges the attributes you specify over
@@ -659,16 +663,29 @@ def style_annotation(
       *color*        any CSS/Qt colour, e.g. "#000000", "red"
       *background*   a filled box behind the text so it reads on any image,
                      e.g. "black", "white", "#202020"; "none" removes it
+      *vertical_align*  "superscript", "subscript" or "normal"
+
+    Only part of the text: *match* is the word or phrase to change (exact,
+    case-sensitive); everything else keeps its formatting. E.g. "make only
+    'treated' bold" → match="treated", bold=true; "the 2 in CO2 as subscript"
+    → match="2", vertical_align="subscript" (occurrence picks which "2" when
+    there are several). When *match* occurs more than once and *occurrence*
+    (1 = first) is not given, nothing changes and the error says how many
+    there are — ask the user which one rather than guessing.
 
     To change the label *text* instead of its style, use set_annotation_text.
     *group_path*: [] free-canvas, [0] group 0, [0,1] sub-group.
-    *annotation_index*: 0-based index among TAText2D elements on that image
-    (as reported by get_annotations).
+    *annotation_index*: 0-based index among the TEXT annotations of that image
+    (get_annotations reports it as text_index).
     """
+    if vertical_align is not None and vertical_align not in ("superscript", "subscript", "normal"):
+        return "ERROR: vertical_align must be superscript, subscript or normal."
     if all(v is None for v in
-           (font_family, font_size, bold, italic, underline, color, background)):
+           (font_family, font_size, bold, italic, underline, color, background, vertical_align)):
         return ("ERROR: nothing to change — set at least one of font_family, "
-                "font_size, bold, italic, underline, color, background.")
+                "font_size, bold, italic, underline, color, background, vertical_align.")
+    if match is not None and background is not None:
+        return "ERROR: the background box is for the whole label; leave match out to set it."
     bg = None
     if background is not None:
         try:
@@ -692,7 +709,7 @@ def style_annotation(
     elem = texts[annotation_index]
     if bg is not None:
         _set_child_text(elem, "fill_color", bg)
-    if all(v is None for v in (font_family, font_size, bold, italic, underline, color)):
+    if all(v is None for v in (font_family, font_size, bold, italic, underline, color, vertical_align)):
         _save(tree, pyf_path)
         return json.dumps({
             "styled": {"group_path": group_path, "image_index": image_index,
@@ -710,7 +727,8 @@ def style_annotation(
             "html": current_html,
             "font_family": font_family, "font_size": font_size,
             "bold": bold, "italic": italic, "underline": underline,
-            "color": color,
+            "color": color, "vertical_align": vertical_align,
+            "match": match, "occurrence": occurrence,
         }, f)
     cmd = [sys.executable, "-m", "pyfigures.gui.style_text_headless",
            params_path, out_path]
@@ -724,7 +742,8 @@ def style_annotation(
     except subprocess.TimeoutExpired:
         return "ERROR: styling timed out"
     if proc.returncode != 0 or not os.path.isfile(out_path):
-        return f"ERROR: {(proc.stderr or proc.stdout or 'styling failed').strip()}"
+        msg = (proc.stderr or proc.stdout or 'styling failed').strip().splitlines()[-1]
+        return msg if msg.startswith("ERROR") else f"ERROR: {msg}"
     with open(out_path, "r", encoding="utf-8") as f:
         new_html = f.read()
 
@@ -734,7 +753,8 @@ def style_annotation(
     changed = {k: v for k, v in {
         "font_family": font_family, "font_size": font_size, "bold": bold,
         "italic": italic, "underline": underline, "color": color,
-        "background": background,
+        "background": background, "vertical_align": vertical_align,
+        "match": match, "occurrence": occurrence,
     }.items() if v is not None}
     return json.dumps({
         "styled": {"group_path": group_path, "image_index": image_index,

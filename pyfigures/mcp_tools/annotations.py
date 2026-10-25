@@ -693,6 +693,146 @@ def add_roi_polygon(
     )
 
 
+_LINE_STYLES = {"solid": "None", "dashed": "[4, 4]", "dotted": "[1, 3]", "dash-dot": "[6, 3, 1, 3]"}
+_ROI_TAGS = ("Rectangle2D", "Ellipse2D", "Line2D", "Polygon2D", "PolyLine2D", "Freehand2D")
+
+
+@mcp.tool()
+def set_roi_properties(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    annotation_index: int,
+    color: str | int | None = None,
+    fill_color: str | int | None = None,
+    stroke: float | None = None,
+    opacity: float | None = None,
+    line_style: str | None = None,
+    x: float | None = None,
+    y: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    x1: float | None = None,
+    y1: float | None = None,
+    x2: float | None = None,
+    y2: float | None = None,
+    points: list | None = None,
+    move_by: list[float] | None = None,
+    arrow: bool | None = None,
+    arrow_at_both_ends: bool | None = None,
+) -> str:
+    """Change an EXISTING ROI (rectangle, ellipse, line/arrow, polygon,
+    polyline, freehand) — what its properties in the Edit Image dialog do.
+    Only what you pass changes; geometry, colours and the rest stay as they are.
+
+    Find the ROI with get_annotations: *annotation_index* is its index there
+    (0-based among all the image's annotations). Several ROIs fit the user's
+    words ("the box" with two rectangles)? Ask which one — do not edit the first.
+
+    Style (any ROI): *color* outline; *fill_color* fill, "none" removes it;
+    *stroke* outline width (px); *opacity* 0–1; *line_style* solid, dashed,
+    dotted or dash-dot.
+    Geometry, in RAW image pixels (top-left of the uncropped image, the same
+    coordinates get_annotations reports — never canvas/screen positions):
+      rectangle / ellipse: *x*, *y* (top-left), *width*, *height*
+      line / arrow: *x1*, *y1*, *x2*, *y2* (an arrow points at x2, y2);
+                    *arrow* / *arrow_at_both_ends* turn the heads on or off
+      polygon / polyline / freehand: *points* [[x, y], …] (replaces them all)
+      any ROI: *move_by* [dx, dy] shifts it without changing its size.
+    """
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    annots = imgs[image_index].find("annotations")
+    children = list(annots) if annots is not None else []
+    if not 0 <= annotation_index < len(children):
+        return (f"ERROR: annotation_index {annotation_index} out of range "
+                f"({len(children)} annotations; see get_annotations).")
+    el = children[annotation_index]
+    tag = el.tag
+    if tag not in _ROI_TAGS:
+        hint = {"TAText2D": "a text — use style_annotation / set_annotation_text",
+                "ScaleBar": "the scale bar — use set_scale_bar",
+                "Image2D": "an inset — use set_inset_property"}.get(tag, tag)
+        return f"ERROR: annotation {annotation_index} is {hint}, not a ROI."
+
+    box = ("x", "y", "width", "height")
+    ends = ("x1", "y1", "x2", "y2")
+    given = {k: v for k, v in dict(x=x, y=y, width=width, height=height, x1=x1, y1=y1,
+                                   x2=x2, y2=y2).items() if v is not None}
+    kind = ("box" if tag in ("Rectangle2D", "Ellipse2D") else
+            "line" if tag == "Line2D" else "points")
+    wrong = [k for k in given if (k in box) != (kind == "box") or (k in ends) != (kind == "line")]
+    if wrong or (points is not None and kind != "points"):
+        return (f"ERROR: a {tag} has no {', '.join(wrong) or 'points'}: rectangles/ellipses take "
+                "x, y, width, height; lines x1, y1, x2, y2; polygons points.")
+    if (arrow is not None or arrow_at_both_ends is not None) and tag != "Line2D":
+        return f"ERROR: only a line has arrowheads (this is a {tag})."
+    if line_style is not None and line_style not in _LINE_STYLES:
+        return f"ERROR: line_style must be one of {', '.join(_LINE_STYLES)}."
+    if opacity is not None and not 0 <= opacity <= 1:
+        return "ERROR: opacity must be between 0 and 1."
+    if stroke is not None and stroke <= 0:
+        return "ERROR: stroke must be positive."
+    if (width is not None and width <= 0) or (height is not None and height <= 0):
+        return "ERROR: width and height must be positive."
+    if move_by is not None and len(move_by) != 2:
+        return "ERROR: move_by is [dx, dy]."
+
+    changed = []
+
+    def put(name, text):
+        if el.find(name) is None:
+            ET.SubElement(el, name)
+        _set_child_text(el, name, text)
+        changed.append(name)
+
+    if color is not None:
+        put("color", str(_color_to_int(color)))
+    if fill_color is not None:
+        none = str(fill_color).strip().lower() in ("none", "null", "transparent", "")
+        put("fill_color", "None" if none else str(_color_to_int(fill_color)))
+    if stroke is not None:
+        put("stroke", str(float(stroke)))
+    if opacity is not None:
+        put("opacity", str(float(opacity)))
+    if line_style is not None:
+        put("line_style", _LINE_STYLES[line_style])
+    for k, v in given.items():
+        put(k, str(float(v)))
+    if points is not None:
+        flat = _flatten_points(points)
+        if len(flat) < 4:
+            return "ERROR: need at least 2 points."
+        put("coords_as_list", str(flat))
+    if arrow is not None:
+        put("arrow", str(bool(arrow)))
+    if arrow_at_both_ends is not None:
+        put("arrow_at_both_ends", str(bool(arrow_at_both_ends)))
+    if move_by is not None:
+        dx, dy = float(move_by[0]), float(move_by[1])
+        if kind == "points":
+            import ast as _ast
+            flat = [float(v) for v in _ast.literal_eval(_child_text(el, "coords_as_list") or "[]")]
+            put("coords_as_list", str([v + (dx if i % 2 == 0 else dy) for i, v in enumerate(flat)]))
+        else:
+            for k, d in ((("x", dx), ("y", dy)) if kind == "box" else
+                         (("x1", dx), ("y1", dy), ("x2", dx), ("y2", dy))):
+                put(k, str(float(_child_text(el, k) or 0) + d))
+    if not changed:
+        return "ERROR: nothing to change — pass at least one property."
+    _save(tree, pyf_path)
+    from .core import _describe_roi
+    return json.dumps({"edited": {"group_path": group_path, "image_index": image_index,
+                                  "annotation_index": annotation_index, "type": tag},
+                       "changed": sorted(set(changed)),
+                       "now": _describe_roi(el, annotation_index)}, ensure_ascii=False, indent=2)
+
+
 @mcp.tool()
 def remove_group(pyf_path: str, group_path: list[int]) -> str:
     """Remove a group and ALL of its contents (images, sub-groups, annotations).

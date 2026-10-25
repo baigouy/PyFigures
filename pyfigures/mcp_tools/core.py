@@ -1677,6 +1677,18 @@ def _describe_roi(el: ET.Element, idx: int) -> dict:
         base["type"] = "scale_bar (protected)"
     elif t == "Image2D":
         base["type"] = "inset (protected)"
+    if t in ("Rectangle2D", "Ellipse2D", "Line2D", "Polygon2D", "PolyLine2D", "Freehand2D"):
+        for k in ("stroke", "opacity"):
+            v = _child_text(el, k)
+            try:
+                base[k] = float(v) if v not in (None, "None") else None
+            except ValueError:
+                base[k] = None
+        fill = _child_text(el, "fill_color")
+        base["fill_color"] = None if fill in (None, "None") else fill
+        style = _child_text(el, "line_style")
+        base["line_style"] = {"[4, 4]": "dashed", "[1, 3]": "dotted",
+                              "[6, 3, 1, 3]": "dash-dot"}.get(str(style), "solid" if style in (None, "None") else str(style))
     return base
 
 

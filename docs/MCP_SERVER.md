@@ -441,8 +441,9 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 |------|-------------|
 | `add_annotation(pyf_path, group_path, image_index, text, placement)` | Add one floating text label |
 | `add_corner_labels(pyf_path, group_path, image_index, top_left, top_right, bottom_left, bottom_right)` | Add stacked text labels to any/all corners in one call |
-| `set_annotation_text(pyf_path, group_path, image_index, annotation_index, html_text)` | Edit annotation text (supports HTML) |
-| `style_annotation(pyf_path, group_path, ...)` | Restyle an existing text label (font, size, colour, weight, `background` box, …) |
+| `set_annotation_text(pyf_path, group_path, image_index, annotation_index, html_text)` | Edit annotation text (supports HTML); `annotation_index` = the `text_index` `get_annotations` reports |
+| `style_annotation(pyf_path, group_path, ...)` | Restyle an existing text label (font, size, colour, weight, `background` box, `vertical_align` superscript/subscript, …), or only one word of it: `match` (+ `occurrence` when it occurs several times — otherwise the error asks which). GUI: double-click the text → Edit text, select the word. |
+| `set_roi_properties(pyf_path, group_path, image_index, annotation_index, ...)` | Change an existing ROI, keeping the rest: outline `color`, `fill_color` (`"none"` removes it), `stroke`, `opacity`, `line_style` (solid/dashed/dotted/dash-dot), geometry in raw image pixels (`x`/`y`/`width`/`height`, `x1`…`y2`, `points`, `move_by`), arrowheads on/off. GUI: double-click the image → Edit Image, select the ROI. |
 | `tidy_text(pyf_path)` | Apply conservative typography fixes (×, °, units, ranges, −) to every text label |
 | `remove_annotation(pyf_path, group_path, image_index, annotation_index)` | Remove any annotation/ROI by index (ScaleBars and insets are protected) |
 | `add_roi_rect(pyf_path, group_path, image_index, x, y, width, height, ...)` | Overlay a rectangular ROI (highlight box) |

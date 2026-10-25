@@ -417,7 +417,10 @@ def tidy_text(pyf_path: str) -> str:
 def get_annotations(pyf_path: str) -> str:
     """Return ALL annotations and ROIs in the figure as JSON, including nested groups.
 
-    Each entry includes *annotation_index* (0-based within that image's list),
+    Each entry includes *annotation_index* (0-based within that image's list:
+    what set_roi_properties and remove_annotation take), for a text also *text_index*
+    (0-based among the image's texts: what set_annotation_text and
+    style_annotation take),
     *type* (TAText2D / Rectangle2D / Ellipse2D / Line2D / Polygon2D / …),
     and shape-specific fields (x/y/width/height, text/placement, points, arrow, …).
     ScaleBars and insets are listed as protected and cannot be removed via remove_annotation.
@@ -432,8 +435,12 @@ def get_annotations(pyf_path: str) -> str:
             if annots is None:
                 continue
             removable = _roi_children(annots)
+            n_text = 0
             for ai, child in enumerate(annots):
                 desc = _describe_roi(child, ai)
+                if child.tag == "TAText2D":
+                    desc["text_index"] = n_text      # what the text tools take
+                    n_text += 1
                 desc["group_path"] = path
                 desc["image_index"] = ii
                 out.append(desc)
