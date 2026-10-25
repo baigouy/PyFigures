@@ -394,6 +394,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `set_orientation(pyf_path, group_path, orientation)` | Switch group to `X` (row) or `Y` (column) |
 | `reorder_children(pyf_path, group_path, new_order)` | Reorder panels or groups |
 | `move_image(pyf_path, ...)` | Move an image to a different position |
+| `stack_with_image(pyf_path, src_group_path, src_image_index, target_group_path, target_image_index)` | Stack an image with another inside its row: A \| B + C → A \| (B / C) (GUI drop choice "Stack with it (column in the row)") |
 | `set_size(pyf_path, group_path, image_index, width, height)` | Resize a panel |
 | `layout_canvas(pyf_path, ...)` | Apply a full canvas layout |
 | `set_image_filename(pyf_path, group_path, image_index, filename)` | Change the file a panel points to |

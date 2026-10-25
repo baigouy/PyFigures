@@ -52,7 +52,7 @@ import uuid
 #   {"dialog": "text"}                          what to do in the dialog that opened
 # "done" names the result the GUI watches for (see gui/show_me_how.py):
 #   split_created, scalebar_added, inset_added, lut_changed, crop_changed,
-#   panel_added, dialog_closed.
+#   panel_added, dialog_closed, order_changed, layout_changed.
 
 GUIDES: dict[str, dict] = {
     "split_channels": {
@@ -121,6 +121,75 @@ GUIDES: dict[str, dict] = {
         "alternative": "Drag a row onto another row and choose Swap to exchange two rows.",
         "done": "order_changed",
         "mcp": "reorder_children",
+    },
+    "stack_in_row": {
+        "title": "Stack two images inside a row",
+        "summary": "Put an image under another one of a row: A | B becomes A | (B / C).",
+        "keywords": ["stack", "stacked", "stacking", "nest", "nested", "column in the row",
+                     "under", "below", "on top of", "column inside"],
+        "steps": [
+            {"select": "image",
+             "text": "Click the row once, then click the image to move (now only that image "
+                     "is selected)."},
+            {"context": "Drag it onto the image of the row it should go under, release, and "
+                        "choose <b>Stack with it (column in the row)</b> in the menu. The two "
+                        "become a column inside that row. To cancel, choose <b>Ignore</b> or "
+                        "press Escape while the menu is open."},
+        ],
+        "alternative": "To row / To column in the same menu make a new top-level row or "
+                       "column instead.",
+        "done": "layout_changed",
+        "mcp": "stack_with_image",
+    },
+    "arrowheads": {
+        "title": "Point at a feature with an arrow or an arrowhead",
+        "summary": "Add an arrow, or the larger head alone (as in papers), pointing at a feature.",
+        "keywords": ["arrow", "arrowhead", "arrowheads", "arrow head", "point at", "pointing",
+                     "pointer", "tip"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that shows the feature."},
+            {"menu": ["Annotations", "Add arrow pointing at a feature…"]},
+            {"dialog": "In <b>Style</b> choose an arrow, a double arrow or <b>Arrowhead only "
+                       "(larger head, no line)</b>. Type the tip position in image pixels and "
+                       "the direction (Length does not apply to an arrowhead), or click "
+                       "<b>Draw it with the mouse instead…</b>. Click <b>Ok</b>."},
+        ],
+        "alternative": "Double-click the panel → Annotations tab: pick the Arrow or the "
+                       "Arrowhead tool and drag towards the feature, then Ok.",
+        "done": "dialog_closed",
+        "mcp": "add_arrow",
+    },
+    "text_style": {
+        "title": "Change the font of labels, letters or scale-bar numbers",
+        "summary": "Restyle a whole family of texts at once (font, size, colour, bold, italic).",
+        "keywords": ["font", "text style", "bold", "italic", "font size", "text size",
+                     "scale bar numbers", "scale bar legend", "labels font", "restyle"],
+        "steps": [
+            {"menu": ["Annotations", "Text style (letters, labels, scale bars…)…"]},
+            {"dialog": "Choose which texts (panel letters, labels, scale-bar legends or all), "
+                       "then tick <b>Font</b> or <b>Size</b>, or pick a colour, bold or italic. "
+                       "Only what you tick or pick changes; the words stay. Click <b>Ok</b>."},
+        ],
+        "alternative": "Panel letters only: Annotations → Panel letters options. One text: "
+                       "double-click its panel → Texts tab → double-click the text.",
+        "done": "dialog_closed",
+        "mcp": "restyle_texts",
+    },
+    "review_comments": {
+        "title": "Get comments from co-authors (review)",
+        "summary": "Export a review page others can comment on, then import their comments.",
+        "keywords": ["review", "comment", "comments", "co-author", "coauthor", "feedback",
+                     "annotate for review", "reviewer"],
+        "steps": [
+            {"menu": ["File", "Review comments", "Export for review…"]},
+            {"dialog": "Give your e-mail if you want replies sent to you and save the HTML "
+                       "page. Send it: reviewers open it in a browser, draw a box on a region "
+                       "and comment it, or write a general comment, then save their copy."},
+        ],
+        "alternative": "When a reviewed copy comes back: File → Review comments → Import "
+                       "review comments… shows each comment on its panel.",
+        "done": "dialog_closed",
+        "mcp": "export_review",
     },
     "set_lut": {
         "title": "Change channel colours (LUTs)",
@@ -248,7 +317,11 @@ GUIDES: dict[str, dict] = {
         "keywords": ["caption", "legend", "figure legend", "text below"],
         "steps": [
             {"menu": ["File", "Figure caption / legend…"]},
-            {"dialog": "Type the caption and click <b>Ok</b>; it is saved beside the .pyf."},
+            {"dialog": "Type the caption in the rich-text editor. To italicize or bold some "
+                       "words, select them and click <b>Italic</b> or <b>Bold</b> in its "
+                       "toolbar (Greek letters and superscripts are there too). The title is "
+                       "optional. Click <b>Ok</b>: the caption is saved beside the .pyf, as "
+                       "plain text and as Markdown keeping the formatting."},
         ],
         "alternative": "",
         "done": "dialog_closed",

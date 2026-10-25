@@ -509,6 +509,12 @@ def _guide_context(c, guide_id):
         assert hits, "no shortcut for the right arrow"
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
+    elif guide_id == "stack_in_row":
+        # drag the selected panel onto an image of the other row
+        c.menus.pick = "Stack with it (column in the row)"
+        H.drag(c.g, img, H.centre(c.g, H.by_name(c.g, "rgb")))
+        c.menus.pick = None
+        H.settle(c.qapp, c.g)
     else:
         raise AssertionError(f"no context route for guide {guide_id}")
 

@@ -353,6 +353,24 @@ def chk_annotation_added(cls):
     return chk
 
 
+def _bold_texts(dlg):
+    w = dlg.parent()._text_style_widgets
+    w["target"].setCurrentIndex(w["target"].findData("texts"))
+    w["bold"].setCurrentIndex(1)
+    H.accept(dlg)
+
+
+def chk_texts_bold(g, b, a, run):
+    import xml.etree.ElementTree as ET
+    from pyfigures.mcp_tools.core import _decode
+    path = os.path.join(run["out"], "restyled.pyf")
+    g._save_state_to_file(path)
+    texts = [_decode(t.findtext("text")) or "" for t in ET.parse(path).getroot().iter("TAText2D")
+             if t.findtext("is_letter") != "True"]
+    assert texts and all("font-weight:700" in t or "font-weight:600" in t for t in texts), texts
+    assert a["panels"][0]["texts"] == b["panels"][0]["texts"]          # words kept
+
+
 def chk_tidied(g, b, a, run):
     texts = [t for p in a["panels"] for t in p["texts"]]
     assert any("10–20" in t and "37 °C" in t for t in texts), texts
@@ -545,6 +563,7 @@ ACTIONS = {
     "menu: Annotations > Add zoom callout to selected panel…": spec(chk_annotation_added("inset"),
                                                                     [("zoom callout", ok)]),
     "menu: Annotations > Add arrow pointing at a feature…": spec(chk_annotation_added("roi"), [("arrow", ok)]),
+    "menu: Annotations > Text style (letters, labels, scale bars…)…": spec(chk_texts_bold, [("Text style", _bold_texts)]),
     "menu: Annotations > Draw ROIs, text, crop or rotate (double-click a panel)…": spec(
         unchanged, [("Annotate the image", H.reject)], inv=False),
     "menu: Annotations > Figure colours…": spec(chk_rgb_luts(["MAGENTA", "GREEN", "BLUE"]),

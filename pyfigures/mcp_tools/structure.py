@@ -1582,6 +1582,63 @@ def move_image(
 
 
 @mcp.tool()
+def stack_with_image(
+    pyf_path: str,
+    src_group_path: list[int],
+    src_image_index: int,
+    target_group_path: list[int],
+    target_image_index: int,
+) -> str:
+    """Stack an image WITH another one inside the target's row (the GUI drop
+    choice "Stack with it (column in the row)"): A | B plus C stacked on B
+    gives A | (B / C) — a column of the two nested in the row. In a column,
+    the two become a row nested in that column.
+
+    *src_group_path* / *src_image_index*: the image to move ([] = free canvas).
+    *target_group_path* / *target_image_index*: the image it joins; its group
+    must be a row or column (not the free canvas).
+    """
+    if not target_group_path:
+        return "ERROR: the target must be inside a row or column (target_group_path is empty)."
+    tree, root = _load(pyf_path)
+    holder, err = _navigate_group(root, target_group_path)
+    if err:
+        return f"ERROR (target): {err}"
+    holder_content = holder.find("content")
+    targets = [c for c in holder_content if c.tag == "Image2D"] if holder_content is not None else []
+    if not 0 <= target_image_index < len(targets):
+        return f"ERROR: target_image_index {target_image_index} out of range ({len(targets)} images)."
+    src_container, err = _get_container(root, src_group_path)
+    if err:
+        return f"ERROR (source): {err}"
+    sources = [c for c in src_container if c.tag == "Image2D"]
+    if not 0 <= src_image_index < len(sources):
+        return f"ERROR: src_image_index {src_image_index} out of range ({len(sources)} images)."
+    target = targets[target_image_index]
+    moved = sources[src_image_index]
+    if moved is target:
+        return "ERROR: an image cannot be stacked with itself."
+    src_container.remove(moved)
+    if src_group_path and not len(src_container):
+        # its row is now empty: drop the empty group
+        parent = root if len(src_group_path) == 1 else _navigate_group(root, src_group_path[:-1])[0].find("content")
+        empty = src_container if src_container.tag == "Group" else next(
+            (g for g in parent if g.tag == "Group" and g.find("content") is src_container), None)
+        if empty is not None:
+            parent.remove(empty)
+    orientation = "Y" if _decode(holder.findtext("orientation")) == "X" else "X"
+    nested = _new_group_elem(orientation, int(holder.findtext("space") or 3), group_id=_next_group_id(root))
+    index = list(holder_content).index(target)
+    holder_content.remove(target)
+    nested.find("content").append(target)
+    nested.find("content").append(moved)
+    holder_content.insert(index, nested)
+    _save(tree, pyf_path, recompute=True)
+    kind = "column" if orientation == "Y" else "row"
+    return f"Stacked the image with {list(target_group_path)}[{target_image_index}]: a {kind} of the two inside that group."
+
+
+@mcp.tool()
 def fill_template(
     pyf_path: str,
     group_path: list[int],

@@ -113,8 +113,15 @@ class GuideRunner:
         # the panels in reading order, and the rows: order_changed compares them
         order = tuple(id(i) for i in imgs)
         rows = tuple(id(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
+
+        def nesting(shape):
+            content = getattr(shape, "content", None)
+            if content is None or isinstance(shape, Image2D):
+                return id(shape)
+            return (id(shape), tuple(nesting(c) for c in content))
+        structure = tuple(nesting(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
         return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
-                "order": order, "rows": rows}
+                "order": order, "rows": rows, "structure": structure}
 
     def _image_state(self, img):
         if img is None:
@@ -138,6 +145,10 @@ class GuideRunner:
             # the same panels in another order (or the rows reordered)
             same = sorted(now["order"]) == sorted(b.get("order", ()))
             return same and (now["order"] != b.get("order") or now["rows"] != b.get("rows"))
+        if kind == "layout_changed":
+            # the same panels, grouped differently (e.g. two stacked inside a row)
+            return (now["images"] == b.get("images")
+                    and now["structure"] != b.get("structure", now["structure"]))
         if kind in ("lut_changed", "crop_changed"):
             img = self._target_image
             if img is None or self._image_state0 is None:
