@@ -77,6 +77,11 @@ def test_bad_targets_are_refused(fig):
     ("make the labels bold", "text_style"),
     ("send the figure to my co-authors for comments", "review_comments"),
     ("italicize words in the caption", "figure_caption"),
+    ("put the 2 of CO2 in subscript", "edit_text"),
+    ("type a µ in my text", "edit_text"),
+    ("make the existing inset bigger", "edit_inset"),
+    ("change the inset border colour", "edit_inset"),
+    ("add a zoom inset", "zoom_inset"),                       # creating one is still the callout
 ])
 def test_help_supplements_are_authored_guides(query, expected):
     from pyfigures import guides

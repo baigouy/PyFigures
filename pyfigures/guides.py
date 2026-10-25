@@ -141,6 +141,46 @@ GUIDES: dict[str, dict] = {
         "done": "layout_changed",
         "mcp": "stack_with_image",
     },
+    "edit_text": {
+        "title": "Greek letters, µ, superscripts in a text on an image",
+        "summary": "Write or edit an ordinary text on a panel, with µ, Greek letters, "
+                   "superscripts or subscripts (not the panel letters).",
+        "keywords": ["greek", "µ", "micro", "micron sign", "alpha", "beta", "superscript",
+                     "subscript", "exponent", "co2", "edit text", "edit the text", "text on the image",
+                     "existing text", "word bold"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that holds (or will hold) the text."},
+            {"context": "Double-click the panel: its editor opens. In the <b>Texts</b> tab click "
+                        "<b>Add Text</b>, or double-click an existing text. In the <b>Edit text</b> "
+                        "dialog select the characters and click <b>Superscript</b> or "
+                        "<b>Subscript</b>, or pick µ / a Greek letter from the toolbar menu; "
+                        "Bold and Italic work on the selection only. Click <b>Ok</b>, then "
+                        "<b>Ok</b> in the editor."},
+        ],
+        "alternative": "Panel letters (a, b, c…) are not edited here: Annotations → panel "
+                       "letters options.",
+        "done": "dialog_closed",
+        "mcp": "set_annotation_text",
+    },
+    "edit_inset": {
+        "title": "Change an existing inset (size, border)",
+        "summary": "Resize an inset already on a panel, or change its border width and colour.",
+        "keywords": ["existing inset", "edit inset", "edit the inset", "inset size", "inset border",
+                     "resize inset", "resize the inset", "bigger inset", "smaller inset",
+                     "inset colour", "inset color", "change the inset", "change inset"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that has the inset."},
+            {"context": "Double-click the panel: its editor opens. Click the inset to select it, "
+                        "then double-click it: <b>Edit Inset</b> sets its size (percentage of "
+                        "the panel width), border size and colour. Click <b>Ok</b>, then "
+                        "<b>Ok</b> in the editor."},
+        ],
+        "alternative": "The corner is chosen when the inset is made: to move it to another "
+                       "corner, select it in the editor, delete it, and add it again "
+                       "(Annotations → Add zoom callout…).",
+        "done": "dialog_closed",
+        "mcp": "set_image_property",
+    },
     "arrowheads": {
         "title": "Point at a feature with an arrow or an arrowhead",
         "summary": "Add an arrow, or the larger head alone (as in papers), pointing at a feature.",
