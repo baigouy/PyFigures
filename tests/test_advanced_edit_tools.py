@@ -75,7 +75,8 @@ def test_subscript_of_one_character(fig):
     subs = re.findall(r'<span style="[^"]*vertical-align:\s*sub[^"]*">([^<]*)</span>', html)
     assert subs == ["2"], html
     # the second "2" (in "2 h") is untouched
-    assert re.sub(r"<[^>]+>", "", html).count("2") == 2
+    body = html[html.index("<body"):]
+    assert re.sub(r"<[^>]+>", "", body).count("2") == 2
 
 
 def test_a_word_not_in_the_text_is_reported(fig):
