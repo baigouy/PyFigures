@@ -361,12 +361,12 @@ def test_drag_menus_offer_the_right_choices(qapp, e2e_gui, e2e_files, tmp_path, 
 
 
 DRAG_OFFERED = {
-    "image onto image of another row": ["To row", "To column", "Swap"],
+    "image onto image of another row": ["To row", "To column", "Stack with it (column in the row)", "Swap"],
     "row onto row": ["Swap", "To row"],
     "loose image onto loose image": ["Swap", "To row", "To column"],
     "row onto loose image": ["Take E into the dragged row", "To row", "Swap"],
     "image to empty space": ["Extrude"],
-    "loose image onto image in row": ["To row", "To column", "Swap"],
+    "loose image onto image in row": ["To row", "To column", "Stack with it (column in the row)", "Swap"],
     "image in row onto loose image": ["Swap", "To row", "To column"],
 }
 

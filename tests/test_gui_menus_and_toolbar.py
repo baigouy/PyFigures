@@ -749,7 +749,7 @@ def test_edit_image_and_magenta_green_split_need_a_selection(gui, monkeypatch, d
     assert gui.edit_selected_image_action() is False
     assert gui._channel_split_selected(gray=False) is False
     opened = []
-    monkeypatch.setattr(panel, "update_image_annotations", lambda image2d=None: opened.append(image2d))
+    monkeypatch.setattr(panel, "update_image_annotations", lambda image2d=None, tab=None: opened.append(image2d))
     first = _images(gui)[0]
     panel.set_current_selection(first)
     assert gui.edit_selected_image_action() is True and opened == [first]
