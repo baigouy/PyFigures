@@ -80,6 +80,15 @@ def tutorial_feature_help(topic):
 def explain(topic='overview'):
     feature=current_feature_help(topic)
     if feature is not None:return feature
+    from pyfigures.guides import find_guide, explain as native_explain
+    # Task guides answer these exactly; the word routes below would send "draw a
+    # rectangle" to edit_roi, "editable text" slides to edit_text, a projection or
+    # a moved image to an unrelated tutorial step.
+    task,_=find_guide(topic)
+    if task in ('draw_roi','remove_inset','scale_bar_units','max_projection','remap_images','export_pptx','reorder_panels'):
+        result=native_explain(task)
+        result['answer_style']='Human GUI steps; code only when explicitly requested.'
+        return result
     tutorial=tutorial_feature_help(topic)
     if tutorial is not None:return tutorial
     from pyfigures.guides import explain as native_explain, GUIDES

@@ -114,8 +114,9 @@ GUIDES: dict[str, dict] = {
             {"select": "image",
              "text": "Click the row once (the whole row is selected), then click the panel "
                      "to move (now only that panel is selected)."},
-            {"context": "Press the <b>←</b> / <b>→</b> arrow keys to move the panel inside its "
-                        "row. With the whole row selected, <b>↑</b> / <b>↓</b> move the row. "
+            {"context": "Press the <b>←</b> / <b>→</b> (left / right) arrow keys to move the "
+                        "panel inside its row. With the whole row selected, <b>↑</b> / <b>↓</b> "
+                        "(up / down) move the row. "
                         "Or drag the panel onto another one and choose <b>Swap</b>."},
         ],
         "alternative": "Drag a row onto another row and choose Swap to exchange two rows.",
@@ -202,6 +203,107 @@ GUIDES: dict[str, dict] = {
                        "(Annotations → Add zoom callout…).",
         "done": "dialog_closed",
         "mcp": "set_image_property",
+    },
+    "draw_roi": {
+        "title": "Draw a rectangle, ellipse, polygon or line on an image",
+        "summary": "Outline a region of a panel with a new box, ellipse, polygon or line, with "
+                   "or without a filled interior.",
+        "keywords": ["draw a rectangle", "draw a box", "draw an ellipse", "draw a circle",
+                     "draw a polygon", "draw a line", "new roi", "add a roi", "add roi",
+                     "ellipse instead", "irregular region", "polygon", "ellipse", "circle",
+                     "mark a feature", "outline a region", "no filled interior", "hollow",
+                     "rectangle with an outline"],
+        "steps": [
+            {"select": "image", "text": "Click the panel to draw on."},
+            {"context": "Double-click the panel: its editor opens on the <b>Annotations</b> tab. "
+                        "Click the shape button (square for a rectangle, <b>Ellipse</b>, "
+                        "<b>Polygon</b>, <b>Line</b>…) and drag on the image; for a polygon click "
+                        "each corner and double-click to close it. A new shape takes the current "
+                        "settings: <b>Contour</b> is the outline colour, <b>Stroke Size</b> its "
+                        "width, and <b>Fill</b> its interior; click <b>Reset</b> next to Fill for "
+                        "an outline with no filled interior (it also removes the fill of a "
+                        "selected shape). Click <b>Ok</b>."},
+        ],
+        "alternative": "To change a ROI that is already drawn, select it in the same editor.",
+        "done": "dialog_closed",
+        "mcp": "add_roi_rect",
+    },
+    "remove_inset": {
+        "title": "Remove an inset but keep its rectangle",
+        "summary": "Delete a magnified inset while the rectangle (ROI) that marks its region "
+                   "stays on the original image.",
+        "keywords": ["remove the inset", "remove an inset", "remove a magnified inset",
+                     "delete the inset", "delete an inset", "remove inset", "delete inset",
+                     "keep the rectangle", "leaving its rectangle", "keep its rectangle",
+                     "keep the roi"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that has the inset."},
+            {"context": "Double-click the panel: its editor opens on the <b>Annotations</b> tab. "
+                        "Click the inset (the magnified picture) to select it and press "
+                        "<b>Delete</b>. The rectangle ROI is a separate object and stays on the "
+                        "image. Click <b>Ok</b>."},
+        ],
+        "alternative": "Every inset of every panel at once (the rectangles stay): Annotations → "
+                       "Remove → Remove all insets.",
+        "done": "dialog_closed",
+        "mcp": "remove_inset",
+    },
+    "scale_bar_units": {
+        "title": "Change a scale bar's unit (µm → nm)",
+        "summary": "Show a scale bar in nanometres (or another unit) instead of micrometres.",
+        "keywords": ["nanometre", "nanometres", "nanometer", "nanometers", "nm", "unit",
+                     "units", "micrometres to", "micrometers to", "scale bar legend",
+                     "scale bar unit", "legend unit", "change the unit"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that has the scale bar."},
+            {"context": "Double-click the panel: its editor opens. In the <b>File Infos + "
+                        "Scale</b> tab, set <b>Pixel to unit conversion factor</b> in the new unit "
+                        "(nm per pixel = µm per pixel × 1000)."},
+            {"context": "In the <b>Annotations</b> tab click the scale bar, then double-click it: "
+                        "<b>Edit ScaleBar</b>. Set its size in the new unit (e.g. 500) and edit the "
+                        "legend text to read the unit (e.g. 500 nm). Click <b>Ok</b>, then "
+                        "<b>Ok</b> in the editor."},
+        ],
+        "alternative": "Every panel at once: Annotations → Add scale bar to all panels… with "
+                       "the length typed in the new unit, once each image's pixel size is in "
+                       "that unit.",
+        "done": "dialog_closed",
+        "mcp": "set_scale_bar",
+    },
+    "max_projection": {
+        "title": "Show a Z stack as a maximum-intensity projection",
+        "summary": "Display the maximum (or minimum, average) projection of a Z stack panel.",
+        "keywords": ["maximum intensity projection", "max projection", "maximum projection",
+                     "projection", "project", "z stack", "z-stack", "mip", "average projection"],
+        "steps": [
+            {"select": "image", "text": "Click the Z-stack panel."},
+            {"context": "Double-click the panel: its editor opens. In the <b>File Infos + "
+                        "Scale</b> tab, the <b>Projection</b> box sets <b>Max</b> (or Min / Avg) "
+                        "and the Z range to include. Click <b>Ok</b>."},
+        ],
+        "alternative": "New Z stacks open as a max projection when View → Show new Z stacks as "
+                       "max projection is checked; Insert → Stack views → Montage of frames "
+                       "(time / Z)… shows several slices instead.",
+        "done": "dialog_closed",
+        "mcp": "configure_image",
+    },
+    "remap_images": {
+        "title": "Reconnect missing images after moving their folder",
+        "summary": "Point the figure at the new location of images that were moved or renamed.",
+        "keywords": ["reconnect", "relink", "remap", "missing image", "missing images",
+                     "moved", "moving its folder", "moved folder", "broken link", "broken links",
+                     "new location", "file not found"],
+        "steps": [
+            {"menu": ["QC", "Remap image paths…"]},
+            {"dialog": "Type the <b>Old path prefix</b> (the folder the images were in, e.g. "
+                       "C:\\old\\data) and the <b>New path prefix</b> (where they are now, e.g. "
+                       "D:\\new\\data). Click <b>Ok</b>: every missing image under the old "
+                       "folder is reconnected."},
+        ],
+        "alternative": "QC → Check for changed source files… lists images that changed since the "
+                       "figure was saved.",
+        "done": "dialog_closed",
+        "mcp": "remap_paths",
     },
     "arrowheads": {
         "title": "Point at a feature with an arrow or an arrowhead",

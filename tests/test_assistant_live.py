@@ -369,6 +369,19 @@ def test_how_to_questions_use_the_authored_guides():
     assert r["status"] == "explained" and r["guide"] == "stack_in_row" and not r["operation_executed"]
     r = explain("add an arrowhead")
     assert r["guide"] == "arrowheads"
+    # the task guides win over the word routes (rectangle -> edit_roi, text -> edit_text…)
+    for question, guide in [
+            ("Where do I draw a rectangle with an outline and no filled interior?", "draw_roi"),
+            ("How can I remove a magnified inset while leaving its rectangle on the original image?",
+             "remove_inset"),
+            ("How do I make a maximum-intensity projection from a Z stack?", "max_projection"),
+            ("How can I reconnect a missing image after moving its folder?", "remap_images"),
+            ("How do I export slides with editable text rather than one flattened screenshot?",
+             "export_pptx"),
+            ("How do I make the outline of the existing box thicker?", "edit_roi"),
+            ("How do I put the 2 in CO2 in subscript?", "edit_text"),
+            ("How do I resize an existing inset?", "edit_inset")]:
+        assert explain(question)["guide"] == guide, question
 
 
 def test_live_mcp_server_builds_its_tools():

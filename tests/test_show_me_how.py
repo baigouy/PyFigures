@@ -42,6 +42,16 @@ def test_every_guide_names_an_existing_do_it_tool():
     ("magnify a detail with a zoom inset", "zoom_inset"),
     ("export to powerpoint", "export_pptx"),
     ("is it colour blind safe", "colour_blind_preview"),
+    ("Where do I draw a rectangle with an outline and no filled interior?", "draw_roi"),
+    ("How can I mark a feature with an ellipse instead of a box?", "draw_roi"),
+    ("How do I outline an irregular region with a polygon?", "draw_roi"),
+    ("How can I remove a magnified inset while leaving its rectangle on the original image?",
+     "remove_inset"),
+    ("How do I change a scale-bar legend from micrometres to nanometres?", "scale_bar_units"),
+    ("How do I make a maximum-intensity projection from a Z stack?", "max_projection"),
+    ("How can I reconnect a missing image after moving its folder?", "remap_images"),
+    ("How do I export slides with editable text rather than one flattened screenshot?",
+     "export_pptx"),
 ])
 def test_find_guide_from_ids_and_words(query, expected):
     assert G.find_guide(query)[0] == expected

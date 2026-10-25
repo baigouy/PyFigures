@@ -486,7 +486,9 @@ GUIDE_KEYS = _guide_keys()
 
 def _guide_context(c, guide_id):
     """The right-click / double-click route a guide describes."""
-    img = H.panel(c.g).selected_shape
+    # a guide with two editor steps (scale_bar_units): the panel stays the same one
+    img = H.panel(c.g).selected_shape or getattr(c, "_guide_img", None)
+    c._guide_img = img
     if guide_id == "set_lut":
         def green(dlg):
             from qtpy.QtWidgets import QComboBox
@@ -509,7 +511,8 @@ def _guide_context(c, guide_id):
         assert hits, "no shortcut for the right arrow"
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
-    elif guide_id in ("edit_text", "edit_inset", "edit_roi"):
+    elif guide_id in ("edit_text", "edit_inset", "edit_roi", "draw_roi", "remove_inset",
+                      "scale_bar_units", "max_projection"):
         # the panel's editor (double-click), accepted
         c.editor(img, lambda ed: None)
     elif guide_id == "stack_in_row":
