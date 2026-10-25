@@ -176,6 +176,33 @@ def poster_render_cache_in_tmp(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_fiji_jvm_in_the_test_process(monkeypatch):
+    """No Fiji fallback reader inside the test process: it starts a Java VM
+    that raises access violations on purpose and stays loaded, after which Qt
+    crashed at random places later in the run. Files only Fiji reads are
+    tested in a child process (test_fiji_formats.py)."""
+    try:
+        from batoolset import image_reader
+    except Exception:
+        yield
+        return
+    monkeypatch.setattr(image_reader, '_ij_reader_available', False, raising=False)
+    try:
+        from batoolset.IJ import ij_reader     # importing it starts no JVM
+    except Exception:
+        yield
+        return
+
+    def _no_jvm(*_a, **_k):
+        raise RuntimeError('Fiji is not used inside the test process')
+    # series counting (get_series_info) reaches the JVM without init_ij
+    # the JVM start itself (init_ij's singleton logic stays testable)
+    monkeypatch.setattr(ij_reader, '_init_ij_unlocked', _no_jvm)
+    monkeypatch.setattr(ij_reader, '_java_imports', _no_jvm)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def close_matplotlib_figures():
     yield
     plt.close('all')
