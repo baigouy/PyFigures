@@ -354,9 +354,14 @@ def _panel_description(img, stats):
         if bars:
             lab = _scalebar_info(bars[0])["label_plain"].strip()
             extras.append(f"scale bar {lab}" if lab else "a scale bar")
+        from ..arrowheads import is_head_only
         arrows = [l for l in annots.findall("Line2D") if (l.findtext("arrow") or "") == "True"]
-        if arrows:
-            extras.append(f"{len(arrows)} arrow{'s' if len(arrows) > 1 else ''} marking features")
+        heads = [l for l in arrows if is_head_only(*(l.findtext(k) or 0 for k in ("x1", "y1", "x2", "y2")), True)]
+        n_arrows = len(arrows) - len(heads)
+        if n_arrows:
+            extras.append(f"{n_arrows} arrow{'s' if n_arrows > 1 else ''} marking features")
+        if heads:
+            extras.append(f"{len(heads)} arrowhead{'s' if len(heads) > 1 else ''} marking features")
         insets = annots.findall("Image2D")
         if insets:
             extras.append("a magnified inset" if len(insets) == 1 else f"{len(insets)} magnified insets")

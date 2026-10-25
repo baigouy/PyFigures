@@ -595,6 +595,7 @@ backwards from the tip.
 | `head` | `normal` | `small`, `normal` or `large`. A normal head is 8× the stroke long (8 pt ≈ 2.8 mm at 1 pt). |
 | `both_ends` | `false` | Heads at both ends. |
 | `label` | text | Text placed just beyond the tail. |
+| `style` | `arrow` | `arrowhead`: the head alone, larger, as often seen in papers (no line; `length` and `both_ends` do not apply). |
 
 If the panel ends up so small on the page that the arrow would be mostly
 arrowhead, the build prints a warning — use a longer `length`, a `small` head,

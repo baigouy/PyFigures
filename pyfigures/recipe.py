@@ -143,7 +143,7 @@ _ROW_KEYS = {"panels", "orientation", "spacing", "labels", "labels_position",
              "labels_orientation", "side_label", "side_label_position"}
 _CROP_KEYS = {"left", "right", "top", "bottom"}
 _SCALE_BAR_KEYS = {"units", "unit", "color", "placement", "label"}
-_ARROW_KEYS = {"at", "from", "length", "color", "stroke", "head", "both_ends", "label"}
+_ARROW_KEYS = {"at", "from", "length", "color", "stroke", "head", "both_ends", "label", "style"}
 _KYMO_KEYS = {"line", "width", "channel", "projection", "frame_height", "cmap", "mark_line",
               "line_color", "label"}
 _ORTHO_KEYS = {"at", "z", "time_point", "channel", "colors", "z_scale", "gap", "background",
@@ -1336,7 +1336,7 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
     for k, a in enumerate(opts.get("arrows") or []):
         kw = {"from_direction": a.get("from", "top left")}
         kw.update({key: a[key] for key in ("length", "color", "stroke", "head",
-                                           "both_ends", "label") if key in a})
+                                           "both_ends", "label", "style") if key in a})
         w += _check(M.add_arrow(out, gp, i, a["at"][0], a["at"][1], **kw), step + f" arrow {k + 1}")
     for k, b in enumerate(opts.get("brackets") or []):
         kw = {key: b[key] for key in ("label", "tick", "color", "stroke", "font_pt", "label_gap")

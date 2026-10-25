@@ -303,8 +303,13 @@ def add_arrow(
     head: str = "normal",
     both_ends: bool = False,
     label: str | None = None,
+    style: str = "arrow",
 ) -> str:
     """Point an arrow AT a feature: give where the tip must be, not the line.
+
+    *style*: "arrow" (a line with a head, default) or "arrowhead" — the head
+    alone, larger, as often seen in papers (no line; *length* and *both_ends*
+    do not apply). get_annotations reports kind "arrow" / "arrowhead".
 
     The arrowhead's point is exactly (*tip_x*, *tip_y*) in image pixels
     (top-left of the raw image = 0,0) and stays on that pixel whatever the
@@ -329,6 +334,14 @@ def add_arrow(
     """
     if head not in _ARROW_HEADS:
         return f"ERROR: head must be one of {sorted(_ARROW_HEADS)}."
+    style = str(style).strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+    if style in ("head", "headonly", "arrowheadonly"):
+        style = "arrowhead"
+    if style not in ("arrow", "arrowhead"):
+        return "ERROR: style must be 'arrow' (a line with a head) or 'arrowhead' (the head alone)."
+    if style == "arrowhead":
+        return _add_arrowhead(pyf_path, group_path, image_index, tip_x, tip_y, from_direction,
+                              color, stroke, head, label)
     tree, root = _load(pyf_path)
     img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
@@ -373,6 +386,42 @@ def add_arrow(
     return (f"Arrow added to image {image_index} in "
             f"{'canvas' if not group_path else f'group {group_path}'}: tip at "
             f"({tip_x:g}, {tip_y:g}), tail at ({tx:.0f}, {ty:.0f}){note}.")
+
+
+def _add_arrowhead(pyf_path, group_path, image_index, tip_x, tip_y, from_direction,
+                   color, stroke, head, label):
+    """add_arrow(style='arrowhead'): the head alone, its point on (tip_x, tip_y)."""
+    from ..arrowheads import ARROWHEAD_SIZES, HEAD_ONLY_LENGTH
+    tree, root = _load(pyf_path)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    if err:
+        return f"ERROR: {err}"
+    size = _panel_raw_size(img)
+    if size is not None and not (0 <= tip_x <= size[0] and 0 <= tip_y <= size[1]):
+        return (f"ERROR: tip ({tip_x}, {tip_y}) is outside the image "
+                f"({size[0]:.0f} x {size[1]:.0f} px).")
+    try:
+        # the direction only: a line much shorter than the head never shows
+        dx, dy, n = _arrow_tail(float(tip_x), float(tip_y), from_direction, 10.0, None)
+        used = HEAD_ONLY_LENGTH
+        tx = tip_x + (dx - tip_x) / n * used
+        ty = tip_y + (dy - tip_y) / n * used
+        c = _color_to_int(color)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    hw, hl = ARROWHEAD_SIZES[head]
+    annots.append(_new_roi_line(tx, ty, tip_x, tip_y, c, stroke, 1.0, True, False, hw, hl))
+    if label:
+        hexcol = f"#{c & 0xFFFFFF:06x}"
+        ux, uy = (tx - tip_x) / used, (ty - tip_y) / used
+        gap = 0.08 * (min(size) if size else 100.0)        # beyond the head
+        annots.append(_new_free_text(
+            f'<font color={hexcol}>{_escape_if_plain(label)}</font>',
+            tip_x + ux * gap, tip_y + uy * gap))
+    _save(tree, pyf_path)
+    return (f"Arrowhead added to image {image_index} in "
+            f"{'canvas' if not group_path else f'group {group_path}'}: point at "
+            f"({tip_x:g}, {tip_y:g}), coming from {from_direction}.")
 
 
 def _append_bracket_shapes(annots, x1, x2, y, label, tick, color, stroke,

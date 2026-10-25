@@ -8,6 +8,7 @@ from batoolset.strings.tools import reload_string_list, find_letter_before_h
 # import pzfconfig # this is to store the path to be used for the consolidated files
 from pyfigures.gui.scalebareditor import ScaleBarEditor
 from pyfigures.gui.zoom_links import zoom_links, follow_zoom_links
+from pyfigures.arrowheads import ARROWHEAD_ONLY, make_head_only
 from pyfigures.gui.widget_for_inset import InsetWidget
 import traceback
 from batoolset.drawings.shapes.rectangle2d import Rectangle2D
@@ -205,8 +206,14 @@ class VectorialDrawPane2(QWidget):
         # any other tool cancels an in-progress bracket placement
         self._bracket_mode = False
         self._bracket_dragging = False
+        self._head_only = False
 
-        if 'bracket' in sender or 'accolade' in sender:
+        if 'arrowhead' in sender:
+            # an arrow whose line is shorter than its head: only the head shows
+            self._head_only = True
+            self.shape_to_draw = partial(Line2D, arrow=True, arrowhead_width_scaler=ARROWHEAD_ONLY[0],
+                                         arrowhead_height_scaler=ARROWHEAD_ONLY[1])
+        elif 'bracket' in sender or 'accolade' in sender:
             # significance bracket: handled by the dedicated drag branch in the
             # mouse handlers (shape_to_draw stays None so the box-shape path is inert)
             self._bracket_mode = True
@@ -766,6 +773,9 @@ class VectorialDrawPane2(QWidget):
                 self.update()
                 return
             if self.drawing_mode and self.currently_drawn_shape is not None:
+                # the shape ends where the mouse was released (it ended at the
+                # last move event)
+                self.lastPoint = event.position() / self.scale
                 if not isinstance(self.currently_drawn_shape, (TAText2D, ScaleBar)):
                     self.currently_drawn_shape.add(self.firstPoint, self.lastPoint)
                 # see how to do that
@@ -781,6 +791,8 @@ class VectorialDrawPane2(QWidget):
 
                     size_ok = self.check_shape_size_before_adding_it()
                     if size_ok:
+                        if getattr(self, '_head_only', False) and isinstance(self.currently_drawn_shape, Line2D):
+                            make_head_only(self.currently_drawn_shape)
                         self.shapes.append(self.currently_drawn_shape)
                         self.shapeAdded.emit()
                         self.selected_shape = [self.currently_drawn_shape]  # do select drawn shape
@@ -1687,6 +1699,14 @@ class MainWindow(QWidget):
             arrow.setToolTip("Arrow")
             arrow.clicked.connect(self.qt_viewer.change_shape)
             shapes_toolbox_layout.addWidget(arrow, 1, 0)
+
+            # the head alone, larger, as in papers: drag towards the feature
+            arrowhead = QPushButton()
+            arrowhead.setFocusPolicy(Qt.NoFocus)
+            arrowhead.setIcon(get_icon("mdi.navigation"))
+            arrowhead.setToolTip("Arrowhead only (a larger head, no line): drag towards the feature")
+            arrowhead.clicked.connect(self.qt_viewer.change_shape)
+            shapes_toolbox_layout.addWidget(arrowhead, 4, 0)
 
             if False:
                 # not implemented yet

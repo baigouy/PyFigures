@@ -1654,6 +1654,15 @@ def _describe_roi(el: ET.Element, idx: int) -> dict:
             base[k] = float(v) if v is not None else None
         base["arrow"] = _child_text(el, "arrow")
         base["color"] = _child_text(el, "color")
+        # 'line', 'arrow' or 'arrowhead' (a head alone: its line is too short to show)
+        from ..arrowheads import is_head_only
+        arrow = str(base["arrow"]) == "True"
+        both = str(_child_text(el, "arrow_at_both_ends")) == "True"
+        if None not in (base["x1"], base["y1"], base["x2"], base["y2"]) and \
+                is_head_only(base["x1"], base["y1"], base["x2"], base["y2"], arrow):
+            base["kind"] = "arrowhead"
+        else:
+            base["kind"] = ("double arrow" if both else "arrow") if arrow else "line"
     elif t in ("Polygon2D", "PolyLine2D", "Freehand2D"):
         raw = _child_text(el, "coords_as_list") or "[]"
         try:

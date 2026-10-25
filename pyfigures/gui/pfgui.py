@@ -4920,6 +4920,13 @@ class EZFIG_GUI(QMainWindow):
         head.addItems(['normal', 'small', 'large'])
         grid.addWidget(QLabel('Head:', frame), 6, 0)
         grid.addWidget(head, 6, 1)
+        # the head alone, larger, as in papers (MCP: add_arrow style='arrowhead')
+        style = QComboBox(frame)
+        style.addItem('Arrow (line + head)', 'arrow')
+        style.addItem('Arrowhead only (larger head, no line)', 'arrowhead')
+        style.currentIndexChanged.connect(lambda _i: length.setEnabled(style.currentData() == 'arrow'))
+        grid.addWidget(QLabel('Style:', frame), 10, 0)
+        grid.addWidget(style, 10, 1)
         stroke = self._spin(frame, 0.1, 10, 1.0, double=True, decimals=2)
         grid.addWidget(QLabel('Line width (pt):', frame), 7, 0)
         grid.addWidget(stroke, 7, 1)
@@ -4944,10 +4951,11 @@ class EZFIG_GUI(QMainWindow):
                   tip_x=tip_x.value(), tip_y=tip_y.value(),
                   from_direction=direction.currentText(), color=colour.currentText(),
                   stroke=stroke.value(), head=head.currentText(),
-                  label=label.text().strip() or None)
-        if length.value() > 0:
+                  label=label.text().strip() or None, style=style.currentData())
+        if length.value() > 0 and style.currentData() == 'arrow':
             kw['length'] = float(length.value())
-        self._run_mcp_mutation(add_arrow, "Arrow added.", **kw)
+        self._run_mcp_mutation(add_arrow, "Arrowhead added." if style.currentData() == 'arrowhead'
+                               else "Arrow added.", **kw)
 
     def add_stack_montage_action(self):
         """Opt-in: show several frames of the selected stack as a row with
