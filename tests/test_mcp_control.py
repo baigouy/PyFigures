@@ -323,3 +323,15 @@ def test_gui_menu_opens_the_dialog(home, qapp, monkeypatch):
     action = next(a for a in actions if a.text() == "MCP server…")
     action.trigger()
     assert isinstance(g.open_mcp_server_dialog(), D.McpServerDialog)
+    # also one click from the toolbar (it was buried under Tools)
+    opened = []
+    monkeypatch.setattr(g, "open_mcp_server_dialog", lambda: opened.append(1))
+    assert g.mcp_toolbar_action in g.mainToolBar.actions()
+    g.mcp_toolbar_action.trigger()
+    assert opened == [1]
+    # the dialog says how to use it (LM Studio's plug icon, saved files)
+    dlg = D.McpServerDialog(g)
+    from qtpy.QtWidgets import QLabel
+    text = " ".join(l.text() for l in dlg.findChildren(QLabel))
+    assert "plug / hammer icon" in text and "saved .pyf files" in text
+    dlg.deleteLater()

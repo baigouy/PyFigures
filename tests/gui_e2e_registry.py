@@ -33,6 +33,12 @@ LINKED = {
     # registers servers in the user's client configs: done in a fake home there
     "menu: Tools > MCP server…": ["test_mcp_control.py::test_gui_menu_opens_the_dialog",
                                   "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
+    "toolbar: MCP server (AI assistants)": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
+    # A | (B / C): a panel stacked with the one it is dropped on, inside its row
+    "drag [loose image onto image in row]: Stack with it (column in the row)": [
+        "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
+    "drag [image onto image of another row]: Stack with it (column in the row)": [
+        "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
     # records the user's own clicks: real events are sent through the application there

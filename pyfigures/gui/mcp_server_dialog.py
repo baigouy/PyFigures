@@ -27,6 +27,22 @@ class McpServerDialog(QDialog):
         self.last_message = ""
         lay = QVBoxLayout(self)
 
+        # the setup took too much guessing (LM Studio: where the entry goes,
+        # the plug icon in the chat, which document is edited)
+        howto = QLabel(
+            "<b>How to use it</b><ol style='margin-top:2px'>"
+            "<li><b>Register</b> your client below (it merges one 'pyfigures' entry into its "
+            "configuration, keeping every other server; a backup is kept), then restart the "
+            "client.</li>"
+            "<li><b>LM Studio</b>: in a chat, click the <b>plug / hammer icon</b> under the message "
+            "box and switch <b>mcp/pyfigures</b> on. Pick a model that can call tools; tool "
+            "descriptions use part of the context, so give it 32k tokens or more.</li>"
+            "<li>The MCP server works on <b>saved .pyf files</b>: give the model the file's path "
+            "(File → Save first). Reopen the file here to see its changes.</li></ol>")
+        howto.setWordWrap(True)
+        howto.setTextFormat(Qt.TextFormat.RichText)
+        lay.addWidget(howto)
+
         reg_box = QGroupBox("MCP clients (they start the server when they need it, "
                             "and stop it when they quit)")
         grid = QGridLayout(reg_box)
@@ -45,7 +61,9 @@ class McpServerDialog(QDialog):
         cl = QHBoxLayout(copies)
         cl.setContentsMargins(0, 0, 0, 0)
         for label, fmt, tip in (("Copy JSON", "json", "The 'mcpServers' entry most MCP clients read "
-                                                     "(Windsurf, Cline…)."),
+                                                     "(Windsurf, Cline…). Add its 'pyfigures' entry "
+                                                     "INSIDE the file's existing \"mcpServers\" "
+                                                     "object: do not replace the other servers."),
                                 ("Copy Hermes YAML", "hermes", "For Hermes Agent: paste into "
                                                                "~/.hermes/config.yaml (in WSL "
                                                                "if Hermes runs there).")):
