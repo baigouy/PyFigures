@@ -29,6 +29,13 @@ def describe(obj):
     result['token'] = hashlib.sha256(json.dumps(semantic, sort_keys=True, default=str).encode()).hexdigest()
     return result
 
+def text_inspection_record(obj, panel_id, group_path, image_index, annotation_index, text_index):
+    """Use the edit validator's canonical object token, never a selection token."""
+    return dict(panel_id=panel_id, group_path=list(group_path), image_index=image_index,
+                annotation_index=annotation_index, text_index=text_index, is_letter=False,
+                token_source="annotation_object", **describe(obj))
+
+
 def inspect_objects(session, panel_ref=None, offset=0, limit=12, include_panel_letters=False):
     if isinstance(offset,bool) or isinstance(limit,bool) or not isinstance(offset,int) or not isinstance(limit,int) or offset<0 or not 1<=limit<=24:
         raise ValueError("Use nonnegative offset and limit 1 to 24")
@@ -49,7 +56,9 @@ def inspect_objects(session, panel_ref=None, offset=0, limit=12, include_panel_l
     if viewer is not None:
         for index,obj in enumerate(viewer.shapes):
             editor_objects.append(dict(annotation_index=index,selected=any(obj is x for x in viewer.selected_shape),**describe(obj)))
-    return {'objects':items[offset:offset+limit], 'total_objects':len(items),
+    return {'edit_target':'editor_draft' if viewer is not None else 'document',
+            'token_source':'editor_draft_objects' if viewer is not None else 'objects',
+            'objects':items[offset:offset+limit], 'total_objects':len(items),
             'next_offset':offset+limit if offset+limit<len(items) else None,
             'editor_draft_objects':editor_objects,
             'editor_panel_id':getattr(session,'_annotation_editor_panel_id',None),
@@ -214,7 +223,7 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
         raise ValueError('Annotation index not found; inspect again')
     obj=panel.annotations[annotation_index]
     before=describe(obj)
-    if token!=before['token']:raise ValueError('STALE_ANNOTATION: Inspect the object again before editing')
+    if token!=before['token']:raise ValueError('STALE_ANNOTATION: Use inspect_annotation_objects and copy the matching object token, not selection.token. Inspect the object again before editing')
     if not isinstance(changes,dict):raise ValueError('changes must be an object')
     if hasattr(obj,'doc'):apply=prepare_text(obj,changes,substring,occurrence)
     else:
@@ -234,7 +243,8 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
             w.paint.EZFIG_panel.update();w.paint.EZFIG_panel.repaint()
             if w.save_state(show_popup=False) is None:raise RuntimeError('Could not checkpoint edited annotation')
             w._mark_dirty()
-        return {'changed':changed,'outcome':'VERIFIED_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
+        after=describe(obj)
+        return {'next_token':after['token'],'panel_ref':panel_ref,'annotation_index':annotation_index,'changed':changed,'outcome':'VERIFIED_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
                 'verification':'Read back actual native annotation properties; visual readability is not guaranteed.'}
     except Exception:
         w.reload_state(str(backup),append=False,skip_add_to_stack=True)
@@ -276,7 +286,8 @@ def edit_draft(session,panel_ref,annotation_index,token,changes,substring=None,o
     if changed:
         viewer.shapeChanged.emit() if hasattr(viewer,'shapeChanged') else None
         viewer.update()
-    return {'changed':changed,'target':'editor_draft','document_changed':False,
+    after=describe(viewer.shapes[annotation_index])
+    return {'next_token':after['token'],'panel_ref':panel_ref,'annotation_index':annotation_index,'changed':changed,'target':'editor_draft','document_changed':False,
             'outcome':'VERIFIED_DRAFT_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
             'verification':'Read back the open editor draft. The figure changes only when the user clicks OK in the editor; Cancel discards it.'}
 

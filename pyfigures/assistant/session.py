@@ -80,11 +80,11 @@ class Session:
                        'image_index': ix, 'letters': [a.getPlainText() for a in letters(p)],
                        'rotation_degrees': getattr(p, 'theta', 0), 'geometry': geometry(p)}
                       for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)]
-        annotations = [{'panel_id': '/'.join(map(str, (*gp, ix))), 'group_path': list(gp), 'image_index': ix,
-                        'annotation_index': index, 'text_index': sum(isinstance(v,TAText2D) for v in p.annotations[:index]), 'type': type(a).__name__, 'is_letter': False, 'text': a.getPlainText()[:500]}
+        from .advanced_annotations import describe, text_inspection_record
+        annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,
+                        index, sum(isinstance(v, TAText2D) for v in p.annotations[:index]))
                        for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
                        for index, a in enumerate(p.annotations or []) if isinstance(a, TAText2D) and not a.is_letter]
-        from .advanced_annotations import describe
         rois=[dict(panel_id='/'.join(map(str,(*gp,ix))),annotation_index=index,**describe(a))
               for gp,ix,p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
               for index,a in enumerate(p.annotations or [])
