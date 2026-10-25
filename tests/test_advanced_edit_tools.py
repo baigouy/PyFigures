@@ -70,6 +70,16 @@ def test_the_one_whole_word_is_meant(fig):
     assert bold == ["treated"], html
 
 
+def test_all_matches_inside_longer_words_too(fig):
+    # "make everything containing 'treated' bold"
+    out = M.style_annotation(fig, [0], 0, 0, bold=True, match="treated", occurrence="all")
+    assert not out.startswith("ERROR"), out
+    html = _text_html(fig)
+    bold = re.findall(r'<span style="[^"]*font-weight:\s*(?:700|bold)[^"]*">([^<]*)</span>', html)
+    assert bold == ["treated", "treated"], html
+    assert "untreated" in re.sub(r"<[^>]+>", "", html)
+
+
 def test_a_character_found_twice_asks_which_and_changes_nothing(fig):
     # "2" in "CO2" and in "2 h": a lone 2 is not "the 2 in CO2", so ask
     before = _text_html(fig)

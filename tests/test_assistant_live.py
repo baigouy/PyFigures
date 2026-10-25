@@ -141,6 +141,11 @@ def test_advanced_text_and_roi_edits_on_the_live_figure(qapp, gui, runtime, tmp_
                changes={"bold": True}, substring="treated")["changed"]
     assert both.doc.find("treated").charFormat().fontWeight() > 400
     assert both.doc.find("untreated").charFormat().fontWeight() < 600
+    cmd("edit_annotation_properties", panel_ref="0/0", annotation_index=bi, token=describe(both)["token"],
+        changes={"italic": True}, substring="treated", occurrence="all")
+    assert both.doc.find("treated").charFormat().fontItalic()
+    in_untreated = both.doc.find("treated", both.doc.find("untreated").selectionStart())
+    assert in_untreated.charFormat().fontItalic() and both.doc.toPlainText() == "treated and untreated"
     twice = TAText2D("control vs control")
     panel().annotations.append(twice)
     with pytest.raises(ValueError, match="CLARIFICATION_REQUIRED"):

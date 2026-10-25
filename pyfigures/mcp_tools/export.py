@@ -645,7 +645,7 @@ def style_annotation(
     background: str | int | None = None,
     vertical_align: str | None = None,
     match: str | None = None,
-    occurrence: int | None = None,
+    occurrence: int | str | None = None,
 ) -> str:
     """Restyle a text annotation (or ONE word / phrase of it) WITHOUT losing
     its rich formatting — what the Edit text dialog does with a selection.
@@ -673,7 +673,9 @@ def style_annotation(
     ("treated" in "treated and untreated"). Otherwise, when *match* occurs
     more than once and *occurrence* (1 = first) is not given, nothing changes
     and the error says how many there are — ask the user which one rather
-    than guessing.
+    than guessing. occurrence="all" changes every match, inside longer words
+    too: "make everything containing 'treated' bold" bolds both in
+    "treated and untreated".
 
     To change the label *text* instead of its style, use set_annotation_text.
     *group_path*: [] free-canvas, [0] group 0, [0,1] sub-group.

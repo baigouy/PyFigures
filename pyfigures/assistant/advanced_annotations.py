@@ -76,7 +76,7 @@ def color(value, transparent=False):
     return q.rgb() & 0xffffff
 
 def prepare_text(obj, changes, substring=None, occurrence=None):
-    from qtpy.QtGui import QTextCursor,QTextCharFormat,QFont,QColor
+    from qtpy.QtGui import QTextCursor,QTextCharFormat,QFont,QColor,QTextDocument
     allowed={'text','bold','italic','underline','font_family','font_size','color','background','vertical_alignment','placement'}
     if not changes or set(changes)-allowed:
         raise ValueError('Unsupported or empty rich-text changes')
@@ -88,30 +88,40 @@ def prepare_text(obj, changes, substring=None, occurrence=None):
         if occurrence is not None:
             raise ValueError('occurrence requires substring')
         cursor.select(QTextCursor.SelectionType.Document)
+        cursors=[cursor]
     else:
         if not isinstance(substring,str) or not substring:
             raise ValueError('substring must be nonempty literal text')
         matches=[]
-        found=doc.find(substring,0)
+        found=doc.find(substring,0,QTextDocument.FindFlag.FindCaseSensitively)
         while not found.isNull():
             matches.append((found.selectionStart(),found.selectionEnd()))
-            found=doc.find(substring,found.selectionEnd())
+            found=doc.find(substring,found.selectionEnd(),QTextDocument.FindFlag.FindCaseSensitively)
         if not matches:
             raise ValueError('Requested text is absent')
-        if occurrence is None and len(matches)>1 and len(substring)>1 and substring.replace(' ','').isalpha():
-            # "treated" in "treated and untreated": the one whole word is meant.
-            # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
-            plain=doc.toPlainText()
-            whole=[m for m in matches if not (m[0]>0 and plain[m[0]-1].isalnum()) and not (m[1]<len(plain) and plain[m[1]].isalnum())]
-            if len(whole)==1:matches=whole
-        if occurrence is None and len(matches)!=1:
-            raise ValueError('CLARIFICATION_REQUIRED: Text occurs more than once; specify a 1-based occurrence')
-        n=1 if occurrence is None else occurrence
-        if isinstance(n,bool) or not isinstance(n,int) or not 1<=n<=len(matches):
-            raise ValueError('Occurrence is outside the matching text range')
-        start,end=matches[n-1]
-        cursor.setPosition(start)
-        cursor.setPosition(end,QTextCursor.MoveMode.KeepAnchor)
+        if occurrence=='all':
+            # "everything containing treated": every match, inside longer words too
+            spans=matches
+        else:
+            if occurrence is None and len(matches)>1 and len(substring)>1 and substring.replace(' ','').isalpha():
+                # "treated" in "treated and untreated": the one whole word is meant.
+                # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
+                plain=doc.toPlainText()
+                whole=[m for m in matches if not (m[0]>0 and plain[m[0]-1].isalnum()) and not (m[1]<len(plain) and plain[m[1]].isalnum())]
+                if len(whole)==1:matches=whole
+            if occurrence is None and len(matches)!=1:
+                raise ValueError('CLARIFICATION_REQUIRED: Text occurs more than once; ask the user which one they mean, then pass a 1-based occurrence (or "all" when they asked for every match). Do not pick one yourself.')
+            n=1 if occurrence is None else occurrence
+            if isinstance(n,bool) or not isinstance(n,int) or not 1<=n<=len(matches):
+                raise ValueError('Occurrence is a 1-based number within the matches, or "all"')
+            spans=[matches[n-1]]
+        cursors=[]
+        for start,end in spans:
+            c=QTextCursor(doc)
+            c.setPosition(start)
+            c.setPosition(end,QTextCursor.MoveMode.KeepAnchor)
+            cursors.append(c)
+        cursor=cursors[0]
     fmt=QTextCharFormat()
     for key, setter in [('bold',lambda v:fmt.setFontWeight(QFont.Weight.Bold if v else QFont.Weight.Normal)),
                         ('italic',fmt.setFontItalic),('underline',fmt.setFontUnderline)]:
@@ -136,13 +146,16 @@ def prepare_text(obj, changes, substring=None, occurrence=None):
                'superscript':QTextCharFormat.VerticalAlignment.AlignSuperScript}
         if changes['vertical_alignment'] not in modes:raise ValueError('Unknown vertical_alignment')
         fmt.setVerticalAlignment(modes[changes['vertical_alignment']])
-    cursor.mergeCharFormat(fmt)
+    for c in cursors:
+        c.mergeCharFormat(fmt)
     if 'text' in changes:
         replacement=changes['text']
         if not isinstance(replacement,str) or len(replacement)>10000:
             raise ValueError('Replacement text must be a string up to 10000 characters')
         # Insert literal text (Greek/Unicode allowed), never interpret user text as HTML.
-        cursor.insertText(replacement, cursor.charFormat())
+        # The cursors follow earlier insertions, so every match is replaced in place.
+        for c in cursors:
+            c.insertText(replacement, c.charFormat())
     placement=None
     if 'placement' in changes:
         if not isinstance(changes['placement'],str):raise ValueError('placement must be a named corner or center')

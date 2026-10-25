@@ -64,7 +64,8 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
     With *match* only that word/phrase changes (case-sensitive); when it occurs
     more than once, *occurrence* (1 = first) says which, otherwise ValueError —
     the caller must ask rather than guess. Exception: a word of letters found
-    once as a whole word ("treated" in "treated and untreated") is that one. *vertical_align*: superscript,
+    once as a whole word ("treated" in "treated and untreated") is that one.
+    *occurrence* "all" changes every match, inside longer words too. *vertical_align*: superscript,
     subscript or normal. Requires a QApplication (QTextDocument needs fonts).
     """
     from qtpy.QtGui import (QTextDocument, QTextCursor, QTextCharFormat,
@@ -77,25 +78,29 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
         plain = doc.toPlainText()
         if not found:
             raise ValueError(f"{match!r} is not in the text {plain!r} (the match is case-sensitive).")
-        if occurrence is None and len(found) > 1 and len(match) > 1 and str(match).replace(" ", "").isalpha():
-            # "treated" in "treated and untreated": the one whole word is meant.
-            # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
-            whole = [c for c in found
-                     if not (c.selectionStart() > 0 and plain[c.selectionStart() - 1].isalnum())
-                     and not (c.selectionEnd() < len(plain) and plain[c.selectionEnd()].isalnum())]
-            if len(whole) == 1:
-                found = whole
-        if occurrence is None and len(found) > 1:
-            raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}; nothing was changed. "
-                             f"Ask the user which one they mean, then pass occurrence (1 = first) — "
-                             f"do not pick one yourself.")
-        k = 1 if occurrence is None else int(occurrence)
-        if not 1 <= k <= len(found):
-            raise ValueError(f"occurrence {k} out of range: {match!r} occurs {len(found)} time(s).")
-        cursor = found[k - 1]
+        if occurrence == "all":     # "everything containing treated": every match
+            cursors = found
+        else:
+            if occurrence is None and len(found) > 1 and len(match) > 1 and str(match).replace(" ", "").isalpha():
+                # "treated" in "treated and untreated": the one whole word is meant.
+                # Not for digits: "the 2 in CO2" must not pick the lone 2 of "2 h".
+                whole = [c for c in found
+                         if not (c.selectionStart() > 0 and plain[c.selectionStart() - 1].isalnum())
+                         and not (c.selectionEnd() < len(plain) and plain[c.selectionEnd()].isalnum())]
+                if len(whole) == 1:
+                    found = whole
+            if occurrence is None and len(found) > 1:
+                raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}; nothing was changed. "
+                                 f"Ask the user which one they mean, then pass occurrence (1 = first, "
+                                 f"or \"all\" if they asked for every match) — do not pick one yourself.")
+            k = 1 if occurrence is None else int(occurrence)
+            if not 1 <= k <= len(found):
+                raise ValueError(f"occurrence {k} out of range: {match!r} occurs {len(found)} time(s).")
+            cursors = [found[k - 1]]
     else:
         cursor = QTextCursor(doc)
         cursor.select(QTextCursor.Document)
+        cursors = [cursor]
 
     fmt = QTextCharFormat()
     if font_family is not None:
@@ -117,7 +122,8 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
         fmt.setVerticalAlignment({"superscript": va.AlignSuperScript, "subscript": va.AlignSubScript,
                                   "normal": va.AlignNormal}[vertical_align])
 
-    cursor.mergeCharFormat(fmt)
+    for cursor in cursors:
+        cursor.mergeCharFormat(fmt)
     return doc.toHtml()
 
 
