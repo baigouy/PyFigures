@@ -391,8 +391,7 @@ def test_tips_do_not_block_a_drop(qapp, monkeypatch):
     were modal. They are not modal now and a drag closes them."""
     from qtpy.QtCore import QMimeData, QPoint, Qt, QUrl
     from qtpy.QtGui import QDragEnterEvent
-    from pyfigures.gui.pfgui import EZFIG_GUI
-    real_show_tips = EZFIG_GUI.__dict__["show_tips"]
+    from pyfigures.gui.pfgui import EZFIG_GUI, open_tips as real_show_tips
     monkeypatch.setattr(EZFIG_GUI, "show_tips", lambda self: None)   # not at start-up
     g = EZFIG_GUI()
     try:

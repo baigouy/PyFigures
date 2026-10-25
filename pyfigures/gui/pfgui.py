@@ -179,6 +179,20 @@ class _PyfLoaderWorker(QObject):
         self.finished.emit()
 
 
+def open_tips(window):
+    """Help → Show Tips (and at start-up). Not modal: a file dragged onto the
+    window while the tips were open was refused (nothing happened); a drag
+    now closes them and drops normally."""
+    old = getattr(window, '_tip_dialog', None)
+    if old is not None and _qt_alive(old):
+        old.close()
+    dialog = TipDialog(window, window.tips)
+    dialog.setModal(False)
+    window._tip_dialog = dialog
+    dialog.show()
+    return dialog
+
+
 # Annotations → Figure colours…: presets of the editable combo (channel order)
 FIGURE_COLOUR_PRESETS = [
     "magenta, green",
@@ -2015,16 +2029,7 @@ class EZFIG_GUI(QMainWindow):
         dialog.exec_()
 
     def show_tips(self):
-        # not modal: a file dragged onto the window while the tips are open was
-        # refused (nothing happened); a drag now closes them and drops normally
-        old = getattr(self, '_tip_dialog', None)
-        if old is not None and _qt_alive(old):
-            old.close()
-        dialog = TipDialog(self, self.tips)
-        dialog.setModal(False)
-        self._tip_dialog = dialog
-        dialog.show()
-        return dialog
+        return open_tips(self)
 
     def _close_tips(self):
         dialog = getattr(self, '_tip_dialog', None)

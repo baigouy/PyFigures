@@ -647,20 +647,23 @@ class _DialogInjector(QObject):
         super().__init__()
         self._ctrl = controller
         self._hints: dict = {}   # id(dialog) → _InDialogHint
-        self._shown: set = set()   # id(dialog) of dialogs not destroyed yet
+
+    @staticmethod
+    def _still_open(dialog) -> bool:
+        """True while *dialog* is a live top-level window. A dialog Qt made
+        itself is not tracked by sip: its wrapper survives the C++ object and
+        isdeleted() says False (touching it: access violation, seen during
+        Review → Import comments). Comparing identities with the live windows
+        never touches the dialog itself."""
+        return any(w is dialog for w in QApplication.topLevelWidgets())
 
     def eventFilter(self, obj, event):
+        if not hasattr(self, '_hints'):
+            return False       # a filter left behind by a controller being torn down
         if isinstance(obj, QDialog):
             t = event.type()
             if t == QEvent.Show:
-                # a dialog made by Qt itself is not tracked by sip: its wrapper
-                # survives the C++ object and isdeleted() says False (access
-                # violation in _inject) — the destroyed signal is reliable
-                key = id(obj)
-                if key not in self._shown:
-                    self._shown.add(key)
-                    obj.destroyed.connect(lambda *_a, k=key: self._shown.discard(k))
-                QTimer.singleShot(150, lambda d=obj, k=key: self._inject(d) if k in self._shown else None)
+                QTimer.singleShot(150, lambda d=obj: self._inject(d) if self._still_open(d) else None)
             elif t in (QEvent.Hide, QEvent.Close):
                 self._remove(obj)
             elif t == QEvent.Resize:
