@@ -5818,6 +5818,9 @@ class EZFIG_GUI(QMainWindow):
             self.share_figure_action.setChecked(False)
             self.statusBar().showMessage("The figure is no longer shared with the MCP server.", 5000)
             return False
+        if not self._confirm_share_handover():
+            self.share_figure_action.setChecked(False)
+            return False
         try:
             # a plain window hands its figure over to one that can be shared
             win = launch.start_live_session(self).window
@@ -5837,6 +5840,21 @@ class EZFIG_GUI(QMainWindow):
         box.exec()
         return win
 
+    def _confirm_share_handover(self):
+        """A plain window cannot be shared in place (a Qt window cannot change
+        class): it reopens its figure, unsaved work and undo history in a new
+        window. Ask first; True when the window can already be shared."""
+        from pyfigures.assistant.partner_gui import PartnerGUI
+        if isinstance(self, PartnerGUI):
+            return True
+        answer = QMessageBox.question(
+            self, 'Share the figure',
+            "To share it, PyFigures reopens this figure in a new window (with your "
+            "unsaved changes and undo history) and closes this one.\n\nContinue?",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Ok)
+        return answer == QMessageBox.StandardButton.Ok
+
     def open_chat_sidebar(self):
         """Tools > Chat sidebar (CLI: --chat): dock qtpy_ai_sidecar, sharing
         the figure with it."""
@@ -5845,6 +5863,8 @@ class EZFIG_GUI(QMainWindow):
             QMessageBox.information(self, 'Chat sidebar',
                                     "The chat is a separate, optional package. Install it with\n\n"
                                     "    pip install qtpy-ai-sidecar\n\nthen choose this entry again.")
+            return None
+        if not launch.is_sharing(self) and not self._confirm_share_handover():
             return None
         try:
             dock = launch.attach_sidecar(self)

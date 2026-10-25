@@ -86,7 +86,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[bioformats]
     ```
     
-    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video and the MCP server), use `pip install -U pyfigures[all]` instead.
+    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video, the MCP server and the chat sidebar), use `pip install -U pyfigures[all]` instead (the chat sidebar's package, qtpy-ai-sidecar, is not on PyPI yet: install it first from its folder with `pip install -e`).
     
 
 7. **Optional: Install video support (reading movies, exporting H.264 videos):**

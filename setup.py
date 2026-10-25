@@ -91,14 +91,16 @@ setuptools.setup(
             "omero-py",
         ],
         # Tools > Chat sidebar: the separate qtpy-ai-sidecar package (local or
-        # API model) docked beside the figure. Left out of "all" until that
-        # package is on PyPI.
+        # API model) docked beside the figure. NB: until qtpy-ai-sidecar is on
+        # PyPI, `pip install pyfigures[chat]` / `[all]` needs it installed first
+        # (pip install -e path/to/qtpy_ai_sidecar).
         'chat': [
             "mcp>=1.0",
             "qtpy-ai-sidecar",
         ],
         'all': [
             "mcp>=1.0",
+            "qtpy-ai-sidecar",
             "av",
             "pyimagej",
             "zarr",

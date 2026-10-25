@@ -175,6 +175,12 @@ def test_tools_menu_share_toggle(qapp, gui, runtime, monkeypatch):
     shown = []
     monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.detailedText()) or 0)
     g = gui()
+    # a plain window asks before handing its figure over; Cancel changes nothing
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Cancel)
+    g.share_figure_action.trigger()
+    assert not g.share_figure_action.isChecked() and not (runtime / "connection.json").exists()
+    assert g.open_chat_sidebar() is None and not (runtime / "connection.json").exists()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Ok)
     g.share_figure_action.trigger()
     w = next(x for x in qapp.topLevelWidgets() if getattr(x, "_live_server", None) is not None)
     assert w.share_figure_action.isChecked() and (runtime / "connection.json").exists()
