@@ -162,6 +162,7 @@ def adopt_letter_deltas(before,after,window,operation=None):
     """Honor actual native-letter deltas without freezing letters on moved media."""
     from .categorized_mcp import category_for
     if operation and category_for(operation)=="layout":return
+    if operation in ('add_image','remove_image','add_group','remove_group'):return
     from .partner_gui import panels,letters,letter_info,POLICY,TAText2D
     from pyfigures.mcp_tools.core import _html_to_plain
     def indexed(data):
@@ -198,7 +199,10 @@ def adopt_letter_deltas(before,after,window,operation=None):
         preview.opacity=float(annotation.findtext('opacity') or 1)
         info=letter_info(preview)
         policy=json.loads(getattr(panel,POLICY,'{}'))
-        policy.update(visible=True,text=_html_to_plain(text),base=info)
+        policy.update(visible=True,base=info)
+        prior_text=_html_to_plain(_decode(prior[0].findtext('text')) or '') if len(prior)==1 else None
+        if prior_text!=_html_to_plain(text):
+            policy.update(automatic_text=False,text=_html_to_plain(text))
         for key in ('placement','font_family','font_size','color','background'):
             policy[key]=info[key]
         setattr(panel,POLICY,json.dumps(policy));changed=True

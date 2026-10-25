@@ -20,7 +20,7 @@ os.environ.setdefault("QT_API", "pyqt6")
 MODULES = ["categorized_mcp", "existing_tools", "original_registry", "partner_gui", "figure_state",
            "gui_selection", "letter_sequence", "live_structure", "plot_lifecycle", "pointer_context",
            "readability", "recovery", "submission_review", "manual_help", "native_gui",
-           "assistant_actions", "live_mcp", "session", "launch"]
+           "assistant_actions", "advanced_annotations", "live_mcp", "session", "launch"]
 
 
 @pytest.fixture
@@ -96,6 +96,50 @@ def test_runtime_folder_is_outside_the_repository(monkeypatch):
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = str(runtime_dir())
     assert not path.startswith(repo) and path.endswith(os.path.join("PyFigures", "assistant"))
+
+
+def test_advanced_text_and_roi_edits_on_the_live_figure(qapp, gui, runtime, tmp_path):
+    """ChatGPT's live advanced editing, as ported: one word of a text, a ROI's
+    outline/fill, stale tokens refused, one undo step each."""
+    import uuid
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.txt2d import TAText2D
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.advanced_annotations import describe
+    from pyfigures.assistant.partner_gui import panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+
+    def cmd(operation, **arguments):
+        s = session.snapshot()
+        return session.execute(dict(operation=operation, arguments=arguments, request_id=str(uuid.uuid4()),
+                                    session_id=s["session_id"], expected_revision=s["revision"]))
+
+    def panel():
+        return next(p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw))
+    p = panel()
+    text = TAText2D('<span style="color:#ffffff">CO2 and <i>control</i></span>')
+    p.annotations.append(text)
+    ti = len(p.annotations) - 1
+    token = describe(text)["token"]
+    out = cmd("edit_annotation_properties", panel_ref="0/0",annotation_index=ti, token=token,
+              changes={"bold": True}, substring="CO2")
+    assert out["changed"]
+    assert text.doc.find("CO2").charFormat().fontWeight() > 400
+    control = text.doc.find("control").charFormat()
+    assert control.fontItalic() and control.foreground().color().name() == "#ffffff"
+    with pytest.raises(ValueError, match="STALE_ANNOTATION"):
+        cmd("edit_annotation_properties", panel_ref="0/0",annotation_index=ti, token=token,
+            changes={"color": "red"})
+    cmd("undo")
+    assert panel().annotations[ti].doc.find("CO2").charFormat().fontWeight() < 600
+    roi = Rectangle2D(5, 6, 30, 40, color=0xffffff, fill_color=0x333333, stroke=2)
+    panel().annotations.append(roi)
+    ri = len(panel().annotations) - 1
+    cmd("edit_annotation_properties", panel_ref="0/0",annotation_index=ri, token=describe(roi)["token"],
+        changes={"stroke": 3, "fill_color": "none"})
+    assert roi.stroke == 3 and roi.fill_color is None and roi.width() == 30 and roi.color == 0xffffff
 
 
 def test_share_edit_undo_and_stop(qapp, gui, runtime):

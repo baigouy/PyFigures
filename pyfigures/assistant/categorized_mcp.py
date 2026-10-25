@@ -21,6 +21,7 @@ CATEGORIES = {
 
 
 def category_for(name):
+    if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties'):return 'annotations'
     if name=='restyle_texts':return 'lettering'
     if name=='review_submission_readiness':return 'quality'
     if name in ('inspect_native_gui','use_native_gui','open_native_menu') or name.startswith('native_gui_'):
@@ -72,7 +73,7 @@ def build_server(full_server, send):
     names = originals | {'arrange_live_images', 'set_panel_letter_position', 'edit_live_label',
         'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'roi_to_inset', 'explain_live_interaction', 'save_live_figure',
         'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row'}
-    names.update({'review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
+    names.update({'open_annotation_properties','inspect_annotation_objects','edit_annotation_properties','review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
     available = {n: t for n, t in full_server._tool_manager._tools.items() if n in names}
     server = FastMCP('PyFigures categorized live prototype', instructions=(
         'Edit scientific figures in the open PyFigures GUI. Start with a small tool surface. '
@@ -89,22 +90,25 @@ def build_server(full_server, send):
         'Use swap_live_panels; never delete/recreate letters to swap or relabel. '
         'Removal is only for an explicit user request to remove letters; removal_request must quote it. '
         'Readiness requires review_submission_readiness: actual resolution AND journal checks. audit_figure is inventory, not readiness. Report measured blockers and incomplete evidence; never infer readiness from labels or export DPI. '
+        'For multi-clause requests, satisfy and verify every clause before saying done. A named target in edit arguments does not select it in the GUI: explicit select-plus-edit requests need select_live_objects as well as the edit. Preserve the selection and check the final outline/state. '
         'A successful tool call is not task success. Report verified after-state; if counts show zero letters, '
         'say letters are absent, never claim a lettering swap succeeded. '
+        'When the human supplies annotation content, such as write a text note on a named panel, create the ordinary annotation with add_annotation. Merely opening an editor does not fulfill a request to write the supplied content. Offer/open the editor for unspecified content or an explicit editor request. '
         'When no dedicated operation covers a GUI feature, discover native_gui: inspect actual native menu/dialog controls, invoke their exact IDs, complete or cancel the dialog, then verify jobs and document state. Queued is not success. Never substitute code for a normal manual how-to request. '
+        'For rearranging EXISTING images into regular rows/columns, prefer arrange_live_images once. Derive columns from current image count when a row count is requested; ask if equal rows are impossible. Do not rebuild existing rows with per-image move loops. '
         'To construct NEW rows/columns, call add_group and use its returned path before adding images/plots. Requested row numbers are not existing group paths. On a missing-container error inspect/create the intended container; never fall back into an unrelated existing row. '
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
         'Never guess argument names. Discover the exact schema before first use. undo_redo is directly available and also searchable; do not repeatedly search after a no-match. '
         'Category descriptions are guidance, not restrictions: search by words across all '
         'categories if needed. All original functions remain available underneath. '
-        'Figure targets default to live; explicit paths retain file-based behavior. '
+        'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
         'For figure/group LETTER edits, removal or restoration prefer edit_panel_letters '
-        'once at the intended scope, not per-image add/remove/style loops. '
+        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, foreground and background; bold/italic/underline are handled by restyle_texts(target=letters), not guessed edit_panel_letters fields. '
         'For ALL scale bars use remove_scale_bar_all or set_scale_bar_all once. '
         'For deleting last N rows use delete_last_rows in one call. Never guess shifted indices after an error; verify actual removed targets before claiming success. '
         'For ungroup all / images as single images / move all to free canvas use ungroup_all_images once; never consolidate into one group or loop over shifting indices. '
-        'Single-panel scale-bar tools are for an explicitly limited panel, not figure-wide loops. '
+        'Single-panel scale-bar tools are for an explicitly limited panel, not figure-wide loops. A named panel, even a short or mistyped name, never authorizes set_scale_bar_all. Resolve the panel or ask; bulk only when all/every/whole figure was requested. '
         'inspect_panel_letters verifies text/color/background/placement after refresh. '
         'Explicit white stays white; background="none" means transparent, black does not. '
         'Recovery copies are automatic but differ from saving: report persistence state '
@@ -152,7 +156,7 @@ def build_server(full_server, send):
         if category and category not in CATEGORIES:
             raise ValueError('Unknown category. Use list_pyfigures_categories.')
         if not 1 <= limit <= 12 or offset < 0:
-            raise ValueError('limit must be 1–12 and offset nonnegative')
+            raise ValueError('limit must be 1Ã¢â‚¬â€œ12 and offset nonnegative')
         words = re.findall(r'[a-z0-9]+', query.lower())
         aliases = {'gaps': 'spacing', 'gap': 'spacing', 'letters': 'letter',
                    'labels': 'label', 'rows': 'row', 'images': 'image', 'fonts': 'font',
@@ -166,6 +170,14 @@ def build_server(full_server, send):
             title = name.replace('_', ' ')
             help_text = tool.description.lower()
             score = sum(5 * (w in title) + (w in help_text) for w in words)
+            if query.strip().lower()==name.lower():score+=1000
+            # Concrete output/metadata intent must outrank generic figure inspection.
+            if name=='export_figure' and any(w in ('export','png','svg','pdf','tiff','jpeg') for w in words):score+=320
+            if name in ('set_figure_caption','get_figure_caption') and 'caption' in words:
+                score+=300 if name.startswith('set_') and not any(w in ('get','read','inspect') for w in words) else 200
+            if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties') and any(w in ('subscript','superscript','rich','substring','roi','properties') for w in words):score+=230
+            if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
+
             if name=='review_submission_readiness' and any(w in ('ready','readiness','submission','publish','publication','compliance','resolution','dpi') for w in words):
                 score+=400
             if name == 'inspect_native_gui' and any(w in ('gui','menu','dialog','button','control','native') for w in words):
@@ -176,7 +188,7 @@ def build_server(full_server, send):
                 score += 300
             if name == 'roi_to_inset' and 'inset' in words and any(w in ('roi', 'convert', 'rectangle') for w in words):
                 score += 350
-            if name == 'inspect_figure' and any(w in ('inspect', 'figure', 'state') for w in words):
+            if name == 'inspect_figure' and any(w in ('inspect', 'state', 'describe') for w in words):
                 score += 250
             if name == 'select_live_objects' and any(w in ('select', 'selection', 'highlight') for w in words):
                 score += 250
@@ -194,16 +206,17 @@ def build_server(full_server, send):
                 score += 100
             if any(w in ('how', 'help', 'learn', 'tutorial') for w in words) and name in ('explain_how', 'list_how_to_guides'):
                 score += 100
-            if 'scale' in words and name in ('remove_scale_bar_all', 'set_scale_bar_all'):
-                score += 40
+            if 'scale' in words:
+                if name in ('remove_scale_bar_all','set_scale_bar_all') and any(w in ('all','every','whole','entire') for w in words):score+=240
+                if name=='set_scale_bar' and not any(w in ('all','every','whole','entire','remove','delete') for w in words):score+=120
             if 'rotation' in words and name in ('set_image_property', 'get_image_property', 'list_image_properties'):
                 score += 80
             if name == 'swap_live_panels' and any(w in ('swap', 'exchange', 'switch') for w in words):
                 score += 100
             if name == 'edit_panel_letters' and any(w in ('letter', 'lettering', 'font', 'background') for w in words):
                 score += 50
-            if name == 'arrange_live_images' and any(w in ('row', 'arrange', 'rearrange') for w in words):
-                score += 35
+            if name == 'arrange_live_images' and any(w in ('row', 'column', 'grid', 'arrange', 'rearrange') for w in words):
+                score += 300
             if name == 'save_live_figure' and any(w in ('save', 'saving', 'persist') for w in words):
                 score += 35
             if words and not score:
@@ -218,7 +231,7 @@ def build_server(full_server, send):
             for key in internal:
                 schema.get('properties', {}).pop(key, None)
             schema['required'] = [k for k in schema.get('required', []) if k not in internal]
-            found.append({'name': n, 'category': c, 'description': t.description,
+            found.append({'name': n, 'callable_directly': False, 'dispatcher': 'use_pyfigures_tool', 'category': c, 'description': t.description,
                           'arguments_schema': schema})
         manual_guides=None
         if manual_guides is None and query:
@@ -230,11 +243,21 @@ def build_server(full_server, send):
             from .manual_help import explain
             topic='split' if any(w in ('split','channel','channels') for w in words) else ('drag_and_drop' if any(w in ('drag','drop','dnd') for w in words) else 'shortcuts')
             manual_guides=explain(topic)
+        # Never hand the model half a JSON schema when the engine bounds tool output.
+        # Page whole operations; next_offset points to the first entry not returned.
+        budget=20000-len(json.dumps(manual_guides,ensure_ascii=False))
+        bounded=[]
+        used=0
+        for entry in found:
+            size=len(json.dumps(entry,ensure_ascii=False))
+            if bounded and used+size>budget:break
+            bounded.append(entry);used+=size
+        found=bounded
         return {'manual_guides':manual_guides,'guidance': ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Clarification is needed only for missing or non-unique references. Never remove letters as a swap workaround.'
                              if any(w in ('swap', 'exchange', 'switch') for w in words) else
                              'Report verified after-state, not merely native success text. Ordinary text/captions are NOT automatic panel letters: inspect get_annotations and remove_annotation for quoted text, preserving letters. removal_request must quote the actual human request verbatim, never an invented clearer request.'),
                 'total_matches': len(ranked), 'offset': offset,
-                'next_offset': offset + limit if offset + limit < len(ranked) else None,
+                'next_offset': offset + len(found) if offset + len(found) < len(ranked) else None,
                 'tools': found}
 
     @server.tool(structured_output=False)

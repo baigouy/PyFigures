@@ -163,7 +163,7 @@ class ActionManager:
         a = self.active
         target = a['draft'] or self.session
         op = req['operation']
-        mutating = op not in ('inspect', 'letter_state', 'preview', 'readability', 'submission_review')
+        mutating = op not in ('inspect', 'letter_state', 'preview', 'readability', 'submission_review', 'inspect_annotation_objects')
         name = req.get('arguments', {}).get('tool', '')
         read_only_native = op == 'original_tool' and name.startswith(('get_', 'list_', 'describe_', 'inspect_', 'check_', 'explain_'))
         if a['record'].get('resume_guard') and mutating and not read_only_native:

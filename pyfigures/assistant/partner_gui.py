@@ -195,6 +195,15 @@ def restore_policies(nodes, objects):
     nodes = [n for n in nodes if n.tag in ('Image2D', 'Group')]
     for node, obj in zip(nodes, objects):
         if isinstance(obj, Image2D):
+            # Native Image2D currently discards its opacity constructor argument.
+            # Restore the declared document value, including undo/reload adoption.
+            opacity=node.findtext('opacity')
+            if opacity is not None:
+                import math
+                opacity=float(opacity)
+                if not math.isfinite(opacity) or not 0<=opacity<=1:
+                    raise ValueError('Invalid serialized image opacity')
+                obj.opacity=opacity
             value = _decode(node.findtext(POLICY))
             if isinstance(value, str):
                 json.loads(value)
@@ -293,7 +302,7 @@ class PartnerGUI(BaseGUI):
                 panel.annotations.remove(duplicate)
             # A stored base style makes explicit per-panel changes independent of defaults.
             base = policy.get('base', {})
-            text = policy.get('text', base.get('text', a.getPlainText()))
+            text = a.getPlainText() if policy.get('automatic_text', 'text' not in policy and self.auto_lettering_checkbox.isChecked()) else policy.get('text', base.get('text', a.getPlainText()))
             family = policy.get('font_family', base.get('font_family', self.serializable_font.family()))
             size = policy.get('font_size', base.get('font_size', self.serializable_font.pointSize()))
             foreground = policy.get('color', base.get('color', '#000000'))
@@ -382,7 +391,7 @@ class PartnerGUI(BaseGUI):
                     policy.pop('text', None)
                     policy.update(visible=True, base=base)
                 else:
-                    policy.update(visible=True, text=saved[0]['text'], base=base)
+                    policy.update(automatic_text=False, visible=True, text=saved[0]['text'], base=base)
             else:
                 policy['visible'] = False
             setattr(p, POLICY, json.dumps(policy))
@@ -445,7 +454,7 @@ class PartnerGUI(BaseGUI):
             if len(saved['letters']) > 1:
                 raise ValueError('Multiple panel letters require clarification')
             if saved['letters']:
-                policy.update(visible=True, text=saved['letters'][0]['text'], base=dict(saved['letters'][0]))
+                policy.update(automatic_text=False, visible=True, text=saved['letters'][0]['text'], base=dict(saved['letters'][0]))
             else:
                 policy['visible'] = False
             setattr(p, POLICY, json.dumps(policy))
@@ -540,7 +549,7 @@ class PartnerGUI(BaseGUI):
             existing = json.loads(getattr(image, POLICY, '{}'))
             if saved['letters']:
                 actual = saved['letters'][0]
-                existing.update(visible=True, text=actual['text'], base=dict(actual))
+                existing.update(automatic_text=False, visible=True, text=actual['text'], base=dict(actual))
             else:
                 existing['visible'] = False
             setattr(image, POLICY, json.dumps(existing))
@@ -622,6 +631,7 @@ class PartnerGUI(BaseGUI):
             raise ValueError('panel_ids from inspect_panel_letters are required')
         if placement is not None:
             placement = ' '.join(placement.lower().replace('-', ' ').split())
+            placement = placement.replace('upper', 'top').replace('lower', 'bottom')
             if placement in ('center', 'centre', 'middle', 'center center', 'centre centre'):
                 placement = 'center_h center_v'
             if placement not in ('top left', 'top right', 'bottom left', 'bottom right', 'center_h center_v'):
@@ -694,6 +704,10 @@ class PartnerGUI(BaseGUI):
                 policy['visible'] = True
                 if action in ('restore', 'renumber'):
                     policy['text'] = planned_text[pid]
+                    policy['automatic_text'] = scope == 'all'
+                    if scope == 'all':
+                        policy.pop('text', None)
+                        policy.get('base', {}).pop('text', None)
                 if placement is not None:
                     assign('placement', placement)
                 if font_family is not None:
@@ -770,6 +784,7 @@ class PartnerGUI(BaseGUI):
                 policy = json.loads(getattr(item[2], POLICY, '{}'))
                 policy['text'] = next(p['letters'][0]['text'] for p in before['panels']
                                       if p['panel_id'] == '/'.join(map(str, (*other[0], other[1]))))
+                policy['automatic_text'] = False
                 policy['visible'] = True
                 setattr(item[2], POLICY, json.dumps(policy))
             self.update_letters()

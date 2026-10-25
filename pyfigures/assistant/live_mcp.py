@@ -127,7 +127,7 @@ def edit_panel_letters(action: Literal['style','remove','restore','renumber'] = 
                        color: str | int | None = None, background: str | int | None = None,
                        start_letter: str | None = None, replace_overrides: bool = False,
                        removal_request: str | None = None) -> dict:
-    """Preferred ONE-CALL bulk operation for moving/restyling/removing/restoring panel letters. placement accepts center/centre/middle or a corner. action=style preserves existing text; renumber scope=all creates a complete unique sequence for a newly constructed figure when asked to letter the panels; partial restore preserves existing IDs and is not a whole-figure renumber; remove requires removal_request quoting an explicit user request to remove/hide letters (never a swap), and hides panel letters persistently without deleting captions/scale bars; restore without start_letter preserves an existing or hidden panel text and otherwise uses its automatic position; explicit start_letter sets a new sequence; renumber changes sequence. scope=auto infers panels from panel_ids, group from group_path, otherwise all; explicit panels/group/selection/all are supported. Supplying panel_ids can never broaden to all panels. For WHITE Arial 12 with NO background use color="white", font_family="Arial", font_size=12, background="none". Black is a color, NOT transparent. Unspecified appearance is preserved. Per-panel overrides survive whole-figure style changes unless replace_overrides=true. One undo step. Returns actual styles, changed/skipped counts, and recovery status. Do not loop over individual annotations for figure/group requests."""
+    """Preferred ONE-CALL bulk operation for panel-letter placement, font family/size, color/background, removal and restoration. For bold/italic/underline use restyle_texts(target=letters); those are not fields of this function. placement accepts center/centre/middle or a corner. action=style preserves existing text; renumber scope=all creates a complete unique sequence for a newly constructed figure when asked to letter the panels; partial restore preserves existing IDs and is not a whole-figure renumber; remove requires removal_request quoting an explicit user request to remove/hide letters (never a swap), and hides panel letters persistently without deleting captions/scale bars; restore without start_letter preserves an existing or hidden panel text and otherwise uses its automatic position; explicit start_letter sets a new sequence; renumber changes sequence. scope=auto infers panels from panel_ids, group from group_path, otherwise all; explicit panels/group/selection/all are supported. Supplying panel_ids can never broaden to all panels. For WHITE Arial 12 with NO background use color="white", font_family="Arial", font_size=12, background="none". Black is a color, NOT transparent. Unspecified appearance is preserved. Per-panel overrides survive whole-figure style changes unless replace_overrides=true. One undo step. Returns actual styles, changed/skipped counts, and recovery status. Do not loop over individual annotations for figure/group requests."""
     if panel_ids and scope in ('auto', 'all'):
         scope = 'panels'
     elif group_path is not None and scope == 'auto':
@@ -276,6 +276,22 @@ def review_submission_readiness(pyf_path: str = 'live', journal: str | None = No
     from .submission_review import review_file
     return review_file(Path(pyf_path),arguments)
 
+@mcp.tool()
+def inspect_annotation_objects(panel_ref: str | None = None, offset: int = 0, limit: int = 12, include_panel_letters: bool = False) -> dict:
+    """Inspect ordinary rich-text annotations and ROI geometry with per-object stale-check tokens. panel_ref is a visible letter or panel ID. Read actual HTML/text, geometry and properties before advanced edits. Automatic panel letters are flagged; use scoped letter tools for those."""
+    return call_live('inspect_annotation_objects', dict(panel_ref=panel_ref,offset=offset,limit=limit,include_panel_letters=include_panel_letters))
+
+@mcp.tool()
+def edit_annotation_properties(panel_ref: str, annotation_index: int, token: str, changes: dict, substring: str | None = None, occurrence: int | None = None) -> dict:
+    """Advanced ordinary text or ROI edit, one undo transaction. First inspect_annotation_objects for index/token. Text changes: literal text replacement, bold/italic/underline booleans, font_family, font_size, color, background (none clears), vertical_alignment normal/subscript/superscript, placement named corner or center for the whole annotation. substring optionally limits formatting/replacement to literal text; repeated matches require 1-based occurrence. Preserves unrequested formatting. ROI changes: color, fill_color (none clears), stroke, opacity, geometry [x,y,width,height] for Rect2D/Ellipse2D or endpoints [x1,y1,x2,y2] for Line2D; source-image pixels. Unsupported shapes use native annotation editor controls. Finish/cancel any open native editor first. Returns actual before/after; NO_CHANGE is not success."""
+    return call_live('edit_annotation_properties', dict(panel_ref=panel_ref,annotation_index=annotation_index,token=token,changes=changes,substring=substring,occurrence=occurrence))
+
+@mcp.tool()
+def open_annotation_properties(panel_ref: str, annotation_index: int, token: str) -> dict:
+    """Open and select an existing annotation using the actual native property editor. First inspect_annotation_objects. Text, scale bars and insets open the same dialog as double-click; other ROI types are selected with native controls. Scheduled is not applied. Inspect_native_gui to use exact control IDs; native OK/Cancel remains in effect, including the outer annotation editor."""
+    return call_live('open_annotation_properties', dict(panel_ref=panel_ref,annotation_index=annotation_index,token=token))
+
+
 if __name__ == '__main__':
     from pyfigures.mcp_server import run_stdio
     if os.environ.get('PYFIGURES_MCP_SURFACE', 'categories') == 'all':
@@ -284,6 +300,8 @@ if __name__ == '__main__':
         from .categorized_mcp import build_server
         active_server = build_server(mcp, request)
     run_stdio(active_server)
+
+
 
 
 

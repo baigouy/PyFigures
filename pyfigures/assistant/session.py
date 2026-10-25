@@ -133,12 +133,15 @@ class Session:
                 args['request_id']=req.get('request_id')
                 method={'use_native_gui':'operate','open_native_menu':'open_menu','native_gesture':'gesture','native_drop_files':'drop_files','native_keys':'keys'}[op]
                 return getattr(self.native_gui,method)(**args)
-            if getattr(self, '_annotation_editor_pending', False) and op not in ('inspect', 'readability'):
+            if getattr(self, '_annotation_editor_pending', False) and op not in ('inspect', 'readability', 'inspect_annotation_objects'):
                 raise ValueError('ANNOTATION_EDITOR_OPEN: Finish or cancel the native editor before another tool action')
-            if op in ('select_live_objects', 'open_annotation_editor'):
+            if op in ('select_live_objects', 'open_annotation_editor', 'open_annotation_properties'):
                 self.sync()
                 if req.get('session_id') != self.id or req.get('expected_revision') != self.revision:
                     raise ValueError('STALE_STATE: Inspect before selecting or opening an editor')
+                if op == 'open_annotation_properties':
+                    from .advanced_annotations import open_properties
+                    return open_properties(self, **req.get('arguments', {}))
                 from .gui_selection import select, open_editor
                 return select(self.window, **req.get('arguments', {})) if op == 'select_live_objects' else open_editor(self, **req.get('arguments', {}))
             if getattr(self, 'actions', None) and self.actions.active:
@@ -176,6 +179,12 @@ class Session:
             if op == 'letter_state':
                 from .partner_gui import state
                 result = {**state(w), 'revision': self.revision}
+            elif op == 'inspect_annotation_objects':
+                from .advanced_annotations import inspect_objects
+                result = inspect_objects(self, **args)
+            elif op == 'edit_annotation_properties':
+                from .advanced_annotations import edit
+                result = edit(self, **args)
             elif op == 'bulk_letters':
                 result = self.bulk_letters(args)
             elif op == 'roi_to_inset':

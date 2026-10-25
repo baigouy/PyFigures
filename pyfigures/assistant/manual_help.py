@@ -1,5 +1,5 @@
 """Source-reviewed manual help; does not execute GUI actions."""
-import ast,hashlib,json
+import ast,hashlib,json,re
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 NAMES=('left_pressed','right_pressed','up_pressed','down_pressed','_drag_entry','internal_DND_context_menu','mouseReleaseEvent','extend')
@@ -9,6 +9,21 @@ def fingerprints():
     return {node.name:hashlib.sha256(ast.get_source_segment(source,node).encode()).hexdigest()
             for node in ast.walk(tree) if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name in NAMES}
 def explain(topic='overview'):
+    from pyfigures.guides import explain as native_explain, GUIDES
+    # Prefer the current authored native guides to prototype-era supplements.
+    words=set(re.findall(r'[a-z]+',topic.lower()))
+    target=None
+    if 'inset' in words and words.intersection({'move','resize','border','existing','edit'}):
+        target='edit_inset'
+    elif words.intersection({'subscript','superscript','greek'}) or ('text' in words and words.intersection({'part','word','portion','edit'})):
+        target='edit_text'
+    if target in GUIDES:
+        result=native_explain(target)
+        result['answer_style']='Human GUI steps; code only when explicitly requested.'
+        return result
+    current=native_explain(topic)
+    if current.get('guide') in ('edit_text','edit_inset','stack_in_row','arrowheads','text_style','review_comments','figure_caption'):
+        return current
     normalized=topic.lower().replace('-', '_').replace(' ', '_')
     if normalized in ('shortcuts','keyboard','rearrange','arrows'):
         from pyfigures.guides import explain as native_explain
