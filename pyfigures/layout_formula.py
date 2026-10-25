@@ -21,6 +21,9 @@
   Ids are stable names, not positions: panel letters (A, B, C…) follow the
   reading order of the formula and are regenerated, the mapping id → source
   never changes.
+* ``^`` adds insets (no letter of their own): ``a^b`` shows image ``b`` in a
+  corner of ``a``; ``a^a`` is a zoom callout of ``a`` itself (a box on the
+  centre, to refine afterwards in the GUI); ``a^b^c`` two insets.
 
 The parenthesised comma/slash notation is inspired by Griphus (Systaxon,
 UFES; https://www.systaxon.ufes.br/gri/), which builds figure plates from
@@ -114,7 +117,20 @@ class _Parser:
             raise _err(self.text, tok[1], "a panel or '(' is missing")
         if tok[2]:
             self.take()
-            return {"type": "panel", "id": tok[0]}
+            if "^" not in tok[0]:
+                return {"type": "panel", "id": tok[0]}
+            # a^b: panel a with b as an inset; a^a: a zoom callout of a itself
+            host, *insets = tok[0].split("^")
+            if not host or not all(insets):
+                if not host:
+                    where = tok[1]
+                elif "^^" in tok[0]:
+                    where = tok[1] + tok[0].index("^^") + 1
+                else:
+                    where = tok[1] + len(tok[0]) - 1
+                raise _err(self.text, where, "'^' needs a panel on each side (a^b: b as an "
+                                             "inset of a; a^a: a zoom of a)")
+            return {"type": "panel", "id": host, "insets": insets}
         if tok[0] == "(":
             self.take("(")
             if self.peek()[0] == ")":
@@ -164,6 +180,17 @@ def panel_ids(tree) -> list[str]:
     return out
 
 
+def panel_insets(tree) -> dict:
+    """{panel id: [inset ids]} for the panels written a^b (insets carry no
+    letter; a^a is a zoom callout of a)."""
+    if tree["type"] == "panel":
+        return {tree["id"]: list(tree["insets"])} if tree.get("insets") else {}
+    out = {}
+    for k in tree["children"]:
+        out.update(panel_insets(k))
+    return out
+
+
 def grid_cells(tree) -> list[list[str]]:
     """The rows of panel ids of a grid node (its inner stack of rows)."""
     inner = tree["children"][0]
@@ -175,7 +202,7 @@ def to_text(tree) -> str:
     """The formula of a tree (normalised: minimal brackets)."""
     t = tree["type"]
     if t == "panel":
-        return tree["id"]
+        return "^".join([tree["id"]] + list(tree.get("insets") or []))
     if t == "grid":
         return "[" + to_text(tree["children"][0]) + "]"
     sep = "," if t == "row" else "/"

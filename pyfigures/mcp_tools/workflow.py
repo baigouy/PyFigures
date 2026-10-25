@@ -861,7 +861,9 @@ def recipe_reference() -> str:
                       "a,b over row c,d), '( )' nest to any depth — a group spans the rows/"
                       "columns it holds, e.g. (a,(b/c))/d puts a beside b-over-c; '[ ]' a grid "
                       "whose cells are centre-cropped to one aspect ratio so they line up. "
-                      "Spaces are ignored. Notation inspired by Griphus.",
+                      "'^' adds insets without a letter: a^b shows image b in a corner of a, "
+                      "a^a a zoom callout of a itself (box on the centre, to refine in the "
+                      "GUI). Spaces are ignored. Notation inspired by Griphus.",
             "ids": "a panel id from panels:, a file name (no , / ( ) [ ] | or spaces), or the "
                    "name of exactly one file next to the recipe (a -> a.png). Letters follow "
                    "the formula's reading order.",

@@ -271,6 +271,7 @@ panels:
 | `/` | stacked; `,` binds tighter, so `a,b/c,d` is the row `a,b` over the row `c,d` |
 | `( )` | a group, nested to any depth; a group spans the rows / columns it holds: `(a,(b/c))/d` puts `a` beside `b` over `c` (a panel two rows high) |
 | `[ ]` | a grid: every cell is centre-cropped to the grid's most common aspect ratio, so rows have equal heights and columns line up (the build lists each crop). Plain groups keep each image's own aspect ratio, without cropping |
+| `^` | insets, without a letter of their own: `a^b` shows image `b` in a corner of `a` (`b` may be defined in `panels:` without appearing elsewhere); `a^a` is a zoom callout of `a` itself, its box on the centre quarter (`zoom: {box: auto}`) — move and resize it afterwards in the GUI; `a^b^c` two insets |
 
 Spaces are only for reading: `a|b|c / d|e|f` = `(a,b,c)/(d,e,f)`.
 
@@ -739,7 +740,7 @@ that region in a corner, and leader lines joining them (or a list of them).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `box` | **required** | `[x, y, w, h]` of the region, in raw pixels. |
+| `box` | **required** | `[x, y, w, h]` of the region, in raw pixels, or `auto` (the centre quarter, to refine in the GUI). |
 | `corner` | `top right` | Where the magnified view goes. |
 | `size` | `0.4` | Magnified view width as a fraction of the panel width (0 < size ≤ 1; `inset_fraction` is accepted too). |
 | `color` / `line_color` | `yellow` | Box and leader-line colours. |

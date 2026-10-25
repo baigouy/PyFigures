@@ -244,6 +244,50 @@ def test_picture_recipe_lines_up_spanning_panels(files, qapp):
     assert any("cells'" in w for w in res["warnings"])
 
 
+def test_caret_insets_parse():
+    t = L.parse("a^a,b^c^d/e")
+    assert L.panel_ids(t) == ["a", "b", "e"]                     # insets get no letter
+    assert L.panel_insets(t) == {"a": ["a"], "b": ["c", "d"]}
+    assert L.to_text(t) == "(a^a,b^c^d)/e"
+    for bad in ("a^", "^a", "a^^b"):
+        with pytest.raises(L.FormulaError, match=r"'\^' needs a panel on each side"):
+            L.parse(bad)
+
+
+def _insets(pyf):
+    """[(file, [inset files], n zoom boxes)] per image panel."""
+    from pyfigures.mcp_tools.core import _decode
+    out = []
+    for g in ET.parse(pyf).getroot().iter("Group"):
+        for img in g.find("content"):
+            if img.tag != "Image2D":
+                continue
+            ann = img.find("annotations")
+            kids = list(ann) if ann is not None else []
+            name = os.path.splitext(os.path.basename(_decode(img.findtext("filename"))))[0]
+            ins = [os.path.splitext(os.path.basename(_decode(a.findtext("filename"))))[0]
+                   for a in kids if a.tag == "Image2D"]
+            out.append((name, ins, sum(1 for a in kids if a.tag == "Rectangle2D")))
+    return out
+
+
+def test_caret_insets_in_a_recipe(files, qapp):
+    res = _build(files, "output: f.pyf\nlayout: (a^a, b^c)/d\npanels:\n  c: {image: c.png}\n")
+    assert not isinstance(res, str), res
+    got = _insets(str(files / "f.pyf"))
+    # a: a zoom of itself (the magnified view + its box), b: c in a corner; c is no panel
+    assert [g[0] for g in got] == ["a", "b", "d"]
+    assert got[0][1] == ["a"] and got[0][2] >= 1
+    assert got[1][1] == ["c"] and got[2][1] == []
+    t = _tree(str(files / "f.pyf"))
+    assert [[_letter(x) for x in g[1]] for g in t] == [["a[A]", "b[B]"], ["d[C]"]]
+
+
+def test_caret_inset_must_be_an_image(files, qapp):
+    res = _build(files, "output: f.pyf\nlayout: a^p\npanels:\n  p: {plot: data.csv, kind: box}\n")
+    assert isinstance(res, str) and "'p' used as an inset must be an image" in res, res
+
+
 def test_recipe_reference_and_cli_document_the_formula(capsys):
     import pyfigures.mcp_server as M
     ref = json.loads(M.recipe_reference())

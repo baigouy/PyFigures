@@ -640,7 +640,7 @@ def _check_extras(opts, where, base):
         if key in opts:
             for k, item in enumerate(_as_list(opts[key])):
                 _check_mapping(item, allowed, required, where, f"{key} {k + 1}")
-                if key == "zoom":
+                if key == "zoom" and item["box"] != "auto":      # auto: the centre quarter
                     _check_point(item["box"], 4, where, f"zoom {k + 1} 'box'")
                 if "image" in item and not source_exists(_resolve(base, item["image"])):
                     raise RecipeError(f"{where}: {key} image not found: {_resolve(base, item['image'])}")
@@ -710,32 +710,54 @@ def _layout_rows(recipe, base=None):
             raise RecipeError(f"layout: panel {pid!r} is placed twice — to show the same image "
                               "twice, define two ids with the same source in panels:")
         seen.add(pid)
-    unused = [str(k) for k in panels if str(k) not in seen]
+    insets = LF.panel_insets(tree)                  # a^b: b in a corner of a; a^a: a zoom of a
+    as_inset = {i for host, ins in insets.items() for i in ins if i != host}
+    unused = [str(k) for k in panels if str(k) not in seen and str(k) not in as_inset]
     if unused:
         raise RecipeError(f"panels {unused} are not in the layout {recipe['layout']!r} "
                           "(a typo? every panel id must appear in the formula once)")
+
+    def spec_of(pid):
+        if pid in panels:
+            return panels[pid]
+        if _FILE_LIKE.search(pid):
+            return pid                               # a file name used directly
+        cands = []
+        if base and os.path.isdir(base):
+            cands = sorted(n for n in os.listdir(base)
+                           if os.path.splitext(n)[0].lower() == pid.lower()
+                           and os.path.isfile(os.path.join(base, n))
+                           and not n.lower().endswith((".yaml", ".yml", ".json", ".pyf")))
+        if len(cands) == 1:
+            return cands[0]
+        if len(cands) > 1:
+            raise RecipeError(f"layout: panel {pid!r} matches several files {cands}: write "
+                              f"the file name in the formula, or define {pid} in panels:")
+        raise RecipeError(f"layout: panel {pid!r} is not defined in panels: and no file "
+                          f"called {pid}.* is next to the recipe — add it, e.g. "
+                          f"panels: {{{pid}: {{image: file.tif}}}}")
+
+    def image_of(spec, pid, role):
+        if isinstance(spec, str):
+            return spec
+        if isinstance(spec, dict) and "image" in spec:
+            return spec["image"]
+        raise RecipeError(f"layout: {pid!r} {role} must be an image (a file or "
+                          f"{{image: …}}), not {spec!r}")
+
     rows = []
     for pid in ids:
-        if pid in panels:
-            rows.append(({}, [panels[pid]]))
-        elif _FILE_LIKE.search(pid):
-            rows.append(({}, [pid]))                 # a file name used directly
-        else:
-            cands = []
-            if base and os.path.isdir(base):
-                cands = sorted(n for n in os.listdir(base)
-                               if os.path.splitext(n)[0].lower() == pid.lower()
-                               and os.path.isfile(os.path.join(base, n))
-                               and not n.lower().endswith((".yaml", ".yml", ".json", ".pyf")))
-            if len(cands) == 1:
-                rows.append(({}, [cands[0]]))
-                continue
-            if len(cands) > 1:
-                raise RecipeError(f"layout: panel {pid!r} matches several files {cands}: write "
-                                  f"the file name in the formula, or define {pid} in panels:")
-            raise RecipeError(f"layout: panel {pid!r} is not defined in panels: and no file "
-                              f"called {pid}.* is next to the recipe — add it, e.g. "
-                              f"panels: {{{pid}: {{image: file.tif}}}}")
+        spec = spec_of(pid)
+        if pid in insets:
+            host = image_of(spec, pid, "with ^ insets")
+            spec = dict(spec) if isinstance(spec, dict) else {"image": host}
+            for ins in insets[pid]:
+                if ins == pid:
+                    spec["zoom"] = _as_list(spec.get("zoom") or []) + [{"box": "auto"}]
+                else:
+                    spec["inset"] = (_as_list(spec.get("inset") or [])
+                                     + [{"image": image_of(spec_of(ins), ins, "used as an inset")}])
+        rows.append(({}, [spec]))
     return tree, ids, rows
 
 
@@ -1384,7 +1406,12 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
     if zooms:
         pw, ph = _image_size(path)
         for k, z in enumerate(zooms):
-            x, y, zw, zh = z["box"]
+            if z["box"] == "auto":
+                # a^a in a layout formula: the centre quarter, refined in the GUI
+                iw, ih = int(pw), int(ph)
+                x, y, zw, zh = 3 * iw // 8, 3 * ih // 8, max(1, iw // 4), max(1, ih // 4)
+            else:
+                x, y, zw, zh = z["box"]
             kw = {"inset_corner": z.get("corner", "top right"),
                   "inset_fraction": z.get("size", 0.4),
                   "box_color": z.get("color", "yellow"),
