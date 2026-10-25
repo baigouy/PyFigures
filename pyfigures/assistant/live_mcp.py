@@ -288,7 +288,7 @@ def edit_annotation_properties(panel_ref: str, annotation_index: int, token: str
 
 @mcp.tool()
 def open_annotation_properties(panel_ref: str, annotation_index: int, token: str) -> dict:
-    """Open and select an existing annotation using the actual native property editor. First inspect_annotation_objects. Text, scale bars and insets open the same dialog as double-click; other ROI types are selected with native controls. Scheduled is not applied. Inspect_native_gui to use exact control IDs; native OK/Cancel remains in effect, including the outer annotation editor."""
+    """Open and select an existing annotation using the actual native property editor. First inspect_annotation_objects. If the native editor is already open for that panel, use the current draft annotation index/token; its edits are retained. Text, scale bars and insets open the same dialog as double-click; other ROI types are selected with native controls. Scheduled is not applied. Inspect_native_gui to use exact control IDs; native OK/Cancel remains in effect, including the outer annotation editor."""
     return call_live('open_annotation_properties', dict(panel_ref=panel_ref,annotation_index=annotation_index,token=token))
 
 

@@ -77,8 +77,9 @@ def restyle_html(html: str, *, font_family=None, font_size=None, bold=None,
         if not found:
             raise ValueError(f"{match!r} is not in the text {plain!r} (the match is case-sensitive).")
         if occurrence is None and len(found) > 1:
-            raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}: give occurrence "
-                             f"(1 = first) to say which one.")
+            raise ValueError(f"{match!r} occurs {len(found)} times in {plain!r}; nothing was changed. "
+                             f"Ask the user which one they mean, then pass occurrence (1 = first) — "
+                             f"do not pick one yourself.")
         k = 1 if occurrence is None else int(occurrence)
         if not 1 <= k <= len(found):
             raise ValueError(f"occurrence {k} out of range: {match!r} occurs {len(found)} time(s).")

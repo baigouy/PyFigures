@@ -68,6 +68,7 @@ def open_editor(session, panel_ref=None):
     from .partner_gui import POLICY
     policy = getattr(panel, POLICY, None)
     panel_id = next('/'.join(map(str, (*gp, ix))) for gp, ix, p in panels(canvas.shapes_to_draw) if p is panel)
+    session._annotation_editor_panel_id = panel_id
     session._annotation_editor_pending = True
     session._annotation_editor_status = 'scheduled'
     def launch():
@@ -75,7 +76,7 @@ def open_editor(session, panel_ref=None):
             if not any(p is panel for _, _, p in panels(canvas.shapes_to_draw)):
                 raise ValueError('Panel changed before editor opened')
             session._annotation_editor_status = 'open'
-            canvas.update_image_annotations(image2d=panel)
+            canvas.update_image_annotations(image2d=panel, tab='Annotations')
             current = resolve_panel(window, panel_id)
             if current is not panel and policy is not None and not getattr(current, POLICY, None):
                 # Native clone drops prototype-only extension metadata.
@@ -91,3 +92,72 @@ def open_editor(session, panel_ref=None):
     QTimer.singleShot(200, launch)
     return dict(status='scheduled', selection=selection_state(window), document_changed=False,
                 message='Native annotation editor will open for this panel. Human edits use native OK/Cancel; no annotation has been added by this tool.')
+
+
+def resolve_panel_arguments(window,arguments):
+    """Resolve named native-tool targets before any temporary file is edited."""
+    args=dict(arguments)
+    ref=args.pop('panel_ref',None)
+    if ref is None:return args
+    if not isinstance(ref,str) or not ref.strip():raise ValueError('panel_ref must be a current visible letter or panel ID')
+    panel=resolve_panel(window,ref)
+    matches=[(list(gp),ix) for gp,ix,p in panels(window.paint.EZFIG_panel.shapes_to_draw) if p is panel]
+    if len(matches)!=1:raise ValueError('STALE_PANEL_REFERENCE: Inspect the figure again')
+    path,index=matches[0]
+    for key,wanted in (('group_path',path),('image_index',index)):
+        supplied=args.get(key)
+        if supplied is not None and (isinstance(supplied,bool) or supplied!=wanted):
+            raise ValueError('PANEL_ADDRESS_CONFLICT: '+ref+' resolves to '+str(path)+' image '+str(index)+'. Omit numeric addresses when using panel_ref; no edit performed.')
+        args[key]=wanted
+    return args
+
+def owned_by(window,dialog):
+    """True when *dialog* belongs to *window* (directly or through other
+    dialogs). Not isAncestorOf: it stops at window boundaries, and a dialog
+    is always its own window."""
+    owner=dialog.parentWidget()
+    while owner is not None and owner is not window:owner=owner.parentWidget()
+    return owner is not None
+
+def native_editor(session):
+    from qtpy.QtWidgets import QApplication,QDialog,QWidget
+    viewers=[]
+    for dialog in QApplication.topLevelWidgets():
+        if not isinstance(dialog,QDialog) or dialog.windowTitle()!='Annotate the image' or not dialog.isVisible():continue
+        if not owned_by(session.window,dialog):continue
+        for widget in dialog.findChildren(QWidget):
+            viewer=getattr(widget,'qt_viewer',None)
+            if viewer is not None and all(viewer is not found[1] for found in viewers):
+                viewers.append((dialog,viewer))
+    if len(viewers)>1:raise ValueError('Several native editors belong to this window; finish one before continuing')
+    return viewers[0] if viewers else (None,None)
+
+def sync_editor(session):
+    """Observe real dialogs too, including editors opened by a human double-click."""
+    dialog,viewer=native_editor(session)
+    observed=getattr(session,'_annotation_editor_observed',False)
+    pending=getattr(session,'_annotation_editor_pending',False)
+    if viewer is not None:
+        if not observed and not pending:
+            selected=selection_state(session.window)['selected_panels']
+            owner=selected[0]['panel_id'] if len(selected)==1 else None
+            if owner is None:
+                background=viewer.background
+                matches=['/'.join(map(str,(*gp,ix))) for gp,ix,p in panels(session.window.paint.EZFIG_panel.shapes_to_draw)
+                         if str(p.filename)==str(background.filename) and str(getattr(p,'custom_loading_script',''))==str(getattr(background,'custom_loading_script',''))]
+                if len(matches)==1:owner=matches[0]
+            session._annotation_editor_panel_id=owner
+            session._annotation_editor_status='open (native GUI)'
+        session._annotation_editor_observed=True
+        session._annotation_editor_pending=True
+    elif observed:
+        session._annotation_editor_observed=False
+        session._annotation_editor_pending=False
+        session._annotation_editor_panel_id=None
+        session._annotation_editor_status='closed'
+    return dialog,viewer
+
+def native_dialog_titles(session):
+    from qtpy.QtWidgets import QApplication,QDialog
+    return [d.windowTitle() for d in QApplication.topLevelWidgets()
+            if isinstance(d,QDialog) and d.isVisible() and owned_by(session.window,d)]

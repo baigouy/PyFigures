@@ -99,6 +99,7 @@ def build_server(full_server, send):
         'To construct NEW rows/columns, call add_group and use its returned path before adding images/plots. Requested row numbers are not existing group paths. On a missing-container error inspect/create the intended container; never fall back into an unrelated existing row. '
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
+        'For named live panels, prefer panel_ref on native image/annotation tools; omit numeric group_path/image_index so current GUI state resolves the address. get_annotations text_index is the index for style_annotation/set_annotation_text, while annotation_index is the full list index for ROI/removal tools. The live text wrappers accept text_index explicitly. '
         'Never guess argument names. Discover the exact schema before first use. undo_redo is directly available and also searchable; do not repeatedly search after a no-match. '
         'Category descriptions are guidance, not restrictions: search by words across all '
         'categories if needed. All original functions remain available underneath. '
@@ -234,7 +235,7 @@ def build_server(full_server, send):
             found.append({'name': n, 'callable_directly': False, 'dispatcher': 'use_pyfigures_tool', 'category': c, 'description': t.description,
                           'arguments_schema': schema})
         manual_guides=None
-        if manual_guides is None and query:
+        if query:
             from .manual_help import explain
             candidate=explain(query)
             if candidate.get('status') in ('explained','source_reviewed'):

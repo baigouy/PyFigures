@@ -19,9 +19,12 @@ def describe(obj):
     if hasattr(obj,'text_orientation'):result['text_orientation']=str(obj.text_orientation)
     from qtpy.QtGui import QPolygonF
     if isinstance(obj,QPolygonF):result['vertices']=[[point.x(),point.y()] for point in obj]
+    if type(obj).__name__=='Image2D':
+        result['filename']=str(getattr(obj,'filename',''))
+        result['script']=str(getattr(obj,'custom_loading_script','') or '')
     semantic = dict(result)
     # Anchored text x/y are paint caches, not user changes.
-    if hasattr(obj, 'doc'):
+    if hasattr(obj, 'doc') or (type(obj).__name__=='Image2D' and bool(str(getattr(obj,'placement','')))):
         semantic.pop('geometry', None)
     result['token'] = hashlib.sha256(json.dumps(semantic, sort_keys=True, default=str).encode()).hexdigest()
     return result
@@ -40,21 +43,16 @@ def inspect_objects(session, panel_ref=None, offset=0, limit=12, include_panel_l
         for index, obj in enumerate(panel.annotations or []):
             if getattr(obj,'is_letter',False) and not include_panel_letters:continue
             items.append(dict(panel_id=pid, annotation_index=index, **describe(obj)))
+    from .gui_selection import sync_editor
+    _,viewer=sync_editor(session)
     editor_objects=[]
-    if getattr(session,'_annotation_editor_pending',False):
-        from qtpy.QtWidgets import QApplication,QDialog,QWidget
-        seen=set()
-        for dialog in QApplication.topLevelWidgets():
-            if not isinstance(dialog,QDialog) or dialog.windowTitle()!='Annotate the image':continue
-            for widget in dialog.findChildren(QWidget):
-                viewer=getattr(widget,'qt_viewer',None)
-                if viewer is None or id(viewer) in seen:continue
-                seen.add(id(viewer))
-                for index,obj in enumerate(viewer.shapes):
-                    editor_objects.append(dict(annotation_index=index,selected=any(obj is x for x in viewer.selected_shape),**describe(obj)))
+    if viewer is not None:
+        for index,obj in enumerate(viewer.shapes):
+            editor_objects.append(dict(annotation_index=index,selected=any(obj is x for x in viewer.selected_shape),**describe(obj)))
     return {'objects':items[offset:offset+limit], 'total_objects':len(items),
             'next_offset':offset+limit if offset+limit<len(items) else None,
             'editor_draft_objects':editor_objects,
+            'editor_panel_id':getattr(session,'_annotation_editor_panel_id',None),
             'editor_open':bool(getattr(session, '_annotation_editor_pending',False)),
             'editor_status':getattr(session,'_annotation_editor_status',None),
             'coordinates':'ROI geometry is in source-image pixels, not scene/display pixels.'}
@@ -188,8 +186,10 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
     from .gui_selection import resolve_panel
     from .session import STATE
     import uuid
+    from .gui_selection import sync_editor
+    sync_editor(session)
     if getattr(session,'_annotation_editor_pending',False):
-        raise ValueError('Finish or cancel the native editor first; its draft must retain native OK/Cancel semantics')
+        return edit_draft(session,panel_ref,annotation_index,token,changes,substring,occurrence)
     panel=resolve_panel(session.window,panel_ref)
     if isinstance(annotation_index,bool) or not isinstance(annotation_index,int) or not 0<=annotation_index<len(panel.annotations or []):
         raise ValueError('Annotation index not found; inspect again')
@@ -225,37 +225,96 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
         w.update_button_state()
         raise
 
-def open_properties(session,panel_ref,annotation_index,token):
-    """Open the same nested dialog as a native annotation double-click."""
-    from .gui_selection import resolve_panel,open_editor
-    from qtpy.QtWidgets import QApplication,QDialog,QWidget
-    from qtpy.QtCore import QTimer
+def edit_draft(session,panel_ref,annotation_index,token,changes,substring=None,occurrence=None):
+    """The panel's editor is open: edit its DRAFT object, as the editor's own
+    controls do. The figure is untouched until the user clicks OK (Cancel
+    drops the change), so native OK/Cancel semantics stay intact."""
+    from .gui_selection import resolve_panel,native_editor,native_dialog_titles
+    from .partner_gui import panels
     panel=resolve_panel(session.window,panel_ref)
-    if isinstance(annotation_index,bool) or not isinstance(annotation_index,int) or not 0<=annotation_index<len(panel.annotations or []):
-        raise ValueError('Annotation index not found')
-    obj=panel.annotations[annotation_index]
-    if describe(obj)['token']!=token:raise ValueError('STALE_ANNOTATION: Inspect again')
-    result=open_editor(session,panel_ref)
+    owner=next('/'.join(map(str,(*gp,ix))) for gp,ix,p in panels(session.window.paint.EZFIG_panel.shapes_to_draw) if p is panel)
+    if getattr(session,'_annotation_editor_panel_id',None)!=owner:
+        raise ValueError('The open editor is for another panel; finish or cancel it first')
+    if any(t in ('Edit text','Edit ScaleBar','Edit Inset') for t in native_dialog_titles(session)):
+        raise ValueError('Finish or cancel the open property dialog first')
+    _,viewer=native_editor(session)
+    if viewer is None:raise ValueError('The editor is still opening; inspect again')
+    if isinstance(annotation_index,bool) or not isinstance(annotation_index,int) or not 0<=annotation_index<len(viewer.shapes):
+        raise ValueError('Draft annotation index not found; inspect the editor draft again')
+    draft=viewer.shapes[annotation_index]
+    main=panel.annotations[annotation_index] if annotation_index<len(panel.annotations or []) else None
+    before=describe(draft)
+    valid=before['token']==token or (main is not None and describe(main)['token']==token and draft_matches(main,draft))
+    if not valid:raise ValueError('STALE_ANNOTATION: Inspect the current editor draft again')
+    if not isinstance(changes,dict):raise ValueError('changes must be an object')
+    if hasattr(draft,'doc'):apply=prepare_text(draft,changes,substring,occurrence)
+    else:
+        if substring is not None or occurrence is not None:raise ValueError('Text selection cannot target an ROI')
+        apply=prepare_roi(draft,changes)
+    apply()
+    after=describe(draft)
+    changed=before['token']!=after['token']
+    if changed:
+        viewer.shapeChanged.emit() if hasattr(viewer,'shapeChanged') else None
+        viewer.update()
+    return {'changed':changed,'target':'editor_draft','document_changed':False,
+            'outcome':'VERIFIED_DRAFT_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
+            'verification':'Read back the open editor draft. The figure changes only when the user clicks OK in the editor; Cancel discards it.'}
+
+def open_properties(session,panel_ref,annotation_index,token):
+    """Select a draft object and open its actual native double-click properties."""
+    from .gui_selection import resolve_panel,open_editor,sync_editor,native_editor,native_dialog_titles
+    from .partner_gui import panels
+    from qtpy.QtCore import QTimer
+    if isinstance(annotation_index,bool) or not isinstance(annotation_index,int) or annotation_index<0:
+        raise ValueError('Annotation index must be a nonnegative integer')
+    sync_editor(session)
+    panel=resolve_panel(session.window,panel_ref)
+    owner=next('/'.join(map(str,(*gp,ix))) for gp,ix,p in panels(session.window.paint.EZFIG_panel.shapes_to_draw) if p is panel)
+    main=panel.annotations[annotation_index] if annotation_index<len(panel.annotations or []) else None
+    existing=bool(getattr(session,'_annotation_editor_pending',False))
+    dialogs={'TAText2D':'text','ScaleBar':'scale bar','Image2D':'inset'}
+    _,open_viewer=native_editor(session) if existing else (None,None)
+    objects=list(open_viewer.shapes if open_viewer is not None else panel.annotations or [])
+    if annotation_index<len(objects) and type(objects[annotation_index]).__name__ not in dialogs:
+        # Otherwise the object is merely selected and "scheduled" reads as success.
+        others=', '.join(f'{i} ({dialogs[type(a).__name__]})' for i,a in enumerate(objects) if type(a).__name__ in dialogs) or 'none'
+        raise ValueError(f'Annotation {annotation_index} is a {type(objects[annotation_index]).__name__}, which has no properties dialog '
+                         f'(edit it with edit_annotation_properties). Objects with a properties dialog on this panel: {others}. Nothing was opened.')
+    if existing:
+        if getattr(session,'_annotation_editor_panel_id',None)!=owner:
+            raise ValueError('Finish the current panel editor before opening another panel properties')
+        _,viewer=native_editor(session)
+        if viewer is not None:
+            if annotation_index>=len(viewer.shapes):raise ValueError('Draft annotation index not found; inspect again')
+            candidate=viewer.shapes[annotation_index]
+            valid=describe(candidate)['token']==token or (main is not None and describe(main)['token']==token and draft_matches(main,candidate))
+            if not valid:raise ValueError('STALE_ANNOTATION: Inspect the current editor draft again')
+            titles=native_dialog_titles(session)
+            expected={'TAText2D':'Edit text','ScaleBar':'Edit ScaleBar','Image2D':'Edit Inset'}.get(type(candidate).__name__)
+            if any(t in ('Edit text','Edit ScaleBar','Edit Inset') for t in titles):
+                if expected in titles and any(candidate is a for a in viewer.selected_shape):
+                    return {'status':'already_open','document_changed':False,'message':'The requested native properties are already open.'}
+                raise ValueError('Finish or cancel the current property dialog before selecting another annotation')
+        result={'status':'scheduled','document_changed':False}
+    else:
+        if main is None or describe(main)['token']!=token:raise ValueError('STALE_ANNOTATION: Inspect again')
+        result=open_editor(session,panel_ref)
     attempts=[0]
     def choose():
         attempts[0]+=1
         if not getattr(session,'_annotation_editor_pending',False):return
-        dialogs=[d for d in QApplication.topLevelWidgets() if isinstance(d,QDialog) and d.windowTitle()=='Annotate the image' and d.isVisible()]
-        viewers=[]
-        for dialog in dialogs:
-            for widget in dialog.findChildren(QWidget):
-                viewer=getattr(widget,'qt_viewer',None)
-                if viewer is not None and all(viewer is not v for v in viewers):viewers.append(viewer)
-        if not viewers and attempts[0]<100:
+        _,viewer=sync_editor(session)
+        if viewer is None and attempts[0]<100:
             QTimer.singleShot(50,choose);return
         try:
-            if len(viewers)!=1:raise ValueError('Native annotation canvas was not uniquely available')
-            viewer=viewers[0]
-            if annotation_index>=len(viewer.shapes):raise ValueError('Annotation draft changed; inspect native editor')
+            if viewer is None:raise ValueError('Native annotation canvas was not available')
+            if getattr(session,'_annotation_editor_panel_id',None)!=owner:raise ValueError('Native editor owner changed')
+            if annotation_index>=len(viewer.shapes):raise ValueError('Annotation draft changed; inspect again')
             draft=viewer.shapes[annotation_index]
-            if not draft_matches(obj,draft):raise ValueError('Annotation draft differs; inspect native editor before editing')
-            viewer.selected_shape=[draft]
-            viewer.currently_drawn_shape=None
+            valid=describe(draft)['token']==token or (main is not None and describe(main)['token']==token and draft_matches(main,draft))
+            if not valid:raise ValueError('Annotation draft differs; inspect current editor before editing')
+            viewer.selected_shape=[draft];viewer.currently_drawn_shape=None
             viewer.selectionChanged.emit();viewer.update()
             session._annotation_editor_status='annotation selected; native controls available'
             if type(draft).__name__ in ('TAText2D','ScaleBar','Image2D'):
@@ -264,8 +323,8 @@ def open_properties(session,panel_ref,annotation_index,token):
                 session._annotation_editor_status='annotation editor open; accept or cancel parent dialog'
         except Exception as exc:
             session._annotation_editor_status='property selection failed: '+str(exc)
-    QTimer.singleShot(250,choose)
-    return {**result,'message':'Native editor opening. Text/scale-bar/inset properties use the native double-click dialog; ROI selection exposes native controls. Inspect native GUI jobs/dialogs and accept or cancel BOTH levels. Queued is not an applied edit.'}
+    QTimer.singleShot(80 if existing else 250,choose)
+    return {**result,'message':'Native properties requested for the selected annotation. Uses the current editor draft when already open. Inspect actual dialogs; queued is not applied. Both native OK/Cancel levels remain in effect.'}
 
 def draft_matches(original,draft):
     """Native TextEditor resolves inherited fonts while cloning; compare effective styles."""

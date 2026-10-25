@@ -8,12 +8,92 @@ def fingerprints():
     tree=ast.parse(source)
     return {node.name:hashlib.sha256(ast.get_source_segment(source,node).encode()).hexdigest()
             for node in ast.walk(tree) if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and node.name in NAMES}
+def current_feature_help(topic):
+    words=set(re.findall(r'[a-z]+',topic.lower()))
+    native=Path(__file__).resolve().parents[2]/'pyfigures'
+    if words.intersection({'sample','samples'}) and words.intersection({'file','files','tutorial','tutorials','inputs'}):
+        files={'gui/tutorial.py':['Give me sample files','def _make_samples'],'gui/pfgui.py':['Beginner Tutorial']}
+        title='Tutorial sample files'
+        steps=['Open a tutorial from Help, for example Beginner Tutorial.',
+               'On a step that needs input files, click Give me sample files. It creates the sample inputs and shows information for that step. The button is offered only on steps that provide samples.',
+               'Use those files in the dialog described by the tutorial. The tutorial still guides your own clicks.']
+    elif 'poster' in words and words.intersection({'send','transfer'}):
+        files={'gui/pfgui.py':['Send this figure to the poster designer','add_figure_file(self.current_file)']}
+        title='Send the current figure to a poster'
+        steps=['Choose Tools > Send this figure to the poster designer.',
+               'If the figure is new or has unsaved changes, choose Save and complete saving; Cancel stops the transfer.',
+               'The poster designer opens and links the saved .pyf figure. Its PDF/SVG exports draw that figure as vectors.']
+    elif ('^' in topic and words.intersection({'layout','formula','inset','notation'})) or 'a^b' in topic or 'a^a' in topic or ('inset' in words and words.intersection({'formula','notation','expression'})):
+        files={'layout_formula.py':['a^b','a^a'],'recipe.py':['centre quarter']}
+        title='Inset layout notation'
+        steps=['In a layout formula, a^b means image b is an inset in a corner of image a; the inset has no letter of its own.',
+               'a^a means a zoom callout of a itself. Its initial box is the centre quarter, which you can refine in the GUI.',
+               'For the mouse workflow, select the panel and use Annotations > Add zoom callout to selected panel, or open its annotation editor and convert a rectangle ROI to an inset.']
+    else:return None
+    hashes={}
+    for relative,anchors in files.items():
+        path=native/relative
+        try:source=path.read_text(encoding='utf-8')
+        except OSError:return dict(status='needs_review',operation_executed=False,message='Current source for this help is unavailable.')
+        if not all(anchor in source for anchor in anchors):
+            return dict(status='needs_review',operation_executed=False,message='The source changed; verify this feature in the current GUI before giving exact steps.')
+        hashes[relative]=hashlib.sha256(source.encode()).hexdigest()
+    return dict(status='source_reviewed',operation_executed=False,guides=[dict(title=title,steps=steps)],
+                source_sha256=hashes,answer_style='Human GUI steps. No Python or tool commands unless explicitly requested.')
+
+def tutorial_feature_help(topic):
+    """Read authored tutorial text without importing or constructing Qt widgets."""
+    import html
+    words=set(re.findall(r'[a-z]+',topic.lower()))
+    concepts=None
+    if 'projection' in words:concepts=('projection',)
+    elif 'montage' in words:concepts=('montage',)
+    elif 'orthogonal' in words:concepts=('orthogonal',)
+    elif words.intersection({'consolidate','portable','archive'}):concepts=('consolidat',)
+    elif words.intersection({'reconnect','relink','remap'}) or ('missing' in words and 'image' in words):concepts=('remap','moved file')
+    elif 'replace' in words and words.intersection({'picture','image','panel'}):concepts=('replac',)
+    if concepts is None:return None
+    source=Path(__file__).resolve().parents[2]/'pyfigures/gui/tutorial.py'
+    try:text=source.read_text(encoding='utf-8')
+    except OSError:return dict(status='needs_review',operation_executed=False,message='Current tutorial source unavailable.')
+    choices=[]
+    for function in ast.parse(text).body:
+        if not isinstance(function,ast.FunctionDef) or not function.name.endswith('_steps'):continue
+        for node in ast.walk(function):
+            if not isinstance(node,ast.Call) or getattr(node.func,'id','')!='TutorialStep':continue
+            data={item.arg:item.value for item in node.keywords}
+            try:
+                title=ast.literal_eval(data.get('title',node.args[0] if node.args else None))
+                message=ast.literal_eval(data.get('message',node.args[1] if len(node.args)>1 else None))
+            except (ValueError,TypeError):continue
+            if not isinstance(title,str) or not isinstance(message,str):continue
+            score=sum(10*(term in title.lower())+(term in message.lower()) for term in concepts)
+            if score:choices.append((score,title,message,node.lineno,function.name))
+    if not choices:return dict(status='needs_review',operation_executed=False,message='No current authored tutorial step for this topic; inspect current native menus instead of inventing instructions.')
+    _,title,message,line,function=max(choices,key=lambda row:row[0])
+    clean=html.unescape(re.sub('<[^>]+>',' ',message.replace('<br>','\n').replace('<br/>','\n')))
+    clean=re.sub(r'[ \t]+',' ',clean).strip()
+    return dict(status='source_reviewed',operation_executed=False,guides=[dict(title=title,steps=[clean])],
+                tutorial_source=dict(function=function,line=line,sha256=hashlib.sha256(text.encode()).hexdigest()),
+                answer_style='Human GUI steps from the current authored tutorial. No API commands or Python.')
+
 def explain(topic='overview'):
+    feature=current_feature_help(topic)
+    if feature is not None:return feature
+    tutorial=tutorial_feature_help(topic)
+    if tutorial is not None:return tutorial
     from pyfigures.guides import explain as native_explain, GUIDES
     # Prefer the current authored native guides to prototype-era supplements.
     words=set(re.findall(r'[a-z]+',topic.lower()))
     target=None
-    if 'inset' in words and words.intersection({'move','resize','border','existing','edit'}):
+    if words.intersection({'rectangle','ellipse','polygon'}) or ('line' in words and words.intersection({'plain','no','without'})):
+        target='edit_roi'
+    elif words.intersection({'text','note','wording','word','phrase'}) and not words.intersection({'caption','scale','bar','bars'}):
+        target='edit_text'
+    elif words.intersection({'scale','bar','bars'}) and words.intersection({'restyle','font','style','numbers'}):
+        target='text_style'
+
+    if 'inset' in words and words.intersection({'move','resize','border','existing','edit','remove'}):
         target='edit_inset'
     elif words.intersection({'subscript','superscript','greek'}) or ('text' in words and words.intersection({'part','word','portion','edit'})):
         target='edit_text'
@@ -22,7 +102,10 @@ def explain(topic='overview'):
         result['answer_style']='Human GUI steps; code only when explicitly requested.'
         return result
     current=native_explain(topic)
-    if current.get('guide') in ('edit_text','edit_inset','stack_in_row','arrowheads','text_style','review_comments','figure_caption'):
+    if current.get('guide')=='split_channels':
+        current['steps'].append('With automatic lettering enabled, each channel panel and the merge have their own panel letter; montage frames may share one letter.')
+        return current
+    if current.get('guide') in ('edit_roi','edit_text','edit_inset','stack_in_row','arrowheads','text_style','review_comments','figure_caption'):
         return current
     normalized=topic.lower().replace('-', '_').replace(' ', '_')
     if normalized in ('shortcuts','keyboard','rearrange','arrows'):

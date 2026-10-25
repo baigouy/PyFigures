@@ -71,6 +71,8 @@ class Session:
 
     def snapshot(self):
         self.sync()
+        from .gui_selection import sync_editor,native_dialog_titles
+        sync_editor(self)
         from .partner_gui import panels, letters, state as lettering_state, selection_state
         from .figure_state import specification
         from .pointer_context import geometry
@@ -79,17 +81,26 @@ class Session:
                        'rotation_degrees': getattr(p, 'theta', 0), 'geometry': geometry(p)}
                       for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)]
         annotations = [{'panel_id': '/'.join(map(str, (*gp, ix))), 'group_path': list(gp), 'image_index': ix,
-                        'annotation_index': index, 'type': type(a).__name__, 'is_letter': False, 'text': a.getPlainText()[:500]}
+                        'annotation_index': index, 'text_index': sum(isinstance(v,TAText2D) for v in p.annotations[:index]), 'type': type(a).__name__, 'is_letter': False, 'text': a.getPlainText()[:500]}
                        for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
                        for index, a in enumerate(p.annotations or []) if isinstance(a, TAText2D) and not a.is_letter]
+        from .advanced_annotations import describe
+        rois=[dict(panel_id='/'.join(map(str,(*gp,ix))),annotation_index=index,**describe(a))
+              for gp,ix,p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
+              for index,a in enumerate(p.annotations or [])
+              if type(a).__name__ in ('Rectangle2D','Rect2D','Ellipse2D','Circle2D','Square2D','Line2D','Polygon2D','PolyLine2D','Freehand2D')]
         return {'session_id': self.id, 'revision': self.revision,
                 'text_annotations': annotations,
+                'roi_annotations': rois,
                 'selection': selection_state(self.window),
                 'verified_letter_specification': specification(lettering_state(self.window)),
                 'panel_references': references,
                 'last_canvas_click': self.pointer.snapshot(),
                 'annotation_editor_status': getattr(self, '_annotation_editor_status', 'closed'),
+                'annotation_editor_open': bool(getattr(self, '_annotation_editor_pending', False)),
+                'annotation_editor_panel_id': getattr(self, '_annotation_editor_panel_id', None),
                 'native_gui_available': True,
+                'native_dialogs': native_dialog_titles(self),
                 'native_gui_jobs': list(self.native_gui.jobs.values())[-10:] if hasattr(self,'native_gui') else [],
                 'path': self.window.current_file, 'dirty': self.window._dirty,
                 'row_spacing_px': self.window.main_space_spinner.value(),
@@ -107,6 +118,8 @@ class Session:
                                  'arrange_rows', 'existing_read', 'existing_batch', 'original_tool']}
 
     def execute(self, req):
+        from .gui_selection import sync_editor
+        sync_editor(self)
         if req['operation'] == 'manual_guide':
             from .manual_help import explain
             return explain(req.get('arguments', {}).get('topic', 'overview'))
@@ -133,7 +146,17 @@ class Session:
                 args['request_id']=req.get('request_id')
                 method={'use_native_gui':'operate','open_native_menu':'open_menu','native_gesture':'gesture','native_drop_files':'drop_files','native_keys':'keys'}[op]
                 return getattr(self.native_gui,method)(**args)
-            if getattr(self, '_annotation_editor_pending', False) and op not in ('inspect', 'readability', 'inspect_annotation_objects'):
+            if op == 'edit_annotation_properties':
+                from .gui_selection import sync_editor
+                sync_editor(self)
+                if getattr(self, '_annotation_editor_pending', False):
+                    # the panel's editor is open: change its draft (OK/Cancel decide)
+                    self.sync()
+                    if req.get('session_id') != self.id or req.get('expected_revision') != self.revision:
+                        raise ValueError('STALE_STATE: Inspect before editing the editor draft')
+                    from .advanced_annotations import edit_draft
+                    return edit_draft(self, **req.get('arguments', {}))
+            if getattr(self, '_annotation_editor_pending', False) and op not in ('inspect', 'readability', 'inspect_annotation_objects', 'open_annotation_properties'):
                 raise ValueError('ANNOTATION_EDITOR_OPEN: Finish or cancel the native editor before another tool action')
             if op in ('select_live_objects', 'open_annotation_editor', 'open_annotation_properties'):
                 self.sync()
@@ -462,6 +485,8 @@ class Session:
         if not parameter:
             raise ValueError('This tool requires its original explicit paths')
         supplied = dict(args.get('arguments', {}))
+        from .gui_selection import resolve_panel_arguments
+        supplied = resolve_panel_arguments(self.window, supplied)
         supplied[parameter] = 'live'
         w = self.window
         from .partner_gui import state as letter_state, panels as image_panels

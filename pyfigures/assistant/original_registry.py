@@ -1,7 +1,7 @@
 """Discover actual registered MCP tools, not helper functions or a manual allowlist."""
 import base64
 import inspect
-from typing import Any, get_type_hints
+from typing import Any, Optional, get_type_hints
 import pyfigures.mcp_server as original
 from mcp.server.fastmcp import Image
 from mcp.types import ImageContent
@@ -50,9 +50,29 @@ def register_all(server, send):
         parameter = live_parameter(name)
         # Guidance requires a real window identity, not a temporary document.
         route = parameter
+        native_params=inspect.signature(tool.fn).parameters
+        addressable=bool(route and {'group_path','image_index'} <= set(native_params))
+        text_indexed=name in ('style_annotation','set_annotation_text')
 
-        def make_wrapper(tool=tool, name=name, parameter=route):
+        def make_wrapper(tool=tool, name=name, parameter=route, native_params=native_params, addressable=addressable, text_indexed=text_indexed):
             def invoke(**kwargs):
+                if text_indexed:
+                    index=kwargs.pop('text_index',None)
+                    if index is not None:
+                        if kwargs.get('annotation_index') is not None and kwargs['annotation_index']!=index:
+                            raise ValueError('Conflicting text_index and annotation_index; use text_index from get_annotations for text tools')
+                        kwargs['annotation_index']=index
+                ref=kwargs.get('panel_ref')
+                if addressable:
+                    for key in ('group_path','image_index'):
+                        if kwargs.get(key) is None:
+                            kwargs.pop(key,None)
+                            if ref is None and native_params[key].default is not inspect.Parameter.empty:
+                                kwargs[key]=native_params[key].default
+                            elif ref is None:
+                                raise ValueError('Supply panel_ref for a named live panel, or both group_path and image_index')
+                if text_indexed and kwargs.get('annotation_index') is None:
+                    raise ValueError('Supply text_index from get_annotations (text tools count texts, not all annotations)')
                 target = kwargs.get(parameter, 'live') if parameter else None
                 if parameter and target == 'live':
                     for attempt in range(2):
@@ -73,6 +93,8 @@ def register_all(server, send):
                                 'verified_changes': result.get('verified_changes'),
                                 'verified_specification': result.get('verified_specification')}
                     return decoded
+                if kwargs.pop('panel_ref',None) is not None:
+                    raise ValueError('panel_ref is for the live GUI; explicit file tools require native indices')
                 return tool.fn(**kwargs)
             hints = get_type_hints(inspect.unwrap(tool.fn))
             params = []
@@ -81,7 +103,13 @@ def register_all(server, send):
                               annotation=hints.get(p.name, p.annotation))
                 if p.name == parameter:
                     p = p.replace(default='live')
+                if addressable and p.name in ('group_path','image_index'):
+                    p=p.replace(default=None,annotation=Optional[p.annotation])
+                if text_indexed and p.name=='annotation_index':
+                    p=p.replace(name='text_index')
                 params.append(p)
+            if addressable:
+                params.append(inspect.Parameter('panel_ref',inspect.Parameter.KEYWORD_ONLY,default=None,annotation=str | None))
             invoke.__name__ = name
             invoke.__signature__ = inspect.Signature(params, return_annotation=Any)
             invoke.__annotations__ = {p.name: p.annotation for p in params}
@@ -90,8 +118,13 @@ def register_all(server, send):
 
         suffix = (f' Live adapter: {route} defaults to "live", meaning the OPEN PyFigures document including unsaved changes. Omit it for live editing. An explicit filesystem path uses the original file-based tool. Live document changes are undoable and not automatically saved.'
                   if route else ' Original file/service tool: retains its original explicit paths and side effects; does not automatically load its output in the GUI.')
+        if addressable:
+            suffix += ' PREFER panel_ref (visible letter or inspected panel ID) for a named LIVE panel; omit group_path/image_index. Resolved against current GUI state on the Qt thread. Conflicting numeric addresses are rejected, never silently substituted.'
+        if text_indexed:
+            suffix += ' Use the required text_index from get_annotations. The native Python parameter called annotation_index counts TEXTS; the live MCP schema deliberately calls it text_index to distinguish it from ROI/removal indices.'
         if name in ('get_image_property', 'set_image_property'):
             suffix += ' Image rotation is property_name="theta" in degrees; unrotate/reset rotation means value="0". inspect_figure panel_references maps visible letters to group_path/image_index.'
-        server.add_tool(make_wrapper(), name=name, description=tool.description + suffix,
+        description=tool.description.replace('annotation_index','text_index') if text_indexed else tool.description
+        server.add_tool(make_wrapper(), name=name, description=description + suffix,
                         annotations=tool.annotations, structured_output=False)
     return len(registry())

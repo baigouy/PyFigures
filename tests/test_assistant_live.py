@@ -142,6 +142,83 @@ def test_advanced_text_and_roi_edits_on_the_live_figure(qapp, gui, runtime, tmp_
     assert roi.stroke == 3 and roi.fill_color is None and roi.width() == 30 and roi.color == 0xffffff
 
 
+def test_edits_while_the_image_editor_is_open_go_into_its_draft(qapp, gui, runtime, tmp_path):
+    """With the panel's annotation editor open, an edit changes the editor's
+    draft only (OK/Cancel still decide); a rectangle has no properties dialog
+    and is refused by name; an inset's properties open inside that editor."""
+    import time
+    import uuid
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QApplication, QDialog
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.advanced_annotations import describe, inspect_objects
+    from pyfigures.assistant.partner_gui import panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+
+    def cmd(operation, **arguments):
+        s = session.snapshot()
+        return session.execute(dict(operation=operation, arguments=arguments, request_id=str(uuid.uuid4()),
+                                    session_id=s["session_id"], expected_revision=s["revision"]))
+
+    def panel():
+        return next(p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw))
+
+    def dialogs():
+        return {d.windowTitle(): d for d in QApplication.topLevelWidgets() if isinstance(d, QDialog) and d.isVisible()}
+    panel().annotations.append(Rectangle2D(5, 6, 20, 15, color=0xFF0000, fill_color=0x333333))
+    cmd("roi_to_inset", panel_ref="0/0")
+    panel().annotations.append(Rectangle2D(2, 3, 10, 10, color=0x00FF00, fill_color=0x333333))
+    kinds = [type(a).__name__ for a in panel().annotations]
+    inset, box = kinds.index("Image2D"), len(kinds) - 1
+    cmd("open_annotation_editor", panel_ref="0/0")
+    seen = {}
+
+    def in_editor():
+        if "Annotate the image" not in dialogs():
+            QTimer.singleShot(50, in_editor)
+            return
+        try:
+            token = next(o["token"] for o in inspect_objects(session, "0/0")["objects"] if o["annotation_index"] == box)
+            seen["edit"] = cmd("edit_annotation_properties", panel_ref="0/0", annotation_index=box,
+                               token=token, changes={"fill_color": "none"})
+            seen["main_fill"] = panel().annotations[box].fill_color
+            token = next(o["token"] for o in inspect_objects(session, "0/0")["objects"] if o["annotation_index"] == box)
+            try:
+                cmd("open_annotation_properties", panel_ref="0/0", annotation_index=box, token=token)
+            except ValueError as e:
+                seen["refused"] = str(e)
+            token = next(o["token"] for o in inspect_objects(session, "0/0")["objects"] if o["annotation_index"] == inset)
+            cmd("open_annotation_properties", panel_ref="0/0", annotation_index=inset, token=token)
+        except Exception as e:
+            seen["error"] = repr(e)
+        QTimer.singleShot(50, close_inset)
+
+    def close_inset():
+        d = dialogs()
+        if "Edit Inset" in d:
+            seen["inset_dialog"] = True
+            d["Edit Inset"].reject()
+        elif time.time() - t0 < 5:
+            QTimer.singleShot(50, close_inset)
+            return
+        QTimer.singleShot(50, lambda: [d.reject() for t, d in dialogs().items() if t == "Annotate the image"])
+    t0 = time.time()
+    QTimer.singleShot(50, in_editor)
+    while (time.time() - t0 < 10) and ("inset_dialog" not in seen or dialogs()):
+        qapp.processEvents()
+        time.sleep(0.01)
+    assert "error" not in seen, seen
+    assert seen["edit"]["target"] == "editor_draft" and seen["edit"]["changed"] and not seen["edit"]["document_changed"]
+    assert seen["main_fill"] is not None                  # the figure waits for OK
+    assert "Rectangle2D" in seen["refused"] and f"{inset} (inset)" in seen["refused"]
+    assert seen.get("inset_dialog")
+    assert not dialogs()
+    assert panel().annotations[box].fill_color is not None  # Cancel dropped the draft
+
+
 def test_share_edit_undo_and_stop(qapp, gui, runtime):
     from pyfigures.assistant import launch
     g = gui(shareable=True)
