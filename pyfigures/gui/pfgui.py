@@ -51,7 +51,7 @@ from qtpy.QtWidgets import QApplication, QStackedWidget, QWidget, QTabWidget, QS
     QGridLayout, QTextBrowser, QFrame, QProgressBar, QGroupBox, QAction, QDialog, QDockWidget, QLabel, QMenu, QShortcut, \
     QCheckBox, QSpinBox, QMainWindow, QToolBar, QComboBox, QMenuBar, QMessageBox, QLineEdit, QInputDialog, \
     QDoubleSpinBox, QTextEdit, QToolButton, QColorDialog, QHBoxLayout, QSlider, QProgressDialog
-from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool, QUrl
+from qtpy.QtCore import Signal, QEvent, Qt, QRect, QRectF, QTimer,QObject,QPoint, QPointF,QThread,Slot,QRunnable,QThreadPool, QUrl, QCoreApplication
 import qtawesome as qta
 import logging
 import numpy as np
@@ -176,6 +176,14 @@ class _PyfLoaderWorker(QObject):
                     self.file_ready.emit(path, properties, False)
             except Exception as e:
                 self.file_error.emit(path, str(e))
+        # Back to the GUI thread before finishing, so deleteLater runs there.
+        # Deleted on this thread, ~QObject holds Qt's connection lock while
+        # PyQt waits for the GIL to drop the wrapper; the GUI thread, holding
+        # the GIL and creating/connecting an object, waits for that lock:
+        # a deadlock (seen as random test hangs after loading a .pyf).
+        app = QCoreApplication.instance()
+        if app is not None:
+            self.moveToThread(app.thread())
         self.finished.emit()
 
 
