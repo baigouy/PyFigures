@@ -1727,6 +1727,19 @@ class EZFIG_GUI(QMainWindow):
                                       "(MCP server… only sets up the connection)")
         tools_menu.addAction(mcp_history_action)
         mcp_history_action.triggered.connect(self.mcp_history_dialog)
+        self.share_figure_action = QAction("Share the open figure with the MCP server", self)
+        self.share_figure_action.setCheckable(True)
+        self.share_figure_action.setToolTip("Let an MCP client edit THIS window's figure live (unsaved "
+                                            "work included, one undo step per edit) through "
+                                            "python -m pyfigures.assistant.live_mcp. Only on this "
+                                            "computer (127.0.0.1).")
+        tools_menu.addAction(self.share_figure_action)
+        self.share_figure_action.triggered.connect(self.share_figure_toggled)
+        chat_action = QAction("Chat sidebar (local model)…", self)
+        chat_action.setToolTip("Dock a chat on the right that edits this figure through the MCP "
+                               "server (optional package qtpy-ai-sidecar)")
+        tools_menu.addAction(chat_action)
+        chat_action.triggered.connect(lambda _checked=False: self.open_chat_sidebar())
         self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
         tools_menu.addAction(self.pdf_vector_action)
         self.pdf_vector_action.triggered.connect(lambda *_: (self._offer_vector_pdf('menu'),
@@ -3773,6 +3786,12 @@ class EZFIG_GUI(QMainWindow):
                 self._guide_mailbox.close()
             except Exception:
                 traceback.print_exc()
+        if getattr(self, '_live_server', None) is not None:
+            try:
+                from pyfigures.assistant.launch import stop_live_session
+                stop_live_session(self)
+            except Exception:
+                traceback.print_exc()
         if getattr(self, '_started_mcp_http', False):
             try:
                 from pyfigures.gui.mcp_server_dialog import stop_autostarted_http_server
@@ -5787,6 +5806,53 @@ class EZFIG_GUI(QMainWindow):
         if 'err' in box:
             raise box['err']
         return box.get('res')
+
+    def share_figure_toggled(self, checked=None):
+        """Tools > Share the open figure with the MCP server (CLI: --share):
+        serve this window's figure for python -m pyfigures.assistant.live_mcp."""
+        from pyfigures.assistant import launch
+        if checked is None:
+            checked = not launch.is_sharing(self)
+        if not checked:
+            launch.stop_live_session(self)
+            self.share_figure_action.setChecked(False)
+            self.statusBar().showMessage("The figure is no longer shared with the MCP server.", 5000)
+            return False
+        try:
+            # a plain window hands its figure over to one that can be shared
+            win = launch.start_live_session(self).window
+        except Exception as e:
+            self.share_figure_action.setChecked(False)
+            QMessageBox.warning(self, 'Share the figure', str(e))
+            return False
+        win.share_figure_action.setChecked(True)
+        import json
+        config = json.dumps({"mcpServers": {"pyfigures-live": launch.mcp_server_entry()}}, indent=2)
+        box = QMessageBox(QMessageBox.Icon.Information, 'Share the figure',
+                          "This window's figure is shared with the MCP server on this computer.\n\n"
+                          "Add the configuration below to your MCP client (Claude, LM Studio…), "
+                          "or use Tools > Chat sidebar. Edits appear here with one undo step "
+                          "each; nothing is saved to disk until you save.", QMessageBox.StandardButton.Ok, win)
+        box.setDetailedText(config)
+        box.exec()
+        return win
+
+    def open_chat_sidebar(self):
+        """Tools > Chat sidebar (CLI: --chat): dock qtpy_ai_sidecar, sharing
+        the figure with it."""
+        from pyfigures.assistant import launch, sidecar_available
+        if not sidecar_available():
+            QMessageBox.information(self, 'Chat sidebar',
+                                    "The chat is a separate, optional package. Install it with\n\n"
+                                    "    pip install qtpy-ai-sidecar\n\nthen choose this entry again.")
+            return None
+        try:
+            dock = launch.attach_sidecar(self)
+        except Exception as e:
+            QMessageBox.warning(self, 'Chat sidebar', str(e))
+            return None
+        dock.parent().share_figure_action.setChecked(True)
+        return dock
 
     def mcp_history_dialog(self):
         """Show the MCP calls logged for the saved figure, with an 'Undo last

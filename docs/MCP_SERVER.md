@@ -315,6 +315,34 @@ python -m pyfigures.mcp_server --transport sse --port 8765
 `python -m pyfigures.mcp_control start` does the same in the background and
 `stop` ends it (see "Starting, stopping and registering the server").
 
+### Editing the figure open in the window (live)
+
+The tools above work on `.pyf` files. To let a client edit the figure **open in
+the PyFigures window** (unsaved work included, each edit one Undo step, nothing
+written to disk until you save):
+
+1. In PyFigures choose **Tools → Share the open figure with the MCP server**
+   (or start PyFigures with `python -m pyfigures --share`). The window serves its
+   figure on 127.0.0.1 only, behind a random token; one window at a time.
+2. Point the client at the live server (the dialog shows this configuration):
+
+```json
+{"mcpServers": {"pyfigures-live": {
+  "command": "python", "args": ["-m", "pyfigures.assistant.live_mcp"]}}}
+```
+
+It starts with six tools (inspect, preview, undo/redo, and categories to find
+and run every PyFigures tool on the live figure). Set
+`PYFIGURES_MCP_SURFACE=all` to list every tool directly.
+
+**Chat sidebar.** **Tools → Chat sidebar (local model)…** (or `--chat`) docks
+a chat beside the figure that drives the same server with a local model or an
+API model. It is the separate package `qtpy-ai-sidecar`
+(`pip install pyfigures[chat]` once it is published). Its profile is read from
+`PYFIGURES_SIDECAR_CONFIG` or `sidecar.json` in the live folder
+(`%LOCALAPPDATA%\PyFigures\assistant` on Windows); connection settings made in
+the chat itself are remembered.
+
 ---
 
 ## 5. Available tools reference

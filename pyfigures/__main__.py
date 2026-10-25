@@ -278,9 +278,21 @@ def run_pyfigures():
                 threading.Thread(target=_init_fiji_cached, daemon=True).start()
 
     # Only NOW create the main window — Fiji is fully ready (or skipped)
-    w = EZFIG_GUI()
+    share = '--share' in sys.argv or '--chat' in sys.argv
+    if share:
+        # a window that can share its figure with `python -m pyfigures.assistant.live_mcp`
+        from pyfigures.assistant.partner_gui import PartnerGUI
+        w = PartnerGUI()
+    else:
+        w = EZFIG_GUI()
     w.show()
     w.open_guide_mailbox()      # MCP show_me_how / `python -m pyfigures.guides show …`
+    if share:
+        from pyfigures.assistant.launch import apply_launch_flags
+        try:
+            apply_launch_flags(w, sys.argv[1:])
+        except Exception as e:
+            QMessageBox.warning(w, 'Share the figure', str(e))
 
     # Run the event loop; it returns once the last window is closed.
     exit_code = app.exec_() if hasattr(app, 'exec_') else app.exec()

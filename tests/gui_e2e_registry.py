@@ -41,6 +41,13 @@ LINKED = {
         "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
     "drag [image onto image of another row]: Stack with it (column in the row)": [
         "test_bugs_found_by_gui_e2e.py::test_image_dropped_on_an_image_of_a_row_can_stack_with_it_in_the_row"],
+    # serves the window on 127.0.0.1 (a plain window hands over to a shareable one): done there
+    "menu: Tools > Share the open figure with the MCP server": [
+        "test_assistant_live.py::test_tools_menu_share_toggle",
+        "test_assistant_live.py::test_a_plain_window_hands_its_figure_over"],
+    "menu: Tools > Chat sidebar (local model)…": [
+        "test_assistant_live.py::test_chat_sidebar_docks_the_sidecar",
+        "test_assistant_live.py::test_chat_sidebar_without_the_package_says_how_to_install"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
     # records the user's own clicks: real events are sent through the application there

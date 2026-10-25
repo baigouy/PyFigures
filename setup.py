@@ -90,6 +90,13 @@ setuptools.setup(
         'omero': [
             "omero-py",
         ],
+        # Tools > Chat sidebar: the separate qtpy-ai-sidecar package (local or
+        # API model) docked beside the figure. Left out of "all" until that
+        # package is on PyPI.
+        'chat': [
+            "mcp>=1.0",
+            "qtpy-ai-sidecar",
+        ],
         'all': [
             "mcp>=1.0",
             "av",
