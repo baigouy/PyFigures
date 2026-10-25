@@ -24,6 +24,10 @@ _MCP_SPEAK = [
      "Set the pixel size of the panels: double-click a panel, or Annotations → "
      "Add scale bar to all panels…"),
     (re.compile(r"\bVERDICT:\s*"), "Verdict: "),
+    (re.compile(r"\(give max_height_mm to check one\)"), "(enter a Max height to check one)"),
+    (re.compile(r"resize_figure with the journal narrows it to fit, or choose a smaller column "
+                r"\(fit_height='column'\)"),
+     "QC → Apply journal guidelines… narrows it to fit (If too tall), or choose a smaller column"),
 ]
 
 
@@ -74,12 +78,31 @@ def audit_report(raw):
                   "last panel.)", ""]
     else:
         lines += ["✓ Every micrograph has a scale bar.", ""]
+    # a bar is not a calibration
+    uncal = d.get("scale_bars_not_calibrated") or []
+    if uncal:
+        lines += [f"✗ {len(uncal)} scale bar{'s are' if len(uncal) > 1 else ' is'} NOT calibrated "
+                  f"(the image has no pixel size, the bar is a length in pixels): {who(uncal)}",
+                  "   Set the pixel size: double-click the panel (px to unit), or Annotations → "
+                  "Add scale bar to all panels… with a pixel size.", ""]
+    by_hand = d.get("scale_bars_calibrated_by_hand") or []
+    if by_hand:
+        lines += [f"! {len(by_hand)} scale bar{'s use' if len(by_hand) > 1 else ' uses'} a pixel size "
+                  f"set in the figure, not read from the image file: "
+                  + ", ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} "
+                              f"({e.get('pixel_size'):g} per pixel)" for e in by_hand),
+                  "   Check it is the microscope's real pixel size.", ""]
     unlabelled = d.get("panels_missing_label") or []
     if unlabelled:
         lines += [f"✗ {len(unlabelled)} panel{'s have' if len(unlabelled) > 1 else ' has'} no letter or "
                   f"text: {who(unlabelled)}", "   " + _HOW_LABEL, ""]
     else:
         lines += ["✓ Every panel has a letter or a text.", ""]
+    constant = d.get("panels_constant") or []
+    if constant:
+        lines += [f"✗ {len(constant)} panel{'s show' if len(constant) > 1 else ' shows'} a single value "
+                  f"everywhere (nothing to see, e.g. an empty channel): {who(constant)}",
+                  "   Remove it (select it, Delete) unless the empty image is the point.", ""]
     for b in d.get("panels_with_burned_in_text") or []:
         place = names.get((tuple(b["group_path"]), b["image_index"]), os.path.basename(str(b.get("filename"))))
         lines += [f"! {place}: {b.get('warning')}", ""]
@@ -87,8 +110,12 @@ def audit_report(raw):
         lines.append("Panels:")
         for p in d["panels"]:
             texts = ", ".join(p.get("labels") or []) or "none"
-            lines.append(f"   {_name(p)} — scale bar: {'yes' if p.get('scale_bar') else 'no'}; "
-                         f"texts: {texts}")
+            bar = "no"
+            if p.get("scale_bar"):
+                bar = {"metadata": "yes (pixel size from the file)",
+                       "figure": "yes (pixel size set by hand)",
+                       "none": "yes, NOT calibrated (pixels)"}.get(p.get("pixel_size_source"), "yes")
+            lines.append(f"   {_name(p)} — scale bar: {bar}; texts: {texts}")
     return "\n".join(lines).rstrip()
 
 

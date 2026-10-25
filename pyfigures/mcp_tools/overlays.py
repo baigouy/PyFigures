@@ -24,6 +24,7 @@ from .app import (
 from .core import (
     _apply_scalebar_to_img,
     _first_filename,
+    _pixel_size,
     _scale_bar_length_error,
     _atomic_write_text,
     _caption_sidecar_path,
@@ -241,6 +242,12 @@ def set_scale_bar(
     if too_long:
         return f"ERROR: {too_long} Nothing was changed."
 
+    uncal = []
+    if px_to_unit is None and _pixel_size(imgs[image_index])[0] is None:
+        # no pixel size anywhere: the bar is a length in pixels and says so
+        uncal = [os.path.basename(str(_first_filename(imgs[image_index])))]
+        text = _default_bar_label(bar_width_in_units, "px")
+        legend_html = _scale_bar_legend_html(text, label_color_int)
     action = _apply_scalebar_to_img(
         imgs[image_index], bar_width_in_units, legend_html,
         placement, bar_color_int, px_to_unit,
@@ -250,7 +257,7 @@ def set_scale_bar(
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
     return (
         f"Scale bar {action} on image {image_index} in {loc}: "
-        f"{text}, {placement}{px_note}."
+        f"{text}, {placement}{px_note}." + _uncalibrated_warning(uncal, unit)
     )
 
 
@@ -296,6 +303,7 @@ def set_scale_bar_all(
     bar_color: str = "white",
     label_color: str = "white",
     px_to_unit: float | None = None,
+    px_to_unit_scope: str = "all",
 ) -> str:
     """Add or update the scale bar on EVERY image in the figure at once.
 
@@ -305,6 +313,14 @@ def set_scale_bar_all(
 
     Parameters are identical to set_scale_bar(), except *group_path* and
     *image_index* are omitted — this tool always targets all images.
+
+    Pixel size: each image keeps its own (from its file's metadata or set
+    before) unless *px_to_unit* is given. *px_to_unit_scope*: ``"all"``
+    (default) — *px_to_unit* replaces the pixel size of every image;
+    ``"missing"`` — it is used only for images that have none (a calibrated
+    image keeps its own). An image left without any pixel size gets a bar
+    drawn at 1 unit per pixel: the reply flags it as NOT calibrated — never
+    present such a bar as a real scale (ask the user for the pixel size).
 
     Typical workflow::
 
@@ -324,30 +340,45 @@ def set_scale_bar_all(
     except ValueError as e:
         return f"ERROR: {e}"
 
+    if px_to_unit_scope not in ("all", "missing"):
+        return "ERROR: px_to_unit_scope must be 'all' or 'missing'."
     text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
     legend_html = _scale_bar_legend_html(text, label_color_int)
+    px_legend_html = _scale_bar_legend_html(_default_bar_label(bar_width_in_units, "px"),
+                                            label_color_int)
 
     tree, root = _load(pyf_path)
 
     added = 0
     updated = 0
     skipped = 0
+    kept_own = 0
     too_long: list[str] = []
+    uncalibrated: list[str] = []
 
     def _process_img(img: ET.Element):
-        nonlocal added, updated, skipped
+        nonlocal added, updated, skipped, kept_own
         # a chart or a LUT calibration bar has no pixel size: no scale bar
         script = _decode(img.findtext("custom_loading_script")) or ""
         if "from staplot import api" in script or "ColorbarBase(" in script:
             skipped += 1
             return
-        err = _scale_bar_length_error(img, bar_width_in_units, px_to_unit, unit)
+        px = px_to_unit
+        own, _source = _pixel_size(img)
+        if px is not None and px_to_unit_scope == "missing" and own is not None:
+            px = None                    # a calibrated image keeps its own pixel size
+            kept_own += 1
+        err = _scale_bar_length_error(img, bar_width_in_units, px, unit)
         if err:
             too_long.append(f"{os.path.basename(str(_first_filename(img)))}: {err}")
             return
+        legend = legend_html
+        if px is None and own is None:
+            uncalibrated.append(os.path.basename(str(_first_filename(img))))
+            legend = px_legend_html          # no pixel size: the bar says pixels
         action = _apply_scalebar_to_img(
-            img, bar_width_in_units, legend_html,
-            placement, bar_color_int, px_to_unit,
+            img, bar_width_in_units, legend,
+            placement, bar_color_int, px,
         )
         if action == "added":
             added += 1
@@ -379,12 +410,26 @@ def set_scale_bar_all(
         return "No images found in this figure."
     _save(tree, pyf_path)
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
+    if px_to_unit is not None and kept_own:
+        px_note += f" (only for images without a pixel size; {kept_own} kept their own)"
     skip_note = f" Skipped {skipped} data-plot / colour-bar panel(s)." if skipped else ""
     return (
         f"Scale bar applied to {total} image(s): "
         f"{added} added, {updated} updated. "
         f"Settings: '{text}', {placement}{px_note}.{skip_note}"
+        + _uncalibrated_warning(uncalibrated, unit)
     )
+
+
+def _uncalibrated_warning(names: list, unit: str) -> str:
+    """The bars drawn without any pixel size (1 unit per pixel): they look
+    like real scales, so the reply says they are not."""
+    if not names:
+        return ""
+    shown = ", ".join(names[:8]) + (f" and {len(names) - 8} more" if len(names) > 8 else "")
+    return (f"\nWARNING: NOT CALIBRATED — {len(names)} image(s) have no pixel size (none in the "
+            f"file, none set): {shown}. Their bar is labelled in pixels (px), not {unit}. Give "
+            f"their pixel size (px_to_unit, {unit} per pixel) for a {unit} scale bar.")
 
 
 # ---------------------------------------------------------------------------

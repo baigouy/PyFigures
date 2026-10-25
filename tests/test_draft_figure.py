@@ -156,6 +156,57 @@ def test_gui_draft_figure_action(qapp, monkeypatch, tmp_path):
     g.draft_figure_action()
 
     assert os.path.isfile(os.path.join(folder, "DraftFigure.pyf"))
-    imgs = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)]
-    assert len(imgs) >= 1     # drafted figure was loaded into the GUI
+    shapes = g.paint.EZFIG_panel.shapes_to_draw
+    # the plot ends the image row: nothing loose on the canvas (it was a
+    # free-canvas panel at its own size, outside the layout)
+    assert shapes and not any(isinstance(s, Image2D) for s in shapes)
+    assert sum(len(s.content) for s in shapes) == 4
+    g._dirty = False
+
+
+def test_draft_plots_join_the_layout(tmp_path):
+    from pyfigures.mcp_server import draft_figure, describe_figure
+    d = str(tmp_path)
+    folder = _img_folder(d, [f"{c}.tif" for c in "abcdef"], with_csv=True)
+    out = os.path.join(d, "one.pyf")
+    draft_figure(folder, out)
+    text = describe_figure(out)
+    assert "row 2: d.tif | e.tif | f.tif | counts.csv (plot)" in text and "Free-canvas" not in text
+    # three plots: a row of their own
+    for k in range(2):
+        with open(os.path.join(folder, f"more{k}.csv"), "w") as f:
+            f.write("WT,KO\n1,2\n2,3\n3,4\n")
+    out = os.path.join(d, "three.pyf")
+    draft_figure(folder, out)
+    text = describe_figure(out)
+    assert "(plot) | " in text and "row 3:" in text and "Free-canvas" not in text
+
+
+def test_gui_draft_groups_rows_by_prefix(qapp, monkeypatch, tmp_path):
+    """The dialog offers one row per condition (file-name prefix / sub-folder)."""
+    from qtpy import QtWidgets
+    from pyfigures.gui import pfgui
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    from pyfigures.mcp_server import describe_figure
+    EZFIG_GUI.show_tips = lambda self: None
+    monkeypatch.setattr(QtWidgets.QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    folder = _img_folder(str(tmp_path), ["WT_1.tif", "WT_2.tif", "KO_1.tif", "KO_2.tif", "KO_3.tif"])
+    monkeypatch.setattr(QtWidgets.QFileDialog, "getExistingDirectory",
+                        staticmethod(lambda *a, **k: folder))
+
+    class _OK:
+        def __init__(self, *a, main_widget=None, **k):
+            self.frame = main_widget
+
+        def exec_(self):
+            combo = [c for c in self.frame.findChildren(QtWidgets.QComboBox)
+                     if c.findData("prefix") >= 0][0]
+            combo.setCurrentIndex(combo.findData("prefix"))
+            return QtWidgets.QDialog.Accepted
+    monkeypatch.setattr(pfgui, "CustomDialog", _OK)
+    g = EZFIG_GUI()
+    g.draft_figure_action()
+    text = describe_figure(os.path.join(folder, "DraftFigure.pyf"))
+    assert "row 1: KO_1.tif | KO_2.tif | KO_3.tif" in text or "row 2: KO_1.tif | KO_2.tif | KO_3.tif" in text
+    assert "WT_1.tif | WT_2.tif" in text
     g._dirty = False

@@ -118,6 +118,7 @@ from pyfigures.gui.bg_color_selection import BackgroundColorPicker
 from pyfigures.gui.panelcreationwidget import PanelCreator
 from batoolset.dims.tools import scaling_factor_to_achieve_DPI
 from batoolset.img import guess_dimensions
+from pyfigures.constant_panels import constant_free_channels
 from batoolset.pyqts.tools import distance, getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
@@ -2140,30 +2141,34 @@ class MyWidget(QWidget):
             # check if has channels otherwise ignore
             guessed_dims = guess_dimensions(self.selected_shape.img)
             if 'c' in guessed_dims and self.selected_shape.img.shape[-1] > 1:
-                channels = [False for _ in range(self.selected_shape.img.shape[-1])]
+                n_channels = self.selected_shape.img.shape[-1]
+                channels = [False for _ in range(n_channels)]
+                # a channel with one value everywhere (the empty blue of an RGB
+                # file holding two channels) made a black panel: left out
+                kept = constant_free_channels(self.selected_shape.img)
+                self.last_split_skipped = [ch for ch in range(n_channels) if ch not in kept]
                 panel_clone = []
                 if not 'ray' in mode:
-                    luts = [None for _ in channels]
-                    for ch in range(0, self.selected_shape.img.shape[-1], 2):
+                    for k in range(0, len(kept), 2):
                         copy_channels = list(channels)
-                        copy_channels[ch] = True
-                        luts[ch] = 'MAGENTA'
-                        try:
-                            copy_channels[ch + 1] = True
-                            luts[ch + 1] = 'GREEN'
-                        except Exception:
-                            # we are out of bonds this is expected --> forget about that!!!
-                            pass
+                        luts = [None for _ in channels]
+                        copy_channels[kept[k]] = True
+                        luts[kept[k]] = 'MAGENTA'
+                        if k + 1 < len(kept):
+                            copy_channels[kept[k + 1]] = True
+                            luts[kept[k + 1]] = 'GREEN'
                         clone = clone_object(self.selected_shape,
                                              overrides={'channels': copy_channels, 'LUTs': luts})
                         panel_clone.append(clone)
                 else:
-                    for ch in range(self.selected_shape.img.shape[
-                                        -1]):  # clone and only check one channel then keep all the rest intact and remove of not the LUT
+                    for ch in kept:
                         copy_channels = list(channels)
                         copy_channels[ch] = True
+                        # each channel in gray: the clone kept the source's
+                        # coloured LUT (a 'gray' split showed red / green panels)
+                        luts = ['GRAY' if c == ch else None for c in range(n_channels)]
                         clone = clone_object(self.selected_shape,
-                                             overrides={'channels': copy_channels})
+                                             overrides={'channels': copy_channels, 'LUTs': luts})
                         panel_clone.append(clone)
                 panel_clone.append(clone_object(self.selected_shape))
                 final_split = Group(*panel_clone, orientation='X')
@@ -2180,6 +2185,11 @@ class MyWidget(QWidget):
                 self.update()
                 self.update_size()
                 self.undo_redo_save_required.emit()
+                if self.last_split_skipped:
+                    self.informative_message_required.emit(
+                        'Channel split: left out channel(s) '
+                        + ', '.join(str(c + 1) for c in self.last_split_skipped)
+                        + ' (one value everywhere: an empty channel)')
 
         # print('called there')
 

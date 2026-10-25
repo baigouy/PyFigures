@@ -386,6 +386,35 @@ def test_simple_value_widgets(qapp, dialogs):
     assert b.get_color() is None
 
 
+def test_tips_do_not_block_a_drop(qapp, monkeypatch):
+    """A file dropped while the start-up tips were open did nothing: the tips
+    were modal. They are not modal now and a drag closes them."""
+    from qtpy.QtCore import QMimeData, QPoint, Qt, QUrl
+    from qtpy.QtGui import QDragEnterEvent
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    real_show_tips = EZFIG_GUI.__dict__["show_tips"]
+    monkeypatch.setattr(EZFIG_GUI, "show_tips", lambda self: None)   # not at start-up
+    g = EZFIG_GUI()
+    try:
+        tip = real_show_tips(g)
+        assert tip.isVisible() and not tip.isModal()
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile("C:/x/cells.tif")])
+        ev = QDragEnterEvent(QPoint(5, 5), Qt.DropAction.CopyAction, mime,
+                             Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        g.dragEnterEvent(ev)
+        assert ev.isAccepted() and not tip.isVisible()
+        # dragged over the tips themselves: they close and let it through
+        tip = real_show_tips(g)
+        ev = QDragEnterEvent(QPoint(5, 5), Qt.DropAction.CopyAction, mime,
+                             Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        tip.dragEnterEvent(ev)
+        assert not tip.isVisible()
+    finally:
+        g._dirty = False
+        g.close()
+
+
 def test_tip_dialog_navigation(qapp):
     from pyfigures.gui.tipdialog import TipDialog
     from pyfigures.gui import user_prefs

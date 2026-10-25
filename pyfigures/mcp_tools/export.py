@@ -239,6 +239,14 @@ def audit_figure(pyf_path: str) -> str:
     reviewers most often ask to add. Only micrographs need a bar (not plots or
     text), and a montage / channel split needs one for the whole series (it is
     listed by its last panel), the rule check_journal_compliance applies.
+    A scale bar is not proof of a calibration: ``scale_bars_not_calibrated``
+    lists bars on images with no pixel size at all (drawn at 1 unit per pixel —
+    never present them as real scales), ``scale_bars_calibrated_by_hand`` those
+    whose pixel size was set in the figure rather than read from the image file
+    (check it is the real one); each panel's ``pixel_size_source`` says
+    'metadata', 'figure' or 'none'.
+    ``panels_constant`` lists panels showing a single value everywhere (all
+    black / white, an empty channel): usually a mistake to remove.
     ``panels_with_burned_in_text`` lists sources with text burned into their
     pixels near an edge (an information line) and the crop that removes it —
     a suggestion: the user decides whether that text belongs to the data.
@@ -258,14 +266,21 @@ def audit_figure(pyf_path: str) -> str:
             has_bar = any(c.tag == "ScaleBar" for c in children)
             labels = _panel_label_texts(img)
             fname = _decode(img.findtext("filename"))
-            panels.append({
+            entry = {
                 "group_path": list(path),
                 "image_index": ii,
                 "filename": fname,
                 "scale_bar": has_bar,
                 "labels": labels,
                 "n_labels": len(labels),
-            })
+            }
+            if has_bar:
+                # a bar is not a calibrated bar: where its pixel size comes from
+                from .core import _pixel_size
+                px, source = _pixel_size(img)
+                entry["pixel_size"] = px
+                entry["pixel_size_source"] = source
+            panels.append(entry)
 
     def _walk(grp, path):
         content = grp.find("content")
@@ -309,12 +324,33 @@ def audit_figure(pyf_path: str) -> str:
             burned.append({"group_path": p["group_path"], "image_index": p["image_index"],
                            "filename": fn, "warning": w})
 
+    def _where(p):
+        return {"group_path": p["group_path"], "image_index": p["image_index"],
+                "filename": p["filename"]}
+    # panels showing one value everywhere (an empty channel of a split, a
+    # black / white image): nothing to see
+    from ..constant_panels import constant_panel_value, _channels_shown
+    constant, cache = [], {}
+    for p, el in zip(panels, elems):
+        fn = p["filename"]
+        if not isinstance(fn, str) or fn in ("None", "@template@") or fn.startswith("["):
+            continue
+        v = constant_panel_value(fn, _channels_shown(el), cache)
+        if v is not None:
+            constant.append(dict(_where(p), value=v))
     return json.dumps({
         "n_panels": len(panels),
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,
+        # scale bars with no pixel size at all: a length in pixels, not a scale
+        "scale_bars_not_calibrated": [_where(p) for p in panels
+                                      if p.get("pixel_size_source") == "none"],
+        # pixel size typed into the figure, not read from the image file
+        "scale_bars_calibrated_by_hand": [dict(_where(p), pixel_size=p["pixel_size"]) for p in panels
+                                          if p.get("pixel_size_source") == "figure"],
         "panels_missing_label": missing_label,
+        "panels_constant": constant,
         "panels_with_burned_in_text": burned,
         "panels": panels,
     }, ensure_ascii=False, indent=2)

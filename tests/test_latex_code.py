@@ -121,6 +121,8 @@ def test_gui_add_edit_and_context_menu(qapp, tmp_path, caches, monkeypatch):
         assert d.update_preview() is False and "LaTeX could not compile" in d.error.text()
         d.code_edit.setPlainText(LCD.EXAMPLES["Table"])
         assert d.update_preview() is True and not d.preview.pixmap().isNull()
+        # a preview bigger than its space scrolls (it was cut, no scrollbar)
+        assert d.preview_scroll.widget() is d.preview
         d.deleteLater()
     finally:
         g._dirty = False

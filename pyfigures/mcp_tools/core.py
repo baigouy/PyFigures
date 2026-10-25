@@ -870,6 +870,52 @@ def _nice_bar_length(max_units: float) -> float:
     return float(10 ** k)
 
 
+# formats whose header may carry a pixel size (PNG / JPEG never do)
+_CALIBRATED_FORMATS = (".tif", ".tiff", ".lsm", ".czi", ".lif", ".nd2", ".oib", ".oif", ".ims",
+                       ".zarr", ".ome.zarr", ".vsi", ".lei")
+
+
+def _file_pixel_size(path) -> float | None:
+    """The pixel size (units per pixel) the image file itself records, or None.
+    TIFFs are read from their tags; the microscope formats through the image
+    reader (slower, only for them)."""
+    if not isinstance(path, str) or not path or path == "@template@":
+        return None
+    low = path.lower()
+    if not low.endswith(_CALIBRATED_FORMATS):
+        return None
+    try:
+        if low.endswith((".tif", ".tiff")):
+            from .workflow import _try_read_image_info
+            v = _try_read_image_info(path).get("px_to_unit")
+        else:
+            from pyfigures.stack_info import stack_info
+            v = stack_info(path).get("vx")
+        v = float(v) if v else None
+        return v if v and v > 0 else None
+    except Exception:
+        return None
+
+
+def _pixel_size(img: ET.Element) -> tuple[float | None, str]:
+    """(pixel size, where it comes from) for a panel: 'metadata' (the image
+    file records it), 'figure' (set in the figure: by hand, or a value the
+    file does not carry) or 'none' — then a scale bar is drawn at 1 unit per
+    pixel, which is NOT a calibration."""
+    try:
+        stored = float(_child_text(img, "px_to_unit_conversion_factor") or 0)
+    except (TypeError, ValueError):
+        stored = 0.0
+    own = _file_pixel_size(_first_filename(img))
+    if stored > 0:
+        if own is not None and abs(own - stored) <= 0.01 * own:
+            return stored, "metadata"
+        return stored, "figure"
+    if own is not None:
+        return own, "metadata"
+    return None, "none"
+
+
 def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
                             px_to_unit: float | None, unit: str = "µm") -> str | None:
     """An error when the bar would be as wide as the (cropped) image or wider —

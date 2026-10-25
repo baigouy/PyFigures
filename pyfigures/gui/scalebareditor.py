@@ -9,10 +9,13 @@ from qtpy.QtWidgets import QApplication, QWidget, QVBoxLayout, QDoubleSpinBox, Q
 from pyfigures.gui.simple_text_editor import TextEditor
 
 class ScaleBarEditor(QWidget):
-    def __init__(self, parent=None, scale_bar=None):
+    def __init__(self, parent=None, scale_bar=None, calibrated=True):
         super().__init__(parent)
 
         self.scale_bar = scale_bar
+        # an image without a pixel size: the bar is a length in pixels and its
+        # legend says 'px' (it read '10 µm' on a 1 µm-per-pixel guess)
+        self.calibrated = calibrated
         if self.scale_bar is None or not isinstance(scale_bar,ScaleBar):
             self.text_editor = TextEditor(TAText2D(placement=None), show_position=False, show_text_orientation=False, show_range=False)
         else:
@@ -33,6 +36,15 @@ class ScaleBarEditor(QWidget):
         self.check_box.setChecked(True)
 
         layout = QVBoxLayout(self)
+        if not calibrated:
+            self.size_label.setText('Size in pixels:')
+            note = QLabel('<b>This image has no pixel size</b> (none in its file, none set): the '
+                          'bar is a length in pixels and its legend says px. For a µm bar, set the '
+                          'pixel size (px to unit) in the editor first.', self)
+            note.setWordWrap(True)
+            layout.addWidget(note)
+            if not self.text_editor.associated_text.getPlainText().strip():
+                self.text_editor.textEdit.setPlainText(self._px_legend(self.size_spinner.value()))
         layout.addWidget(self.check_box)
         layout.addWidget(self.text_editor)
         # layout.addWidget(self.size_spinner)
@@ -146,10 +158,19 @@ class ScaleBarEditor(QWidget):
             self.text_editor.setHidden(False)
             # self.text_editor.textEdit.setEnabled(False)
 
+    @staticmethod
+    def _px_legend(size):
+        return f'{size:g} px'
+
     def _legend(self):
         """The typed legend, or None when text is off or nothing was typed (an
         empty legend left a blank gap above the bar; '' crashed the drawing)."""
         text = self.text_editor.associated_text
+        if not self.calibrated and isinstance(text, TAText2D):
+            import re
+            # the 'N px' legend follows the size typed after it was filled in
+            if re.fullmatch(r'\s*[\d.]+\s*px\s*', text.getPlainText() or ''):
+                text.setText(self._px_legend(self.size_spinner.value()))
         if not self.check_box.isChecked() or not isinstance(text, TAText2D) \
                 or not text.getPlainText().strip():
             return None

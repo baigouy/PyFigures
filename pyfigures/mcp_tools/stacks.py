@@ -392,9 +392,14 @@ def add_channel_split(
     spacing: int = 3,
     label_placement: str = "top right",
     crop: dict[str, int] | None = None,
+    skip_constant_channels: bool = True,
 ) -> str:
     """The classic channel-split row: each channel on its own panel, then the
     merge, with the channel names on the panels.
+
+    *skip_constant_channels*: a channel holding one value everywhere (e.g. the
+      empty blue channel of an RGB file with two channels) gets no panel of
+      its own (default True); the reply names it.
 
     *crop*: pixels to remove on every panel, e.g. {"bottom": 24} to cut text
       burned into the bottom rows of the image (keys left/right/top/bottom).
@@ -453,22 +458,39 @@ def add_channel_split(
     if bad:
         return f"ERROR: unsupported colour(s) {bad}; use {sorted(set(_COLOR_LUTS) - {'grey', 'white'})}."
 
+    # a channel with one value everywhere (the empty blue of an RGB file holding
+    # two channels) gave a black panel: it is left out
+    skipped = []
+    if info and skip_constant_channels and info["order"].endswith("c"):
+        try:
+            from batoolset.img import Img
+            from pyfigures.constant_panels import constant_free_channels
+            data = Img(stack_path, serie_to_open=series) if series is not None else Img(stack_path)
+            kept = constant_free_channels(data)
+            skipped = [i for i in range(n) if i not in kept]
+        except Exception:
+            skipped = []
+
     tree, root = _load(pyf_path)
     grp = _new_group_elem("X", spacing, _next_group_id(root))
     path, err = _insert_group(root, grp, parent_group_path)
     if err:
         return f"ERROR: {err}"
     content = grp.find("content")
-    total = n + (1 if include_merge else 0)
+    total = n - len(skipped) + (1 if include_merge else 0)
     try:
         proj = _projection_for(info, None, projection) if info else None
     except ValueError as e:
         return f"ERROR: {e}"
+    k = 0
     for i in range(n):
+        if i in skipped:
+            continue
+        k += 1
         lut = "GRAY" if gray else _COLOR_LUTS[colors[i]]
         # label: channel colour on gray panels (reads as a legend), white on tinted
         lab_col = _COLOR_HEX[colors[i]] if gray else 0xFFFFFF
-        comment = f"{SERIES_MARK}{i + 1}/{total}] channel split of {base_comment}: {names[i]}"
+        comment = f"{SERIES_MARK}{k}/{total}] channel split of {base_comment}: {names[i]}"
         if info:
             fixed = {"t": frame} if "t" in info["order"] else {}
             img = _stack_panel(info, _plane_values(info, fixed, proj), proj,
@@ -509,8 +531,11 @@ def add_channel_split(
     _crop_panels(content.iter("Image2D"), crop)
     _save(tree, pyf_path, recompute=True)
     return (f"Channel split of {base_comment} added at group {path}: "
-            + ", ".join(f"{nm} ({c})" for nm, c in zip(names, colors))
+            + ", ".join(f"{nm} ({c})" for i, (nm, c) in enumerate(zip(names, colors))
+                        if i not in skipped)
             + (" + merge" if include_merge else "")
+            + ("".join(f"; left out {names[i]} (channel {i + 1}: one value everywhere, an empty "
+                       f"channel — skip_constant_channels=False keeps it)" for i in skipped))
             + (", grayscale singles" if gray else ", tinted singles")
             + (f", Z {proj}-projected" if proj else "") + ".")
 

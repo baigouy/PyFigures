@@ -59,6 +59,33 @@ def test_resolution_and_compliance_name_panels_by_letter(fig):
     assert "Verdict: NOT READY" in comp and "Fix them before submitting." in comp
 
 
+def test_compliance_reports_the_height(fig):
+    """The page height never showed in the GUI check: only journals with a
+    maximum height had a height line, and the dialog had no field for it."""
+    from pyfigures.mcp_server import check_journal_compliance
+    from pyfigures.gui.qc_reports import humanize
+    plain = check_journal_compliance(fig, width_mm=85)
+    assert "[ok] height: figure" in plain and "no maximum height" in plain
+    assert "max_height_mm" not in humanize(plain)
+    tight = check_journal_compliance(fig, width_mm=85, max_height_mm=5)
+    assert "[FAIL] height:" in tight and "the maximum height you gave" in tight
+    assert "resize_figure" not in humanize(tight)
+    assert check_journal_compliance(fig, width_mm=85, max_height_mm=-3).startswith("ERROR")
+
+
+def test_journal_dialog_max_height(qapp):
+    from pyfigures.gui.pfgui import _JournalDialog
+    d = _JournalDialog()
+    d.journal_combo.setCurrentText("nature")
+    assert "247" in d.max_height_edit.placeholderText()
+    assert "max_height_mm" not in d.values()
+    d.max_height_edit.setText("200")
+    assert d.values()["max_height_mm"] == 200.0
+    d.max_height_edit.setText("tall")
+    with pytest.raises(ValueError):
+        d.values()
+
+
 def test_integrity_report_is_plain_and_skips_plots(fig):
     from pyfigures.mcp_server import check_image_integrity
     from pyfigures.gui.qc_reports import integrity_report
@@ -133,6 +160,62 @@ def test_report_window_is_not_screen_sized(gui, monkeypatch):
     gui._show_report("Figure audit", "line\n" * 5)
     # it opened at 85 % of the screen, bigger than the main window
     assert sizes and sizes[0].width() <= 720 and sizes[0].height() <= 520
+
+
+def test_undo_redo_say_they_are_working(gui, monkeypatch):
+    """A slow undo gave no sign it was accepted."""
+    from qtpy.QtWidgets import QApplication
+    seen = []
+    gui.undo_stack = ["a.xml", "b.xml"]
+    gui.current_index = 2
+    gui.last_called_state = "c.xml"
+    monkeypatch.setattr(gui, "reload_state", lambda *a, **k: seen.append(
+        (gui.statusBar().currentMessage(), QApplication.overrideCursor() is not None)))
+    gui.undo()
+    assert seen == [("Undoing…", True)] and gui.statusBar().currentMessage() == "Undone."
+    assert QApplication.overrideCursor() is None
+    gui.last_called_state = "z.xml"
+    gui.redo()
+    assert seen[-1] == ("Redoing…", True) and gui.statusBar().currentMessage() == "Redone."
+    gui._dirty = False
+
+
+def test_menus_show_their_tooltips(gui):
+    """The explanations of menu entries were written but never shown (Qt
+    hides menu tooltips unless asked)."""
+    stack = [a.menu() for a in gui.menuBar.actions() if a.menu() is not None]
+    assert stack
+    while stack:
+        m = stack.pop()
+        assert m.toolTipsVisible(), m.title()
+        stack += [a.menu() for a in m.actions() if a.menu() is not None]
+
+
+def test_file_import_menu(gui):
+    file_menu = next(a.menu() for a in gui.menuBar.actions() if a.text() == "File")
+    imp = next(a.menu() for a in file_menu.actions() if a.text() == "Import")
+    texts = [a.text() for a in imp.actions()]
+    assert "Images from files" in texts and any("OME-Zarr" in t for t in texts) \
+        and any("CSV" in t for t in texts)
+
+
+def test_vector_pdf_entry_shows_its_state(gui, monkeypatch):
+    import pyfigures.extras as extras
+    monkeypatch.setattr(extras, "has_pymupdf", lambda: True)
+    gui._update_vector_pdf_action()
+    assert gui.pdf_vector_action.isChecked() and gui.pdf_vector_action.toolTip().startswith("Installed")
+    monkeypatch.setattr(extras, "has_pymupdf", lambda: False)
+    gui._update_vector_pdf_action()
+    assert not gui.pdf_vector_action.isChecked() and "Not installed" in gui.pdf_vector_action.toolTip()
+
+
+def test_menu_bar_right_click_entries_have_names(gui):
+    """Right-clicking the menu bar showed an entry without text (it hid the
+    toolbar)."""
+    menu = gui.createPopupMenu()
+    texts = [a.text() for a in menu.actions() if not a.isSeparator()]
+    assert texts and all(t.strip() for t in texts), texts
+    assert "Show the toolbar" in texts
 
 
 def test_scale_consistency_note_in_gui_words():

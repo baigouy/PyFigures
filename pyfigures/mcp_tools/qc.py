@@ -525,14 +525,17 @@ def check_journal_compliance(
     require_scale_bars: bool = False,
     require_panel_labels: bool = False,
     require_sans_serif: bool = True,
+    max_height_mm: float | None = None,
 ) -> str:
     """Read-only compliance report: check the current figure against a journal's
     formatting rules and list what passes and what needs fixing. Nothing is
     modified — use apply_journal_guidelines() to fix issues.
 
-    Checks: figure width vs the target column width, minimum font size (figure font
-    + scripted-panel fonts), sans-serif font family, per-panel print resolution,
-    and (optionally) presence of scale bars and panel labels.
+    Checks: figure width vs the target column width, figure height vs the
+    journal's maximum height (*max_height_mm* when given, else the journal's
+    own; without either the height is only reported), minimum font size
+    (figure font + scripted-panel fonts), sans-serif font family, per-panel
+    print resolution, and (optionally) presence of scale bars and panel labels.
 
     Paste the journal's guidelines, extract the numbers, then call this with the
     matching parameters (journal preset or explicit width, dpi, min_font_pt, …).
@@ -583,7 +586,14 @@ def check_journal_compliance(
     if stored.get("max_height_mm") and (journal is None or journal == stored.get("journal")):
         if max_h is None or stored["max_height_mm"] < max_h[0]:
             max_h = (float(stored["max_height_mm"]), "the height the figure was fitted to")
-    height_mm = _figure_height_mm(pyf_path) if max_h else None
+    if max_height_mm is not None:
+        try:
+            if float(max_height_mm) <= 0:
+                raise ValueError
+            max_h = (float(max_height_mm), "the maximum height you gave")
+        except (TypeError, ValueError):
+            return f"ERROR: max_height_mm must be a positive number of mm, not {max_height_mm!r}."
+    height_mm = _figure_height_mm(pyf_path)
     if cur_sizes:
         cur_px = max(cur_sizes)
         ok_w = abs(cur_px - target_px) <= max(2, target_px * 0.01)
@@ -606,6 +616,10 @@ def check_journal_compliance(
                             + ("" if height_mm <= max_h[0] * 1.01 else
                                " — resize_figure with the journal narrows it to fit, or "
                                "choose a smaller column (fit_height='column')")))
+    elif height_mm is not None:
+        # nothing to compare with: say how tall it is (the check was invisible)
+        results.append(("height", True, f"figure {height_mm:.1f}mm tall; the journal gives no "
+                                        f"maximum height (give max_height_mm to check one)"))
 
     # ── font size ──────────────────────────────────────────────────────────────
     font_el = root.find("SerializableQFont")

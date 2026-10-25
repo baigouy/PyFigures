@@ -4,6 +4,7 @@
 from batoolset.settings.global_settings import set_UI  # set the UI to qtpy
 set_UI()
 from batoolset.images.centralstore import ImageCentralStore
+import contextlib
 import time
 from batoolset.drawings.shapes.serializableguiparams import SerializableGUIparameters
 # import filecmp # TODO use that to avoid duplicating a save in undo/redo --> future dev, not urgent
@@ -176,6 +177,20 @@ class _PyfLoaderWorker(QObject):
             except Exception as e:
                 self.file_error.emit(path, str(e))
         self.finished.emit()
+
+
+# Annotations → Figure colours…: presets of the editable combo (channel order)
+FIGURE_COLOUR_PRESETS = [
+    "magenta, green",
+    "colorblind",
+    "green, magenta",
+    "magenta, green, blue",
+    "magenta, green, cyan",
+    "red, green, blue",
+    "cyan, magenta, yellow",
+    "green, magenta, cyan, gray",
+    "gray",
+]
 
 
 def _same_file_content(a, b):
@@ -464,6 +479,13 @@ class _JournalDialog(QFrame):
         grid.addWidget(QLabel("Min font (pt):", self), r, 0)
         grid.addWidget(self.min_font_edit, r, 1); r += 1
 
+        # the journal's own maximum height is used when this is empty
+        self.max_height_edit = QLineEdit("", self)
+        self.max_height_edit.setToolTip("Maximum figure height in mm (caption excluded). Empty: the "
+                                        "journal's own maximum, when its page gives one.")
+        grid.addWidget(QLabel("Max height (mm):", self), r, 0)
+        grid.addWidget(self.max_height_edit, r, 1); r += 1
+
         self.with_apply_options = with_apply_options
         if with_apply_options:
             self.panel_labels_check = QCheckBox("Add panel letters (a, b, c…)", self)
@@ -538,6 +560,9 @@ class _JournalDialog(QFrame):
         if info.get("max_height_mm"):
             self.style_label.setText(self.style_label.text()
                                      + f"<br><i>Maximum height {info['max_height_mm']:g} mm.</i>")
+            self.max_height_edit.setPlaceholderText(f"journal's: {info['max_height_mm']:g}")
+        else:
+            self.max_height_edit.setPlaceholderText("none given by the journal, e.g. 230")
         self._select_column(current)
         self.column_combo.blockSignals(False)
 
@@ -592,6 +617,12 @@ class _JournalDialog(QFrame):
             out["min_font_pt"] = float(self.min_font_edit.text())
         except ValueError:
             raise ValueError("Min DPI must be an integer and min font a number.")
+        height = self.max_height_edit.text().strip()
+        if height:
+            try:
+                out["max_height_mm"] = float(height)
+            except ValueError:
+                raise ValueError("Max height must be a number (mm).")
         if self.with_apply_options:
             out["add_panel_labels"] = self.panel_labels_check.isChecked()
             out["fit_height"] = self.fit_height_combo.currentData()
@@ -611,10 +642,23 @@ class _ScaleBarAllDialog(QFrame):
         self.unit_edit = QLineEdit("µm", self)
         grid.addWidget(QLabel("Unit:", self), r, 0)
         grid.addWidget(self.unit_edit, r, 1); r += 1
+        info = QLabel("Each image uses its own pixel size: the one in its file (TIFF, CZI, LIF…) or "
+                      "the one set in its editor. An image without any gets a bar in pixels "
+                      "('10 px'), not in µm.", self)
+        info.setWordWrap(True)
+        grid.addWidget(info, r, 0, 1, 2); r += 1
+        # the value is units PER PIXEL (the field said "pixels per unit")
         self.px_edit = QLineEdit("", self)
-        self.px_edit.setPlaceholderText("optional: pixels per unit")
-        grid.addWidget(QLabel("Px→unit factor:", self), r, 0)
+        self.px_edit.setPlaceholderText("optional, e.g. 0.16 (µm per pixel)")
+        grid.addWidget(QLabel("Pixel size (unit per pixel):", self), r, 0)
         grid.addWidget(self.px_edit, r, 1); r += 1
+        self.px_scope_combo = QComboBox(self)
+        self.px_scope_combo.addItem("only for images without a pixel size", "missing")
+        self.px_scope_combo.addItem("for every image (replaces their own)", "all")
+        self.px_scope_combo.setToolTip("What the pixel size typed above applies to. Replacing a "
+                                       "pixel size read from the image file is rarely right.")
+        grid.addWidget(QLabel("Use it:", self), r, 0)
+        grid.addWidget(self.px_scope_combo, r, 1); r += 1
         self.placement_combo = QComboBox(self)
         self.placement_combo.addItems(["bottom right", "bottom left",
                                        "top right", "top left"])
@@ -634,7 +678,8 @@ class _ScaleBarAllDialog(QFrame):
             try:
                 out["px_to_unit"] = float(px)
             except ValueError:
-                raise ValueError("Px→unit factor must be a number.")
+                raise ValueError("The pixel size must be a number (unit per pixel).")
+            out["px_to_unit_scope"] = self.px_scope_combo.currentData()
         return out
 
 
@@ -955,6 +1000,9 @@ class EZFIG_GUI(QMainWindow):
 
         self.mainToolBar = QToolBar(self)
         self.mainToolBar.setObjectName("mainToolBar")
+        # its show/hide entry in the menu-bar right-click menu had no text
+        self.mainToolBar.setWindowTitle("Toolbar")
+        self.mainToolBar.toggleViewAction().setText("Show the toolbar")
         self.addToolBar(Qt.TopToolBarArea, self.mainToolBar)
 
         self.new_ico = QAction(get_icon('mdi.newspaper-plus', color_disabled='lightgray'), 'New figure', self)  # 'mdi.new-box'
@@ -1164,6 +1212,12 @@ class EZFIG_GUI(QMainWindow):
         file_menu.addAction(new_action)
         new_action.triggered.connect(self.new_fig)
 
+        # external files (images, OME-Zarr/OMERO, CSV) — where people look for
+        # them; filled below with the same entries as Insert
+        import_menu = file_menu.addMenu("Import")
+        import_menu.setToolTip("Add images, OME-Zarr / OMERO images or CSV data to the figure "
+                               "(the same entries as in the Insert menu)")
+
         url_action = QAction("Add image from URL / OME-Zarr / OMERO…", self)
         url_action.setToolTip("Add an image from an http(s) URL, an OME-Zarr image (a URL such as "
                               "https://…/image.zarr or a local .zarr folder, e.g. from the IDR) or an "
@@ -1201,9 +1255,10 @@ class EZFIG_GUI(QMainWindow):
         recipe_action.triggered.connect(self.build_from_recipe_action)
 
         search_lib_action = QAction("Search figure library…", self)
-        search_lib_action.setToolTip("Index a folder tree of past .pyf figures and "
-                                     "search them by panel, label or caption to find "
-                                     "and reuse a figure.")
+        search_lib_action.setToolTip("Find an old figure: pick a folder (sub-folders included) and "
+                                     "type words; every .pyf in it is searched by its image file "
+                                     "names, texts / letters and caption. The matches are listed "
+                                     "and the one you pick is opened.")
         file_menu.addAction(search_lib_action)
         search_lib_action.triggered.connect(self.search_library_action)
 
@@ -1264,8 +1319,11 @@ class EZFIG_GUI(QMainWindow):
         alt_text_action.triggered.connect(self.alt_text_action)
 
         copy_style_action = QAction("Copy style from another figure…", self)
-        copy_style_action.setToolTip("Give this figure the fonts, letters, scale bars, "
-                                     "spacing and chart styling of another .pyf.")
+        copy_style_action.setToolTip("Make this figure look like another .pyf (e.g. one the journal "
+                                     "accepted): its figure font, panel-letter style, scale-bar "
+                                     "style, spacing and chart styling — you choose which. Only the "
+                                     "figure-wide settings are copied: a text styled by hand in "
+                                     "the source keeps its own font and is not copied.")
         file_menu.addAction(copy_style_action)
         copy_style_action.triggered.connect(self.copy_style_action)
 
@@ -1364,9 +1422,10 @@ class EZFIG_GUI(QMainWindow):
         export_menu.addAction(_submission_title)
         export_source_data_action = QAction("Source data bundle…", self)
         export_source_data_action.setToolTip(
-            "Folder of underlying data + provenance for submission: the rendered "
-            "figure, each panel's source image/CSV, the caption, the statistics and "
-            "a Methods paragraph.")
+            "For journals that ask for the 'source data' of each figure (Nature, Cell, eLife…): "
+            "one folder with the rendered figure, a copy of every panel's original image / CSV "
+            "(named by panel letter), the caption, the statistics and a Methods paragraph "
+            "listing the adjustments.")
         export_menu.addAction(export_source_data_action)
         export_source_data_action.triggered.connect(self.export_source_data_action)
 
@@ -1463,6 +1522,9 @@ class EZFIG_GUI(QMainWindow):
         insert_menu.addSeparator()
         insert_menu.addAction(equation_action)
         insert_menu.addAction(latex_code_action)
+        import_menu.addMenu(images_menu)
+        import_menu.addAction(url_action)
+        import_menu.addAction(data_plot_action)
 
         # ── Annotations: what is drawn on panels ─────────────────────────
         annots = self.menuBar.addMenu("Annotations")
@@ -1628,11 +1690,13 @@ class EZFIG_GUI(QMainWindow):
                                       "of the last changes it made.")
         tools_menu.addAction(mcp_history_action)
         mcp_history_action.triggered.connect(self.mcp_history_dialog)
-        pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
-        pdf_vector_action.setToolTip("Install PyMuPDF so that PDF panels stay vectors instead of "
-                                     "600-dpi pictures (free, AGPL v3, downloaded from PyPI).")
-        tools_menu.addAction(pdf_vector_action)
-        pdf_vector_action.triggered.connect(lambda *_: self._offer_vector_pdf('menu'))
+        self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
+        tools_menu.addAction(self.pdf_vector_action)
+        self.pdf_vector_action.triggered.connect(lambda *_: (self._offer_vector_pdf('menu'),
+                                                             self._update_vector_pdf_action()))
+        # says whether it is installed (clicking only said "already installed")
+        tools_menu.aboutToShow.connect(self._update_vector_pdf_action)
+        self._update_vector_pdf_action()
 
         view_menu = self.menuBar.addMenu('View')
         from pyfigures.gui.user_prefs import load_max_project_z_stacks, load_show_edit_hint
@@ -1755,6 +1819,16 @@ class EZFIG_GUI(QMainWindow):
         album_tuto_action.triggered.connect(self.start_album_tutorial)
         help_menu.addAction(album_tuto_action)
 
+        # Qt hides the tooltips of menu entries unless asked: the explanations
+        # written above were never shown
+        def _show_tips(menu):
+            menu.setToolTipsVisible(True)
+            for act in menu.actions():
+                if act.menu() is not None:
+                    _show_tips(act.menu())
+        for act in self.menuBar.actions():
+            if act.menu() is not None:
+                _show_tips(act.menu())
 
     # Maps each persistent toolbar QAction to its qtawesome icon name.
     _TOOLBAR_ICON_MAP = [
@@ -1941,8 +2015,22 @@ class EZFIG_GUI(QMainWindow):
         dialog.exec_()
 
     def show_tips(self):
+        # not modal: a file dragged onto the window while the tips are open was
+        # refused (nothing happened); a drag now closes them and drops normally
+        old = getattr(self, '_tip_dialog', None)
+        if old is not None and _qt_alive(old):
+            old.close()
         dialog = TipDialog(self, self.tips)
-        dialog.exec_()
+        dialog.setModal(False)
+        self._tip_dialog = dialog
+        dialog.show()
+        return dialog
+
+    def _close_tips(self):
+        dialog = getattr(self, '_tip_dialog', None)
+        self._tip_dialog = None
+        if dialog is not None and _qt_alive(dialog):
+            dialog.close()
 
     def journal_styles_action(self):
         """QC → Journal styles…: make / review / correct a journal style from
@@ -2166,6 +2254,7 @@ class EZFIG_GUI(QMainWindow):
             event.ignore()
             return
         if event.mimeData().hasUrls():
+            self._close_tips()
             event.accept()
         else:
             event.ignore()
@@ -3426,6 +3515,20 @@ class EZFIG_GUI(QMainWindow):
             panel_timer.stop()
             self.paint.EZFIG_panel.emit_undo_redo_save_required()
 
+    @contextlib.contextmanager
+    def _busy_status(self, doing, done):
+        """A slow undo/redo gave no sign it was accepted: the status bar says
+        what is happening (painted before the work starts) and the cursor
+        waits until it is over."""
+        self.statusBar().showMessage(doing)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.statusBar().repaint()
+        try:
+            yield
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.statusBar().showMessage(done, 3000)
+
     def undo(self):
         self._flush_pending_checkpoints()
         recall_required = False
@@ -3444,7 +3547,8 @@ class EZFIG_GUI(QMainWindow):
             # with open(file_path, "r") as f:
             #     self.text_edit.setPlainText(f.read())
             if not recall_required and file_path:
-                self.reload_state(file_path, append=False)
+                with self._busy_status('Undoing…', 'Undone.'):
+                    self.reload_state(file_path, append=False)
 
             # self.redo_stack.append(self.undo_stack.pop())
             del self.undo_stack[self.current_index - 1]
@@ -3481,7 +3585,8 @@ class EZFIG_GUI(QMainWindow):
             self.undo_stack.append(file_path)
             self.current_index += 1
             if not recall_required and file_path:
-                self.reload_state(file_path, append=False)
+                with self._busy_status('Redoing…', 'Redone.'):
+                    self.reload_state(file_path, append=False)
         self.update_button_state()
         self._mark_dirty()  # redone state differs from the last saved file
         if recall_required:
@@ -5363,12 +5468,12 @@ class EZFIG_GUI(QMainWindow):
 
     def figure_colors_action(self):
         """Annotations → Figure colours… (MCP: set_figure_colors; recipe: colors:)."""
-        text, ok = QInputDialog.getText(
+        text, ok = QInputDialog.getItem(
             self, "Figure colours",
-            "Colours in channel order (gray, red, green, blue, cyan, magenta, yellow), e.g.\n"
-            "magenta, green — or colorblind. Single-channel panels become gray; plots take\n"
-            "these colours when they have as many groups, else a colour-blind-safe palette:",
-            text="magenta, green")
+            "Pick a preset or type colours in channel order (gray, red, green, blue, cyan,\n"
+            "magenta, yellow). Single-channel panels become gray; plots take these colours\n"
+            "when they have as many groups, else a colour-blind-safe palette:",
+            FIGURE_COLOUR_PRESETS, 0, True)
         if not ok or not text.strip():
             return
         import re
@@ -6367,15 +6472,27 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(QLabel('Scale-bar length (units, optional):', frame), 4, 0)
         sb_edit = QLineEdit('', frame)
         grid.addWidget(sb_edit, 4, 1)
+        # the useful part of a draft: one row per condition (MCP group_by)
+        grid.addWidget(QLabel('Rows:', frame), 5, 0)
+        group_combo = QComboBox(frame)
+        group_combo.addItem('a balanced grid of all images', 'none')
+        group_combo.addItem('one row per sub-folder (e.g. one per condition)', 'subfolder')
+        group_combo.addItem('one row per file-name prefix (WT_1, WT_2 | KO_1…)', 'prefix')
+        group_combo.setToolTip("How images are split into rows. Name files by condition "
+                               "(WT_..., KO_...) or put each condition in its own sub-folder to "
+                               "get one row per condition.")
+        grid.addWidget(group_combo, 5, 1)
 
         cd = CustomDialog(title="Draft figure from folder",
-                          message=(f"{os.path.basename(folder)} — images become a grid, "
-                                   "CSVs become data-plot panels."),
+                          message=(f"{os.path.basename(folder)} — images become rows of panels, "
+                                   "each CSV a data plot with its statistics; letters, scale bars "
+                                   "(with a pixel size) and a caption stub are added. A first "
+                                   "draft to fine-tune: for an exact layout use a recipe."),
                           main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
 
-        kwargs = {"plot_kind": kind_combo.currentText()}
+        kwargs = {"plot_kind": kind_combo.currentText(), "group_by": group_combo.currentData()}
         if journal_combo.currentText() != '(none)':
             kwargs["journal"] = journal_combo.currentText()
             kwargs["column"] = column_combo.currentData() or "single"
@@ -7037,6 +7154,23 @@ class EZFIG_GUI(QMainWindow):
             self._mark_clean()  # figure now matches the file on disk
             return True
         return False
+
+    def _update_vector_pdf_action(self):
+        """Tools → Vector PDF panels: installed (greyed out) or the installer."""
+        from pyfigures.extras import has_pymupdf
+        act = getattr(self, 'pdf_vector_action', None)
+        if act is None:
+            return
+        act.setCheckable(True)
+        installed = has_pymupdf()
+        act.setChecked(installed)            # the tick says it is installed
+        if installed:
+            act.setToolTip("Installed: a PDF added to the figure (a plot from R / Prism, a "
+                           "diagram) stays a vector panel, sharp at any zoom.")
+        else:
+            act.setToolTip("Not installed: a PDF added to the figure (a plot from R / Prism, a "
+                           "diagram) becomes a 600-dpi picture. Click to install PyMuPDF (free, "
+                           "AGPL v3, from PyPI) and keep PDF panels as vectors.")
 
     def _offer_vector_pdf(self, reason):
         """Offer PyMuPDF (vector PDF panels); for 'export' only when the figure

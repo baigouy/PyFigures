@@ -616,8 +616,23 @@ def draft_figure(
         create_figure(out_pyf, mode="canvas")
 
     n_plots = 0
+    plot_path = []
+    if images and csvs:
+        # the plots join the layout (they were loose free-canvas panels, at
+        # their own big size): one or two end the last image row, at the
+        # images' height (alone in a row they took the full width); more make
+        # a row of their own
+        _t, _root = _load(out_pyf)
+        n_rows = len(_top_groups(_root))
+        if len(csvs) <= 2 and n_rows:
+            plot_path = [n_rows - 1]
+        else:
+            from .structure import add_group
+            rg = add_group(out_pyf, orientation="X")
+            if not (isinstance(rg, str) and rg.startswith("ERROR")):
+                plot_path = [n_rows]
     for c in csvs:
-        rr = add_data_plot(out_pyf, [], c, kind=plot_kind, annotate_stats=True)
+        rr = add_data_plot(out_pyf, plot_path, c, kind=plot_kind, annotate_stats=True)
         if not (isinstance(rr, str) and rr.startswith("ERROR")):
             n_plots += 1
     if n_plots:

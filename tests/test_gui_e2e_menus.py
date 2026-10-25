@@ -588,7 +588,9 @@ ACTIONS = {
     "menu: View > Theme > Dark": spec(unchanged, inv=False),
     # ── Help ──
     "menu: Help > About": spec(unchanged, [("PyFigures:", ok)], inv=False),
-    "menu: Help > Show Tips": spec(unchanged, [("TipDialog", ok)], inv=False, before=H.real_show_tips),
+    # a window beside the figure, not modal (a drop while it was open was lost)
+    "menu: Help > Show Tips": spec(both(unchanged, chk_window("_tip_dialog", "TipDialog")), inv=False,
+                                   before=H.real_show_tips),
     "menu: Help > List shortcuts": spec(unchanged, [("hortcut", ok)], inv=False),
     "menu: Help > User Guide": spec(unchanged, inv=False),
     # ── toolbar ──

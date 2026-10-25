@@ -133,8 +133,10 @@ def test_old_plot_scripts_without_colors_get_them():
 def test_gui_figure_colours_action(fig3, monkeypatch):
     from pyfigures.gui import pfgui
     calls = {}
-    monkeypatch.setattr(pfgui.QInputDialog, "getText",
-                        staticmethod(lambda *a, **k: ("magenta, green", True)))
+    offered = []
+    # an editable combo of presets (was a bare text field)
+    monkeypatch.setattr(pfgui.QInputDialog, "getItem",
+                        staticmethod(lambda *a, **k: offered.append((a[3], a[5])) or ("magenta, green", True)))
 
     class Win:
         def _run_mcp_mutation(self, func, msg, **kw):
@@ -143,6 +145,11 @@ def test_gui_figure_colours_action(fig3, monkeypatch):
     pfgui.PyFigures.figure_colors_action(Win()) if hasattr(pfgui, "PyFigures") else \
         _main_window_class(pfgui).figure_colors_action(Win())
     assert calls == {"func": "set_figure_colors", "colors": ["magenta", "green"]}
+    presets, editable = offered[0]
+    assert editable is True and "colorblind" in presets and len(presets) >= 6
+    from pyfigures.mcp_tools.stacks import _COLOR_LUTS
+    for p in presets:                    # every preset is accepted by set_figure_colors
+        assert p == "colorblind" or all(c.strip() in _COLOR_LUTS for c in p.split(",")), p
 
 
 def _main_window_class(pfgui):

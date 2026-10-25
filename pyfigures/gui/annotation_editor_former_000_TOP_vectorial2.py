@@ -864,7 +864,9 @@ class VectorialDrawPane2(QWidget):
                 bar_size = scale_bar.bar_width_in_units
                 bar_placement = scale_bar.placement
 
-                editor = ScaleBarEditor(self,scale_bar)
+                background = getattr(self, 'background', None)
+                editor = ScaleBarEditor(self, scale_bar, calibrated=bool(
+                    getattr(background, 'px_to_unit_conversion_factor', 0) or background is None))
 
                 custom_dialog = CustomDialog(title="Edit ScaleBar", message="Do you want to proceed?", main_widget=editor, parent=self, options=['Ok','Cancel'], auto_adjust=True) # that is really very good --> I can do it like that
                 result = custom_dialog.exec_()
@@ -2425,7 +2427,7 @@ class MainWindow(QWidget):
             placement='bottom-right',
         )
 
-        editor = ScaleBarEditor(self, default_sb)
+        editor = ScaleBarEditor(self, default_sb, calibrated=bool(conversion_factor))
         custom_dialog = CustomDialog(
             title='Add Scale Bar',
             message='Set bar size and legend, then click Ok.',

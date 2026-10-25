@@ -38,6 +38,11 @@ class TipDialog(QDialog):
         self.auto_show_checkbox.setChecked(load_auto_show_tips())
         self.auto_show_checkbox.stateChanged.connect(self.toggle_auto_show)
         layout.addWidget(self.auto_show_checkbox)
+        hint = QLabel("<i>Drag image files onto the window at any time: the tips close and the "
+                      "images are added.</i>", self)
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        self.setAcceptDrops(True)
         # Set up auto-show timer
         self.auto_show_timer = QTimer(self)
         self.auto_show_timer.timeout.connect(self.show_random_tip)
@@ -45,6 +50,13 @@ class TipDialog(QDialog):
             self.auto_show_timer.start(16000)  # Show a random tip every 16 seconds
 
         self.setMinimumSize(750, 570)
+
+    def dragEnterEvent(self, event):
+        # files dragged over the tips: get out of the way so they land on the
+        # figure below (the tips used to swallow the drop)
+        if event.mimeData().hasUrls():
+            self.close()
+        event.ignore()
 
     def show_next_tip(self):
         self.current_tip_index = (self.current_tip_index + 1) % len(self.tips)

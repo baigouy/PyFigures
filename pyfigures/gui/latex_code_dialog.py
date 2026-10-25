@@ -6,7 +6,7 @@ from __future__ import annotations
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QFont, QImage, QPixmap
 from qtpy.QtWidgets import (QApplication, QComboBox, QDialog, QDialogButtonBox, QFrame, QHBoxLayout,
-                            QLabel, QPlainTextEdit, QPushButton, QVBoxLayout)
+                            QLabel, QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout)
 
 EXAMPLES = {
     "TikZ picture": "\\begin{tikzpicture}\n"
@@ -72,14 +72,16 @@ class LatexCodeDialog(QDialog):
                                   "siunitx, booktabs, tikz, pgfplots), or a whole document "
                                   "(\\documentclass…) with its own preamble.")
         layout.addWidget(self.code_edit, 3)
-        frame = QFrame()
-        frame.setFrameShape(QFrame.Shape.StyledPanel)
-        frame_layout = QVBoxLayout(frame)
+        # the compiled preview can be taller/wider than the space: it scrolls
+        # (a tall table or document was cut)
         self.preview = QLabel("Press Preview to compile")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setMinimumHeight(140)
-        frame_layout.addWidget(self.preview)
-        layout.addWidget(frame, 2)
+        self.preview_scroll = QScrollArea()
+        self.preview_scroll.setFrameShape(QFrame.Shape.StyledPanel)
+        self.preview_scroll.setWidgetResizable(True)
+        self.preview_scroll.setMinimumHeight(140)
+        self.preview_scroll.setWidget(self.preview)
+        layout.addWidget(self.preview_scroll, 2)
         self.error = QLabel()
         self.error.setStyleSheet("color: #b00020;")
         self.error.setWordWrap(True)
