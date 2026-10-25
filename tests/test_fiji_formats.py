@@ -77,8 +77,20 @@ def test_a_zero_resolution_tag_is_ignored(tmp_path):
     ("HEART.SEQ", (30, 512, 512), "dhw"),
 ])
 def test_fiji_samples_load_as_fiji_shows_them(name, shape, dims):
-    img = Img(os.path.join(FIJI, name))
-    assert img.shape == shape and img.metadata["dimensions"] == dims
+    # In a child process: some of these formats are read by Fiji, and a Java VM
+    # started inside the test process (it raises access violations on purpose,
+    # and stays loaded) made later Qt tests crash at random places.
+    import json
+    import subprocess
+    import sys
+    code = ("import json, sys; from batoolset.img import Img; img = Img(sys.argv[1]); "
+            "print('RESULT ' + json.dumps([list(img.shape), img.metadata['dimensions']]))")
+    run = subprocess.run([sys.executable, "-c", code, os.path.join(FIJI, name)],
+                         capture_output=True, text=True, timeout=600)
+    line = next((l for l in run.stdout.splitlines() if l.startswith("RESULT ")), None)
+    assert line is not None, run.stdout[-2000:] + run.stderr[-2000:]
+    got_shape, got_dims = json.loads(line[len("RESULT "):])
+    assert tuple(got_shape) == shape and got_dims == dims
 
 
 @pytest.mark.skipif(not os.path.isdir(FIJI), reason="the Fiji sample images are not on this computer")
