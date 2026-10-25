@@ -156,7 +156,7 @@ from batoolset.drawings.shapes.txt2d import TAText2D
 from batoolset.figure.fig_tools import  get_master_bounds2 #get_master_bounds,
 # from batoolset.figure.row import Row
 import os.path
-from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
 from batoolset.tools.logger import TA_logger  # logging
 
 # en fait pas mal et faire autour un GUI avec un menu qui contient ça
@@ -4394,7 +4394,7 @@ class MyWidget(QWidget):
                     #                 shape = elm
                     #                 self.set_current_selection(shape)
                     #
-                    #                 from personal.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+                    #                 from personal.annotation_editor import VectorialDrawPane2, MainWindow
                     #                 # I do not even need to select the image I can directly edit it
                     #                 vdp = VectorialDrawPane2(background=shape)
                     #                 main = MainWindow(qt_viewer=vdp)

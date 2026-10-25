@@ -36,7 +36,7 @@ def test_selecting_an_arrow_from_the_menu_does_not_break_the_editor(qapp, tmp_pa
     from qtpy.QtCore import QEvent, QPointF, Qt
     from qtpy.QtGui import QMouseEvent
     from qtpy.QtWidgets import QApplication
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     errors = []
     monkeypatch.setattr(sys, "excepthook", lambda t, v, tb: errors.append(f"{t.__name__}: {v}"))
     bg = _figure_with_arrow(tmp_path)
@@ -69,7 +69,7 @@ def test_selecting_an_arrow_from_the_menu_does_not_break_the_editor(qapp, tmp_pa
 
 
 def test_editor_opens_on_the_drawing_tools(qapp, tmp_path):
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     main = MainWindow(qt_viewer=VectorialDrawPane2(background=_figure_with_arrow(tmp_path)))
     assert main.tab_widget.tabText(main.tab_widget.currentIndex()) != "Annotations"
     assert main.open_tab("Annotations")
@@ -98,7 +98,7 @@ def test_zoom_leaders_follow_the_inset_and_the_box(qapp, tmp_path):
     from qtpy.QtCore import QPointF
     from batoolset.drawings.shapes.line2d import Line2D
     from pyfigures.gui.zoom_links import zoom_links, follow_zoom_links
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     viewer = VectorialDrawPane2(background=_callout(tmp_path))
     main = MainWindow(qt_viewer=viewer)
     main.resize(900, 700)
@@ -133,7 +133,7 @@ def test_zoom_leaders_follow_a_drag_in_the_editor(qapp, tmp_path):
     from qtpy.QtCore import QEvent, QPointF, Qt
     from qtpy.QtGui import QMouseEvent
     from qtpy.QtWidgets import QApplication
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     viewer = VectorialDrawPane2(background=_callout(tmp_path))
     main = MainWindow(qt_viewer=viewer)
     main.resize(900, 700)

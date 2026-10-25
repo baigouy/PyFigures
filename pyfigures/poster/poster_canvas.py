@@ -1,10 +1,10 @@
 """The poster/collage canvas: a plain QWidget with its own paint/mouse handling.
 
 Deliberately not built on batoolset.GUI.paint2.Createpaintwidget /
-pyfigures.gui.annotation_editor_former_000_TOP_vectorial2.VectorialDrawPane2 (the
+pyfigures.gui.annotation_editor.VectorialDrawPane2 (the
 scientific-figure canvas): those are tightly bound to axis-aligned trimming and
 tight packing, neither of which applies here. Nothing in this file is imported by,
-or imports from, ezfig.py / pfgui.py / annotation_editor_former_000_TOP_vectorial2.py.
+or imports from, ezfig.py / pfgui.py / annotation_editor.py.
 """
 from batoolset.settings.global_settings import set_UI
 set_UI()

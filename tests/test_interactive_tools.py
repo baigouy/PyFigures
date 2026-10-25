@@ -36,7 +36,7 @@ def _tif(path, val):
 
 @pytest.fixture
 def pane(qapp):
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2
     return VectorialDrawPane2(background=None)
 
 

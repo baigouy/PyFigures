@@ -80,7 +80,7 @@ def test_editor_arrowhead_tool(qapp, tmp_path):
     from batoolset.drawings.shapes.image2d import Image2D
     from batoolset.drawings.shapes.line2d import Line2D
     from pyfigures.arrowheads import is_head_only
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     p = str(tmp_path / "a.tif")
     from batoolset.img import Img
     Img((np.random.default_rng(0).random((200, 300)) * 255).astype(np.uint8), dimensions="hw").save(p)

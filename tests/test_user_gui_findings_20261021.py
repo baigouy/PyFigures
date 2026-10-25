@@ -352,7 +352,7 @@ def test_scale_bar_has_no_text_unless_one_is_typed(qapp):
     ed2 = ScaleBarEditor(scale_bar=ScaleBar(10, legend=TAText2D("10 µm")))
     assert ed2.getScaleBar().legend.getPlainText() == "10 µm"
     import inspect
-    from pyfigures.gui import annotation_editor_former_000_TOP_vectorial2 as E
+    from pyfigures.gui import annotation_editor as E
     src = inspect.getsource(E)
     assert "TAText2D('<font color=#FFFFFF>Double click" not in src   # no placeholder legend
 
@@ -362,7 +362,7 @@ def test_scale_bar_has_no_text_unless_one_is_typed(qapp):
 @pytest.mark.parametrize("kind,projectable", [("plain", False), ("zstack", True)])
 def test_editor_offers_projection_only_for_stacks(qapp, tmp_path, kind, projectable):
     from batoolset.drawings.shapes.image2d import Image2D
-    from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import VectorialDrawPane2, MainWindow
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     path = _plain(tmp_path / "p.tif") if kind == "plain" else _stack(tmp_path / "z.tif", "ZYX", (4, 30, 40))
     main = MainWindow(qt_viewer=VectorialDrawPane2(background=Image2D(path)))
     main.update_dimension_sliders()

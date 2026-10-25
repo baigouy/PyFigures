@@ -683,7 +683,7 @@ class _DialogInjector(QObject):
         if mw is None:
             return False
         try:
-            from pyfigures.gui.annotation_editor_former_000_TOP_vectorial2 import MainWindow
+            from pyfigures.gui.annotation_editor import MainWindow
             return isinstance(mw, MainWindow)
         except Exception:
             return False
