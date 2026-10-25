@@ -299,6 +299,81 @@ def test_skipping_every_step_never_blocks(empty_win, qapp, name):
     assert all("Edit the script" in t for t in blocked), blocked
 
 
+@pytest.mark.parametrize("steps, first, row", [(T.beginner_steps, "Step 1 —", "Step 2 —"),
+                                                (T.advanced_steps, "Step 1 —", "Step 6 —")])
+def test_row_setup_reuses_the_image_already_dropped(empty_win, qapp, steps, first, row):
+    """"Set it up for me" on the first step drops ONE image; on the row step
+    it must build the row from that image plus a sample, not leave it alone
+    beside a separate row of two new samples."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    win = empty_win
+    all_steps = steps()
+    step1 = next(s for s in all_steps if s.title.startswith(first))
+    step_row = next(s for s in all_steps if s.title.startswith(row))
+    step1.prepare(win)
+    assert _wait(qapp, lambda: T._lone_image(win) is not None)
+    dropped = T._lone_image(win).filename
+    assert not step_row.requires(win)
+    step_row.prepare(win)
+    assert _wait(qapp, lambda: step_row.requires(win))
+    shapes = win.paint.EZFIG_panel.shapes_to_draw
+    assert not any(isinstance(s, Image2D) for s in shapes)          # nothing left alone
+    assert len(T._groups(win)) == 1
+    files = [c.filename for c in T._groups(win)[0].content]
+    assert len(files) == 2 and files[0] == dropped
+
+
+def _sample_paths(text):
+    import html
+    import re
+    return [html.unescape(p) for p in re.findall(r"<code>(.*?)</code>", text)]
+
+
+@pytest.mark.parametrize("name", list(_TUTORIALS))
+def test_sample_files_buttons_write_usable_files(empty_win, qapp, name):
+    """Steps whose dialog asks for files the user may not have (a CSV, a
+    recipe, another figure, a reviewed copy…) offer "Give me sample files":
+    the files exist and are the kind the dialog reads."""
+    import json
+    from pyfigures.gui.review.html_export import extract_comments
+    from pyfigures.recipe import build_figure_from_recipe
+    from pyfigures.mcp_tools.export import index_figures, search_figures
+    win = empty_win
+    ctrl = win._tutorial
+    ctrl.start(_TUTORIALS[name]())
+    seen = []
+
+    def on_step(step):
+        if step.samples is None:
+            return
+        assert not ctrl._bubble._btn_samples.isHidden(), step.title
+        ctrl._bubble._btn_samples.click()
+        _process(3)
+        text = ctrl._bubble._samples_label.text()
+        assert not ctrl._bubble._samples_label.isHidden() and "Could not" not in text, (step.title, text)
+        paths = _sample_paths(text)
+        assert paths and all(os.path.exists(p) for p in paths), (step.title, text)
+        p = paths[0]
+        if p.endswith(".csv"):
+            head = open(p, encoding="utf-8").readline().strip().split(",")
+            assert len(head) == 3
+        elif p.endswith(".yaml"):
+            assert os.path.isfile(build_figure_from_recipe(p)["output"])
+        elif p.endswith(".html"):
+            assert len(extract_comments(p)) == 2
+        elif p.endswith(".pyf"):
+            assert os.path.getsize(p) > 0
+        elif "library" in p:
+            idx = os.path.join(p, "index.json")
+            index_figures(p, idx)
+            assert "actin_staining" in search_figures("actin", idx)
+        seen.append(step.title)
+
+    _walk_with_setups(ctrl, qapp, win, on_step=on_step)
+    expected = {"publication": 1, "sharing": 3, "stacks": 1, "automation": 5}.get(name, 0)
+    assert len(seen) == expected, seen
+
+
 def test_stack_steps_really_work_on_the_samples(empty_win, qapp):
     """Run each Stack views action on the sample stacks (dialogs accepted
     with their defaults) and check the tutorial sees the step as done."""

@@ -168,3 +168,38 @@ def test_has_caption_sidecar_helper(gui, tmp_path):
     # write the caption sidecar and detect it
     set_figure_caption(pyf, "A legend.", title="Figure 1")
     assert T._has_caption_sidecar(gui) is True
+
+
+def test_menu_paths_cited_in_tutorials_exist(gui):
+    """Every '<b>Menu → item</b>' a tutorial tells the user to open is a real
+    menu-bar path (right-click menu paths start with no menu-bar name)."""
+    import html
+    import re
+
+    def norm(s):
+        s = s.replace("&&", "\0").replace("&", "").replace("\0", "&")
+        return re.sub(r"[….]+$", "", s.strip(' "▶')).strip()
+
+    paths = set()
+
+    def walk(menu, prefix):
+        for a in menu.actions():
+            t = norm(a.text())
+            if t:
+                paths.add(" → ".join(prefix + [t]))
+                if a.menu() is not None:
+                    walk(a.menu(), prefix + [t])
+
+    for a in gui.menuBar.actions():
+        if a.menu() is not None:
+            walk(a.menu(), [norm(a.text())])
+    tops = {p.split(" → ")[0] for p in paths}
+    src = open(T.__file__, encoding="utf-8").read()
+    wrong = []
+    for m in re.finditer(r"<b>([^<]*?→[^<]*?)</b>", src):
+        parts = [norm(p) for p in html.unescape(m.group(1)).split("→")]
+        if parts[0] in tops and " → ".join(parts) not in paths:
+            if parts[0] == "Help" and parts[-1].endswith("Movies"):
+                continue                 # "Help → <tutorial name>": named, not a literal path
+            wrong.append(" → ".join(parts))
+    assert not wrong, wrong

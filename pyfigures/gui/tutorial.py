@@ -155,11 +155,15 @@ class TutorialStep:
                     user skipped that step — the bubble says so (requires_text)
                     and, if *prepare* is given, offers "Set it up for me".
     prepare         callable(win) that creates what *requires* checks for.
+    samples         callable(win) → HTML: for a step whose dialog asks for
+                    files the user may not have (a CSV, another figure, a
+                    reviewed copy…), writes sample ones and says where they
+                    are; offered as "Give me sample files".
     """
 
     def __init__(self, title, message, get_target=None,
                  completion_check=None, auto_advance=True, on_show=None,
-                 requires=None, requires_text='', prepare=None):
+                 requires=None, requires_text='', prepare=None, samples=None):
         self.title = title
         self.message = message
         self.get_target = get_target
@@ -169,6 +173,7 @@ class TutorialStep:
         self.requires = requires
         self.requires_text = requires_text
         self.prepare = prepare
+        self.samples = samples
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -279,6 +284,7 @@ class HintBubble(QFrame):
     prev_requested = Signal()
     skip_requested = Signal()
     prepare_requested = Signal()
+    samples_requested = Signal()
 
     _STYLE = """
         QLabel#needs_label {
@@ -399,6 +405,21 @@ class HintBubble(QFrame):
         self._btn_prepare.hide()
         layout.addWidget(self._btn_prepare, 0, Qt.AlignLeft)
 
+        # steps whose dialog asks for files the user may not have
+        self._btn_samples = QPushButton('Give me sample files')
+        self._btn_samples.setObjectName('btn_prepare')
+        self._btn_samples.setToolTip('Writes small sample files for this step and says where they are.')
+        self._btn_samples.clicked.connect(self.samples_requested)
+        self._btn_samples.hide()
+        layout.addWidget(self._btn_samples, 0, Qt.AlignLeft)
+        self._samples_label = QLabel()
+        self._samples_label.setObjectName('needs_label')
+        self._samples_label.setWordWrap(True)
+        self._samples_label.setTextFormat(Qt.RichText)
+        self._samples_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._samples_label.hide()
+        layout.addWidget(self._samples_label)
+
         # ── dots ──
         dots_row = QHBoxLayout()
         dots_row.setSpacing(5)
@@ -460,7 +481,8 @@ class HintBubble(QFrame):
             self._drag_pos = None
         return False  # don't consume; buttons etc. still receive the event
 
-    def update_step(self, index: int, total: int, step: TutorialStep, done: bool, missing: bool = False):
+    def update_step(self, index: int, total: int, step: TutorialStep, done: bool, missing: bool = False,
+                    samples_text: str = ''):
         self._counter.setText(f'Step {index + 1} of {total}')
         self._title.setText(step.title)
         self._message.setText(step.message)
@@ -469,6 +491,9 @@ class HintBubble(QFrame):
         self._needs_label.setText('⚠  ' + (step.requires_text or 'This step needs the result of an earlier step.'))
         self._needs_label.setVisible(show_needs)
         self._btn_prepare.setVisible(show_needs and step.prepare is not None)
+        self._btn_samples.setVisible(step.samples is not None and not show_needs)
+        self._samples_label.setVisible(bool(samples_text) and step.samples is not None)
+        self._samples_label.setText(samples_text)
         self._btn_prev.setEnabled(index > 0)
         self._btn_next.setText('Finish' if index == total - 1 else 'Next →')
 
@@ -746,7 +771,9 @@ class TutorialController:
         self._bubble.prev_requested.connect(self._prev)
         self._bubble.skip_requested.connect(self.stop)
         self._bubble.prepare_requested.connect(self._prepare)
+        self._bubble.samples_requested.connect(self._make_samples)
         self._missing = False          # current step's prerequisite is absent
+        self._samples_text = {}        # step index → where its sample files are
 
         # Completion-polling timer
         self._poll = QTimer(win)
@@ -774,6 +801,7 @@ class TutorialController:
     def start(self, steps: list[TutorialStep]):
         self._steps = steps
         self._index = 0
+        self._samples_text = {}
         self._done_flag = False
         self._auto_advance_pending = False
         self._show()
@@ -836,6 +864,20 @@ class TutorialController:
             traceback.print_exc()
         self._update_ui()
 
+    def _make_samples(self):
+        """"Give me sample files": write the inputs the step's dialog asks for."""
+        step = self._current_step()
+        if step.samples is None:
+            return
+        try:
+            text = step.samples(self._win)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            text = f'Could not write the sample files: {e}'
+        self._samples_text[self._index] = text
+        self._update_ui()
+
     def _update_ui(self, step_changed: bool = False):
         win = self._win
         self._overlay.resize(win.size())
@@ -850,7 +892,8 @@ class TutorialController:
         self._overlay.set_target(rect, self._done_flag)
 
         self._missing = self._requirement_missing()
-        self._bubble.update_step(self._index, len(self._steps), step, self._done_flag, self._missing)
+        self._bubble.update_step(self._index, len(self._steps), step, self._done_flag, self._missing,
+                                 self._samples_text.get(self._index, ''))
         self._bubble.reposition(rect, win)
 
         if step_changed and step.on_show is not None:
@@ -1369,6 +1412,188 @@ def _prep_row(n=2):
     return prepare
 
 
+def _lone_image(win):
+    """The last picture dropped on its own (not in a row), or None."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    for s in reversed(win.paint.EZFIG_panel.shapes_to_draw):
+        if isinstance(s, Image2D) and not getattr(s, 'isText', False):
+            return s
+    return None
+
+
+def _prep_row_reusing(n=2):
+    """Build the row from the image the previous step dropped plus samples,
+    so that image is not left alone beside a separate sample row."""
+    def prepare(win):
+        target = _lone_image(win)
+        if target is None:
+            win.add_images_to_new_row(_demo_image_paths(n))
+        else:
+            win.add_images_combined_with_target(_demo_image_paths(n - 1), target)
+    return prepare
+
+
+# ── "Give me sample files": inputs a step's dialog asks for ──────────────────
+
+def _sample_subdir(name):
+    """A new, empty folder for one step's sample files."""
+    import os
+    _DEMO_COUNTER[0] += 1
+    path = os.path.join(_demo_dir(), f'{name}_{_DEMO_COUNTER[0]:02d}')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _where(what, path, then=''):
+    import html
+    return (f'📁 {what}:<br><code>{html.escape(path)}</code>'
+            + (f'<br>{then}' if then else ''))
+
+
+def _write_sample_csv(path):
+    """Measurements per group, one column per group (the layout the plot
+    dialog and recipes read)."""
+    import numpy as np
+    rng = np.random.default_rng(7)
+    groups = {'Control': rng.normal(10, 2, 12), 'Mutant A': rng.normal(14, 2, 12),
+              'Mutant B': rng.normal(10.5, 2, 12)}
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(','.join(groups) + '\n')
+        for row in zip(*groups.values()):
+            f.write(','.join(f'{v:.2f}' for v in row) + '\n')
+    return path
+
+
+def _copy_images_to(folder, n):
+    import os
+    import shutil
+    out = []
+    for p in _demo_image_paths(n):
+        dst = os.path.join(folder, os.path.basename(p))
+        shutil.copyfile(p, dst)
+        out.append(dst)
+    return out
+
+
+def _build_sample_figure(folder, name, caption, n=2):
+    """A small saved figure (.pyf) built from a recipe, beside its images."""
+    import os
+    from pyfigures.recipe import build_figure_from_recipe
+    images = [os.path.basename(p) for p in _copy_images_to(folder, n)]
+    recipe = os.path.join(folder, f'{name}.yaml')
+    with open(recipe, 'w', encoding='utf-8') as f:
+        f.write(f'output: {name}.pyf\n')
+        f.write(f'caption: "{caption}"\n')
+        f.write('label_background: black\n')
+        f.write('rows:\n')
+        f.write('  - [' + ', '.join(images) + ']\n')
+    build_figure_from_recipe(recipe)
+    return os.path.join(folder, f'{name}.pyf')
+
+
+def _samples_csv(win):
+    import os
+    path = _write_sample_csv(os.path.join(_sample_subdir('csv'), 'cells_per_field.csv'))
+    return _where('Sample CSV (three groups of measurements)', path, 'Pick it in the dialog.')
+
+
+def _samples_channel_files(win):
+    import os
+    import shutil
+    d = _sample_subdir('channels')
+    for name, p in zip(('DAPI', 'GFP', 'RFP'), _demo_image_paths(3)):
+        shutil.copyfile(p, os.path.join(d, f'cells_{name}.png'))
+    return _where('Three channel files (cells_DAPI / _GFP / _RFP.png)', d,
+                  'Pick one file per channel.')
+
+
+def _samples_results_folder(win):
+    import os
+    d = _sample_subdir('results')
+    _copy_images_to(d, 4)
+    _write_sample_csv(os.path.join(d, 'cells_per_field.csv'))
+    return _where('A results folder (4 images and a CSV)', d, 'Pick this folder in the dialog.')
+
+
+def _samples_recipe(win):
+    import os
+    d = _sample_subdir('recipe')
+    images = [os.path.basename(p) for p in _copy_images_to(d, 3)]
+    _write_sample_csv(os.path.join(d, 'cells_per_field.csv'))
+    recipe = os.path.join(d, 'sample_recipe.yaml')
+    with open(recipe, 'w', encoding='utf-8') as f:
+        f.write('# A sample recipe: open it in a text editor, change a setting and rebuild.\n')
+        f.write('output: sample_figure.pyf\n')
+        f.write('defaults:\n')
+        f.write('  px_to_unit: 0.1                  # micrometres per pixel\n')
+        f.write('  scale_bar: {units: 10, unit: "µm"}\n')
+        f.write('rows:\n')
+        f.write(f'  - [{images[0]}, {images[1]}, {images[2]}]\n')
+        f.write('  - - {image: ' + images[0] + ', lut: green}\n')
+        f.write('    - {plot: cells_per_field.csv, kind: box, ylabel: "cells / field"}\n')
+    return _where('A sample recipe', recipe, 'Pick it in the dialog.')
+
+
+def _samples_library(win):
+    d = _sample_subdir('library')
+    _build_sample_figure(d, 'actin_staining', 'Actin staining in wild-type guts.')
+    _build_sample_figure(d, 'gfp_timelapse', 'GFP time-lapse of dividing cells.')
+    return _where('A small figure library (two figures)', d,
+                  'Point the dialog at this folder and search for <b>actin</b> or <b>GFP</b>.')
+
+
+def _samples_other_figure(win):
+    path = _build_sample_figure(_sample_subdir('other_figure'), 'other_figure',
+                                'Another figure, white letters on black.')
+    return _where('Another figure', path, 'Pick it in the dialog.')
+
+
+def _samples_older_version(win):
+    import os
+    dst = os.path.join(_sample_subdir('versions'), 'older_version.pyf')
+    win._save_state_to_file(dst)
+    return _where('A copy of the figure as it is now', dst,
+                  'Change something first (delete a panel, change a LUT…), then compare with this copy.')
+
+
+def _samples_review(win):
+    import os
+    from pyfigures.gui.review.html_export import build_review_html
+    d = _sample_subdir('review')
+    png = os.path.join(d, 'figure.png')
+    win._render_png_without_prompt(png)
+    comments = [
+        {'x': 0.2, 'y': 0.3, 'text': 'Add a scale bar here.', 'author': 'Co-author', 'ts': ''},
+        {'x': 0.7, 'y': 0.5, 'w': 0.2, 'h': 0.2, 'text': 'Could this panel be brighter?',
+         'author': 'Co-author', 'ts': ''},
+    ]
+    stem = os.path.splitext(os.path.basename(win.current_file or 'figure'))[0]
+    out = os.path.join(d, f'{stem}_reviewed.html')
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(build_review_html(png, source_name=stem, comments=comments, author='Co-author'))
+    return _where('A reviewed copy, as a co-author would send it back (two comments)', out,
+                  'Pick it in the dialog.')
+
+
+def _samples_moved_images(win):
+    import os
+    import shutil
+    files = sorted({i.filename for i in _image_stack(win)
+                    if isinstance(getattr(i, 'filename', None), str) and os.path.isfile(i.filename)})
+    if not files:
+        return 'The figure has no image files on disk to move.'
+    old = os.path.commonpath([os.path.dirname(f) for f in files])
+    new = _sample_subdir('moved_images')
+    for f in files:
+        dst = os.path.join(new, os.path.relpath(f, old))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(f, dst)
+    import html
+    return (f'📁 The figure\'s images were copied to a new folder, as if moved.<br>'
+            f'Old path prefix: <code>{html.escape(old)}</code><br>'
+            f'New path prefix: <code>{html.escape(new)}</code>')
+
+
 def _prep_row_if_missing(win, then=None):
     """Make sure a row of 2+ images exists, then run then(win)."""
     if not _has_group_with_multiple_images(win):
@@ -1541,7 +1766,7 @@ def beginner_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 1 — Drop your first image',
             message=(
-                'Drag an <b>image file</b> (TIFF, PNG, JPG, CZI…) from your file '
+                'Drag <b>one image file</b> (TIFF, PNG, JPG, CZI…) from your file '
                 'manager and <b>drop it onto the canvas</b>.<br><br>'
                 'From the pop-up menu choose <b>"➕ As single image(s)"</b>.'
             ),
@@ -1571,7 +1796,9 @@ def beginner_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 2 — Build a row',
             message=(
-                'Drag <b>two or more images</b> and drop them onto the canvas.<br><br>'
+                'A row needs <b>at least two images</b>.<br><br>'
+                'Drag <b>one more image</b> and drop it <b>onto your first image</b>, '
+                'or drop <b>two or more</b> new images on an empty area of the canvas.<br><br>'
                 'From the pop-up menu choose <b>"↔ To row"</b>.<br>'
                 'The images are grouped side-by-side into a row.'
             ),
@@ -1579,8 +1806,8 @@ def beginner_steps() -> list[TutorialStep]:
             completion_check=_has_group_with_multiple_images,
             auto_advance=True,
             requires=_has_group_with_multiple_images,
-            requires_text='No images to hand? Build the row from two sample images.',
-            prepare=_prep_row(2),
+            requires_text='No second image to hand? Make the row from your image and a sample image.',
+            prepare=_prep_row_reusing(2),
         ),
 
         # ── Click once → select group ─────────────────────────────────────────
@@ -1845,8 +2072,8 @@ def advanced_steps() -> list[TutorialStep]:
             completion_check=_has_group_with_multiple_images,
             auto_advance=True,
             requires=_has_group_with_multiple_images,
-            requires_text='Short of time? Make the row from two sample images.',
-            prepare=_prep_row(2),
+            requires_text='Short of time? Make the row from your image and a sample image.',
+            prepare=_prep_row_reusing(2),
         ),
 
         # ── Add empty image ───────────────────────────────────────────────────
@@ -1929,7 +2156,7 @@ def advanced_steps() -> list[TutorialStep]:
                 '• <b>Annotations → Remove</b> — bulk-remove shapes, scale bars, or insets<br>'
                 '• <b>Right-click a row → Crop &amp; size ▶ → Force same width and height</b><br>'
                 '• <b>Help → Stacks, Channels &amp; Movies</b> tutorial — channel split, projections, video<br>'
-                '• <b>File → Export as PDF / TIF / PNG</b> — for submission or presentations'
+                '• <b>File → Export As</b> (PDF, TIFF, PNG…) — for submission or presentations'
             ),
             get_target=None,
             completion_check=None,
@@ -2171,7 +2398,7 @@ def medium_steps() -> list[TutorialStep]:
                 'Great work — you know the full PyFigures workflow.<br><br>'
                 'Also worth exploring:<br>'
                 '• <b>Save And Consolidate</b> — portable archive of figure + images<br>'
-                '• <b>Color-blind assistant</b> — Help menu<br>'
+                '• <b>Color-blind assistant</b> — QC menu<br>'
                 '• <b>Set LUTs</b> — right-click a group for channel colors<br>'
                 '• <b>Annotations → Panel letters (A, B, C…)</b> — font, size, case<br>'
                 '• <b>Help</b> menu → Advanced Tutorial'
@@ -2279,6 +2506,7 @@ def publication_steps() -> list[TutorialStep]:
             get_target=lambda win: win.menuBar,
             completion_check=None,
             auto_advance=False,
+            samples=_samples_csv,
         ),
 
         # ── Audit ─────────────────────────────────────────────────────────────
@@ -2495,11 +2723,13 @@ def sharing_steps() -> list[TutorialStep]:
                 '<b>File → Review comments → "Import review comments…"</b> and select the file.<br><br>'
                 'The comments are attached to the figure so you can address them '
                 'panel by panel.<br><br>'
+                'No reviewed copy yet? Use the sample one below.<br><br>'
                 'Click <b>Next</b>.'
             ),
             get_target=lambda win: win.menuBar,
             completion_check=None,
             auto_advance=False,
+            samples=_samples_review,
         ),
 
         # ── View review comments ──────────────────────────────────────────────
@@ -2507,7 +2737,7 @@ def sharing_steps() -> list[TutorialStep]:
             title='Step 4 — View review comments',
             message=(
                 'Open <b>File → Review comments → "View review comments"</b> to see the imported '
-                'notes overlaid on the figure.<br><br>'
+                'notes overlaid on the figure (import some in Step 3 first).<br><br>'
                 'Work through them, then re-export an updated review copy if needed.<br><br>'
                 'Click <b>Next</b>.'
             ),
@@ -2529,6 +2759,7 @@ def sharing_steps() -> list[TutorialStep]:
             get_target=lambda win: win.menuBar,
             completion_check=None,
             auto_advance=False,
+            samples=_samples_other_figure,
         ),
 
         # ── Remap image paths ─────────────────────────────────────────────────
@@ -2537,13 +2768,16 @@ def sharing_steps() -> list[TutorialStep]:
             message=(
                 'If images were moved after saving, open '
                 '<b>QC → "Remap image paths…"</b>.<br><br>'
-                'Point it at the new folder and it re-links every broken reference at '
-                'once — no need to re-add images.<br><br>'
-                'Click <b>Next</b>.'
+                'Give the <b>old</b> folder (the start of the paths stored in the figure) '
+                'and the <b>new</b> one: every image path starting with the old folder is '
+                'rewritten at once — no need to re-add images.<br><br>'
+                'To try it, the sample button copies the images to a new folder and '
+                'gives you both paths. Click <b>Next</b>.'
             ),
             get_target=lambda win: win.menuBar,
             completion_check=None,
             auto_advance=False,
+            samples=_samples_moved_images,
         ),
 
         # ── Colour-blind assistant ────────────────────────────────────────────
@@ -2825,6 +3059,7 @@ def stacks_steps() -> list[TutorialStep]:
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_channel_files,
         ),
         TutorialStep(
             title='Step 8 — Export a movie',
@@ -2885,6 +3120,7 @@ def automation_steps() -> list[TutorialStep]:
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_results_folder,
         ),
         TutorialStep(
             title='Step 2 — Build a figure from a recipe',
@@ -2897,10 +3133,12 @@ def automation_steps() -> list[TutorialStep]:
                 'line (<code>python -m pyfigures.recipe my_figure.yaml</code>) and through '
                 'the MCP server.<br><br>'
                 'Every key is described in <code>docs/RECIPES.md</code>; '
-                '<code>docs/recipe_example.yaml</code> is a full example.'
+                '<code>docs/recipe_example.yaml</code> is a full example. The sample '
+                'button writes a short recipe with its images to try it on.'
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_recipe,
         ),
         TutorialStep(
             title='Step 3 — Search your figure library',
@@ -2913,6 +3151,7 @@ def automation_steps() -> list[TutorialStep]:
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_library,
         ),
         TutorialStep(
             title='Step 4 — Compare two versions',
@@ -2920,10 +3159,13 @@ def automation_steps() -> list[TutorialStep]:
                 'Open <b>File → "Compare with another version…"</b> and pick an older '
                 'copy of the figure.<br><br>'
                 'A page opens in your browser listing what changed (panels, crops, '
-                'LUTs, labels…) with the two renderings and their pixel difference.'
+                'LUTs, labels…) with the two renderings and their pixel difference.<br><br>'
+                'No older copy? The sample button saves one of the figure as it is now: '
+                'change something, then compare with it.'
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_older_version,
         ),
         TutorialStep(
             title='Step 5 — Copy the style of another figure',
@@ -2936,6 +3178,7 @@ def automation_steps() -> list[TutorialStep]:
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,
+            samples=_samples_other_figure,
         ),
         TutorialStep(
             title='Step 6 — Alt text for accessibility',
@@ -3112,7 +3355,8 @@ def poster_steps(album=False) -> list[TutorialStep]:
             message=(
                 'You can now lay out posters and collages.<br><br>'
                 'Tip: put a figure made in the main editor on a poster with '
-                '<b>Add image…</b> → pick the <code>.pyf</code>.'
+                '<b>Add image…</b> → pick the <code>.pyf</code>, or from the figure editor '
+                'with <b>Tools → "Send this figure to the poster designer"</b>.'
             ),
         )
     return [
