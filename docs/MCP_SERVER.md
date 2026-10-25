@@ -1,6 +1,6 @@
 # PyFigures MCP Server
 
-The PyFigures **Model Context Protocol (MCP) server** lets any MCP-compatible AI assistant
+The PyFigures **Model Context Protocol (MCP) server** lets any MCP client (Claude, LM Studio…)
 read and edit `.pyf` figure files through natural language — no GUI required.
 
 > **What is MCP?**  

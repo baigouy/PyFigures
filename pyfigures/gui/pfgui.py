@@ -1204,10 +1204,10 @@ class EZFIG_GUI(QMainWindow):
         self.mainToolBar.addWidget(self.page_bounds_checkbox)
         # MCP was only under Tools: one click from the toolbar
         self.mcp_toolbar_action = QAction(get_icon('mdi.robot-outline', color_disabled='lightgray'),
-                                          'MCP server (AI assistants)', self)
-        self.mcp_toolbar_action.setToolTip("Let an AI assistant (Claude, LM Studio…) build and edit "
-                                           "figures: register PyFigures with it, or start the HTTP "
-                                           "server")
+                                          'MCP server', self)
+        self.mcp_toolbar_action.setToolTip("MCP server: let an MCP client (Claude, LM Studio…) build "
+                                           "and edit figures — register PyFigures with it, or start "
+                                           "the HTTP server")
         self.mcp_toolbar_action.triggered.connect(lambda _checked=False: self.open_mcp_server_dialog())
         self.mainToolBar.addSeparator()
         self.mainToolBar.addAction(self.mcp_toolbar_action)
@@ -1722,7 +1722,7 @@ class EZFIG_GUI(QMainWindow):
         tools_menu.addAction(mcp_server_action)
         mcp_server_action.triggered.connect(self.open_mcp_server_dialog)
         mcp_history_action = QAction("MCP call history / undo…", self)
-        mcp_history_action.setToolTip("What an AI assistant did to this figure's file through the "
+        mcp_history_action.setToolTip("What an MCP client did to this figure's file through the "
                                       "MCP server: every call it made, and undo of its last changes "
                                       "(MCP server… only sets up the connection)")
         tools_menu.addAction(mcp_history_action)
