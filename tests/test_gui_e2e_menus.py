@@ -283,6 +283,13 @@ def chk_selection(expected):
     return chk
 
 
+def _fill_caption(dlg):
+    # the rich-text caption dialog (one dialog: title + formatted caption)
+    dlg.title_edit.setText("Figure 7")
+    dlg.doc.setPlainText("e2e caption")
+    H.accept(dlg)
+
+
 def chk_caption(g, b, a, run):
     from pyfigures.mcp_server import get_figure_caption
     d = json.loads(get_figure_caption(g.current_file))
@@ -458,8 +465,8 @@ ACTIONS = {
         files={"save": "out:saved.html"}, inv=False),
     "menu: File > Review comments > Import review comments…": spec(unchanged, files={"open": "review"}, inv=False),
     "menu: File > Review comments > View review comments": spec(unchanged, inv=False),
-    "menu: File > Figure caption / legend…": spec(chk_caption, [("title", text_input("Figure 7")),
-                                                               ("legend", text_input("e2e caption"))], inv=False),
+    "menu: File > Figure caption / legend…": spec(chk_caption, [("Figure caption / legend", _fill_caption)],
+                                                  inv=False),
     "menu: File > Alt text (accessibility)…": spec(chk_alt_text, [("Alt text", line_edit("", "e2e alt text"))],
                                                    inv=False),
     "menu: File > Copy style from another figure…": spec(both(status_says("Style copied from other.pyf"),

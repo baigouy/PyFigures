@@ -6122,16 +6122,17 @@ class EZFIG_GUI(QMainWindow):
                 cur_caption = d.get('caption') or ''
         except Exception:
             pass
-        title, ok = QInputDialog.getText(self, 'Figure caption — title',
-                                         'Title (optional, e.g. "Figure 1"):', text=cur_title)
-        if not ok:
+        # formatted (bold, italics…) in the poster's rich-text editor: it was
+        # two plain text boxes
+        from pyfigures.gui.caption_dialog import CaptionDialog
+        from pyfigures.mcp_tools.overlays import _read_caption_markdown
+        dlg = CaptionDialog(self, cur_title, cur_caption, _read_caption_markdown(self.current_file))
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        caption, ok = QInputDialog.getMultiLineText(self, 'Figure caption / legend',
-                                                    'Caption text:', cur_caption)
-        if not ok:
-            return
+        v = dlg.values()
         try:
-            set_figure_caption(self.current_file, caption, title=title or None)
+            set_figure_caption(self.current_file, v["caption"], title=v["title"] or None,
+                               caption_markdown=v["caption_markdown"])
         except Exception:
             logger.error('set caption failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not save the caption (see log).')

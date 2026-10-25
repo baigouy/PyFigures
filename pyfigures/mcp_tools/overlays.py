@@ -68,12 +68,16 @@ def _default_bar_label(units, unit) -> str:
 
 
 @mcp.tool()
-def set_figure_caption(pyf_path: str, caption: str, title: str | None = None) -> str:
+def set_figure_caption(pyf_path: str, caption: str, title: str | None = None,
+                       caption_markdown: str | None = None) -> str:
     """Store the figure's caption/legend (and optional title) alongside the .pyf —
     the text that describes the panels in the paper.
 
     *caption*: the legend text (plain text; may include panel refs like "(a) …").
     *title*: optional short title, e.g. "Figure 1".
+    *caption_markdown*: the same caption with formatting (**bold**, *italic*
+      species names…), written by export_caption(fmt="md"). A new plain
+      *caption* without it drops the old formatted version.
 
     Saved to a ``<figure>.caption.json`` sidecar next to the .pyf (kept out of the
     figure XML so it can never corrupt the figure's own settings; consolidate/move
@@ -88,11 +92,22 @@ def set_figure_caption(pyf_path: str, caption: str, title: str | None = None) ->
             os.remove(p)
         return "Figure caption cleared."
     old_title, _ = _read_caption(pyf_path)
-    _atomic_write_text(p, json.dumps({"title": title if title is not None else old_title,
-                                      "caption": caption}, ensure_ascii=False, indent=2))
+    entry = {"title": title if title is not None else old_title, "caption": caption}
+    if caption_markdown:
+        entry["caption_markdown"] = caption_markdown
+    _atomic_write_text(p, json.dumps(entry, ensure_ascii=False, indent=2))
     return (f"Figure caption set ({len(caption)} chars)"
             + (f", title={title!r}" if title is not None else "")
             + f" → {os.path.basename(p)}.")
+
+
+def _read_caption_markdown(pyf_path: str):
+    """The formatted (Markdown) caption written by the GUI, or None."""
+    try:
+        with open(_caption_sidecar_path(pyf_path), encoding="utf-8") as f:
+            return json.load(f).get("caption_markdown")
+    except (OSError, ValueError):
+        return None
 
 
 @mcp.tool()
@@ -128,7 +143,9 @@ def export_caption(pyf_path: str, out_path: str | None = None, fmt: str = "txt")
         out_path = os.path.splitext(pyf_path)[0] + "_caption." + fmt
     out_path = os.path.abspath(out_path)
     if fmt == "md":
-        body = (f"## {title}\n\n" if title else "") + caption + "\n"
+        # the formatted caption (bold, italics) when one was written
+        rich = _read_caption_markdown(pyf_path) or caption
+        body = (f"## {title}\n\n" if title else "") + rich + "\n"
     else:
         body = ((title + "\n\n") if title else "") + caption + "\n"
     with open(out_path, "w", encoding="utf-8") as f:

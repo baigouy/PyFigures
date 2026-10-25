@@ -51,30 +51,63 @@ def test_caption_needs_a_saved_figure(gui, ui):
     assert ui["msg"][-1][1] == "Save the figure first"
 
 
+def _caption_dialog(monkeypatch, fill=None, accept=True):
+    """Answer File → Figure caption's rich-text dialog: *fill(dlg)* edits it."""
+    from qtpy.QtWidgets import QDialog
+    from pyfigures.gui import caption_dialog as CD
+    seen = []
+
+    def fake_exec(self):
+        seen.append({"title": self.title_edit.text(), "caption": self.doc.toPlainText(),
+                     "markdown": self.doc.toMarkdown()})
+        if fill:
+            fill(self)
+        return QDialog.DialogCode.Accepted if accept else QDialog.DialogCode.Rejected
+    monkeypatch.setattr(CD.CaptionDialog, "exec", fake_exec)
+    return seen
+
+
 def test_caption_set_then_prefilled(gui, saved, monkeypatch):
     from pyfigures.mcp_server import get_figure_caption
-    _answers(monkeypatch, text=[("Figure 2", True)], multiline=[("Cells divide.", True)])
+
+    def fill(dlg):
+        dlg.title_edit.setText("Figure 2")
+        dlg.doc.setPlainText("Cells divide.")
+    _caption_dialog(monkeypatch, fill)
     gui.figure_caption_action()
     d = json.loads(get_figure_caption(saved))
     assert d["title"] == "Figure 2" and d["caption"] == "Cells divide."
     assert "caption saved" in gui.statusBar().currentMessage().lower()
-    seen = {}
-
-    def get_text(*a, **k):
-        seen["title"] = k.get("text")
-        return ("", False)                                 # then cancel
-    monkeypatch.setattr(QInputDialog, "getText", staticmethod(get_text))
+    seen = _caption_dialog(monkeypatch, accept=False)       # then cancel
     gui.figure_caption_action()
-    assert seen["title"] == "Figure 2"                    # the dialog opens on the stored title
+    assert seen[0]["title"] == "Figure 2" and seen[0]["caption"] == "Cells divide."   # opens on it
     assert json.loads(get_figure_caption(saved))["caption"] == "Cells divide."   # cancel kept it
 
 
-def test_caption_cancel_on_text_keeps_old(gui, saved, monkeypatch):
+def test_caption_cancel_keeps_old(gui, saved, monkeypatch):
     from pyfigures.mcp_server import get_figure_caption, set_figure_caption
     set_figure_caption(saved, "old text", title="T")
-    _answers(monkeypatch, text=[("New title", True)], multiline=[("", False)])
+    _caption_dialog(monkeypatch, lambda dlg: dlg.doc.setPlainText("new"), accept=False)
     gui.figure_caption_action()
     assert json.loads(get_figure_caption(saved))["caption"] == "old text"
+
+
+def test_caption_keeps_its_formatting(gui, saved, monkeypatch, tmp_path):
+    """22 Oct report: the caption was a plain text box (no italics for species
+    names, no bold). It now uses the rich-text editor; the plain text stays
+    what the tools read, the Markdown export keeps the formatting."""
+    from pyfigures.mcp_server import get_figure_caption, export_caption
+
+    def fill(dlg):
+        dlg.doc.setHtml("<p><b>Figure 1.</b> <i>Drosophila</i> wing discs.</p>")
+    _caption_dialog(monkeypatch, fill)
+    gui.figure_caption_action()
+    assert json.loads(get_figure_caption(saved))["caption"] == "Figure 1. Drosophila wing discs."
+    md = open(json.loads(export_caption(saved, fmt="md"))["output"], encoding="utf-8").read()
+    assert "**Figure 1.**" in md and "*Drosophila*" in md
+    seen = _caption_dialog(monkeypatch, accept=False)       # reopens formatted
+    gui.figure_caption_action()
+    assert "*Drosophila*" in seen[0]["markdown"]
 
 
 @pytest.mark.parametrize("include", [True, False])
