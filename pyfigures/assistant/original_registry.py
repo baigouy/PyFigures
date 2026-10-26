@@ -4,7 +4,7 @@ import inspect
 from typing import Any, Optional, get_type_hints
 import pyfigures.mcp_server as original
 from mcp.server.fastmcp import Image
-from mcp.types import ImageContent
+from mcp.types import ImageContent, ToolAnnotations
 
 
 def registry():
@@ -56,6 +56,13 @@ def register_all(server, send):
 
         def make_wrapper(tool=tool, name=name, parameter=route, native_params=native_params, addressable=addressable, text_indexed=text_indexed):
             def invoke(**kwargs):
+                def finish(value, evidence):
+                    if name == 'set_figure_caption':
+                        value = dict(value) if isinstance(value, dict) else {'result': value}
+                        for key in ('caption_text','caption_title','caption_markdown','caption_ends_with_period','caption_readback_error'):
+                            if key in evidence:value[key] = evidence[key]
+                    from .result_evidence import with_font_evidence
+                    return with_font_evidence(value, kwargs.get('font_family'))
                 if text_indexed:
                     index=kwargs.pop('text_index',None)
                     if index is not None:
@@ -86,13 +93,13 @@ def register_all(server, send):
                                 raise
                     decoded = decode(result['tool_result'])
                     if result['document_changed'] or result.get('metadata_changed') or name in ('add_corner_labels', 'set_label_background'):
-                        return {'result': decoded, 'document_changed': result['document_changed'],
+                        return finish({'result': decoded, 'document_changed': result['document_changed'],
                                 'metadata_changed': result.get('metadata_changed', False), 'revision': result['revision'],
                                 'persistence': result.get('persistence'), 'verification': result.get('verification'),
                                 'verified_lettering': result.get('verified_lettering'),
                                 'verified_changes': result.get('verified_changes'),
-                                'verified_specification': result.get('verified_specification')}
-                    return decoded
+                                'verified_specification': result.get('verified_specification')}, result)
+                    return finish(decoded, result)
                 if kwargs.pop('panel_ref',None) is not None:
                     raise ValueError('panel_ref is for the live GUI; explicit file tools require native indices')
                 return tool.fn(**kwargs)
@@ -118,6 +125,8 @@ def register_all(server, send):
 
         suffix = (f' Live adapter: {route} defaults to "live", meaning the OPEN PyFigures document including unsaved changes. Omit it for live editing. An explicit filesystem path uses the original file-based tool. Live document changes are undoable and not automatically saved.'
                   if route else ' Original file/service tool: retains its original explicit paths and side effects; does not automatically load its output in the GUI.')
+        if name == 'list_fonts':
+            suffix = ' Read-only installed font inventory and exact-name availability check; no document change.'
         if addressable:
             suffix += ' PREFER panel_ref (visible letter or inspected panel ID) for a named LIVE panel; omit group_path/image_index. Resolved against current GUI state on the Qt thread. Conflicting numeric addresses are rejected, never silently substituted.'
         if text_indexed:
@@ -125,6 +134,7 @@ def register_all(server, send):
         if name in ('get_image_property', 'set_image_property'):
             suffix += ' Image rotation is property_name="theta" in degrees; unrotate/reset rotation means value="0". inspect_figure panel_references maps visible letters to group_path/image_index.'
         wording = {
+            'list_fonts': 'Read-only fonts/typeface inventory. For is Helvetica/Arial available or installed, pass query and answer font_check.installed; if missing, report drawn_as and offer alternatives. For list fonts omit query and summarise installed_families/count. ',
             'set_figure_caption': 'caption is exact plain text, including its final period when supplied; title is a separate field. caption_markdown is an optional formatted string of that same text, never a boolean. ',
             'add_annotation': 'Write/put <words> on <panel> supplies literal text without needing quotation marks. Add dependent text before a later swap so it travels with its image. ',
             'set_scale_bar': 'Single-panel operation: Give a a scale bar names panel a. Prefer panel_ref even without a selection. Length and pixel size must be finite and positive. Bulk is only for an explicit whole-figure request. ',
@@ -133,5 +143,5 @@ def register_all(server, send):
         description=tool.description.replace('annotation_index','text_index') if text_indexed else tool.description
         description=wording.get(name, '')+description
         server.add_tool(make_wrapper(), name=name, description=description + suffix,
-                        annotations=tool.annotations, structured_output=False)
+                        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False) if name=='list_fonts' else tool.annotations, structured_output=False)
     return len(registry())

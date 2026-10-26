@@ -75,6 +75,17 @@ def build_server(full_server, send):
         'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row'}
     names.update({'open_annotation_properties','inspect_annotation_objects','edit_annotation_properties','review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
     available = {n: t for n, t in full_server._tool_manager._tools.items() if n in names}
+    font_tool = available.get('list_fonts')
+    if font_tool is not None:
+        def compact_list_fonts(query: str | None = None):
+            value = font_tool.fn(query=query)
+            if query:return value
+            from .result_evidence import compact_font_inventory
+            return compact_font_inventory(value)
+        available['list_fonts'] = type(font_tool).from_function(
+            compact_list_fonts, name='list_fonts', description=font_tool.description,
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            structured_output=False)
     server = FastMCP('PyFigures categorized live prototype', instructions=(
         'Edit scientific figures in the open PyFigures GUI. Start with a small tool surface. '
         'Only the seven advertised top-level functions are directly callable. Other names returned by find_pyfigures_tools are inner operations, NOT callable functions. Invoke them through use_pyfigures_tool(tool_name=the_discovered_name, arguments=the_exact_arguments). This applies equally to read-only explain_live_interaction and other guide operations. '
@@ -85,7 +96,8 @@ def build_server(full_server, send):
         'An invalid quantity or unsupported value requires clarification. For row deletion, a count larger than available means delete all available rows and report the ACTUAL number removed, using the bulk operation once. Do not turn zero columns into one, change a negative size to a positive size, or choose a substitute LUT/corner after validation fails. Explain the valid range and ask the user for a corrected value. '
         'A missing or ambiguous named panel is unresolved user intent, not an instruction to choose another panel. After UNKNOWN_PANEL_REFERENCE or AMBIGUOUS_PANEL_REFERENCE, ask for the corrected target and stop that edit. Never replace a failed letter with guessed numeric coordinates, an ordinal, or the last panel; inspection cannot establish which replacement the user intended. '
         'SWAPS: swap q and o means swap image PANELS identified by those letters. Default target=images. '
-        'Exchange letter text only when explicitly requested; do not ask images-versus-letters for normal swaps. '
+        'Letter TEXT swaps require an explicit swap-the-letters/labels request; do not ask images-versus-letters for normal swaps. If a reference is missing or non-unique, STOP and ask; never substitute an existing panel or retry the swap with other references. '
+        'A uniquely named panel wins over a positional/visual description; act on that name and mention the discrepancy. Never edit then undo to ask. '
         'If both swap references identify the same panel (including a letter and its equivalent panel ID), report no change. Repeating a reference is not evidence of duplicate panel letters; use actual duplicate_letter_references from state before claiming ambiguity. '
         'Use swap_live_panels; never delete/recreate letters to swap or relabel. '
         'Removal is only for an explicit user request to remove letters; removal_request must quote it. '
@@ -117,6 +129,7 @@ def build_server(full_server, send):
         'Session IDs/revisions are internal: do not supply remembered values. '
         'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
         'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
+        'Is a font available? Use list_fonts(query=the_font), answer from font_check. '
         'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
 
     @server.tool()
@@ -189,6 +202,7 @@ def build_server(full_server, send):
             if name in ('set_figure_caption','get_figure_caption') and 'caption' in words:
                 score+=300 if name.startswith('set_') and not any(w in ('get','read','inspect') for w in words) else 200
             if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties') and any(w in ('subscript','superscript','rich','substring','roi','properties') for w in words):score+=230
+            if name=='list_fonts' and any(w in ('font','typeface','helvetica','arial','available','installed') for w in words):score+=300
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
 
             if name=='review_submission_readiness' and any(w in ('ready','readiness','submission','publish','publication','compliance','resolution','dpi') for w in words):
@@ -266,7 +280,7 @@ def build_server(full_server, send):
             if bounded and used+size>budget:break
             bounded.append(entry);used+=size
         found=bounded
-        return {'manual_guides':manual_guides,'guidance': ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Clarification is needed only for missing or non-unique references. Never remove letters as a swap workaround.'
+        return {'manual_guides':manual_guides,'guidance': ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Missing or non-unique references require clarification: stop, never substitute an existing panel or retry with other references. Never remove letters as a swap workaround.'
                              if any(w in ('swap', 'exchange', 'switch') for w in words) else
                              'Report verified after-state, not merely native success text. Ordinary text/captions are NOT automatic panel letters: inspect get_annotations and remove_annotation for quoted text, preserving letters. removal_request must quote the actual human request verbatim, never an invented clearer request.'),
                 'total_matches': len(ranked), 'offset': offset,

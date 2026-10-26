@@ -52,7 +52,7 @@ import uuid
 #   {"dialog": "text"}                          what to do in the dialog that opened
 # "done" names the result the GUI watches for (see gui/show_me_how.py):
 #   split_created, scalebar_added, inset_added, lut_changed, crop_changed,
-#   panel_added, dialog_closed, order_changed, layout_changed.
+#   panel_added, dialog_closed, order_changed, layout_changed, file_exported.
 
 GUIDES: dict[str, dict] = {
     "split_channels": {
@@ -76,7 +76,8 @@ GUIDES: dict[str, dict] = {
     "add_scale_bars": {
         "title": "Add scale bars to every panel",
         "summary": "Add a calibrated scale bar to all image panels at once.",
-        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration"],
+        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration",
+                     "all panels", "every panel", "each panel", "all images", "every image"],
         "steps": [
             {"menu": ["Annotations", "Add scale bar to all panels…"]},
             {"dialog": "Enter the bar length (for example 10 µm) and choose the corner. Each "
@@ -88,6 +89,26 @@ GUIDES: dict[str, dict] = {
                        "settings.",
         "done": "scalebar_added",
         "mcp": "set_scale_bar_all",
+    },
+    "scale_bar_one_panel": {
+        "title": "Add a scale bar to one panel",
+        "summary": "Give a single image panel its own calibrated scale bar.",
+        # ties with add_scale_bars on a bare "scale bar": then neither is offered,
+        # rather than the all-panels guide for a one-panel request
+        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration",
+                     "panel", "one panel",
+                     "this panel", "single panel", "one image", "this image"],
+        "steps": [
+            {"select": "image", "text": "Click the panel that needs the scale bar."},
+            {"context": "Double-click the panel: its editor opens. If the image has no pixel "
+                        "size, set <b>Pixel to unit conversion factor</b> in the <b>File Infos + "
+                        "Scale</b> tab (e.g. 0.1 µm per pixel). In the <b>Annotations</b> tab click "
+                        "<b>ScaleBar</b>, double-click the new bar to set its length (e.g. 10 µm), "
+                        "then click <b>Ok</b>."},
+        ],
+        "alternative": "Every panel at once: Annotations → Add scale bar to all panels….",
+        "done": "dialog_closed",
+        "mcp": "set_scale_bar",
     },
     "zoom_inset": {
         "title": "Add a zoom inset (magnified detail)",
@@ -477,6 +498,24 @@ GUIDES: dict[str, dict] = {
         "alternative": "",
         "done": "dialog_closed",
         "mcp": "check_resolution",
+    },
+    "export_vector": {
+        "title": "Export as PDF or SVG",
+        "summary": "Save the figure as a vector file: PDF for journals and printing, SVG for "
+                   "editing in Illustrator or Inkscape and for the web.",
+        "keywords": ["pdf", "svg", "vector", "export pdf", "export svg", "pdf or svg",
+                     "pdf and svg", "which format", "file format"],
+        "steps": [
+            {"menu": ["File", "Export As", "PDF"]},
+            {"dialog": "Choose where to save and click <b>Save</b>. For SVG choose File → Export "
+                       "As → SVG instead. In both, text, lines and plots are vector (sharp at any "
+                       "size), but microscopy and other pixel images stay pixels: check their "
+                       "printed DPI (QC → Check print resolution…) before exporting. PDF is what journals and printers expect and embeds the fonts; "
+                       "SVG is easiest to edit further in Illustrator or Inkscape."},
+        ],
+        "alternative": "File → Export As → PNG / TIF for pixel images at a chosen DPI.",
+        "done": "file_exported",
+        "mcp": "export_figure",
     },
     "export_pptx": {
         "title": "Export to editable PowerPoint",

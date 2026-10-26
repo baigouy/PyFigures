@@ -38,7 +38,7 @@ def test_every_guide_names_an_existing_do_it_tool():
     ("Show me how to split the channels of my RGB image", "split_channels"),
     ("how do I crop the burned-in text", "crop_image"),
     ("make it magenta and green", "set_lut"),
-    ("add a 10 µm scale bar", "add_scale_bars"),
+    ("add a 10 µm scale bar to every panel", "add_scale_bars"),
     ("magnify a detail with a zoom inset", "zoom_inset"),
     ("export to powerpoint", "export_pptx"),
     ("is it colour blind safe", "colour_blind_preview"),

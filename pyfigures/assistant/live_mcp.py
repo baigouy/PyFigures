@@ -136,15 +136,18 @@ def edit_panel_letters(action: Literal['style','remove','restore','renumber'] = 
         scope = 'group'
     elif scope == 'auto':
         scope = 'all'
-    return call_live('bulk_letters', dict(action=action, scope=scope, group_path=group_path,
+    result = call_live('bulk_letters', dict(action=action, scope=scope, group_path=group_path,
         panel_ids=panel_ids, placement=placement, font_family=font_family, font_size=font_size,
         color_value=color, background=background, start_letter=start_letter,
         replace_overrides=replace_overrides, removal_request=removal_request))
 
+    from .result_evidence import with_font_evidence
+    return with_font_evidence(result, font_family)
+
 
 @mcp.tool()
 def swap_live_panels(first: str, second: str, target: str = 'images') -> dict:
-    """Exchange two image panels OR only their letter texts, in one verified undo step. first/second are unique visible letters or panel IDs from inspect_panel_letters. target defaults to images: 'swap q and o' exchanges PANELS identified by those letters. Use letters only when the user explicitly asks to exchange letter text; do not ask images-versus-letters for ordinary swap requests. Images mode keeps slot lettering and swaps image content with its other annotations. Never remove/recreate letters to swap. Reports actual identities and letter counts; rolls back if verification fails."""
+    """Swap IMAGE PANELS in one verified undo step. first/second identify unique visible letters or panel IDs; target=images is the default, including put b in place of a and a in place of b. Letter TEXT swaps (target=letters) require an explicit swap the letters/labels request. Do not ask images-versus-letters for ordinary panel swaps. If either reference is missing or non-unique, STOP and ask: never substitute an existing panel or retry with other references. A uniquely named panel wins over a positional/visual description; act on the named panel and mention the discrepancy. Never edit then undo to ask. Images mode keeps slot lettering and swaps image content with its other annotations. Never remove/recreate letters to swap. Reports actual identities and letter counts; rolls back if verification fails."""
     return call_live('swap_panels', dict(first=first, second=second, target=target))
 
 

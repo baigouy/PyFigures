@@ -7499,6 +7499,8 @@ class EZFIG_GUI(QMainWindow):
     def _save(self, output_file):
         if output_file is not None:
             self.paint.EZFIG_panel.save(output_file)
+            # counted by Show me how ("file_exported")
+            self._exports_done = getattr(self, '_exports_done', 0) + 1
 
     def _images_loading(self):
         th = getattr(self, '_pyf_loader_thread', None)

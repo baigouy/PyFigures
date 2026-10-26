@@ -33,7 +33,7 @@ DST = REPO / "pyfigures" / "assistant"
 MODULES = ["categorized_mcp", "existing_tools", "original_registry", "partner_gui", "figure_state",
            "gui_selection", "letter_sequence", "live_structure", "plot_lifecycle", "pointer_context",
            "readability", "recovery", "submission_review", "manual_help", "native_gui",
-           "assistant_actions", "advanced_annotations", "live_mcp", "live_gui"]
+           "assistant_actions", "advanced_annotations", "result_evidence", "live_mcp", "live_gui"]
 RENAMED = {"live_gui": "session"}
 DATA = ["manual_help_verified.json"]
 HEADER = '''"""Live session of the open figure editor: requests from the local HTTP

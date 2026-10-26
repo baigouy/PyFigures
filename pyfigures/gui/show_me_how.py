@@ -121,7 +121,8 @@ class GuideRunner:
             return (id(shape), tuple(nesting(c) for c in content))
         structure = tuple(nesting(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
         return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
-                "order": order, "rows": rows, "structure": structure}
+                "order": order, "rows": rows, "structure": structure,
+                "exports": getattr(self.win, "_exports_done", 0)}
 
     def _image_state(self, img):
         if img is None:
@@ -137,6 +138,8 @@ class GuideRunner:
             return now["splits"] >= b.get("splits", 0) + 2
         if kind == "scalebar_added":
             return bool(now["bars"]) and now["bars"] != b.get("bars", set())
+        if kind == "file_exported":
+            return now["exports"] > b.get("exports", 0)
         if kind == "inset_added":
             return now["insets"] > b.get("insets", 0)
         if kind == "panel_added":

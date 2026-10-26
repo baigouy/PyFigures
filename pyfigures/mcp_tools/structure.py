@@ -1794,6 +1794,8 @@ def set_image_property(
     without requiring a dedicated tool for each one.
 
     *property_name*: exact XML tag name.  See list_image_properties() for names.
+    theta is the rotation in degrees, positive = clockwise (90 turns the image a
+    quarter turn clockwise, -90 counter-clockwise).
     *value*: the new value as a string.  Encoding is automatic:
 
       ┌─────────────────────────────────┬────────────────────────────────────┐

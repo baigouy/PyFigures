@@ -512,7 +512,7 @@ def _guide_context(c, guide_id):
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
     elif guide_id in ("edit_text", "edit_inset", "edit_roi", "draw_roi", "remove_inset",
-                      "scale_bar_units", "max_projection", "flip_image"):
+                      "scale_bar_units", "max_projection", "flip_image", "scale_bar_one_panel"):
         # the panel's editor (double-click), accepted
         c.editor(img, lambda ed: None)
     elif guide_id == "stack_in_row":
@@ -540,6 +540,8 @@ def test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_pat
     g.current_file = str(tmp_path / "base.pyf")
     c = Ctx(qapp, g, e2e_files, no_file_dialogs, out, menus)
     gid = GUIDE_KEYS[key]
+    if gid == "export_vector":
+        no_file_dialogs["save"] = str(out / "guide_export.pdf")   # the save dialog's answer
     H.action(g, key).trigger()
     H.settle(qapp, g)
     runner = g._guides

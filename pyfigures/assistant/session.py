@@ -629,7 +629,9 @@ class Session:
         letters_after = letter_state(w)
         from .figure_state import changes, specification
         from .figure_state import movement_changes
-        return {'tool_result': encoded, 'document_changed': changed, 'metadata_changed': sidecar_changed,
+        from .result_evidence import caption_evidence
+        caption_result = caption_evidence(path.with_suffix('.caption.json')) if name == 'set_figure_caption' else {}
+        return {**caption_result, 'tool_result': encoded, 'document_changed': changed, 'metadata_changed': sidecar_changed,
                 'verified_changes': movement_changes(letters_before, letters_after) if name == 'move_image' else changes(letters_before, letters_after),
                 'verified_specification': specification(letters_after),
                 'verified_lettering': {'visible_count_before': letters_before['visible_letter_count'],
