@@ -17,6 +17,7 @@ from batoolset.pyqts.tools import check_antialiasing, get_shape_after_rotation_a
     get_original_shape_from_rect_and_angle, get_centroid, create_dim_slider, clear_layout, select_in_combobox, \
     getCtrlModifier, getCtrlModifierAsString
 from batoolset.serializations.tools import clone_object
+from pyfigures.flip import legacy_state as legacy_flip_state
 from batoolset.GUI.customdialog import CustomDialog
 from batoolset.icons.tools import get_icon
 import sys
@@ -1522,6 +1523,17 @@ class MainWindow(QWidget):
 
             rotate_n_crop_layout.addWidget(self.rotate_toolbox)
 
+            # mirroring is a drawing property: the image's pixels stay the original
+            self.flip_toolbox = QGroupBox('Flip', objectName='flip_toolbox')
+            flip_toolbox_layout = QVBoxLayout(self.flip_toolbox)
+            self.flip_h_checkbox = QCheckBox('Flip horizontally (left ↔ right)')
+            self.flip_v_checkbox = QCheckBox('Flip vertically (top ↔ bottom)')
+            for box in (self.flip_h_checkbox, self.flip_v_checkbox):
+                box.setFocusPolicy(Qt.NoFocus)
+                box.toggled.connect(self.apply_flip)
+                flip_toolbox_layout.addWidget(box)
+            rotate_n_crop_layout.addWidget(self.flip_toolbox)
+
             self.crop_toolbox = QGroupBox('Crop', objectName='crop_toolbox')
             self.crop_toolbox.setEnabled(True)
             crop_toolbox_layout = QGridLayout(self.crop_toolbox)
@@ -2647,6 +2659,29 @@ class MainWindow(QWidget):
     def reset_angle(self):
         self.rotate_image_spinbox.setValue(0)
 
+    def apply_flip(self):
+        """Mirror the edited image as the Flip boxes say (Cancel discards it with the other edits)."""
+        bg = self.qt_viewer.background
+        if not bg:
+            return
+        if legacy_flip_state(bg.custom_loading_script) is not None:
+            # a flip saved by an older version re-read the file: reload the original pixels
+            bg.custom_loading_script = None
+            self.qt_viewer.background = bg = clone_object(bg)
+            self.script_text_edit.setText('')
+            self.update_dimension_sliders()
+            self.update_normalization()
+            self.update_channel_layout()
+        bg.set_flip(self.flip_h_checkbox.isChecked(), self.flip_v_checkbox.isChecked())
+        self.qt_viewer.update()
+
+    def _show_flip_state(self, bg):
+        state = legacy_flip_state(bg.custom_loading_script) or (getattr(bg, 'flip_h', False), getattr(bg, 'flip_v', False))
+        for box, on in zip((self.flip_h_checkbox, self.flip_v_checkbox), state):
+            box.blockSignals(True)
+            box.setChecked(bool(on))
+            box.blockSignals(False)
+
     def load_background_parameters(self):
         if self.qt_viewer.background:
             # print('crops checks', self.qt_viewer.background.theta, self.qt_viewer.background.crop_left,self.qt_viewer.background.crop_right,self.qt_viewer.background.crop_top, self.qt_viewer.background.crop_bottom)
@@ -2679,6 +2714,7 @@ class MainWindow(QWidget):
             #     self.scale_conversion_spinner.setValue(self.qt_viewer.background.px_to_unit_conversion_factor) # update the scale (TODO at some point make sure the values are there)
             if self.qt_viewer.background.theta is not None:
                 self.rotate_image_spinbox.setValue(self.qt_viewer.background.theta)
+            self._show_flip_state(self.qt_viewer.background)
             if self.qt_viewer.background.crop_left is not None:
                 self.crop_left_spinbox.setValue(self.qt_viewer.background.crop_left)
             if self.qt_viewer.background.crop_right is not None:

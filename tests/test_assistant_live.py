@@ -376,6 +376,7 @@ def test_how_to_questions_use_the_authored_guides():
              "remove_inset"),
             ("How do I make a maximum-intensity projection from a Z stack?", "max_projection"),
             ("How can I reconnect a missing image after moving its folder?", "remap_images"),
+            ("Where is the horizontal flip?", "flip_image"),
             ("How do I export slides with editable text rather than one flattened screenshot?",
              "export_pptx"),
             ("How do I make the outline of the existing box thicker?", "edit_roi"),

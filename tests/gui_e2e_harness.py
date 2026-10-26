@@ -394,6 +394,7 @@ def _panel_state(img):
         "text": img.findtext("isText") == "True",
         "crop": tuple(_num(img, k) for k in ("crop_left", "crop_right", "crop_top", "crop_bottom")),
         "theta": _num(img, "theta"),
+        "flip": tuple(str(_txt(img, k)) == "True" for k in ("flip_h", "flip_v")),
         "luts": _txt(img, "LUTs"),
         "channels": _txt(img, "channels"),
         "projection": _txt(img, "projection"),

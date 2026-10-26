@@ -521,12 +521,3 @@ def test_scale_bar_colour_is_drawn_and_survives_layout(qapp, tmp_path):
     assert (c.red(), c.green(), c.blue()) == (255, 255, 0)
     assert ScaleBar(bar_width_in_units=10).bar.fill_color == 0xFFFFFF   # default white
 
-
-def test_flip_script_renders(qapp, tmp_path):
-    from batoolset.drawings.shapes.image2d import Image2D
-    from pyfigures.mcp_tools.content import _make_flip_script
-    src = _png(str(tmp_path / "a.png"), 20, 30, value=128)
-    from matplotlib.figure import Figure
-    panel = Image2D(src, custom_loading_script=_make_flip_script(True, False))
-    assert "NameError" not in (panel.script_log or ""), panel.script_log
-    assert isinstance(panel.img, Figure)

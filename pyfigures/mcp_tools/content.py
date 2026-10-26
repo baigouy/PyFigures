@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from textwrap import indent
 from mcp.server.fastmcp import FastMCP, Image
+from ..flip import legacy_state as legacy_flip_state
 from .app import (
     mcp,
 )
@@ -510,46 +511,12 @@ def add_data_plot(
     )
 
 
-def _make_flip_script(flip_h: bool, flip_v: bool) -> str:
-    """Return a custom_loading_script that loads file_path and flips the image."""
-    ops = []
-    if flip_h:
-        ops.append("arr = arr[:, ::-1]")   # mirror left-right
-    if flip_v:
-        ops.append("arr = arr[::-1, :]")   # mirror top-bottom
-    ops_code = "\n".join(ops)
-    return f"""\
-try:
-    import tifffile as _tf
-    arr = _tf.imread(file_path)
-except Exception:
-    from PIL import Image as _PI
-    arr = np.array(_PI.open(file_path))
-# normalise to HWC for display
-if arr.ndim == 2:
-    arr = arr[:, :, np.newaxis].repeat(3, axis=2)
-elif arr.ndim == 3 and arr.shape[0] <= 4 and arr.shape[2] > 4:
-    arr = np.moveaxis(arr, 0, -1)   # CHW -> HWC
-arr = arr[..., :3]                  # drop alpha if present
-# flip
-{ops_code}
-# scale to uint8 for display
-if arr.dtype != np.uint8:
-    _lo, _hi = arr.min(), arr.max()
-    if _hi > _lo:
-        arr = ((arr - _lo) / (_hi - _lo) * 255).astype(np.uint8)
-    else:
-        arr = arr.astype(np.uint8)
-# figure shaped exactly like the image, no margin (a default 4:3 figure
-# stretched non-4:3 images)
-fig = plt.figure(figsize=(arr.shape[1] / 100.0, arr.shape[0] / 100.0), dpi=100)
-ax = fig.add_axes([0, 0, 1, 1])
-ax.imshow(arr, interpolation='none', aspect='equal')
-ax.axis('off')
-fig._pyfigures_pad_inches = 0
-fig._pyfigures_image_panel = True
-self.img = fig
-"""
+def _flip_state(img) -> tuple[bool, bool]:
+    """(flip_h, flip_v) of an Image2D element: its properties, or an old flip script."""
+    legacy = legacy_flip_state(_child_text(img, "custom_loading_script"))
+    if legacy is not None:
+        return legacy
+    return tuple(str(_child_text(img, tag)).strip().lower() == "true" for tag in ("flip_h", "flip_v"))
 
 
 @mcp.tool()
@@ -576,9 +543,8 @@ def transform_image(
                 ``None`` or ``0`` means no rotation (clears any existing rotation).
     *flip_h*:   horizontal mirror (left ↔ right).  True to enable, False to clear.
     *flip_v*:   vertical mirror   (top ↔ bottom).  True to enable, False to clear.
-                Flip is implemented via a custom loading script so it works for
-                any image type (TIFF, PNG, JPG, …).  If you also set a manual
-                script with set_script(), flip will be overwritten — set flip first.
+                A flip is a drawing property like the rotation: the image's
+                pixels, channels and pixel size stay the original.
     *crop_left / crop_right / crop_top / crop_bottom*: pixels to remove from
                 each edge of the raw image (applied before rotation).
     *opacity*:  0.0 (invisible) – 1.0 (fully opaque, default).
@@ -653,26 +619,18 @@ def transform_image(
         _set_child_text(img, "fill_color", str(fc_int))
         changed.append(f"fill_color={fill_color}")
 
-    # --- flip: implemented via custom_loading_script ---
+    # --- flip: native Image2D drawing properties (the pixels stay the original) ---
     if flip_h is not None or flip_v is not None:
-        # Read current flip state from existing script if present, else default False
-        existing = _child_text(img, "custom_loading_script")
-        cur_h = existing is not None and "arr[:, ::-1]" in (existing or "")
-        cur_v = existing is not None and "arr[::-1, :]" in (existing or "")
-        new_h = flip_h if flip_h is not None else cur_h
-        new_v = flip_v if flip_v is not None else cur_v
-        if new_h or new_v:
-            script = _make_flip_script(new_h, new_v)
-            _set_child_text(img, "custom_loading_script", _encode_str(script))
-            axes = []
-            if new_h: axes.append("horizontal")
-            if new_v: axes.append("vertical")
-            changed.append(f"flip={'+'.join(axes)}")
-        else:
-            # Both cleared — remove flip script (unless it was a custom script)
-            if existing is not None and "self.img = fig" in existing and "tifffile" in existing:
-                _set_child_text(img, "custom_loading_script", "None")
-            changed.append("flip=cleared")
+        cur_h, cur_v = _flip_state(img)
+        # a flip written by an older version as a loading script becomes the properties
+        if legacy_flip_state(_child_text(img, "custom_loading_script")) is not None:
+            _set_child_text(img, "custom_loading_script", "None")
+        new_h = bool(flip_h) if flip_h is not None else cur_h
+        new_v = bool(flip_v) if flip_v is not None else cur_v
+        _set_child_text(img, "flip_h", str(new_h))
+        _set_child_text(img, "flip_v", str(new_v))
+        axes = [name for name, on in (("horizontal", new_h), ("vertical", new_v)) if on]
+        changed.append(f"flip={'+'.join(axes)}" if axes else "flip=cleared")
 
     if not changed:
         return "Nothing changed — supply at least one transform parameter."

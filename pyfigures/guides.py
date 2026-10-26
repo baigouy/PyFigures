@@ -287,6 +287,21 @@ GUIDES: dict[str, dict] = {
         "done": "dialog_closed",
         "mcp": "configure_image",
     },
+    "flip_image": {
+        "title": "Flip (mirror) an image",
+        "summary": "Mirror an image panel left-right or top-bottom; its pixels stay the original.",
+        "keywords": ["flip", "flipped", "mirror", "mirrored", "horizontal flip", "vertical flip",
+                     "flip horizontally", "flip vertically", "left right", "upside down"],
+        "steps": [
+            {"select": "image", "text": "Click the image panel to flip."},
+            {"context": "Double-click the panel: its editor opens. In the <b>Rotate + Crop</b> "
+                        "tab, tick <b>Flip horizontally</b> (left ↔ right) and/or <b>Flip "
+                        "vertically</b> (top ↔ bottom). Click <b>Ok</b>."},
+        ],
+        "alternative": "Untick the box to undo the flip; the original image file is never changed.",
+        "done": "dialog_closed",
+        "mcp": "transform_image",
+    },
     "remap_images": {
         "title": "Reconnect missing images after moving their folder",
         "summary": "Point the figure at the new location of images that were moved or renamed.",

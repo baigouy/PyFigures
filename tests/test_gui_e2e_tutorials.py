@@ -512,7 +512,7 @@ def _guide_context(c, guide_id):
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
     elif guide_id in ("edit_text", "edit_inset", "edit_roi", "draw_roi", "remove_inset",
-                      "scale_bar_units", "max_projection"):
+                      "scale_bar_units", "max_projection", "flip_image"):
         # the panel's editor (double-click), accepted
         c.editor(img, lambda ed: None)
     elif guide_id == "stack_in_row":

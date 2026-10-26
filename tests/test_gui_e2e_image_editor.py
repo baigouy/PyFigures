@@ -101,6 +101,11 @@ def _rotate(ed):
     ed.rotate_image_spinbox.setValue(30)
 
 
+def _flip(ed):
+    ed.flip_h_checkbox.setChecked(True)
+    ed.flip_v_checkbox.setChecked(True)
+
+
 def _set_luts(ed):
     next(b for b in ed.findChildren(QPushButton) if b.text() == "Set LUTs").click()
 
@@ -130,6 +135,7 @@ def _roi_added(cls):
 EDITS = [
     ("crop", "cells", _crop, [], lambda b, a: a["crop"] == (4.0, 6.0, 2.0, 3.0)),
     ("rotate", "cells", _rotate, [], lambda b, a: a["theta"] == 30.0),
+    ("flip", "cells", _flip, [], lambda b, a: a["flip"] == (True, True) and not a["script"]),
     ("LUTs", "rgb", _set_luts, [("Edit Look Up Tables (LUTs)", H.accept)], lambda b, a: a["luts"] and not b["luts"]),
     ("projection min", "zstack", _projection("min"), [], lambda b, a: a["projection"] == "min"),
     ("projection avg", "zstack", _projection("avg"), [], lambda b, a: a["projection"] == "avg"),
@@ -201,6 +207,7 @@ def test_cancel_in_the_image_editor_changes_nothing(qapp, e2e_gui, base_pyf, tmp
         ed = dlg.main_widget
         _crop(ed)
         _rotate(ed)
+        _flip(ed)
         _shape_tool("Rectangle")(ed)
         H.reject(dlg)
     with H.dialogs() as pilot:

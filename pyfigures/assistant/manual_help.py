@@ -11,13 +11,7 @@ def fingerprints():
 def current_feature_help(topic):
     words=set(re.findall(r'[a-z]+',topic.lower()))
     native=Path(__file__).resolve().parents[2]/'pyfigures'
-    if words.intersection({'flip','mirror'}) and words.intersection({'horizontal','image','panel','picture'}):
-        files={'mcp_tools/content.py':['def transform_image(', 'flip_h: bool', 'def _make_flip_script(']}
-        title='Horizontal image flip'
-        steps=['Select the single image panel you want to flip horizontally.',
-               'PyFigures has no flip button or menu entry; the image-transform operation mirrors the image horizontally.',
-               'You can ask: Flip the selected image horizontally. These instructions have not changed the figure.']
-    elif words.intersection({'sample','samples'}) and words.intersection({'file','files','tutorial','tutorials','inputs'}):
+    if words.intersection({'sample','samples'}) and words.intersection({'file','files','tutorial','tutorials','inputs'}):
         files={'gui/tutorial.py':['Give me sample files','def _make_samples'],'gui/pfgui.py':['Beginner Tutorial']}
         title='Tutorial sample files'
         steps=['Open a tutorial from Help, for example Beginner Tutorial.',
@@ -91,7 +85,7 @@ def explain(topic='overview'):
     # rectangle" to edit_roi, "editable text" slides to edit_text, a projection or
     # a moved image to an unrelated tutorial step.
     task,_=find_guide(topic)
-    if task in ('draw_roi','remove_inset','scale_bar_units','max_projection','remap_images','export_pptx','reorder_panels'):
+    if task in ('draw_roi','remove_inset','scale_bar_units','max_projection','remap_images','export_pptx','reorder_panels','flip_image'):
         result=native_explain(task)
         result['answer_style']='Human GUI steps; code only when explicitly requested.'
         return result

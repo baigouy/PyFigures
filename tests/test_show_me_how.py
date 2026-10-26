@@ -50,6 +50,8 @@ def test_every_guide_names_an_existing_do_it_tool():
     ("How do I change a scale-bar legend from micrometres to nanometres?", "scale_bar_units"),
     ("How do I make a maximum-intensity projection from a Z stack?", "max_projection"),
     ("How can I reconnect a missing image after moving its folder?", "remap_images"),
+    ("How do I flip an image horizontally?", "flip_image"),
+    ("Where is the option to mirror a panel upside down?", "flip_image"),
     ("How do I export slides with editable text rather than one flattened screenshot?",
      "export_pptx"),
 ])

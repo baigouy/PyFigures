@@ -126,7 +126,8 @@ def test_rotation_flip_and_display_range(built):
     p = _props(res["output"], [1], 1)
     assert p["filename"].endswith("a.tif")
     assert p["theta"] == 15.0
-    assert "flip" in (M.get_script(res["output"], [1], 1) or "").lower()   # a flip is a script step
+    assert str(p["flip_h"]) == "True" and str(p["flip_v"]) == "False"    # a drawing property
+    assert M.get_script(res["output"], [1], 1).startswith("No script")    # not a loading script
     norm = str(p["normalization"])
     assert "custom" in norm and "200" in norm and "10" in norm
 

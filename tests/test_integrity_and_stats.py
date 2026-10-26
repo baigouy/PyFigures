@@ -226,12 +226,12 @@ def test_adjustment_ledger_flags_custom_script_and_inconsistent_ranges():
 
 def test_adjustment_ledger_flip_is_linear_not_custom():
     tmp = tempfile.mkdtemp()
-    flip_script = M._make_flip_script(flip_h=True, flip_v=False)
-    pyf = _write_pyf_fields([{"_lbl": "a", "custom_loading_script": flip_script}], tmp)
+    pyf = _write_pyf_fields([{"_lbl": "a", "flip_h": "True", "flip_v": "False"}], tmp)
     data = json.loads(M.export_adjustment_ledger(pyf))
     p = data["panels"][0]
     assert p["all_linear"] is True                      # a pure flip is not "custom"
-    assert any(a["type"] == "flip" for a in p["adjustments"])
+    flips = [a for a in p["adjustments"] if a["type"] == "flip"]
+    assert flips and flips[0]["detail"]["directions"] == ["horizontal"]
 
 
 # --- zoom / magnified-detail callout ----------------------------------------

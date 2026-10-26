@@ -1891,7 +1891,14 @@ def _panel_adjustments(img: ET.Element):
                     "detail": {"serie_to_open": serie},
                     "text": f"series {serie} of a multi-series file"})
 
-    # custom loading script: known channel merge, benign flip, or arbitrary code
+    # mirroring: drawing properties, the pixels stay the original
+    dirs = [d for d, tag in (("horizontal", "flip_h"), ("vertical", "flip_v"))
+            if str(txt(tag)).strip().lower() == "true"]
+    if dirs:
+        adj.append({"type": "flip", "linear": True, "detail": {"directions": dirs},
+                    "text": f"mirrored ({'/'.join(dirs)})"})
+
+    # custom loading script: known channel merge, benign flip (older versions), or arbitrary code
     script = img.findtext("custom_loading_script")
     merge = _parse_channel_merge_script(_decode(script)) if script else None
     if merge is not None:
