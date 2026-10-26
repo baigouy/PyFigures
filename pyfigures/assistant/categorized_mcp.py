@@ -77,7 +77,7 @@ def build_server(full_server, send):
     available = {n: t for n, t in full_server._tool_manager._tools.items() if n in names}
     server = FastMCP('PyFigures categorized live prototype', instructions=(
         'Edit scientific figures in the open PyFigures GUI. Start with a small tool surface. '
-        'Only the six advertised top-level functions are callable. Names returned by find_pyfigures_tools are inner operations, NOT callable functions. Invoke them through use_pyfigures_tool(tool_name=the_discovered_name, arguments=the_exact_arguments). This applies equally to read-only explain_live_interaction and other guide operations. '
+        'Only the seven advertised top-level functions are directly callable. Other names returned by find_pyfigures_tools are inner operations, NOT callable functions. Invoke them through use_pyfigures_tool(tool_name=the_discovered_name, arguments=the_exact_arguments). This applies equally to read-only explain_live_interaction and other guide operations. '
         'inspect_figure.selection contains the live user-selected panels, groups and containing row paths. Use it for this/selected row or image; do not ask users to repeat an unambiguous selection. Reverse/invert the selected row with reverse_selected_row. Reject missing or multi-row selection, never guess. '
         'For manual drag cancellation: release the mouse, then choose Ignore or dismiss the opened context menu. Escape is verified for the open menu, not during the active drag; do not invent clicking empty canvas as cancellation. '
         'For manual questions use explain_live_interaction with the actual topic or explain_how; follow returned current menu paths. Manual teaching never authorizes editing. API examples inside tool descriptions are developer references, not user-facing instructions: omit them unless code or recipe is explicitly requested. Panel-by-panel joining is ONE drop/operation with ordered contents. '
@@ -100,7 +100,7 @@ def build_server(full_server, send):
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
         'For named live panels, prefer panel_ref on native image/annotation tools; omit numeric group_path/image_index so current GUI state resolves the address. get_annotations text_index is the index for style_annotation/set_annotation_text, while annotation_index is the full list index for ROI/removal tools. The live text wrappers accept text_index explicitly. '
-        'Never guess argument names. Discover the exact schema before first use. undo_redo is directly available and also searchable; do not repeatedly search after a no-match. '
+        'Never guess argument names. Discover the exact schema before first use. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
         'Category descriptions are guidance, not restrictions: search by words across all '
         'categories if needed. All original functions remain available underneath. '
         'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
@@ -117,7 +117,7 @@ def build_server(full_server, send):
         'Session IDs/revisions are internal: do not supply remembered values. '
         'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
         'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
-        'Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
+        'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
 
     @server.tool()
     def inspect_figure() -> dict:
@@ -139,9 +139,21 @@ def build_server(full_server, send):
         from .live_mcp import call_live
         return call_live(action)
 
+    selection_tool = available.get('select_live_objects')
+
+    @server.tool()
+    def select_live_objects(panel_refs: list[str] | None = None,
+                            group_paths: list[list[int]] | None = None,
+                            row_numbers: list[int] | None = None, clear: bool = False) -> dict:
+        """Select OR clear GUI objects. clear=true clears the selection and needs no panel_refs. A selection change, not a document edit. Use one selector: panel_refs (visible labels/IDs), group_paths, or 1-based row_numbers. Multiple targets are allowed. Returns verified selection."""
+        if selection_tool is None:
+            raise ValueError('This session has no live selection implementation; no selection changed.')
+        return selection_tool.fn(panel_refs=panel_refs, group_paths=group_paths,
+                                 row_numbers=row_numbers, clear=clear)
+
     # The tool is already advertised directly; also resolve wrapped calls and searches.
     available['undo_redo'] = server._tool_manager._tools['undo_redo']
-    for direct in ('inspect_figure', 'preview_figure'):
+    for direct in ('inspect_figure', 'preview_figure', 'select_live_objects'):
         available[direct] = server._tool_manager._tools[direct]
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -232,7 +244,7 @@ def build_server(full_server, send):
             for key in internal:
                 schema.get('properties', {}).pop(key, None)
             schema['required'] = [k for k in schema.get('required', []) if k not in internal]
-            found.append({'name': n, 'callable_directly': False, 'dispatcher': 'use_pyfigures_tool', 'category': c, 'description': t.description,
+            found.append({'name': n, 'callable_directly': n in server._tool_manager._tools, 'dispatcher': 'use_pyfigures_tool', 'category': c, 'description': t.description,
                           'arguments_schema': schema})
         manual_guides=None
         if query:

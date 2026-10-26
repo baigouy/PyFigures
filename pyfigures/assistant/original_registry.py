@@ -124,7 +124,14 @@ def register_all(server, send):
             suffix += ' Use the required text_index from get_annotations. The native Python parameter called annotation_index counts TEXTS; the live MCP schema deliberately calls it text_index to distinguish it from ROI/removal indices.'
         if name in ('get_image_property', 'set_image_property'):
             suffix += ' Image rotation is property_name="theta" in degrees; unrotate/reset rotation means value="0". inspect_figure panel_references maps visible letters to group_path/image_index.'
+        wording = {
+            'set_figure_caption': 'caption is exact plain text, including its final period when supplied; title is a separate field. caption_markdown is an optional formatted string of that same text, never a boolean. ',
+            'add_annotation': 'Write/put <words> on <panel> supplies literal text without needing quotation marks. Add dependent text before a later swap so it travels with its image. ',
+            'set_scale_bar': 'Single-panel operation: Give a a scale bar names panel a. Prefer panel_ref even without a selection. Length and pixel size must be finite and positive. Bulk is only for an explicit whole-figure request. ',
+            'set_scale_bar_all': 'Whole-figure operation ONLY when explicitly requested; a named panel never authorizes bulk changes. Length and pixel size must be finite and positive. ',
+        }
         description=tool.description.replace('annotation_index','text_index') if text_indexed else tool.description
+        description=wording.get(name, '')+description
         server.add_tool(make_wrapper(), name=name, description=description + suffix,
                         annotations=tool.annotations, structured_output=False)
     return len(registry())

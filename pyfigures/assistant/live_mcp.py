@@ -214,7 +214,7 @@ def swap_rows(first_row: int, second_row: int) -> dict:
 @mcp.tool()
 def select_live_objects(panel_refs: list[str] | None = None, group_paths: list[list[int]] | None = None,
                         row_numbers: list[int] | None = None, clear: bool = False) -> dict:
-    """Select actual GUI image panels, rows or columns; no document edit. Use ONE selector: panel_refs are visible letters or panel IDs, group_paths from inspection can select rows/columns/nested groups, row_numbers are visible top-level row numbers starting at 1. Multiple targets supported. clear=true clears selection. Returns verified live selection. For reverse last row, select its row_number then reverse_selected_row; never swap individual images repeatedly."""
+    """Select OR clear GUI objects. clear=true clears the selection and needs no panel_refs. A selection change, not a document edit. Use ONE selector: panel_refs are visible letters or panel IDs, group_paths from inspection can select rows/columns/nested groups, row_numbers are visible top-level row numbers starting at 1. Multiple targets supported. clear=true clears selection. Returns verified live selection. For reverse last row, select its row_number then reverse_selected_row; never swap individual images repeatedly."""
     return call_live('select_live_objects', dict(panel_refs=panel_refs, group_paths=group_paths, row_numbers=row_numbers, clear=clear))
 
 @mcp.tool()
