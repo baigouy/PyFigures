@@ -1370,24 +1370,27 @@ def restyle_texts(
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def list_fonts() -> str:
-    """Report the figure font situation, including PyFigures' *portable* fonts.
+def list_fonts(query: str | None = None) -> str:
+    """List the fonts available for figure text on this computer.
 
-    Publication journals often require Helvetica/Arial, which are not installed
-    everywhere. PyFigures auto-registers any redistributable font dropped in its
-    ``pyfigures/gui/fonts/`` folder (on every OS) plus a guaranteed DejaVu Sans
-    fallback, so figures render consistently and exported PDFs embed the font.
+    *query*: optional part of a name (case-insensitive), e.g. "arial" or "sans",
+    to list only matching families.
 
-    Returns JSON with: bundled_families (portable fonts loaded from the folder),
-    fonts_dir (where to add more), portable_clones_available, what "Helvetica"
-    and "Arial" resolve to on this machine, and whether real Helvetica/Arial are
-    present. To make a figure use one, set_figure_properties(font_family=...).
+    Returns JSON with: installed_families (every font family that can be used,
+    filtered by *query*) and their count; what "Helvetica" and "Arial" are
+    really drawn in here and whether real Helvetica/Arial are present (a
+    missing Helvetica is drawn and exported as a metric-compatible clone such
+    as Arial); bundled_families / portable_clones_available (portable fonts
+    PyFigures loads from fonts_dir, where more can be added). To use a font:
+    set_figure_properties(font_family=...) or restyle_texts(font_family=...).
     """
-    out_json = os.path.join(tempfile.mkdtemp(prefix="pyf_fonts_"), "fonts.json")
-    ok, msg = _run_headless_op(["fonts", out_json])
-    if not ok:
-        return f"ERROR: {msg}"
-    if not os.path.isfile(out_json):
-        return f"ERROR: font report not produced: {msg}"
-    with open(out_json, encoding="utf-8") as f:
-        return f.read()
+    from .core import _font_report
+    rep = _font_report(["Helvetica", "Arial"])
+    if isinstance(rep, str):
+        return f"ERROR: {rep}"
+    fams = rep.pop("installed_families", [])
+    if query:
+        fams = [f for f in fams if str(query).strip().lower() in f.lower()]
+    rep.pop("drawn_as", None)
+    out = {"query": query, "count": len(fams), "installed_families": fams, **rep}
+    return json.dumps(out, ensure_ascii=False, indent=2)

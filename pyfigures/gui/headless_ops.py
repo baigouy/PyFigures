@@ -171,7 +171,7 @@ def export_editable(pyf_path: str, out_path: str, fmt: str) -> str:
     return _json.dumps(summary)
 
 
-def fonts_report(out_json: str) -> str:
+def fonts_report(out_json: str, resolve=()) -> str:
     """Write the portable-font report (bundled + available families) to *out_json*.
     Needs a QApplication for QFontDatabase, so it runs here off-screen."""
     from batoolset.settings.global_settings import set_UI
@@ -181,7 +181,7 @@ def fonts_report(out_json: str) -> str:
     from pyfigures.gui.portable_fonts import register_portable_fonts, font_report
     register_portable_fonts(app)
     import json as _json
-    rep = font_report()
+    rep = font_report(resolve)
     with open(out_json, "w", encoding="utf-8") as f:
         _json.dump(rep, f, ensure_ascii=False, indent=2)
     return out_json
@@ -260,6 +260,8 @@ def _main(argv=None) -> int:
 
     fo = sub.add_parser("fonts")
     fo.add_argument("out_json")
+    fo.add_argument("--resolve", nargs="*", default=[],
+                    help="font families to report the actually drawn family for")
 
     sub.add_parser("install-latex",
                    help="download TinyTeX (a small TeX Live) and the packages PyFigures uses")
@@ -271,7 +273,7 @@ def _main(argv=None) -> int:
             out = "TinyTeX: " + tex_install.install(
                 progress=lambda f, m: sys.stderr.write(f"[{f * 100:3.0f}%] {m}\n"))
         elif args.op == "fonts":
-            out = fonts_report(args.out_json)
+            out = fonts_report(args.out_json, args.resolve)
         elif args.op == "video":
             bg = tuple(int(x) for x in args.bg.split(","))
             out = export_video(args.pyf_path, args.out_path,

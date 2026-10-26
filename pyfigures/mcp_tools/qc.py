@@ -655,11 +655,24 @@ def check_journal_compliance(
 
     # ── sans-serif ─────────────────────────────────────────────────────────────
     if require_sans_serif:
-        serif_fonts = {"times", "times new roman", "georgia", "garamond", "serif"}
-        fam_l = (family or "").lower()
-        is_sans = bool(family) and not any(s in fam_l for s in serif_fonts)
+        # judged on the family each text is really drawn and exported in: a
+        # requested font that is not installed is replaced by another one
+        from .core import _font_report, _text_families
+        serif_fonts = {"times", "georgia", "garamond", "cambria", "serif", "roman", "minion", "palatino"}
+        requested = _text_families(root)
+        rep = _font_report(requested) if requested else {}
+        drawn = rep.get("drawn_as", {}) if isinstance(rep, dict) else {}
+        parts, is_sans = [], bool(requested)
+        for fam in requested:
+            real = drawn.get(fam, fam)
+            # "sans" in a name (e.g. "Noto Serif Sans" never, "DejaVu Sans") wins over a serif hint
+            if "sans" not in real.lower() and any(s in real.lower() for s in serif_fonts):
+                is_sans = False
+            parts.append(f"{fam!r}" if real == fam else f"{fam!r} (not installed here: drawn and exported as {real!r})")
+        if not isinstance(rep, dict):
+            parts.append(f"(could not check which fonts are installed: {rep})")
         results.append(("sans-serif font", is_sans,
-                        f"font family {family!r}" if family else "no font family set"))
+                        "font family " + ", ".join(parts) if requested else "no font family set"))
 
     # ── resolution ─────────────────────────────────────────────────────────────
     try:

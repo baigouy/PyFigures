@@ -139,8 +139,24 @@ def resolve_family(requested: str) -> str:
     return requested
 
 
-def font_report() -> dict:
-    """Structured report of the portable-font situation (for GUI + MCP)."""
+def drawn_family(requested: str) -> str:
+    """The family text asking for *requested* is actually drawn and exported in:
+    the substitution chain, else the family itself when installed, else Qt's
+    fallback font."""
+    avail = available_families()
+    resolved = resolve_family(requested)
+    if resolved in avail:
+        return resolved
+    try:
+        from qtpy.QtGui import QFont, QFontInfo
+        return QFontInfo(QFont(requested)).family()
+    except Exception:
+        return resolved
+
+
+def font_report(resolve=()) -> dict:
+    """Structured report of the portable-font situation (for GUI + MCP).
+    *resolve*: family names to report the actually drawn family for."""
     avail = available_families()
     portable = sorted(f for f in PORTABLE_CLONES if f in avail)
     return {
@@ -151,4 +167,7 @@ def font_report() -> dict:
         "arial_resolves_to": resolve_family("Arial"),
         "has_true_helvetica": "Helvetica" in avail,
         "has_arial": "Arial" in avail,
+        # '@' families are Windows' vertical-writing duplicates
+        "installed_families": sorted((f for f in avail if not f.startswith("@")), key=str.lower),
+        "drawn_as": {f: drawn_family(f) for f in resolve},
     }

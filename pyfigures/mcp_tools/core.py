@@ -2319,6 +2319,44 @@ def _restyle_html_batch(htmls: list[str], **attrs) -> list[str] | str:
     return res["htmls"]
 
 
+def _font_report(resolve=()) -> dict | str:
+    """The font report of pyfigures.gui.portable_fonts (installed families, the
+    family each of *resolve* is really drawn and exported in). Qt is needed, so
+    it runs in a subprocess. Returns the dict, or an error string."""
+    out_json = os.path.join(tempfile.mkdtemp(prefix="pyf_fonts_"), "fonts.json")
+    args = ["fonts", out_json]
+    if resolve:
+        args += ["--resolve", *resolve]
+    ok, msg = _run_headless_op(args)
+    if not ok:
+        return msg
+    if not os.path.isfile(out_json):
+        return f"font report not produced: {msg}"
+    with open(out_json, encoding="utf-8") as f:
+        return json.load(f)
+
+
+# generic CSS / Qt names: not a font of their own, never "missing"
+_GENERIC_FAMILIES = {"sans serif", "sans-serif", "serif", "monospace", "ms shell dlg 2", "system-ui"}
+
+
+def _text_families(root: ET.Element) -> list[str]:
+    """Every font family the figure asks for: the figure font and the families
+    in its texts' rich text (generic names left out)."""
+    fams = []
+    fig = _figure_font(root).get("font_family")
+    if fig:
+        fams.append(fig)
+    for ta in root.iter("TAText2D"):
+        raw = _decode((ta.find("text").text if ta.find("text") is not None else "") or "")
+        for m in re.finditer(r"font-family:\s*([^;\"]+)", raw or ""):
+            for part in m.group(1).split(","):
+                name = part.strip().strip("'\"").replace("&quot;", "").replace("&#x27;", "").strip()
+                if name and name.lower() not in _GENERIC_FAMILIES and name not in fams:
+                    fams.append(name)
+    return fams
+
+
 def _figure_font(root: ET.Element) -> dict:
     """The figure font set with set_figure_properties (font_family,
     font_size, italic), {} when none was set."""
