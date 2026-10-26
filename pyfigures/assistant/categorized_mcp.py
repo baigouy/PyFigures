@@ -272,6 +272,10 @@ def build_server(full_server, send):
         if unknown:
             hint = (' edit_panel_letters has no letters argument. To restore a missing panel letter use action=restore, start_letter=desired text, scoped panel_ids. Style alone cannot restore it. For exchanging two panels or letter texts, discover swap_live_panels and use target images by default, or letters only when explicitly requested.'
                     if tool_name == 'edit_panel_letters' and 'letters' in unknown else ' Discover this operation to read its exact arguments_schema.')
+            if tool_name == 'edit_panel_letters':
+                hint = (' Pass only the requested appearance fields. scope=all needs no panel_ids; scope=panels needs a nonempty panel_ids list.'
+                        ' For italic/bold/underline use restyle_texts(target=letters) directly; opacity is not accepted here.'
+                        ' Do not copy the full letter_styles readback or retry unchanged unsupported fields.')
             raise ValueError('Unknown argument(s): ' + ', '.join(sorted(unknown)) + '.' + hint
                              + ' Exact arguments_schema: ' + json.dumps(tool.parameters))
         kwargs = dict(arguments)
