@@ -211,4 +211,14 @@ def fonts_report(d):
     if not clones:
         lines += ["", "Without a look-alike, the figure may look different on another computer: "
                       "use a font installed everywhere, or add the fonts to that folder."]
+    status = d.get("status") or {}
+    if status:
+        lines += ["", "Fonts used in this figure:"]
+        for fam, st in status.items():
+            if st.get("installed"):
+                lines.append(f"  {fam}: installed")
+            else:
+                alts = ", ".join(st.get("alternatives") or []) or "none found"
+                lines.append(f"  {fam}: NOT installed, drawn and exported as {st.get('drawn_as')} "
+                             f"(installed alternatives: {alts})")
     return "\n".join(lines)

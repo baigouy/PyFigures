@@ -154,9 +154,71 @@ def drawn_family(requested: str) -> str:
         return resolved
 
 
+# Common families by style, most journal-friendly first: alternatives to offer
+# for a font that is not installed (only installed ones are offered).
+_STYLE_FAMILIES = {
+    "sans": ["Helvetica", "Arial", "TeX Gyre Heros", "Nimbus Sans", "Arimo", "Liberation Sans",
+             "Helvetica Neue", "Source Sans 3", "Source Sans Pro", "Open Sans", "Roboto", "Lato",
+             "Noto Sans", "Calibri", "Segoe UI", "Verdana", "Tahoma", "DejaVu Sans"],
+    "serif": ["Times New Roman", "Times", "TeX Gyre Termes", "Nimbus Roman", "Tinos",
+              "Liberation Serif", "Georgia", "Cambria", "Palatino Linotype", "Book Antiqua",
+              "Garamond", "Noto Serif", "Source Serif 4", "DejaVu Serif"],
+    "mono": ["Courier New", "Courier", "Cousine", "Liberation Mono", "Consolas",
+             "Lucida Console", "Source Code Pro", "DejaVu Sans Mono"],
+}
+
+
+def font_style(family: str) -> str:
+    """'sans', 'serif' or 'mono' for *family*: from the known lists, else
+    guessed from its name (sans when nothing says otherwise)."""
+    low = family.strip().lower()
+    for style, fams in _STYLE_FAMILIES.items():
+        if low in (f.lower() for f in fams):
+            return style
+    if any(w in low for w in ("mono", "courier", "code", "console")):
+        return "mono"
+    if "sans" not in low and any(w in low for w in ("serif", "times", "roman", "georgia",
+                                                    "garamond", "palatino", "minion", "cambria")):
+        return "serif"
+    return "sans"
+
+
+def font_status(requested: str, limit: int = 5) -> dict:
+    """Is *requested* installed here, what is it really drawn and exported in,
+    and which installed fonts could replace it (same style, the Helvetica/Arial
+    look-alikes first, then names that look alike)."""
+    import difflib
+    avail = available_families()
+    by_low = {f.lower(): f for f in avail if not f.startswith("@")}
+    name = by_low.get(requested.strip().lower())
+    # "helvetica" asks for the Helvetica substitution chain too
+    canon = next((k for k in _SUBSTITUTIONS if k.lower() == requested.strip().lower()), requested)
+    style = font_style(requested)
+    alts = []
+    for cand in _SUBSTITUTIONS.get(canon, []) + _STYLE_FAMILIES[style]:
+        real = by_low.get(cand.lower())
+        if real and real != name and real not in alts:
+            alts.append(real)
+    if name is None:
+        # a misspelt or partial name ("helvetca", "Liberation"): offer the look-alike names too
+        close = difflib.get_close_matches(requested.lower(), list(by_low), n=3, cutoff=0.6)
+        close += [k for k in by_low if requested.strip().lower() in k][:3]
+        front = list(dict.fromkeys(by_low[k] for k in close))
+        alts = front + [a for a in alts if a not in front]
+    return {
+        "requested": requested,
+        "installed": name is not None,
+        "installed_name": name,
+        "drawn_as": drawn_family(name or canon),
+        "style": style,
+        "alternatives": alts[:limit],
+    }
+
+
 def font_report(resolve=()) -> dict:
     """Structured report of the portable-font situation (for GUI + MCP).
-    *resolve*: family names to report the actually drawn family for."""
+    *resolve*: family names to report the actually drawn family, whether they
+    are installed and installed alternatives for (``status``)."""
     avail = available_families()
     portable = sorted(f for f in PORTABLE_CLONES if f in avail)
     return {
@@ -170,4 +232,5 @@ def font_report(resolve=()) -> dict:
         # '@' families are Windows' vertical-writing duplicates
         "installed_families": sorted((f for f in avail if not f.startswith("@")), key=str.lower),
         "drawn_as": {f: drawn_family(f) for f in resolve},
+        "status": {f: font_status(f) for f in resolve},
     }

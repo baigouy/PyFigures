@@ -70,4 +70,42 @@ def test_journal_check_fails_a_serif_font(tmp_path, fonts):
     if "Times New Roman" not in fonts["installed_families"]:
         pytest.skip("Times New Roman is not installed")
     line = _font_line(_figure(tmp_path, "Times New Roman"))
-    assert "[FAIL]" in line, line
+    assert "[FAIL]" in line and "installed sans-serif alternatives: " in line, line
+
+
+def test_list_fonts_answers_is_a_font_installed(fonts):
+    chk = json.loads(M.list_fonts("dejavu sans"))["font_check"]
+    assert chk["installed"] and chk["installed_name"] == "DejaVu Sans" and chk["drawn_as"] == "DejaVu Sans"
+    assert "DejaVu Sans" not in chk["alternatives"]
+    assert "font_check" not in fonts                                # only with a query
+
+
+def test_missing_font_gets_installed_alternatives_of_its_style():
+    chk = json.loads(M.list_fonts("NoSuchSerifFontXyz"))["font_check"]
+    assert not chk["installed"] and chk["style"] == "serif"
+    assert chk["alternatives"] and chk["drawn_as"]
+    helv = json.loads(M.list_fonts("helvetica"))["font_check"]       # case-insensitive
+    if not helv["installed"]:
+        assert helv["style"] == "sans" and helv["alternatives"]
+        assert helv["drawn_as"] == helv["alternatives"][0]          # the look-alike it is drawn in comes first
+
+
+def test_misspelt_font_suggests_the_close_name():
+    chk = json.loads(M.list_fonts("DejaVu Sanz"))["font_check"]
+    assert not chk["installed"] and "DejaVu Sans" in chk["alternatives"]
+
+
+def test_setting_a_missing_font_warns_with_alternatives(tmp_path):
+    out = M.set_figure_properties(_figure(tmp_path, "DejaVu Sans"), font_family="NoSuchFontXyz")
+    assert "'NoSuchFontXyz' is not installed here" in out and "Installed alternatives: '" in out, out
+    out = M.set_figure_properties(str(tmp_path / "fig.pyf"), font_family="DejaVu Sans")
+    assert "not installed" not in out, out
+
+
+def test_gui_fonts_report_lists_the_figure_fonts():
+    from pyfigures.gui.qc_reports import fonts_report
+    text = fonts_report({"status": {
+        "Helvetica": {"installed": False, "drawn_as": "Arial", "alternatives": ["Arial", "Arimo"]},
+        "Arial": {"installed": True}}})
+    assert "Helvetica: NOT installed, drawn and exported as Arial (installed alternatives: Arial, Arimo)" in text
+    assert "Arial: installed" in text

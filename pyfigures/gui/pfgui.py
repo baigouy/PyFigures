@@ -6285,12 +6285,17 @@ class EZFIG_GUI(QMainWindow):
                                f'Wrote {os.path.basename(output_file)}  ({mode.upper()}, {dpi} DPI).')
 
     def fonts_report_action(self):
-        """Show the portable-font situation (MCP: list_fonts)."""
+        """Show the portable-font situation and whether the fonts the figure
+        uses are installed, with alternatives (MCP: list_fonts)."""
         try:
             from pyfigures.gui.portable_fonts import register_portable_fonts, font_report
             from pyfigures.gui.qc_reports import fonts_report
             register_portable_fonts(QApplication.instance())
-            self._show_report('Fonts (portable / Helvetica)', fonts_report(font_report()))
+            used = []
+            if self.paint.EZFIG_panel.shapes_to_draw:
+                from pyfigures.mcp_tools.core import _load, _text_families
+                used = _text_families(_load(self._save_current_to_temp_pyf())[1])
+            self._show_report('Fonts (portable / Helvetica)', fonts_report(font_report(resolve=used)))
         except Exception:
             logger.error('fonts report failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not read the fonts (see log).')

@@ -671,6 +671,12 @@ def check_journal_compliance(
             parts.append(f"{fam!r}" if real == fam else f"{fam!r} (not installed here: drawn and exported as {real!r})")
         if not isinstance(rep, dict):
             parts.append(f"(could not check which fonts are installed: {rep})")
+        elif requested and not is_sans:
+            from pyfigures.gui.portable_fonts import _STYLE_FAMILIES
+            installed = {f.lower(): f for f in rep.get("installed_families", [])}
+            sans = [installed[f.lower()] for f in _STYLE_FAMILIES["sans"] if f.lower() in installed][:5]
+            if sans:
+                parts.append("installed sans-serif alternatives: " + ", ".join(repr(f) for f in sans))
         results.append(("sans-serif font", is_sans,
                         "font family " + ", ".join(parts) if requested else "no font family set"))
 

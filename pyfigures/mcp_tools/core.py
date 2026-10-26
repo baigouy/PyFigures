@@ -2314,9 +2314,21 @@ def _restyle_html_batch(htmls: list[str], **attrs) -> list[str] | str:
         res = json.load(f)
     fam = attrs.get("font_family")
     if fam and res.get("font_installed") is False:
-        _warn(f"the font {fam!r} is not installed here: the text is shown in a fallback font "
-              f"(list_fonts lists what is available).")
+        _warn_missing_font(fam)
     return res["htmls"]
+
+
+def _warn_missing_font(family: str) -> None:
+    """Warn when *family* is not installed here, naming the font it is really
+    drawn and exported in and installed alternatives to offer."""
+    rep = _font_report([family])
+    st = rep.get("status", {}).get(family) if isinstance(rep, dict) else None
+    if st is None:
+        _warn(f"the font {family!r} may not be installed here (list_fonts lists what is available).")
+    elif not st["installed"]:
+        alts = ", ".join(repr(a) for a in st["alternatives"]) or "none found"
+        _warn(f"the font {family!r} is not installed here: it is drawn and exported as "
+              f"{st['drawn_as']!r}. Installed alternatives: {alts} (list_fonts lists all).")
 
 
 def _font_report(resolve=()) -> dict | str:

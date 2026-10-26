@@ -23,6 +23,7 @@ from .app import (
     _warn,
 )
 from .core import (
+    _warn_missing_font,
     _restyle_html_batch,
     _roi_outside_note,
     _restyle_letters,
@@ -1190,6 +1191,7 @@ def set_figure_properties(
     if font_family is not None:
         _set_child_text(font_el, "family", _encode_str(font_family))
         changed.append(f"font.family={font_family!r}")
+        _warn_missing_font(font_family)
     if font_size is not None:
         _set_child_text(font_el, "size", str(int(font_size)))
         changed.append(f"font.size={font_size}")
@@ -1374,10 +1376,14 @@ def list_fonts(query: str | None = None) -> str:
     """List the fonts available for figure text on this computer.
 
     *query*: optional part of a name (case-insensitive), e.g. "arial" or "sans",
-    to list only matching families.
+    to list only matching families. Also answers "is Helvetica available?":
+    list_fonts("Helvetica") → font_check.installed.
 
     Returns JSON with: installed_families (every font family that can be used,
-    filtered by *query*) and their count; what "Helvetica" and "Arial" are
+    filtered by *query*) and their count; with a query, font_check: whether
+    that exact font is installed, the font it is really drawn and exported in,
+    and installed alternatives of the same style (sans/serif/mono, look-alikes
+    first) — offer those when it is not installed; what "Helvetica" and "Arial" are
     really drawn in here and whether real Helvetica/Arial are present (a
     missing Helvetica is drawn and exported as a metric-compatible clone such
     as Arial); bundled_families / portable_clones_available (portable fonts
@@ -1385,12 +1391,17 @@ def list_fonts(query: str | None = None) -> str:
     set_figure_properties(font_family=...) or restyle_texts(font_family=...).
     """
     from .core import _font_report
-    rep = _font_report(["Helvetica", "Arial"])
+    query = str(query).strip() if query else None
+    rep = _font_report([query] if query else [])
     if isinstance(rep, str):
         return f"ERROR: {rep}"
     fams = rep.pop("installed_families", [])
     if query:
-        fams = [f for f in fams if str(query).strip().lower() in f.lower()]
+        fams = [f for f in fams if query.lower() in f.lower()]
     rep.pop("drawn_as", None)
-    out = {"query": query, "count": len(fams), "installed_families": fams, **rep}
+    status = rep.pop("status", {})
+    out = {"query": query, "count": len(fams), "installed_families": fams}
+    if query:
+        out["font_check"] = status.get(query)
+    out.update(rep)
     return json.dumps(out, ensure_ascii=False, indent=2)
