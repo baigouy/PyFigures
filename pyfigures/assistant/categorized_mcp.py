@@ -1,9 +1,17 @@
 """Small, stable MCP surface backed by the complete original registry."""
 import json
+import os
 import re
 import uuid
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.types import ToolAnnotations
+
+FULL_SCHEMAS = 2       # compact discovery: full argument schemas for the best matches only
+# The common operations whose exact fields the dispatcher lists, so they can be
+# called without a search (small models spent most of their context searching).
+COMMON_CONTRACTS = ('edit_panel_letters', 'swap_live_panels', 'remove_annotation', 'set_lut', 'set_scale_bar',
+                    'set_scale_bar_all', 'set_figure_caption', 'add_annotation', 'arrange_live_images',
+                    'delete_last_rows', 'restyle_texts', 'swap_rows', 'set_panel_letter_position', 'add_label_row')
 
 CATEGORIES = {
     'native_gui': 'Actual native menus, dialogs, editor controls, keyboard, context/drop operations and canvas/file interactions. Fallback for capabilities not yet represented by dedicated tools.',
@@ -112,7 +120,7 @@ def build_server(full_server, send):
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
         'For named live panels, prefer panel_ref on native image/annotation tools; omit numeric group_path/image_index so current GUI state resolves the address. get_annotations text_index is the index for style_annotation/set_annotation_text, while annotation_index is the full list index for ROI/removal tools. The live text wrappers accept text_index explicitly. '
-        'Never guess argument names. Discover the exact schema before first use. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
+        'Never guess argument names. Discover the exact schema before first use, except the common operations listed in use_pyfigures_tool, which need no search. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
         'Category descriptions are guidance, not restrictions: search by words across all '
         'categories if needed. All original functions remain available underneath. '
         'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
@@ -259,7 +267,16 @@ def build_server(full_server, send):
         ranked.sort(key=lambda item: (-item[0], item[1]))
         import copy
         found = []
-        for _, n, t, c in ranked[offset:offset + limit]:
+        # Compact results (default): full schemas for the best matches only, one line for
+        # the rest. Six full schemas per search filled small models' context (2026-10-27).
+        # PYFIGURES_COMPACT_DISCOVERY=0 restores six full schemas.
+        compact = os.environ.get('PYFIGURES_COMPACT_DISCOVERY', '1') != '0'
+        for rank, (_, n, t, c) in enumerate(ranked[offset:offset + limit]):
+            if compact and rank >= FULL_SCHEMAS and query.strip().lower() != n.lower():
+                summary = re.split(r'(?<=[.!?])\s', t.description.strip(), maxsplit=1)[0][:160]
+                found.append({'name': n, 'category': c, 'summary': summary,
+                              'schema': 'not included: call find_pyfigures_tools(query="' + n + '") for it, or call the operation; a wrong argument returns its exact schema'})
+                continue
             schema = copy.deepcopy(t.parameters)
             internal = {'session_id', 'expected_revision', 'request_id'}
             for key in internal:
@@ -331,14 +348,15 @@ def build_server(full_server, send):
     # Small real-schema reminders in the advertised dispatcher prevent copying
     # inspection-state objects into edit arguments without expanding the tool list.
     contracts=[]
-    for name in ('edit_panel_letters','swap_live_panels','remove_annotation'):
+    compact=os.environ.get('PYFIGURES_COMPACT_DISCOVERY','1')!='0'
+    for name in (COMMON_CONTRACTS if compact else ('edit_panel_letters','swap_live_panels','remove_annotation')):
         tool=available.get(name)
         if tool:
             schema=tool.parameters
             keys=[k for k in schema.get('properties',{}) if k not in ('session_id','expected_revision','request_id','pyf_path')]
             choices={k:v['enum'] for k,v in schema.get('properties',{}).items() if 'enum' in v}
-            contracts.append(name+': fields='+','.join(keys)+'; choices='+json.dumps(choices)+'; required='+','.join(k for k in schema.get('required',[]) if k in keys))
+            contracts.append(name+': fields='+','.join(keys)+(('; choices='+json.dumps(choices)) if choices else '')+'; required='+','.join(k for k in schema.get('required',[]) if k in keys))
     dispatcher=server._tool_manager._tools['use_pyfigures_tool']
-    dispatcher.description+=' Common exact contracts: '+' | '.join(contracts)+'. Pass only requested flat edit fields. Never copy inspection letters/style objects into arguments. For other operations discover the schema first.'
+    dispatcher.description+=(' Common operations, callable directly WITHOUT a search (exact fields): ' if compact else ' Common exact contracts: ')+' | '.join(contracts)+'. Pass only requested flat edit fields. Never copy inspection letters/style objects into arguments. For other operations discover the schema first.'
 
     return server
