@@ -338,6 +338,10 @@ def build_server(full_server, send):
             raise ValueError('Unknown operation; search with find_pyfigures_tools')
         tool = available[tool_name]
         properties = tool.parameters.get('properties', {})
+        # pyf_path='live' (or empty) names the open figure, which is all a live-only operation acts on;
+        # refusing it made Muse retry remove_scale_bar_all unchanged 31 times.
+        if 'pyf_path' not in properties and arguments.get('pyf_path', 'live') in ('live', '', None):
+            arguments = {k: v for k, v in arguments.items() if k != 'pyf_path'}
         unknown = set(arguments) - set(properties)
         if unknown:
             hint = (' edit_panel_letters has no letters argument. To restore a missing panel letter use action=restore, start_letter=desired text, scoped panel_ids. Style alone cannot restore it. For exchanging two panels or letter texts, discover swap_live_panels and use target images by default, or letters only when explicitly requested.'
