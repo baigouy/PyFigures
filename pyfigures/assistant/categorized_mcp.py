@@ -200,8 +200,8 @@ def build_server(full_server, send):
                 for key, value in CATEGORIES.items()}
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True))
-    def find_pyfigures_tools(query: str = '', category: str = '', limit: int = 6, offset: int = 0) -> dict:
-        """Find operations and retrieve their exact arguments before executing. Search natural words (e.g. spacing, panel letter position, scale bar), optionally within a category. Default at most six schemas; use offset for more. No GUI edits."""
+    def find_pyfigures_tools(query: str = '', category: str = '', limit: int = 6, offset: int = 0, compact: bool = False) -> dict:
+        """Find operations and retrieve their exact arguments before executing. Search natural words (e.g. spacing, panel letter position, scale bar), optionally within a category. Default at most six schemas; use offset for more. No GUI edits. Leave compact unset: the client sets it when its context is filling."""
         if category and category not in CATEGORIES:
             raise ValueError('Unknown category. Use list_pyfigures_categories.')
         if not 1 <= limit <= 12 or offset < 0:
@@ -280,10 +280,12 @@ def build_server(full_server, send):
         ranked.sort(key=lambda item: (-item[0], item[1]))
         import copy
         found = []
-        # Compact results (default): full schemas for the best matches only, one line for
-        # the rest. Six full schemas per search filled small models' context (2026-10-27).
-        # PYFIGURES_COMPACT_DISCOVERY=0 restores six full schemas.
-        compact = os.environ.get('PYFIGURES_COMPACT_DISCOVERY', '1') != '0'
+        # Compact results: full schemas for the best matches only, one line for the rest.
+        # Six full schemas per search filled small models' context (2026-10-27), but always
+        # compacting made Qwen 9B slower, so by default ('auto') only a client whose context
+        # is filling asks for it. PYFIGURES_COMPACT_DISCOVERY=1 always compacts, =0 never.
+        mode = os.environ.get('PYFIGURES_COMPACT_DISCOVERY', 'auto')
+        compact = mode == '1' or (mode != '0' and bool(compact))
         for rank, (_, n, t, c) in enumerate(ranked[offset:offset + limit]):
             if compact and rank >= FULL_SCHEMAS and query.strip().lower() != n.lower():
                 summary = re.split(r'(?<=[.!?])\s', t.description.strip(), maxsplit=1)[0][:160]
