@@ -78,7 +78,11 @@ class Session:
         from .pointer_context import geometry
         references = [{'panel_id': '/'.join(map(str, (*gp, ix))), 'group_path': list(gp),
                        'image_index': ix, 'letters': [a.getPlainText() for a in letters(p)],
-                       'rotation_degrees': getattr(p, 'theta', 0), 'geometry': geometry(p)}
+                       'rotation_degrees': getattr(p, 'theta', 0), 'geometry': geometry(p),
+                       # answers "is c calibrated?", "any scale bars?", "which colours?" without another tool
+                       'pixel_size': getattr(p, 'px_to_unit_conversion_factor', None) or None,   # 0 = not set
+                       'scale_bars': sum(type(a).__name__ == 'ScaleBar' for a in (p.annotations or [])),
+                       'luts': [str(l) if l is not None else None for l in (getattr(p, 'LUTs', None) or [])] or None}
                       for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)]
         from .advanced_annotations import describe, text_inspection_record
         annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,

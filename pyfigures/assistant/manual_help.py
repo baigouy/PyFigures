@@ -85,7 +85,8 @@ def explain(topic='overview'):
     # rectangle" to edit_roi, "editable text" slides to edit_text, a projection or
     # a moved image to an unrelated tutorial step.
     task,_=find_guide(topic)
-    if task in ('draw_roi','remove_inset','scale_bar_units','max_projection','remap_images','export_pptx','reorder_panels','flip_image'):
+    if task in ('draw_roi','remove_inset','scale_bar_units','max_projection','remap_images','export_pptx','reorder_panels','flip_image',
+                'replace_image','export_source_data','set_pixel_size'):
         result=native_explain(task)
         result['answer_style']='Human GUI steps; code only when explicitly requested.'
         return result
@@ -144,6 +145,7 @@ def explain(topic='overview'):
         'Swap exchanges the dragged object and target. To row creates a new row, with the target first and the dragged item after it. To column places the target above the dragged item.',
         'Join this row/column inserts into the existing group. A dragged group offered as one block retains its internal layout; panel by panel inserts its contents individually IN ONE operation, retaining their order but removing the source group as a nested block. Do not describe multiple drops or scattered placement. Neither option is a universal default.',
         'Example: drag row [A,B,C] onto [D,E]. As a block gives [D,E,group(A,B,C)]; panel by panel gives [D,E,A,B,C]. You choose a menu option for one drop.',
+        'When the target panel is inside a row, choose Stack with it (column in the row) to put both panels in a column at the target slot. Inside a column, Beside it (row in the column) puts them in a row at that slot. The dragged panel and target share the target\'s former place; choose this nesting option only when offered.',
         'Take [target] into the dragged row/column puts the target into the dragged group, as its last panel.',
         'Extrude takes the selected image out of its group into a row of its own.',
         'The preview sketches and tooltips describe the available outcomes. Some equivalent choices may be removed, so do not promise every choice for every drop.',

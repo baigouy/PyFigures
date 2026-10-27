@@ -665,6 +665,46 @@ def _canonical_lut_names(luts):
 
 
 @mcp.tool()
+def list_luts(query: str | None = None) -> str:
+    """List the colour look-up tables (LUTs) that set_lut accepts.
+
+    *query*: optional part of a name (case-insensitive), e.g. "green", "fire"
+    or "viridis", to list only matching LUTs. Also answers "is there a
+    magenta-hot LUT?": list_luts("magenta_hot") → lut_check.available.
+
+    Returns JSON with: luts (exact names, filtered by *query*) and their
+    count; standard (the plain PyFigures LUTs) and matplotlib_count when no
+    query is given; with a query, lut_check: whether that exact name exists,
+    its exact key, and close matches to offer when it does not. Names are
+    case-insensitive in set_lut; MATPLOTLIB_<name>_r is the reversed map.
+    """
+    import difflib
+    try:
+        from batoolset.luts.lut_minimal_test import list_available_luts
+        known = list(list_available_luts())
+    except Exception as e:
+        return f"ERROR: LUT table unavailable ({type(e).__name__}: {e})"
+    query = str(query).strip() if query else None
+    if not query:
+        standard = [k for k in known if not k.startswith("MATPLOTLIB_")]
+        return json.dumps({"query": None, "count": len(known), "standard": standard,
+                           "matplotlib_count": len(known) - len(standard),
+                           "matplotlib_examples": [k for k in known if k.startswith("MATPLOTLIB_")
+                                                   and not k.endswith("_r")][:12],
+                           "luts": known}, ensure_ascii=False, indent=2)
+    q = query.lower().replace(" ", "_").replace("-", "_")
+    hits = [k for k in known if q in k.lower()]
+    by_lower = {k.lower(): k for k in known}
+    exact = by_lower.get(q) or by_lower.get("matplotlib_" + q)
+    close = [] if exact else [by_lower[c] for c in difflib.get_close_matches(
+        q, list(by_lower), n=5, cutoff=0.6)]
+    return json.dumps({"query": query, "count": len(hits), "luts": hits,
+                       "lut_check": {"name": query, "available": bool(exact), "exact_key": exact,
+                                     "close_matches": close or hits[:5]}},
+                      ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def set_lut(
     pyf_path: str,
     group_path: list[int],
@@ -678,9 +718,11 @@ def set_lut(
             Use ``null`` / ``None`` to leave a channel at its current LUT.
             Single-channel images: ``["GREEN"]``.
             Three-channel RGB: ``["RED", "GREEN", "BLUE"]``.
-            Mixed (ch0 red, ch1 default): ``["RED", null]``.
+            Mixed (ch0 red, ch1 unchanged): ``["RED", null]``.
+            ``"DEFAULT"`` resets a channel to its acquisition colour.
 
-    Available LUT names (case-insensitive):
+    Available LUT names (case-insensitive; list_luts lists them all and
+    checks whether a name exists):
       Standard:  DEFAULT, GRAY, RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA,
                  ORANGE, PURPLE, AFM_HOT, RED_HOT, GREEN_HOT, BLUE_HOT,
                  OCEAN, HI_LO, DNA, RAINBOW_1, RAINBOW_2, RAINBOW_3,
@@ -741,7 +783,16 @@ def set_lut(
     # "MATPLOTLIB_VIRIDIS" — and unknown names were stored silently.)
     luts_encoded, unknown = _canonical_lut_names(luts)
     if unknown:
-        return "ERROR: " + "; ".join(unknown)
+        return "ERROR: " + "; ".join(unknown) + " (list_luts lists every LUT name)"
+    # null keeps that channel's current LUT, as documented (a model asking for
+    # [null, "YELLOW", null] used to wipe channels 1 and 3)
+    import ast
+    try:
+        current = ast.literal_eval(_child_text(img, "LUTs") or "None") or []
+    except (ValueError, SyntaxError):
+        current = []
+    luts_encoded = [current[i] if new is None and i < len(current) else new
+                    for i, new in enumerate(luts_encoded)]
     _set_child_text(img, "LUTs", repr(luts_encoded))
     changed.append(f"LUTs={luts_encoded}")
     from .stacks import _sync_split_colours

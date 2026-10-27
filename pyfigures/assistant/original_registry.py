@@ -127,6 +127,8 @@ def register_all(server, send):
                   if route else ' Original file/service tool: retains its original explicit paths and side effects; does not automatically load its output in the GUI.')
         if name == 'list_fonts':
             suffix = ' Read-only installed font inventory and exact-name availability check; no document change.'
+        if name == 'list_luts':
+            suffix = ' Read-only LUT name inventory and exact-name availability check; no document change.'
         if addressable:
             suffix += ' PREFER panel_ref (visible letter or inspected panel ID) for a named LIVE panel; omit group_path/image_index. Resolved against current GUI state on the Qt thread. Conflicting numeric addresses are rejected, never silently substituted.'
         if text_indexed:
@@ -134,6 +136,7 @@ def register_all(server, send):
         if name in ('get_image_property', 'set_image_property'):
             suffix += ' Image rotation is property_name="theta" in degrees; unrotate/reset rotation means value="0". inspect_figure panel_references maps visible letters to group_path/image_index.'
         wording = {
+            'add_arrow': "style='arrowhead' already draws a head with NO shaft. Verify get_annotations.kind='arrowhead'; its short nonzero endpoints encode direction, not a visible shaft. Do not collapse endpoints to make it head-only. ",
             'list_fonts': 'Read-only fonts/typeface inventory. For is Helvetica/Arial available or installed, pass query and answer font_check.installed; if missing, report drawn_as and offer alternatives. For list fonts omit query and summarise installed_families/count. ',
             'set_figure_caption': 'caption is exact plain text, including its final period when supplied; title is a separate field. caption_markdown is an optional formatted string of that same text, never a boolean. ',
             'add_annotation': 'Write/put <words> on <panel> supplies literal text without needing quotation marks. Add dependent text before a later swap so it travels with its image. ',
@@ -143,5 +146,5 @@ def register_all(server, send):
         description=tool.description.replace('annotation_index','text_index') if text_indexed else tool.description
         description=wording.get(name, '')+description
         server.add_tool(make_wrapper(), name=name, description=description + suffix,
-                        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False) if name=='list_fonts' else tool.annotations, structured_output=False)
+                        annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False) if name in ('list_fonts','list_luts') else tool.annotations, structured_output=False)
     return len(registry())

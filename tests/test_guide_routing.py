@@ -13,6 +13,12 @@ from pyfigures.guides import find_guide
     ("How can I choose between PDF and SVG when exporting a figure?", "export_vector"),
     ("export PDF SVG", "export_vector"),
     ("export to powerpoint", "export_pptx"),
+    ("export as svg", "export_vector"),
+    ("How do I export the original source data alongside a finished figure?", "export_source_data"),
+    ("How do I replace a picture while keeping its existing annotations?", "replace_image"),
+    ("reconnect missing images", "remap_images"),
+    ("How do I calibrate a scale bar when I know the pixel size?", "set_pixel_size"),
+    ("set the pixel size", "set_pixel_size"),
 ])
 def test_request_reaches_its_guide(query, guide):
     assert find_guide(query)[0] == guide

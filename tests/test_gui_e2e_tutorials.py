@@ -512,9 +512,18 @@ def _guide_context(c, guide_id):
         hits[0].activated.emit()
         H.settle(c.qapp, c.g)
     elif guide_id in ("edit_text", "edit_inset", "edit_roi", "draw_roi", "remove_inset",
-                      "scale_bar_units", "max_projection", "flip_image", "scale_bar_one_panel"):
+                      "scale_bar_units", "max_projection", "flip_image", "scale_bar_one_panel",
+                      "set_pixel_size"):
         # the panel's editor (double-click), accepted
         c.editor(img, lambda ed: None)
+    elif guide_id == "replace_image":
+        # right-click → Convert to template, then a file drop on the grey slot
+        if not getattr(c, "_slot_made", False):
+            c._slot_made = True
+            c.right_click(img, "Convert to template")
+        else:
+            slot = next(i for i in H.images(c.g) if i.filename == "@template@")
+            c.drop(["rgb"], "⬜  Assign to template slot", where=H.centre(c.g, slot))
     elif guide_id == "stack_in_row":
         # drag the selected panel onto an image of the other row
         c.menus.pick = "Stack with it (column in the row)"

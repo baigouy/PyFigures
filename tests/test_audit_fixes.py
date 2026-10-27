@@ -398,6 +398,41 @@ def test_set_lut_resolves_case_and_rejects_unknown(tmp_path):
     assert "MATPLOTLIB_viridis" in luts            # real key, not upper-cased
     out = set_lut(pyf, [0], 0, ["GREEEN"])
     assert out.startswith("ERROR") and "GREEN" in out   # suggestion offered
+    assert "list_luts" in out
+
+
+def test_set_lut_null_keeps_the_current_channel_lut(tmp_path):
+    from pyfigures.mcp_server import create_figure, add_image, set_lut
+    d = str(tmp_path)
+    pyf = os.path.join(d, "f.pyf")
+    create_figure(pyf, num_groups=1)
+    add_image(pyf, [0], _png(os.path.join(d, "a.png"), 20, 20))
+    set_lut(pyf, [0], 0, ["MAGENTA", "GREEN", "BLUE"])
+    assert not set_lut(pyf, [0], 0, [None, "yellow", None]).startswith("ERROR")
+    luts = next(ET.parse(pyf).getroot().iter("Image2D")).findtext("LUTs")
+    assert luts == repr(["MAGENTA", "YELLOW", "BLUE"])
+
+
+def test_list_luts_lists_and_checks_names():
+    import json
+    from pyfigures.mcp_server import list_luts
+    every = json.loads(list_luts())
+    assert every["count"] == len(every["luts"]) > 100
+    assert {"GRAY", "MAGENTA", "YELLOW"} <= set(every["standard"])
+    assert not any(n.startswith("MATPLOTLIB_") for n in every["standard"])
+    hot = json.loads(list_luts("Magenta hot"))
+    assert hot["lut_check"]["available"] and hot["lut_check"]["exact_key"] == "MAGENTA_HOT"
+    assert json.loads(list_luts("viridis"))["lut_check"]["exact_key"] == "MATPLOTLIB_viridis"
+    miss = json.loads(list_luts("blorple"))["lut_check"]
+    assert not miss["available"] and miss["exact_key"] is None
+
+
+def test_recipe_cli_lists_luts(capsys):
+    import json
+    from pyfigures.recipe import main
+    assert main(["luts", "green"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "GREEN" in out["luts"] and out["lut_check"]["available"]
 
 
 def test_saved_pyf_has_no_memory_addresses(tmp_path):

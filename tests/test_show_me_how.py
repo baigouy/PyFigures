@@ -239,6 +239,25 @@ def test_lut_guide_detects_the_colour_change_on_the_selected_image(win, qapp):
     assert win._guides.status()["user_result_detected"] is True
 
 
+def test_replace_guide_follows_convert_to_template_then_assign(win, qapp, tmp_path):
+    # the two real GUI actions the guide names: right-click → Convert to template,
+    # then a file drop → Assign to template slot
+    from pyfigures.gui.tutorial import _figure_is_template
+    img = _images(win)[0]
+    win.paint.EZFIG_panel.selected_shape = img
+    win.show_me_how("replace_image")
+    _pump(qapp, 600)
+    win.paint.EZFIG_panel.templatify(img)
+    _pump(qapp, 600)
+    assert win._guides.status()["status"] == "guidance_shown"     # a grey slot is not done yet
+    slot = next(i for i in _images(win) if i.is_template())
+    win.assign_to_template(slot, [_rgb(tmp_path / "other.png")])
+    _pump(qapp, 900)
+    assert len(_images(win)) == 1 and not _figure_is_template(win)
+    st = win._guides.status()
+    assert st["status"] == "completed" and st["operation_executed"] is False
+
+
 def test_a_help_tutorial_started_later_is_not_closed_by_the_guide(win, qapp):
     from pyfigures.gui.tutorial import TutorialStep
     win.show_me_how("crop_image")

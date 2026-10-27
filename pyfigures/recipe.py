@@ -2165,7 +2165,13 @@ def main(argv=None) -> int:
     b.add_argument("recipe", nargs="+", help="recipe file(s) (.yaml / .yml / .json)")
     b.add_argument("--render", metavar="EXT",
                    help="also export each built figure next to it (e.g. png, pdf, svg)")
+    lu = sub.add_parser("luts", help="list the LUT names a recipe 'lut:' accepts (MCP: list_luts)")
+    lu.add_argument("query", nargs="?", default=None, help="part of a name, e.g. green or viridis")
     args = ap.parse_args(argv)
+    if args.cmd == "luts":
+        from pyfigures.mcp_server import list_luts
+        print(list_luts(args.query))
+        return 0
 
     status = 0
     for rp in args.recipe:

@@ -130,11 +130,13 @@ def build_server(full_server, send):
         'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
         'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
         'Is a font available? Use list_fonts(query=the_font), answer from font_check. '
+        'Which LUTs/colour tables exist, or is a LUT available? Use list_luts(query=the_name), answer from lut_check and pass its exact_key to set_lut. In set_lut, null keeps a channel unchanged. '
+        'Column headers or a heading above/below a row: add_label_row(group_path=[row index], labels=[one per image] or one string). A label left/right of a row: add_side_label. add_annotation writes text INSIDE an image, not beside a row. '
         'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
 
     @server.tool()
     def inspect_figure() -> dict:
-        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
+        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count) and luts (channel colour tables). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
         return send('inspect')
 
     @server.tool()
@@ -182,7 +184,7 @@ def build_server(full_server, send):
         if category and category not in CATEGORIES:
             raise ValueError('Unknown category. Use list_pyfigures_categories.')
         if not 1 <= limit <= 12 or offset < 0:
-            raise ValueError('limit must be 1Ã¢â‚¬â€œ12 and offset nonnegative')
+            raise ValueError('limit must be 1-12 and offset nonnegative')
         words = re.findall(r'[a-z0-9]+', query.lower())
         aliases = {'gaps': 'spacing', 'gap': 'spacing', 'letters': 'letter',
                    'labels': 'label', 'rows': 'row', 'images': 'image', 'fonts': 'font',
@@ -202,8 +204,13 @@ def build_server(full_server, send):
             if name in ('set_figure_caption','get_figure_caption') and 'caption' in words:
                 score+=300 if name.startswith('set_') and not any(w in ('get','read','inspect') for w in words) else 200
             if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties') and any(w in ('subscript','superscript','rich','substring','roi','properties') for w in words):score+=230
-            if name=='list_fonts' and any(w in ('font','typeface','helvetica','arial','available','installed') for w in words):score+=300
+            lut_words=any(w in ('lut','luts','colormap','colormaps','colourmap','lookup','palette','palettes') for w in words)
+            if name=='list_fonts' and not lut_words and any(w in ('font','typeface','helvetica','arial','available','installed') for w in words):score+=300
+            if name=='list_luts' and lut_words and any(w in ('list','which','available','exist','exists','names','options','there') for w in words):score+=350
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
+            side=any(w in ('left','right','side','vertical') for w in words)
+            if name in ('add_label_row','add_side_label') and (any(w in ('column','columns','heading','header','headers','above','below','beside') for w in words) or (side and any(w in ('label','labels') for w in words))):
+                score+=300 if (name=='add_side_label')==side else 150   # beside a row -> side label, else a label row
 
             if name=='review_submission_readiness' and any(w in ('ready','readiness','submission','publish','publication','compliance','resolution','dpi') for w in words):
                 score+=400
@@ -266,6 +273,13 @@ def build_server(full_server, send):
             candidate=explain(query)
             if candidate.get('status') in ('explained','source_reviewed'):
                 manual_guides=candidate
+            elif manual_guides is None and candidate.get('status')=='ambiguous' and candidate.get('candidates'):
+                # "scale bar calibration pixel size" ties several guides: give their authored
+                # steps rather than nothing, or the model answers with tool calls instead
+                close=[explain(c) for c in candidate['candidates'][:3]]
+                manual_guides={'status':'ambiguous','operation_executed':False,
+                               'guides':[g for g in close if g.get('status')=='explained'],
+                               'answer_style':'Pick the guide matching the question; human GUI steps, no tool commands.'}
         if manual_guides is None and any(w in ('keyboard','shortcut','shortcuts','drag','drop','dnd','split','channel','channels') for w in words):
             from .manual_help import explain
             topic='split' if any(w in ('split','channel','channels') for w in words) else ('drag_and_drop' if any(w in ('drag','drop','dnd') for w in words) else 'shortcuts')

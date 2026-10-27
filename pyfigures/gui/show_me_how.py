@@ -120,8 +120,11 @@ class GuideRunner:
                 return id(shape)
             return (id(shape), tuple(nesting(c) for c in content))
         structure = tuple(nesting(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
+        # real pictures only: a grey template slot is half-way, not a replacement
+        files = tuple(str(getattr(i, "filename", None)) for i in imgs
+                      if not (hasattr(i, "is_template") and i.is_template()))
         return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
-                "order": order, "rows": rows, "structure": structure,
+                "order": order, "rows": rows, "structure": structure, "files": files,
                 "exports": getattr(self.win, "_exports_done", 0)}
 
     def _image_state(self, img):
@@ -152,6 +155,11 @@ class GuideRunner:
             # the same panels, grouped differently (e.g. two stacked inside a row)
             return (now["images"] == b.get("images")
                     and now["structure"] != b.get("structure", now["structure"]))
+        if kind == "image_replaced":
+            # same panels, one now showing a file the figure did not have
+            old = set(b.get("files", ()))
+            return (now["images"] == b.get("images")
+                    and any(f not in old and f not in ("None", "") for f in now["files"]))
         if kind in ("lut_changed", "crop_changed"):
             img = self._target_image
             if img is None or self._image_state0 is None:

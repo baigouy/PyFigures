@@ -98,6 +98,43 @@ def test_runtime_folder_is_outside_the_repository(monkeypatch):
     assert not path.startswith(repo) and path.endswith(os.path.join("PyFigures", "assistant"))
 
 
+def test_inspect_reports_pixel_size_scale_bars_and_luts(qapp, gui, runtime, tmp_path):
+    """"Is a calibrated?", "any scale bars?" and "which colours?" are answered by
+    inspect_figure alone, without a second tool the model may not think of."""
+    from batoolset.drawings.shapes.scalebar import ScaleBar
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    first, second = [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][:2]
+    first.px_to_unit_conversion_factor = 0.1
+    second.px_to_unit_conversion_factor = 0          # never calibrated
+    first.annotations.append(ScaleBar(bar_width_in_units=10, unit_to_pixel_conversion_factor=0.1))
+    refs = launch.start_live_session(g).snapshot()["panel_references"]
+    assert (refs[0]["pixel_size"], refs[0]["scale_bars"]) == (0.1, 1)
+    assert (refs[1]["pixel_size"], refs[1]["scale_bars"]) == (None, 0)
+    assert all(r["luts"] is None or isinstance(r["luts"], list) for r in refs)
+    json.dumps(refs)
+
+
+def test_live_set_lut_null_keeps_the_other_channels(qapp, gui, runtime, tmp_path):
+    """"Make the second channel yellow, leave the others": [null, YELLOW, null]
+    on the open figure changes channel 2 only (the nulls used to wipe 1 and 3)."""
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    first = [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0]
+    first.LUTs = ["MAGENTA", "GREEN", "BLUE"]
+    launch.start_live_session(g)
+    state = _call(qapp, "inspect")
+    _call(qapp, "original_tool", session_id=state["session_id"], expected_revision=state["revision"],
+          arguments={"tool": "set_lut", "arguments": {"pyf_path": "live", "group_path": [0], "image_index": 0,
+                                                       "luts": [None, "YELLOW", None]}}, request_id="lut1")
+    after = _call(qapp, "inspect")["panel_references"][0]
+    assert after["luts"] == ["MAGENTA", "YELLOW", "BLUE"]
+
+
 def test_advanced_text_and_roi_edits_on_the_live_figure(qapp, gui, runtime, tmp_path):
     """ChatGPT's live advanced editing, as ported: one word of a text, a ROI's
     outline/fill, stale tokens refused, one undo step each."""

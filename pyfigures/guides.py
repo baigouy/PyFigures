@@ -52,7 +52,8 @@ import uuid
 #   {"dialog": "text"}                          what to do in the dialog that opened
 # "done" names the result the GUI watches for (see gui/show_me_how.py):
 #   split_created, scalebar_added, inset_added, lut_changed, crop_changed,
-#   panel_added, dialog_closed, order_changed, layout_changed, file_exported.
+#   panel_added, dialog_closed, order_changed, layout_changed, file_exported,
+#   image_replaced.
 
 GUIDES: dict[str, dict] = {
     "split_channels": {
@@ -76,7 +77,7 @@ GUIDES: dict[str, dict] = {
     "add_scale_bars": {
         "title": "Add scale bars to every panel",
         "summary": "Add a calibrated scale bar to all image panels at once.",
-        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration",
+        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um",
                      "all panels", "every panel", "each panel", "all images", "every image"],
         "steps": [
             {"menu": ["Annotations", "Add scale bar to all panels…"]},
@@ -95,7 +96,7 @@ GUIDES: dict[str, dict] = {
         "summary": "Give a single image panel its own calibrated scale bar.",
         # ties with add_scale_bars on a bare "scale bar": then neither is offered,
         # rather than the all-panels guide for a one-panel request
-        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um", "calibration",
+        "keywords": ["scale bar", "scalebar", "scale", "bar", "micron", "µm", "um",
                      "panel", "one panel",
                      "this panel", "single panel", "one image", "this image"],
         "steps": [
@@ -109,6 +110,28 @@ GUIDES: dict[str, dict] = {
         "alternative": "Every panel at once: Annotations → Add scale bar to all panels….",
         "done": "dialog_closed",
         "mcp": "set_scale_bar",
+    },
+    "set_pixel_size": {
+        "title": "Calibrate an image (set its pixel size)",
+        "summary": "Tell PyFigures the physical size of one pixel so scale bars are in µm, not pixels.",
+        # multi-word phrases score 2: "calibrate ... pixel size" picks this guide
+        # over the two scale-bar guides, which only share "scale bar"
+        "keywords": ["calibrate", "calibrated", "calibration", "pixel size", "known pixel size", "pixel to unit",
+                     "microns per pixel", "µm per pixel", "um per pixel", "nm per pixel",
+                     "uncalibrated", "conversion factor"],
+        "steps": [
+            {"select": "image", "text": "Click the panel whose pixel size you know."},
+            {"context": "Double-click the panel: its editor opens. In the <b>File Infos + Scale</b> "
+                        "tab, set <b>Pixel to unit conversion factor</b> to the size of one pixel "
+                        "(e.g. 0.1 for 0.1 µm per pixel). Click <b>Ok</b>."},
+            {"context": "Add the bar: in the same editor's <b>Annotations</b> tab click "
+                        "<b>ScaleBar</b> and set its length (e.g. 10 µm), or for every panel use "
+                        "Annotations → Add scale bar to all panels…; the bar uses this pixel size."},
+        ],
+        "alternative": "Images whose file stores a pixel size are already calibrated; inspect "
+                       "it in the same tab.",
+        "done": "dialog_closed",
+        "mcp": "set_image_property",
     },
     "zoom_inset": {
         "title": "Add a zoom inset (magnified detail)",
@@ -520,7 +543,7 @@ GUIDES: dict[str, dict] = {
     "export_pptx": {
         "title": "Export to editable PowerPoint",
         "summary": "Save the figure as a PowerPoint file with editable text and playable movies.",
-        "keywords": ["powerpoint", "pptx", "ppt", "slides", "editable", "export"],
+        "keywords": ["powerpoint", "pptx", "ppt", "slides", "editable"],
         "steps": [
             {"menu": ["File", "Export As", "PowerPoint (editable)…"]},
             {"dialog": "Choose where to save the .pptx and click <b>Save</b>."},
@@ -528,6 +551,40 @@ GUIDES: dict[str, dict] = {
         "alternative": "File → Export As → PDF / SVG / PNG / TIF for other formats.",
         "done": "dialog_closed",
         "mcp": "export_pptx",
+    },
+    "export_source_data": {
+        "title": "Export the source data bundle",
+        "summary": "Write one folder with the figure, every panel's original image/CSV, the "
+                   "caption, the statistics and a Methods paragraph, as journals ask.",
+        "keywords": ["source data", "original data", "raw data", "original images",
+                     "source files", "data bundle", "bundle"],
+        "steps": [
+            {"menu": ["File", "Export As", "Source data bundle…"]},
+            {"dialog": "Choose the folder to write into and confirm. A <b>&lt;figure&gt;_SourceData</b> "
+                       "folder is created there, the originals named by panel letter."},
+        ],
+        "alternative": "File → Consolidate copies the images next to the figure to make it portable.",
+        "done": "dialog_closed",
+        "mcp": "export_source_data",
+    },
+    "replace_image": {
+        "title": "Replace a picture but keep its annotations",
+        "summary": "Swap the image of one panel for another file; its letter, texts, arrows, "
+                   "scale bar, LUTs and place in the layout stay.",
+        "keywords": ["replace", "swap image", "swap picture", "another image", "different image",
+                     "new image", "keep annotations", "keeping annotations", "keep its annotations"],
+        "steps": [
+            {"select": "image",
+             "text": "Click the picture you want to replace."},
+            {"context": "Right-click it and choose <b>Convert to template</b>: the picture becomes "
+                        "a grey slot that keeps its annotations and size."},
+            {"context": "Drag the new image file from your file explorer onto the grey slot and "
+                        "choose <b>⬜ Assign to template slot</b>. The new picture takes its "
+                        "place with all the annotations."},
+        ],
+        "alternative": "To reconnect images whose folder moved, use QC → Remap image paths….",
+        "done": "image_replaced",
+        "mcp": "set_image_filename",
     },
     "figure_caption": {
         "title": "Write the figure caption",
