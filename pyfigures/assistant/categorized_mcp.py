@@ -11,7 +11,15 @@ FULL_SCHEMAS = 2       # compact discovery: full argument schemas for the best m
 # called without a search (small models spent most of their context searching).
 COMMON_CONTRACTS = ('edit_panel_letters', 'swap_live_panels', 'remove_annotation', 'set_lut', 'set_scale_bar',
                     'set_scale_bar_all', 'set_figure_caption', 'add_annotation', 'arrange_live_images',
-                    'delete_last_rows', 'restyle_texts', 'swap_rows', 'set_panel_letter_position', 'add_label_row')
+                    'delete_last_rows', 'restyle_texts', 'swap_rows', 'reorder_children', 'set_panel_letter_position',
+                    'add_label_row')
+CONTRACT_SCOPE = {
+    'swap_rows': 'exchanges WHOLE rows; to reorder panels inside one row use reorder_children',
+    'reorder_children': 'reorders the panels WITHIN one row/group, e.g. reversing a row',
+    'set_panel_letter_position': 'GLOBAL default letter placement for every panel, not one selected panel letter',
+    'delete_last_rows': 'removes WHOLE rows from the end; only on an explicit removal request',
+    'swap_live_panels': 'exchanges two panels, keeping their letters in place',
+}
 
 CATEGORIES = {
     'native_gui': 'Actual native menus, dialogs, editor controls, keyboard, context/drop operations and canvas/file interactions. Fallback for capabilities not yet represented by dedicated tools.',
@@ -94,6 +102,9 @@ def build_server(full_server, send):
             compact_list_fonts, name='list_fonts', description=font_tool.description,
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
             structured_output=False)
+    # PYFIGURES_COMMON_CONTRACTS=1 lists the wider common-operation contracts; off by default
+    # because Qwen 9B then skipped discovery and picked the wrong scope (swap_rows for a within-row reverse).
+    common = os.environ.get('PYFIGURES_COMMON_CONTRACTS', '0') == '1'
     server = FastMCP('PyFigures categorized live prototype', instructions=(
         'Edit scientific figures in the open PyFigures GUI. Start with a small tool surface. '
         'Only the seven advertised top-level functions are directly callable. Other names returned by find_pyfigures_tools are inner operations, NOT callable functions. Invoke them through use_pyfigures_tool(tool_name=the_discovered_name, arguments=the_exact_arguments). This applies equally to read-only explain_live_interaction and other guide operations. '
@@ -120,7 +131,9 @@ def build_server(full_server, send):
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
         'For named live panels, prefer panel_ref on native image/annotation tools; omit numeric group_path/image_index so current GUI state resolves the address. get_annotations text_index is the index for style_annotation/set_annotation_text, while annotation_index is the full list index for ROI/removal tools. The live text wrappers accept text_index explicitly. '
-        'Never guess argument names. Discover the exact schema before first use, except the common operations listed in use_pyfigures_tool, which need no search. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
+        'Never guess argument names. Discover the exact schema before first use'
+        + (', except the common operations listed in use_pyfigures_tool, which you may call through use_pyfigures_tool after checking their scope' if common else '')
+        + '. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
         'Category descriptions are guidance, not restrictions: search by words across all '
         'categories if needed. All original functions remain available underneath. '
         'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
@@ -348,15 +361,15 @@ def build_server(full_server, send):
     # Small real-schema reminders in the advertised dispatcher prevent copying
     # inspection-state objects into edit arguments without expanding the tool list.
     contracts=[]
-    compact=os.environ.get('PYFIGURES_COMPACT_DISCOVERY','1')!='0'
-    for name in (COMMON_CONTRACTS if compact else ('edit_panel_letters','swap_live_panels','remove_annotation')):
+    for name in (COMMON_CONTRACTS if common else ('edit_panel_letters','swap_live_panels','remove_annotation')):
         tool=available.get(name)
         if tool:
             schema=tool.parameters
             keys=[k for k in schema.get('properties',{}) if k not in ('session_id','expected_revision','request_id','pyf_path')]
             choices={k:v['enum'] for k,v in schema.get('properties',{}).items() if 'enum' in v}
-            contracts.append(name+': fields='+','.join(keys)+(('; choices='+json.dumps(choices)) if choices else '')+'; required='+','.join(k for k in schema.get('required',[]) if k in keys))
+            scope=(' ('+CONTRACT_SCOPE[name]+')') if common and name in CONTRACT_SCOPE else ''
+            contracts.append(name+scope+': fields='+','.join(keys)+(('; choices='+json.dumps(choices)) if choices else '')+'; required='+','.join(k for k in schema.get('required',[]) if k in keys))
     dispatcher=server._tool_manager._tools['use_pyfigures_tool']
-    dispatcher.description+=(' Common operations, callable directly WITHOUT a search (exact fields): ' if compact else ' Common exact contracts: ')+' | '.join(contracts)+'. Pass only requested flat edit fields. Never copy inspection letters/style objects into arguments. For other operations discover the schema first.'
+    dispatcher.description+=(' Common operations; call them through use_pyfigures_tool, checking the scope in brackets first (exact fields): ' if common else ' Common exact contracts: ')+' | '.join(contracts)+'. Pass only requested flat edit fields. Never copy inspection letters/style objects into arguments. For other operations discover the schema first.'
 
     return server
