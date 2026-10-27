@@ -356,8 +356,17 @@ def test_tools_menu_share_toggle(qapp, gui, runtime, monkeypatch):
     assert not g.share_figure_action.isChecked() and not (runtime / "connection.json").exists()
     assert g.open_chat_sidebar() is None and not (runtime / "connection.json").exists()
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Ok)
+    # the window this share handed over to, not whichever live window a combined
+    # run happens to list first (that made the test flaky)
+    from pyfigures.assistant import launch
+    started = []
+    real_start = launch.start_live_session
+    monkeypatch.setattr(launch, "start_live_session", lambda window: started.append(real_start(window)) or started[-1])
     g.share_figure_action.trigger()
-    w = next(x for x in qapp.topLevelWidgets() if getattr(x, "_live_server", None) is not None)
+    assert len(started) == 1
+    w = started[0].window
+    descriptor = json.loads((runtime / "connection.json").read_text(encoding="utf-8"))
+    assert descriptor["session_id"] == started[0].id
     assert w.share_figure_action.isChecked() and (runtime / "connection.json").exists()
     config = json.loads(shown[0])["mcpServers"]["pyfigures-live"]
     assert config["args"] == ["-m", "pyfigures.assistant.live_mcp"]
