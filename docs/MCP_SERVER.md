@@ -347,7 +347,7 @@ the chat itself are remembered.
 
 ## 5. Available tools reference
 
-The server currently exposes **154 tools** (about a fifth of them for the poster designer).
+The server currently exposes **175 tools** (about a fifth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
