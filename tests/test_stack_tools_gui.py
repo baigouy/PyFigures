@@ -171,5 +171,5 @@ def test_copy_style_and_alt_text_actions(qapp, monkeypatch, tmp_path):
     alt = os.path.splitext(g.current_file)[0] + ".alttext.json"
     assert os.path.isfile(alt)
     d = json.load(open(alt, encoding="utf-8"))
-    assert d["long"].startswith("figure with 1 panel")
+    assert d["long"].startswith("Figure with 1 panel")
     g._dirty = False

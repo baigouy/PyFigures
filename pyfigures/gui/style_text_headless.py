@@ -138,6 +138,8 @@ def _main(argv=None) -> int:
     set_UI()
     from qtpy.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(sys.argv[:1])  # noqa: F841
+    from pyfigures.qt_exit import skip_qt_teardown
+    skip_qt_teardown()
 
     try:
         with open(params_path, "r", encoding="utf-8") as f:

@@ -75,6 +75,34 @@ def test_integrity_detects_copy_move_clone():
     assert 0 not in cloned
 
 
+def test_integrity_copy_move_at_any_offset_in_a_512px_panel():
+    # the panel used to be shrunk to 384 px, so a patch pasted at an offset that is
+    # not a multiple of 4 px no longer correlated with its source and was missed
+    tmp = tempfile.mkdtemp()
+    rng = np.random.default_rng(5)
+    d = cv2.GaussianBlur((rng.random((512, 512)) * 255).astype(np.uint8), (0, 0), 2)
+    d[40:120, 40:120] = d[270:350, 390:470].copy()   # offset (350, 230)
+    pd = os.path.join(tmp, "d.png"); cv2.imwrite(pd, d)
+    rep = integrity_ops.analyze(_write_pyf([pd], tmp))
+    assert {c["panel"] for c in rep["within_panel_clones"]} == {0}
+    # the two areas are reported in the image's own pixels, the whole pasted 80x80 area
+    r = rep["within_panel_clones"][0]["regions"][0]
+    assert abs(r["a"][0] - 40) <= 2 and abs(r["a"][1] - 40) <= 2
+    assert abs(r["b"][0] - 390) <= 2 and abs(r["b"][1] - 270) <= 2
+    assert 70 <= r["a"][2] <= 82 and 70 <= r["a"][3] <= 82
+
+
+def test_clone_regions_are_in_source_pixels_for_a_large_panel():
+    tmp = tempfile.mkdtemp()
+    rng = np.random.default_rng(6)
+    d = cv2.GaussianBlur((rng.random((1024, 1024)) * 255).astype(np.uint8), (0, 0), 3)
+    d[100:260, 100:260] = d[600:760, 700:860].copy()   # shifts that survive the 2x downscale
+    pd = os.path.join(tmp, "d.png"); cv2.imwrite(pd, d)
+    rep = integrity_ops.analyze(_write_pyf([pd], tmp))
+    r = rep["within_panel_clones"][0]["regions"][0]
+    assert abs(r["a"][0] - 100) <= 4 and abs(r["b"][0] - 700) <= 4 and abs(r["b"][1] - 600) <= 4
+
+
 def test_integrity_repeated_texture_is_not_a_clone():
     # parallel fibres: every block has the same light/dark pattern (same
     # signature) but its own pixels -> must not be reported as copy-move
@@ -222,6 +250,33 @@ def test_adjustment_ledger_flags_custom_script_and_inconsistent_ranges():
     assert data["panels_with_custom_script"] == 1
     assert data["panels"][1]["all_linear"] is False
     assert any("different display ranges" in f for f in data["flags"])
+
+
+def test_adjustment_ledger_names_split_panels_and_insets(tmp_path):
+    # a channel split is one lettered panel: its images were "Panel 1 (x.tif)",
+    # the merge "channel subset selected" and an inset "Panel 5 (y.png)"
+    import tifffile
+    rng = np.random.default_rng(1)
+    tif = tmp_path / "cells.tif"
+    tifffile.imwrite(str(tif), (rng.random((3, 64, 64)) * 4000).astype(np.uint16), imagej=True,
+                     metadata={"axes": "CYX"})
+    png = tmp_path / "tissue.png"
+    cv2.imwrite(str(png), (rng.random((90, 90, 3)) * 255).astype(np.uint8))
+    pyf = str(tmp_path / "fig.pyf")
+    M.create_figure(pyf, orientation="Y")
+    M.add_channel_split(pyf, stack_path=str(tif), names=["DNA", "actin", "tubulin"],
+                        colors=["blue", "green", "magenta"])
+    M.add_group(pyf, orientation="X")
+    M.add_image(pyf, [1], str(png))
+    M.add_zoom_callout(pyf, [1], 0, source_x=10, source_y=10, source_w=20, source_h=20,
+                       parent_width=90, parent_height=90, inset_corner="bottom right")
+    M.add_annotation(pyf, [0], 0, "<b>A</b>", placement="top left")
+    M.add_annotation(pyf, [1], 0, "<b>B</b>", placement="top left")
+    text = json.loads(M.export_adjustment_ledger(pyf))["methods_paragraph"]
+    assert "Panel A (actin): shown in greyscale; channel 2 of 3 shown." in text
+    assert "Panel A (Merge): pseudo-coloured (blue, green, magenta)." in text
+    assert "Panel B, inset: cropped" in text
+    assert "channel subset" not in text and "Panel 1 (" not in text
 
 
 def test_adjustment_ledger_flip_is_linear_not_custom():

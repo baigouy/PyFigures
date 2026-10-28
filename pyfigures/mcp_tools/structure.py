@@ -1100,9 +1100,8 @@ def set_size(
     try:
         from batoolset.settings.global_settings import set_UI as _set_UI
         _set_UI()
-        from qtpy.QtWidgets import QApplication as _QApp
-        import sys as _sys
-        _app = _QApp.instance() or _QApp(_sys.argv[:1])
+        from .core import _ensure_qapp
+        _ensure_qapp()
         from batoolset.drawings.shapes.image2d import Image2D as _Image2D
         from batoolset.serializations.tools import (
             deserialize_to_dict as _d2d,

@@ -193,7 +193,41 @@ def _hamming(a, b):
 # within-panel copy-move (block hashing)
 # --------------------------------------------------------------------------- #
 def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
-                        search_max=384, min_corr=0.99, max_checks=200000):
+                        search_max=512, min_corr=0.99, max_checks=200000):
+    """(count, up to *max_report* sample pairs) of copy-moved blocks, in the
+    coordinates of *g* downscaled to *search_max* (see _clone_pairs)."""
+    pairs, _w = _clone_pairs(g, block, min_std, search_max, min_corr, max_checks)
+    if len(pairs) < min_clones:
+        return 0, []
+    return len(pairs), pairs[:max_report]
+
+
+def clone_regions(pairs, block, scale=1.0, max_regions=4):
+    """Group copy-moved block pairs by their shift: blocks moved together form one
+    pasted region. Returns, largest first, {"a": [x, y, w, h], "b": [x, y, w, h],
+    "block_pairs": n} with the two regions' boxes multiplied by *scale* (search
+    image -> source pixels). Which of a / b is the original cannot be told."""
+    groups = {}
+    for (x1, y1), (x2, y2) in pairs:
+        if (x2, y2) < (x1, y1):
+            (x1, y1), (x2, y2) = (x2, y2), (x1, y1)
+        groups.setdefault((x2 - x1, y2 - y1), []).append((x1, y1))
+    out = []
+    for (dx, dy), pts in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:max_regions]:
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        x0, y0 = min(xs), min(ys)
+        w, h = max(xs) - x0 + block, max(ys) - y0 + block
+
+        def box(x, y):
+            return [int(round(x * scale)), int(round(y * scale)),
+                    int(round(w * scale)), int(round(h * scale))]
+
+        out.append({"a": box(x0, y0), "b": box(x0 + dx, y0 + dy), "block_pairs": len(pts)})
+    return out
+
+
+def _clone_pairs(g, block=24, min_std=0.04, search_max=512, min_corr=0.99, max_checks=200000):
     """Find non-adjacent, textured regions whose signature is identical - the
     fingerprint of copy-move retouching. Uses stride-1 sliding windows (so a
     pasted region is caught at *any* offset, not just grid-aligned ones) with a
@@ -201,7 +235,11 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
     the same light/dark pattern (any two similar edges do), so each candidate
     pair is then confirmed on the pixels themselves: the two blocks' Pearson
     correlation must be >= *min_corr*.
-    Returns (count, sample_pairs)."""
+    Panels larger than *search_max* are downscaled first; keep it at the
+    analysis size, since a downscaled copy only correlates with its source when
+    the paste offset is a multiple of the scale step (384 px missed a glomerulus
+    pasted 350 px away in a 512 px panel).
+    Returns (confirmed block pairs ((x1, y1), (x2, y2)), width of the searched image)."""
     g = np.ascontiguousarray(g, dtype=np.float32)
     h, w = g.shape[:2]
     if max(h, w) > search_max:          # bound cost on large panels
@@ -210,7 +248,7 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
         g = np.ascontiguousarray(g, dtype=np.float32)
         h, w = g.shape[:2]
     if h < block * 2 or w < block * 2:
-        return 0, []
+        return [], w
 
     from numpy.lib.stride_tricks import sliding_window_view
     win = sliding_window_view(g, (block, block))         # (H-B+1, W-B+1, B, B)
@@ -226,7 +264,7 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
     textured = stds.reshape(-1) >= min_std
     keep = np.nonzero(textured)[0]
     if keep.size < 2:
-        return 0, []
+        return [], w
     sigs = np.ascontiguousarray(flat[keep])
     sv = sigs.view(np.dtype((np.void, sigs.dtype.itemsize * sigs.shape[1]))).reshape(-1)
     _uniq, inv, counts = np.unique(sv, return_inverse=True, return_counts=True)
@@ -260,9 +298,7 @@ def within_panel_clones(g, block=24, min_std=0.04, min_clones=3, max_report=8,
                 break
         if checks > max_checks or len(pairs) > 5000:
             break
-    if len(pairs) < min_clones:
-        return 0, []
-    return len(pairs), pairs[:max_report]
+    return pairs, w
 
 
 # --------------------------------------------------------------------------- #
@@ -342,13 +378,18 @@ def analyze(pyf_path, max_dim=512, hamming_threshold=6, block=24, min_clones=3):
     # within-panel copy-move
     clones = []
     for i in idxs:
-        cnt, samples = within_panel_clones(grays[i], block=block, min_clones=min_clones)
-        if cnt:
+        pairs, searched_w = _clone_pairs(grays[i], block=block, search_max=max(512, max_dim))
+        if len(pairs) >= min_clones:
+            # positions in the source image's own pixels (the search image may be smaller)
+            scale = panels[i]["shape"][1] / float(searched_w)
+            s = lambda p: [int(round(p[0] * scale)), int(round(p[1] * scale))]  # noqa: E731
             clones.append({"panel": i, "label": panels[i]["label"],
                            "file": os.path.basename(panels[i]["file"]),
-                           "clone_block_pairs": cnt,
-                           "example_regions": [{"from": list(a), "to": list(b),
-                                                "block": block} for a, b in samples]})
+                           "clone_block_pairs": len(pairs),
+                           "regions": clone_regions(pairs, block, scale),
+                           "example_regions": [{"from": s(a), "to": s(b),
+                                                "block": int(round(block * scale))}
+                                               for a, b in pairs[:8]]})
 
     flag_count = len(exact) + len(cross) + len(clones)
     parts = []

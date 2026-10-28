@@ -1799,6 +1799,72 @@ def _panel_letter_label(img: ET.Element):
     return None
 
 
+def _channel_flags(raw):
+    """The stored channel selection ('""[True, False, False]""') as a list of
+    bools, or None when no selection is stored."""
+    import ast
+    v = _decode(raw) if raw is not None else None
+    if isinstance(v, str):
+        v = v.strip().strip('"')
+        try:
+            v = ast.literal_eval(v)
+        except Exception:
+            return None
+    if isinstance(v, (list, tuple)) and v and all(isinstance(x, bool) for x in v):
+        return list(v)
+    return None
+
+
+def _ledger_names(root: ET.Element) -> dict:
+    """How the Methods text names each image: 'Panel A', 'Panel A (515 nm)' for
+    an unlettered image of a lettered row or column (a channel split, a montage),
+    'Panel B, inset' for an inset or zoom callout. Images that belong to no
+    lettered panel are left out (named by number and file, as before)."""
+    parent = {c: p for p in root.iter() for c in p}
+
+    def own_label(img):
+        annots = img.find("annotations")
+        for a in (annots.findall("TAText2D") if annots is not None else []):
+            il = (a.findtext("is_letter") or "").strip()
+            tx = _strip_tags(_decode(a.findtext("text")) or "").strip()
+            if tx and il not in ("True", "b'True'"):
+                return tx
+        return None
+
+    def owner_image(img):                 # the panel an inset is drawn on
+        p = parent.get(img)
+        while p is not None:
+            if p.tag == "Image2D":
+                return p
+            p = parent.get(p)
+        return None
+
+    names = {}
+    for img in root.iter("Image2D"):
+        letter = _panel_letter_label(img)
+        if letter:
+            group = parent.get(img)
+            shared = group is not None and sum(c.tag == "Image2D" for c in group) > 1
+            what = own_label(img) if shared and owner_image(img) is None else None
+            names[img] = f"Panel {letter}" + (f" ({what})" if what else "")
+    for img in root.iter("Image2D"):
+        if img in names:
+            continue
+        owner = owner_image(img)
+        if owner is not None:
+            if owner in names:
+                names[img] = f"{names[owner].split(' (')[0]}, inset"
+            continue
+        group = parent.get(img)
+        siblings = [c for c in group if c.tag == "Image2D"] if group is not None else []
+        before = [s for s in siblings[:siblings.index(img)] if _panel_letter_label(s)] if img in siblings else []
+        lettered = before[-1:] or [s for s in siblings if _panel_letter_label(s)][:1]
+        if lettered:
+            what = own_label(img) or os.path.basename(_decode(img.findtext("filename")) or "")
+            names[img] = f"Panel {_panel_letter_label(lettered[0])}" + (f" ({what})" if what else "")
+    return names
+
+
 def _panel_adjustments(img: ET.Element):
     """Derive the list of pixel-affecting adjustments applied to one panel from
     its stored state. Returns (adjustments, is_nonlinear_or_custom)."""
@@ -1863,10 +1929,28 @@ def _panel_adjustments(img: ET.Element):
 
     # pseudo-colour LUT
     luts = txt("LUTs")
+    shown = _channel_flags(txt("channels"))
     if is_set(luts):
+        try:
+            names = ast.literal_eval(_decode(luts))
+        except Exception:
+            names = None
+        if isinstance(names, str):
+            names = [names]
+        if isinstance(names, (list, tuple)):
+            used = [str(n).lower() for i, n in enumerate(names)
+                    if n not in (None, "None") and (shown is None or (i < len(shown) and shown[i]))]
+        else:
+            used = []
+        if used and all(n in ("gray", "grey") for n in used):
+            text = "shown in greyscale"
+        elif used:
+            text = "pseudo-coloured (" + ", ".join(dict.fromkeys(used)) + ")"
+        else:
+            text = "pseudo-coloured with a LUT"
         adj.append({"type": "lut", "linear": True,
                     "detail": {"LUTs": _decode(luts)},
-                    "text": "pseudo-coloured with a LUT"})
+                    "text": text})
 
     # Z / t projection
     proj = txt("projection")
@@ -1880,9 +1964,14 @@ def _panel_adjustments(img: ET.Element):
     # channel subset
     ch = txt("channels")
     if is_set(ch) and _decode(ch) not in (None, "None"):
-        adj.append({"type": "channels", "linear": True,
-                    "detail": {"channels": _decode(ch)},
-                    "text": "channel subset selected"})
+        # every channel shown is no selection ([True, True, True] read "channel subset")
+        if shown is None or not all(shown):
+            which = [str(i + 1) for i, s in enumerate(shown or []) if s]
+            text = (f"channel{'s' if len(which) > 1 else ''} {', '.join(which)} of {len(shown)} shown"
+                    if which else "channel subset selected")
+            adj.append({"type": "channels", "linear": True,
+                        "detail": {"channels": _decode(ch)},
+                        "text": text})
 
     # multi-series selection
     serie = txt("serie_to_open")
@@ -1973,6 +2062,7 @@ def export_adjustment_ledger(pyf_path: str) -> str:
     flags = []
     idx = 0
     lut_to_ranges: dict[str, set] = {}
+    names = _ledger_names(root)
     for img in root.iter("Image2D"):
         fn = _decode(img.findtext("filename"))
         script = _decode(img.findtext("custom_loading_script"))
@@ -1996,12 +2086,13 @@ def export_adjustment_ledger(pyf_path: str) -> str:
         panels.append({
             "index": idx,
             "label": label,
+            "name": names.get(img),
             "file": name,
             "adjustments": adj,
             "all_linear": not nonlinear,
         })
         if nonlinear:
-            flags.append(f"Panel {label or idx} ({name}) uses a custom processing "
+            flags.append(f"{names.get(img) or f'Panel {idx}'} ({name}) uses a custom processing "
                          f"script — verify no non-linear/selective manipulation.")
         # collect LUT->range pairs for consistency check
         lut = next((a["detail"].get("LUTs") for a in adj if a["type"] == "lut"), None)
@@ -2021,7 +2112,7 @@ def export_adjustment_ledger(pyf_path: str) -> str:
     # methods paragraph
     sentences = []
     for p in panels:
-        who = f"Panel {p['label']}" if p["label"] else f"Panel {p['index']} ({p['file']})"
+        who = p["name"] or f"Panel {p['index']} ({p['file']})"
         if not p["adjustments"]:
             sentences.append(f"{who}: no adjustments.")
         else:

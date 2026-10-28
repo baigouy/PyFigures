@@ -528,8 +528,9 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
     series = sum(1 for p in panels if p[1].startswith("series:"))
     if series:
         what.append(f"{series} image series")
-    lead = (f"{title.rstrip('.')}: " if title else "") + \
-        f"figure with {n} panel{'s' if n != 1 else ''}" + (f" ({_join(what)})" if what else "") + "."
+    # a sentence of its own starts with a capital ("figure with..." opened the alt text)
+    lead = (f"{title.rstrip('.')}: figure" if title else "Figure") + \
+        f" with {n} panel{'s' if n != 1 else ''}" + (f" ({_join(what)})" if what else "") + "."
     short = lead if len(lead) <= 250 else lead[:247].rstrip() + "…"
     long_text = lead + " " + " ".join(parts)
     out = {"short": short, "long": long_text, "panels": n}

@@ -140,6 +140,10 @@ def integrity_report(raw):
     for it in d.get("within_panel_clones") or []:
         lines.append(f"✗ Repeated regions inside {side(it.get('label'), it.get('file'))} "
                      f"({it.get('clone_block_pairs')} matching block pairs): possible copy-paste")
+        for r in (it.get("regions") or [])[:2]:
+            (ax, ay, aw, ah), (bx, by, _bw, _bh) = r["a"], r["b"]
+            lines.append(f"   the {aw}×{ah} px area at x={ax}, y={ay} matches the one at "
+                         f"x={bx}, y={by} (image pixels)")
     if len(lines) > 2:
         lines.append("")
     errors = d.get("load_errors") or []

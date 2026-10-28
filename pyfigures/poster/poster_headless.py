@@ -119,6 +119,8 @@ def _make_app():
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv[:1])
+    from pyfigures.qt_exit import skip_qt_teardown
+    skip_qt_teardown()
     try:
         from pyfigures.gui.portable_fonts import register_portable_fonts
         register_portable_fonts(app)

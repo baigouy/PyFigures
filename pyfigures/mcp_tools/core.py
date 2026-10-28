@@ -422,9 +422,7 @@ def _auto_recompute(pyf_path: str) -> str:
     try:
         from batoolset.settings.global_settings import set_UI as _set_UI
         _set_UI()
-        from qtpy.QtWidgets import QApplication as _QApp
-        import sys as _sys
-        _app = _QApp.instance() or _QApp(_sys.argv[:1])
+        _ensure_qapp()
         from batoolset.drawings.shapes.image2d import Image2D as _Image2D
         from batoolset.serializations.tools import (
             deserialize_to_dict as _d2d,
@@ -2234,19 +2232,27 @@ def _resolve_target_mm(
     raise ValueError("specify a target width — one of: journal, width_mm, width_cm, width_in.")
 
 
+def _ensure_qapp():
+    """The QApplication of in-process tools, created once and kept: a
+    QApplication that is garbage-collected crashes (0xC0000409), and Qt's
+    teardown at interpreter exit can crash too (pyfigures.qt_exit)."""
+    from qtpy.QtWidgets import QApplication as _QApp
+    global _MCP_QAPP
+    if _QApp.instance() is None:
+        from pyfigures.offscreen import ensure_offscreen_fonts
+        ensure_offscreen_fonts()     # offscreen on Windows has no fonts otherwise
+    _MCP_QAPP = _QApp.instance() or _QApp(sys.argv[:1])
+    from pyfigures.qt_exit import skip_qt_teardown
+    skip_qt_teardown()
+    return _MCP_QAPP
+
+
 def _load_objects_lazy(pyf_path: str):
     """Deserialize a .pyf into PyFigures objects without loading pixel data.
     Returns (objects_list, Group_cls, Image2D_cls). Raises on import/parse error."""
     from batoolset.settings.global_settings import set_UI as _set_UI
     _set_UI()
-    from qtpy.QtWidgets import QApplication as _QApp
-    import sys as _sys
-    # keep a reference — a QApplication that is garbage-collected crashes (0xC0000409)
-    global _MCP_QAPP
-    if _QApp.instance() is None:
-        from pyfigures.offscreen import ensure_offscreen_fonts
-        ensure_offscreen_fonts()     # offscreen on Windows has no fonts otherwise
-    _MCP_QAPP = _QApp.instance() or _QApp(_sys.argv[:1])
+    _ensure_qapp()
     from batoolset.drawings.shapes.image2d import Image2D as _Image2D
     from batoolset.drawings.shapes.group import Group as _Group
     from batoolset.serializations.tools import (
