@@ -333,6 +333,34 @@ def test_recipe_properties_take_a_normalization_mapping(tmp_path, imgs):
         build_recipe(str(r))
 
 
+@pytest.fixture
+def poster(tmp_path, imgs):
+    p = str(tmp_path / "p.pyfposter")
+    M.create_poster(p)
+    M.add_poster_image(p, imgs[0])
+    M.add_poster_image(p, imgs[1])
+    return p
+
+
+@pytest.mark.parametrize("call", [
+    lambda p, im: M.add_poster_image(p, im[2], height_mm=float("inf")),
+    lambda p, im: M.add_poster_image(p, im[2], theta=float("nan")),
+    lambda p, im: M.add_poster_image(p, im[2], x_mm=float("nan")),
+    lambda p, im: M.set_poster_background(p, im[2], pan_x=float("nan")),
+    lambda p, im: M.arrange_poster_grid(p, margin_mm=200),
+    lambda p, im: M.arrange_poster_scatter(p, max_rotation_deg=-10),
+    lambda p, im: M.create_poster(p + "2.pyfposter", page_preset=None, page_width_mm=float("nan"),
+                                  page_height_mm=100),
+])
+def test_poster_tools_refuse_non_finite_numbers_and_impossible_layouts(poster, imgs, call):
+    """inf / nan were saved as positions, sizes, angles and pans (a photo at
+    x=-Infinity); a 200 mm margin on A4 and a negative rotation were accepted."""
+    before = open(poster, encoding="utf-8").read()
+    r = call(poster, imgs)
+    assert r.startswith("ERROR"), r
+    assert open(poster, encoding="utf-8").read() == before
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

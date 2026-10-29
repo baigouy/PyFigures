@@ -478,7 +478,9 @@ def op_arrange_scatter(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     from pyfigures.poster.poster_layouts import scatter_layout
-    _check_margin(args.margin)
+    _check_margin(args.margin, canvas)
+    if args.max_rotation < 0:
+        raise ValueError(f'max_rotation must be 0 or more degrees (got {args.max_rotation})')
     scatter_layout(canvas.shapes_to_draw, canvas.page_width_mm, canvas.page_height_mm,
                    indices=_parse_indices(args.indices, canvas, photos_only=True), seed=args.seed,
                    margin_mm=args.margin, max_rotation_deg=args.max_rotation,
@@ -511,7 +513,7 @@ def op_arrange_grid(args):
         raise ValueError(f'columns must be 1 or more (got {args.columns})')
     if args.gap < 0:
         raise ValueError(f'gap must be 0 or more (got {args.gap} mm)')
-    _check_margin(args.margin)
+    _check_margin(args.margin, canvas)
     grid_layout(canvas.shapes_to_draw, canvas.page_width_mm, canvas.page_height_mm,
                indices=_parse_indices(args.indices, canvas, photos_only=True), columns=args.columns,
                margin_mm=args.margin, gap_mm=args.gap, fit_to_page=not args.no_fit)
@@ -597,9 +599,14 @@ def op_render(args):
     return {'ok': True, 'path': out_path, **_missing_warning(canvas)}
 
 
-def _check_margin(margin):
+def _check_margin(margin, canvas=None):
     if margin is not None and margin < 0:
         raise ValueError(f'margin must be 0 or more (got {margin} mm)')
+    if margin is not None and canvas is not None \
+            and 2 * margin >= min(canvas.page_width_mm, canvas.page_height_mm):
+        # a 200 mm margin on an A4 page was accepted: nothing left to lay out in
+        raise ValueError(f'margin {margin:g} mm leaves no room on the '
+                         f'{canvas.page_width_mm:g} x {canvas.page_height_mm:g} mm page')
 
 
 def _check_zoom(zoom):
@@ -770,6 +777,19 @@ def op_build(args):
     return {'ok': True, **build_poster_from_recipe(args.recipe)}
 
 
+def _finite(text):
+    """argparse type: a finite number. 'nan' / 'inf' parsed as floats and were
+    saved as positions, sizes, angles and pans (a photo at x=-Infinity)."""
+    import math
+    try:
+        v = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'{text!r} is not a number') from None
+    if not math.isfinite(v):
+        raise argparse.ArgumentTypeError(f'{text!r} is not a finite number')
+    return v
+
+
 class _Parser(argparse.ArgumentParser):
     """Bad arguments (an unknown --frame, --kind…) give one "ERROR:" line,
     not the usage text."""
@@ -793,8 +813,8 @@ def _main(argv=None) -> int:
     for name in ('create', 'create-album'):
         c = sub.add_parser(name)
         c.add_argument('poster')
-        c.add_argument('--page-width', type=float, default=None)
-        c.add_argument('--page-height', type=float, default=None)
+        c.add_argument('--page-width', type=_finite, default=None)
+        c.add_argument('--page-height', type=_finite, default=None)
         c.add_argument('--preset', default=None, help=', '.join(PAGE_PRESETS))
 
     _PAGE_HELP = 'which page to operate on (0-based; default: the document\'s only/first page)'
@@ -802,11 +822,11 @@ def _main(argv=None) -> int:
     a = sub.add_parser('add-image')
     a.add_argument('poster')
     a.add_argument('image')
-    a.add_argument('--x', type=float, default=None)
-    a.add_argument('--y', type=float, default=None)
-    a.add_argument('--width', type=float, default=None)
-    a.add_argument('--height', type=float, default=None)
-    a.add_argument('--theta', type=float, default=None)
+    a.add_argument('--x', type=_finite, default=None)
+    a.add_argument('--y', type=_finite, default=None)
+    a.add_argument('--width', type=_finite, default=None)
+    a.add_argument('--height', type=_finite, default=None)
+    a.add_argument('--theta', type=_finite, default=None)
     a.add_argument('--frame', choices=list(FRAME_STYLES), default=None)
     a.add_argument('--caption', default=None)
     a.add_argument('--page', type=int, default=None, help=_PAGE_HELP)
@@ -816,11 +836,11 @@ def _main(argv=None) -> int:
     at.add_argument('html', nargs='?', default=None,
                     help="rich-text content, e.g. '<b>Title</b>' (plain text works too); "
                          "omit to use the --style preset's own placeholder wording")
-    at.add_argument('--x', type=float, default=None)
-    at.add_argument('--y', type=float, default=None)
-    at.add_argument('--width', type=float, default=None)
-    at.add_argument('--height', type=float, default=None)
-    at.add_argument('--theta', type=float, default=None)
+    at.add_argument('--x', type=_finite, default=None)
+    at.add_argument('--y', type=_finite, default=None)
+    at.add_argument('--width', type=_finite, default=None)
+    at.add_argument('--height', type=_finite, default=None)
+    at.add_argument('--theta', type=_finite, default=None)
     at.add_argument('--style', choices=list(TEXT_STYLES), default='body',
                     help='target box size as a fraction of the page height (h1=title-sized down '
                          'to caption), overridden by --width/--height if given')
@@ -829,16 +849,16 @@ def _main(argv=None) -> int:
     sb = sub.add_parser('set-background')
     sb.add_argument('poster')
     sb.add_argument('image')
-    sb.add_argument('--zoom', type=float, default=None)
-    sb.add_argument('--pan-x', type=float, default=None)
-    sb.add_argument('--pan-y', type=float, default=None)
+    sb.add_argument('--zoom', type=_finite, default=None)
+    sb.add_argument('--pan-x', type=_finite, default=None)
+    sb.add_argument('--pan-y', type=_finite, default=None)
     sb.add_argument('--page', type=int, default=None, help=_PAGE_HELP)
 
     ab = sub.add_parser('adjust-background')
     ab.add_argument('poster')
-    ab.add_argument('--zoom', type=float, default=None)
-    ab.add_argument('--pan-x', type=float, default=None)
-    ab.add_argument('--pan-y', type=float, default=None)
+    ab.add_argument('--zoom', type=_finite, default=None)
+    ab.add_argument('--pan-x', type=_finite, default=None)
+    ab.add_argument('--pan-y', type=_finite, default=None)
     ab.add_argument('--reset', action='store_true')
     ab.add_argument('--page', type=int, default=None, help=_PAGE_HELP)
 
@@ -865,8 +885,8 @@ def _main(argv=None) -> int:
     asc = sub.add_parser('arrange-scatter')
     asc.add_argument('poster')
     asc.add_argument('--seed', type=int, default=None)
-    asc.add_argument('--margin', type=float, default=15.0)
-    asc.add_argument('--max-rotation', type=float, default=25.0)
+    asc.add_argument('--margin', type=_finite, default=15.0)
+    asc.add_argument('--max-rotation', type=_finite, default=25.0)
     asc.add_argument('--indices', default=None)
     asc.add_argument('--no-fit', action='store_true',
                      help="don't shrink a throw to fit the page if a corner pokes past the edge")
@@ -874,11 +894,11 @@ def _main(argv=None) -> int:
 
     aarc = sub.add_parser('arrange-arc')
     aarc.add_argument('poster')
-    aarc.add_argument('--center-x', type=float, required=True)
-    aarc.add_argument('--center-y', type=float, required=True)
-    aarc.add_argument('--radius', type=float, required=True)
-    aarc.add_argument('--start-angle', type=float, default=-60.0)
-    aarc.add_argument('--end-angle', type=float, default=60.0)
+    aarc.add_argument('--center-x', type=_finite, required=True)
+    aarc.add_argument('--center-y', type=_finite, required=True)
+    aarc.add_argument('--radius', type=_finite, required=True)
+    aarc.add_argument('--start-angle', type=_finite, default=-60.0)
+    aarc.add_argument('--end-angle', type=_finite, default=60.0)
     aarc.add_argument('--face', choices=['outward', 'inward', 'none'], default='outward')
     aarc.add_argument('--indices', default=None)
     aarc.add_argument('--no-fit', action='store_true',
@@ -888,8 +908,8 @@ def _main(argv=None) -> int:
     ag = sub.add_parser('arrange-grid')
     ag.add_argument('poster')
     ag.add_argument('--columns', type=int, default=None)
-    ag.add_argument('--margin', type=float, default=15.0)
-    ag.add_argument('--gap', type=float, default=6.0)
+    ag.add_argument('--margin', type=_finite, default=15.0)
+    ag.add_argument('--gap', type=_finite, default=6.0)
     ag.add_argument('--indices', default=None)
     ag.add_argument('--no-fit', action='store_true', help='skip the final fit-to-page safety check')
     ag.add_argument('--page', type=int, default=None, help=_PAGE_HELP)
@@ -915,7 +935,7 @@ def _main(argv=None) -> int:
     al.add_argument('poster')
     al.add_argument('layout')
     al.add_argument('--indices', default=None)
-    al.add_argument('--margin', type=float, default=15.0)
+    al.add_argument('--margin', type=_finite, default=15.0)
     al.add_argument('--no-repeat', action='store_true',
                     help="don't tile the layout in bands for extra images; only fill the "
                          "first slots and leave the rest untouched")
@@ -927,7 +947,7 @@ def _main(argv=None) -> int:
     sl = sub.add_parser('sketch-layout')
     sl.add_argument('poster')
     sl.add_argument('layout')
-    sl.add_argument('--margin', type=float, default=15.0)
+    sl.add_argument('--margin', type=_finite, default=15.0)
     sl.add_argument('--no-group', action='store_true',
                     help="don't group the sketched slots — each moves independently")
     sl.add_argument('--page', type=int, default=None, help=_PAGE_HELP)
@@ -955,8 +975,8 @@ def _main(argv=None) -> int:
     ap_ = sub.add_parser('add-page')
     ap_.add_argument('poster')
     ap_.add_argument('--kind', default='spread', choices=list(PAGE_KINDS))
-    ap_.add_argument('--width', type=float, default=None)
-    ap_.add_argument('--height', type=float, default=None)
+    ap_.add_argument('--width', type=_finite, default=None)
+    ap_.add_argument('--height', type=_finite, default=None)
     ap_.add_argument('--index', type=int, default=None,
                      help='insert position (0-based); default: right after the last page')
 
