@@ -52,6 +52,9 @@ def _figure(d):
     M.add_image(pyf, [0], g2, label="B")
     M.add_image(pyf, [1], c, label="C")
     M.add_image(pyf, [1], z, label="D")
+    # the stack as a stack (split by Z offered): a new Z stack otherwise
+    # shows its max projection, as in the GUI
+    M.configure_image(pyf, [1], 1, projection="none")
     M.set_scale_bar(pyf, [0], 0, 10)
     M.add_annotation(pyf, [0], 0, "note")
     M.add_roi_rect(pyf, [0], 0, 5, 5, 10, 10)

@@ -141,6 +141,9 @@ def base_figure(d, files) -> str:
     M.add_image(pyf, [0], files["png"], label="B")
     M.add_image(pyf, [1], files["rgb"], label="C")
     M.add_image(pyf, [1], files["zstack"], label="D")
+    # the stack as a stack (slice shown, split by Z offered): a new Z stack
+    # otherwise shows its max projection, as in the GUI
+    M.configure_image(pyf, [1], 1, projection="none")
     M.set_scale_bar(pyf, [0], 0, 10)
     M.add_annotation(pyf, [0], 0, "note")
     M.add_roi_rect(pyf, [0], 0, 5, 5, 10, 10)
