@@ -317,6 +317,22 @@ def test_set_lut_takes_a_single_lut_as_text_over_mcp(fig):
     assert "GREEN" in M.get_image_property(fig, [0], 0, "LUTs")
 
 
+def test_recipe_properties_take_a_normalization_mapping(tmp_path, imgs):
+    """properties: {normalization: {per_channel: true}} — the natural YAML —
+    was refused ('must be a text, number, ...'); a bad one is still refused."""
+    import ast
+    from pyfigures.recipe import RecipeError, build_figure_from_recipe as build_recipe
+    r = tmp_path / "r.yaml"
+    r.write_text(f"output: n.pyf\nrows:\n  - - image: {os.path.basename(imgs[0])}\n"
+                 f"      properties: {{normalization: {{per_channel: true}}}}\n", encoding="utf-8")
+    build_recipe(str(r))
+    assert ast.literal_eval(ET_text(str(tmp_path / "n.pyf"), "normalization")) == {"per_channel": True}
+    r.write_text(f"output: n2.pyf\nrows:\n  - - image: {os.path.basename(imgs[0])}\n"
+                 f"      properties: {{normalization: {{colour: 1}}}}\n", encoding="utf-8")
+    with pytest.raises(RecipeError):
+        build_recipe(str(r))
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

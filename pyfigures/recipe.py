@@ -661,6 +661,8 @@ def _check_extras(opts, where, base):
             if name in _MANAGED_PROPERTIES:
                 raise RecipeError(f"{where}: property {name} can't be set from a recipe "
                                   "(the file goes in 'image'; code needs a script panel)")
+            if name == "normalization" and isinstance(value, dict):
+                continue              # normalization: {per_channel: true} — a dict by nature
             if value is not None and not isinstance(value, (str, int, float, bool, list)):
                 raise RecipeError(f"{where}: property {name} must be a text, number, "
                                   "true/false, a list or null")
