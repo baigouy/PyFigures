@@ -1020,6 +1020,16 @@ def export_latex(pyf_path: str, out_path: str, image_format: str = "pdf",
     # JVM/Fiji init noise there); mirrors save_latex's naming
     graphics = os.path.splitext(out_path)[0] + "." + fmt
     tex = graphics + "_tex"
+    # the files written are named from out_path's stem: 'camera.tex' with
+    # image_format='png' overwrote the figure's own camera.png
+    from .app import _output_clash
+
+    def _writes(pyf_path, out_path):
+        pass
+    for target in (graphics, tex):
+        clash = _output_clash(_writes, (), {"pyf_path": pyf_path, "out_path": target})
+        if clash:
+            return clash
     argv = ["latex", pyf_path, out_path, "--format", fmt]
     if with_caption and caption_note is None:
         argv.append("--with-caption")

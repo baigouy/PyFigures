@@ -885,7 +885,7 @@ def _pptx_text(shapes, it, emu, RGBColor, Pt, MSO_AUTO_SIZE):
         run.text = r["text"]
         f = run.font
         f.name = r["family"]
-        f.size = Pt(round(r["size"] * 2) / 2)
+        f.size = Pt(min(4000, max(1, round(r["size"] * 2) / 2)))     # PowerPoint: 1 to 4000 pt
         f.bold = r["bold"]
         f.italic = r["italic"]
         f.color.rgb = RGBColor(*r["color"])

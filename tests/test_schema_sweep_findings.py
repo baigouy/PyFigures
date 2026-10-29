@@ -225,6 +225,32 @@ def test_a_saved_vertical_label_row_loads_as_a_row():
     assert Group(orientation="Y").orientation == "Y"
 
 
+def test_export_latex_never_overwrites_a_source_image(tmp_path):
+    """export_latex('camera.tex', image_format='png') writes camera.png +
+    camera.png_tex: it replaced the figure's own camera.png."""
+    cam = _png(tmp_path / "camera.png", 77)
+    before = _sha(cam)
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], cam)
+    res = M.export_latex(pyf, str(tmp_path / "camera.tex"), image_format="png")
+    assert res.startswith("ERROR") and "overwrite" in res, res
+    assert _sha(cam) == before
+    assert not os.path.exists(str(tmp_path / "camera.png_tex"))
+
+
+def test_pptx_export_keeps_tiny_text(fig, tmp_path):
+    """A render walk found it: a 0.3 pt text made export_pptx fail with
+    python-pptx's 'value must be in range 100 to 400000'."""
+    pytest.importorskip("pptx")
+    M.add_annotation(fig, [0], 0, "tiny")
+    M.restyle_texts(fig, font_size=0.3)
+    out = str(tmp_path / "f.pptx")
+    res = M.export_pptx(fig, out)
+    assert not res.startswith("ERROR"), res
+    assert os.path.getsize(out) > 0
+
+
 def test_colour_blindness_out_path_needs_an_image_extension(fig, tmp_path):
     with pytest.raises(ValueError, match="must end in"):
         M.simulate_color_blindness(fig, out_path=str(tmp_path / "sim"))
