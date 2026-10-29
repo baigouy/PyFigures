@@ -238,6 +238,76 @@ def _sub_group_hint(fn, args, kwargs) -> str:
             f"use that group_path for their images (describe_figure lists them).")
 
 
+_OUTPUT_ARGS = ("out_path", "out_html")
+_DOCUMENT_ARGS = ("pyf_path", "poster_path", "album_path", "old_pyf", "new_pyf", "source_pyf")
+
+
+def _output_clash(fn, args, kwargs) -> str | None:
+    """Why the call's output file would overwrite its own figure or one of the
+    figure's source images, or None. export_figure(fig, 'camera.png') replaced
+    the camera.png the figure was built from."""
+    import inspect
+    try:
+        bound = inspect.signature(fn).bind_partial(*args, **kwargs).arguments
+    except TypeError:
+        return None
+    outs = [bound[k] for k in _OUTPUT_ARGS if isinstance(bound.get(k), str) and bound[k]]
+    docs = [bound[k] for k in _DOCUMENT_ARGS if isinstance(bound.get(k), str) and bound[k]]
+    if not outs or not docs:
+        return None
+
+    def key(p):
+        return os.path.normcase(os.path.abspath(p))
+    protected = {key(d): f"the document itself ({os.path.basename(d)})" for d in docs}
+    for d in docs:
+        if not os.path.isfile(d):
+            continue
+        if not d.lower().endswith(".pyf"):
+            # posters / albums (XML, older ones JSON): every path-like string
+            try:
+                import xml.etree.ElementTree as ET
+                data = [v for el in ET.parse(d).getroot().iter() for v in el.attrib.values()]
+            except Exception:
+                try:
+                    with open(d, encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except Exception:
+                    continue
+            stack = [data]
+            while stack:
+                v = stack.pop()
+                if isinstance(v, dict):
+                    stack.extend(v.values())
+                elif isinstance(v, list):
+                    stack.extend(v)
+                elif isinstance(v, str) and os.path.splitext(v)[1] and ("/" in v or "\\" in v):
+                    p = v if os.path.isabs(v) else os.path.join(os.path.dirname(d), v)
+                    protected.setdefault(key(p), f"a source image of the document ({os.path.basename(v)})")
+            continue
+        try:
+            from .core import _load, _decode
+            _, root = _load(d, resolve=False)
+        except Exception:
+            continue
+        for el in root.iter("filename"):
+            name = _decode(el.text) if el.text else None
+            names = name if isinstance(name, list) else [name]
+            if isinstance(name, str) and name.startswith("["):
+                import ast
+                try:
+                    names = ast.literal_eval(name)
+                except (ValueError, SyntaxError):
+                    names = [name]
+            for n in names:
+                if isinstance(n, str) and n not in ("None", "@template@", ""):
+                    protected.setdefault(key(n), f"a source image of the figure ({os.path.basename(n)})")
+    for o in outs:
+        what = protected.get(key(o))
+        if what:
+            return f"ERROR: {o} is {what}: exporting there would overwrite it. Choose another out_path."
+    return None
+
+
 def _tool_with_warnings(*t_args, **t_kwargs):
     """Drop-in for ``mcp.tool()``: runs the tool, then appends any warning raised
     via _warn() during the call (e.g. a failed layout recompute) to a plain-text
@@ -250,6 +320,9 @@ def _tool_with_warnings(*t_args, **t_kwargs):
         @functools.wraps(fn)
         def inner(*args, **kwargs):
             _TOOL_WARNINGS.clear()
+            clash = _output_clash(fn, args, kwargs)
+            if clash:
+                return clash
             try:
                 res = fn(*args, **kwargs)
             except FileNotFoundError as e:

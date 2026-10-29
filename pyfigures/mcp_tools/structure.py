@@ -133,9 +133,19 @@ def write_xml(pyf_path: str, xml_content: str) -> str:
     Returns a confirmation message or an error string.
     """
     try:
-        ET.fromstring(xml_content)           # validate
+        new_root = ET.fromstring(xml_content)           # validate
     except ET.ParseError as e:
         return f"ERROR: XML is not well-formed — {e}.  File not written."
+    # any well-formed XML ('<root/>') used to replace the whole figure
+    expected = "list"
+    if os.path.isfile(pyf_path):
+        try:
+            expected = ET.parse(pyf_path).getroot().tag
+        except ET.ParseError:
+            pass
+    if new_root.tag != expected:
+        return (f"ERROR: this is not a PyFigures figure: the root element is <{new_root.tag}>, "
+                f"a .pyf has <{expected}>. File not written.")
     _atomic_write_text(pyf_path, xml_content)
     return f"Written {len(xml_content)} bytes to {pyf_path}."
 
@@ -497,6 +507,8 @@ def create_figure(
     if mode == "canvas" and num_groups and num_groups > 0:
         return ("ERROR: num_groups only applies to mode='groups' "
                 "(omit mode, or pass mode='groups').")
+    if not isinstance(spacing, (int, float)) or spacing < 0:
+        return f"ERROR: spacing must be 0 or more pixels (got {spacing})."
     o = _orientation(orientation)
     if o is None:
         return (f"ERROR: orientation must be 'X' (a row: side by side) or 'Y' (a column: "
@@ -1037,6 +1049,8 @@ def add_group(
 
     Returns the new group's path and ID.
     """
+    if not isinstance(spacing, (int, float)) or spacing < 0:
+        return f"ERROR: spacing must be 0 or more pixels (got {spacing})."
     o = _orientation(orientation)
     if o is None:
         return (f"ERROR: orientation must be 'X' (a row: side by side) or 'Y' (a column: "
@@ -1938,6 +1952,18 @@ def get_script(
     return script
 
 
+def _script_syntax_error(script: str) -> str | None:
+    """Why *script* is not valid Python, or None. A script that does not even
+    parse was stored and only failed (a blank panel) when the figure was drawn."""
+    try:
+        compile(script, "<panel script>", "exec")
+    except SyntaxError as e:
+        return f"the script is not valid Python (line {e.lineno}: {e.msg})"
+    except ValueError as e:                     # e.g. NUL bytes
+        return f"the script is not valid Python ({e})"
+    return None
+
+
 @mcp.tool()
 def set_script(
     pyf_path: str,
@@ -1990,6 +2016,9 @@ def set_script(
         _save(tree, pyf_path)
         loc = "canvas" if not group_path else f"group {group_path}"
         return f"Script cleared from image {image_index} in {loc}."
+    bad = _script_syntax_error(script)
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
     _set_child_text(img, "custom_loading_script", _encode_str(script))
     _save(tree, pyf_path)
     n_lines = script.count("\n") + 1
@@ -2048,6 +2077,9 @@ def add_scripted_image(
             label="D",
         )
     """
+    bad = _script_syntax_error(script) if str(script).strip() else "the script is empty"
+    if bad:
+        return f"ERROR: {bad}."
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:

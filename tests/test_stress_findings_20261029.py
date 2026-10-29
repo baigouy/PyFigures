@@ -217,6 +217,59 @@ def test_kymograph_refuses_zero_width_and_unknown_colour_map(tmp_path):
     assert not M.add_kymograph(pyf, [0], 0, 2, 2, 28, 20, cmap="magma").startswith("ERROR")
 
 
+def test_write_xml_refuses_xml_that_is_not_a_figure(fig):
+    """Any well-formed XML ('<root/>') replaced the whole figure."""
+    before = open(fig, encoding="utf-8").read()
+    assert M.write_xml(fig, "<root/>").startswith("ERROR")
+    assert open(fig, encoding="utf-8").read() == before
+    assert not M.write_xml(fig, M.get_xml(fig)).startswith("ERROR")
+
+
+@pytest.mark.parametrize("kw", [dict(font_size=0), dict(font_size=-4), dict(default_spacing=-2),
+                                dict(background_color=-5), dict(foreground_color=2 ** 40)])
+def test_figure_properties_refuse_impossible_values(fig, kw):
+    assert M.set_figure_properties(fig, **kw).startswith("ERROR")
+
+
+@pytest.mark.parametrize("call", [
+    lambda p, im: M.add_group(p, spacing=-1),
+    lambda p, im: M.create_figure(p + ".2.pyf", spacing=-3),
+    lambda p, im: M.set_script(p, [0], 0, "this is not python("),
+    lambda p, im: M.add_scripted_image(p, [0], "def f(:\n  pass"),
+    lambda p, im: M.add_scripted_image(p, [0], "   "),
+    lambda p, im: M.set_image_filename(p, [0], 0, ""),
+    lambda p, im: M.add_image(p, [0], "   "),
+    lambda p, im: M.add_inset(p, [0], 0, ""),
+])
+def test_negative_spacing_broken_scripts_and_empty_filenames_are_refused(fig, imgs, call):
+    """Each of these was stored: spacing -1, a script that does not parse (a
+    blank panel at draw time), an empty or blank filename."""
+    before = open(fig, encoding="utf-8").read()
+    assert call(fig, imgs).startswith("ERROR")
+    assert open(fig, encoding="utf-8").read() == before
+
+
+def test_exports_never_overwrite_the_figure_or_its_source_images(fig, imgs, tmp_path):
+    """export_figure(fig, 'camera.png') replaced the camera.png the figure was
+    built from; render_poster did the same to a poster's photo."""
+    original = open(imgs[0], "rb").read()
+    for call in (lambda: M.export_figure(fig, imgs[0]),
+                 lambda: M.export_figure(fig, imgs[0].upper()),           # Windows: same file
+                 lambda: M.export_figure(fig, fig),
+                 lambda: M.export_print_ready(fig, imgs[0]),
+                 lambda: M.export_pptx(fig, fig)):
+        r = call()
+        assert r.startswith("ERROR") and "overwrite" in r, r
+    assert open(imgs[0], "rb").read() == original
+    poster = str(tmp_path / "p.pyfposter")
+    M.create_poster(poster)
+    M.add_poster_image(poster, imgs[1])
+    photo = open(imgs[1], "rb").read()
+    assert "overwrite" in M.render_poster(poster, imgs[1])
+    assert open(imgs[1], "rb").read() == photo
+    assert not M.export_figure(fig, str(tmp_path / "out.png")).startswith("ERROR")
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

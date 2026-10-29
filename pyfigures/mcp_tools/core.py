@@ -1266,6 +1266,8 @@ def _unreadable_image(filename: str) -> str | None:
     not an image (a text file renamed .png); other formats are left to their
     readers."""
     name = str(filename)
+    if filename is None or not name.strip():
+        return "the filename is empty: give the path of the image file"
     from batoolset.ome_zarr import is_zarr_path
     if is_zarr_path(name):                # OME-Zarr: a folder or URL, read by its own reader
         return _unreadable_zarr(name)

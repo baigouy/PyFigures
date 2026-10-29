@@ -1290,6 +1290,14 @@ def set_figure_properties(
     Colour integers: white = 16777215, black = 0, red = 16711680, green = 65280,
     blue = 255.  Or compute: (R << 16) | (G << 8) | B.
     """
+    # all of these were stored as given (font size 0 or -4, spacing -2, ...)
+    if font_size is not None and not (math.isfinite(font_size) and font_size > 0):
+        return f"ERROR: font_size must be a positive number of points (got {font_size})."
+    if default_spacing is not None and not default_spacing >= 0:
+        return f"ERROR: default_spacing must be 0 or more pixels (got {default_spacing})."
+    for name, c in (("background_color", background_color), ("foreground_color", foreground_color)):
+        if c is not None and not (isinstance(c, int) and 0 <= c <= 0xFFFFFF):
+            return f"ERROR: {name} must be an RGB integer 0..16777215 (0xRRGGBB), got {c}."
     tree, root = _load(pyf_path)
     changed = []
 
