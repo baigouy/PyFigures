@@ -201,6 +201,30 @@ def test_set_image_filename_warns_about_a_missing_file(fig, tmp_path):
     assert not res.startswith("ERROR") and "WARNING" in res and "does not exist" in res
 
 
+def test_label_row_over_a_column_is_a_row_and_the_figure_exports(fig, tmp_path):
+    """A render walk found it: add_label_row copied a vertical group's
+    orientation; the vertical label row's layout divided by zero, every panel
+    below it went to y = 1e30 and export failed (QImage size overflow)."""
+    import xml.etree.ElementTree as ET
+    M.set_orientation(fig, [0], "vertical")
+    assert M.add_label_row(fig, [0], ["A", "B"]).startswith("ERROR")    # a column: one header
+    res = M.add_label_row(fig, [0], "Header", position="above")
+    assert not res.startswith("ERROR"), res
+    row = ET.parse(fig).getroot()[0]
+    assert row.findtext("orientation").strip('"') == "X"
+    out = str(tmp_path / "o.png")
+    assert not M.export_figure(fig, out, dpi=72).startswith("ERROR")
+    w, h = Image.open(out).size
+    assert 50 < h < 5000 and 50 < w < 5000, (w, h)
+
+
+def test_a_saved_vertical_label_row_loads_as_a_row():
+    """Figures saved by the old add_label_row: the loader makes the row a row."""
+    from batoolset.drawings.shapes.group import Group
+    assert Group(orientation='"Y"', isText='"below"').orientation == "X"
+    assert Group(orientation="Y").orientation == "Y"
+
+
 def test_colour_blindness_out_path_needs_an_image_extension(fig, tmp_path):
     with pytest.raises(ValueError, match="must end in"):
         M.simulate_color_blindness(fig, out_path=str(tmp_path / "sim"))

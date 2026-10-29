@@ -1059,20 +1059,23 @@ def add_label_row(
         if c.tag in ("Image2D", "Group") and c.findtext("isText", "False") not in ("True",)
     )
 
+    grp_orient = (_child_text(grp, "orientation") or "X").upper()
     # Resolve labels list
     if isinstance(labels, str):
         labels_list = [labels]
     else:
         labels_list = list(labels)
-        if len(labels_list) != non_label_count:
+        if grp_orient == "Y" and len(labels_list) != 1:
+            # the GUI gives a column one header (associate_text_row)
+            return ("ERROR: group is a column (vertical): a label row above or below it "
+                    "holds one header — pass a single string.")
+        if grp_orient != "Y" and len(labels_list) != non_label_count:
             return (
                 f"ERROR: {non_label_count} non-label children in the group but "
                 f"{len(labels_list)} label(s) supplied. "
                 "Provide one label per child, or a single string for a spanning header."
             )
 
-    # Get group orientation to match the label row orientation
-    grp_orient = (_child_text(grp, "orientation") or "X").upper()
     spacing = _child_text(grp, "space") or 3
     new_id = _next_group_id(root)
 
@@ -1086,7 +1089,9 @@ def add_label_row(
         content_el.append(_new_text_label_image2d(lbl, text_orientation))
     for tag, val in [
         ("space",       str(spacing)),
-        ("orientation", _encode_str(grp_orient)),
+        # always a row, as the GUI builds it: a vertical label row's layout
+        # divided by zero and sent every panel below it to y = 1e30
+        ("orientation", _encode_str("X")),
         ("size",        "512.0"),
         ("ID",          str(new_id)),
         ("fill_color",  "None"),
