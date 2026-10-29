@@ -848,8 +848,12 @@ def set_lut(
                    f"add_channel_split (recipe: split:), or give one LUT per channel.")
 
     if normalization is not None:
-        # Store as the raw string — PyFigures evals it via ast.literal_eval
-        _set_child_text(img, "normalization", normalization)
+        from .core import _normalization_to_store
+        stored, bad = _normalization_to_store(normalization)
+        if bad:
+            return f"ERROR: {bad}. Nothing was changed."
+        # a Python literal: PyFigures reads it with ast.literal_eval
+        _set_child_text(img, "normalization", stored)
         changed.append(f"normalization={normalization}")
     elif normalization is None and len(luts) > 0:
         pass  # leave existing normalization untouched unless explicitly cleared
@@ -1058,6 +1062,63 @@ def _decode_text(value) -> str:
 
 
 @mcp.tool()
+def _configure_image_error(img, channels, z_start, z_end, series, normalization) -> str | None:
+    """Why configure_image's values do not fit the panel's file, or None.
+    Each of these used to be stored as given: a reversed or out-of-range Z
+    range, a channel list of the wrong length or with every channel off, a
+    series the file does not have, a normalization the renderer can't read."""
+    from .core import _channel_count_from_file, _first_filename, _normalization_error
+    if normalization is not None:
+        bad = _normalization_error(normalization)
+        if bad:
+            return f"{bad}."
+    fn = _first_filename(img)
+    if channels is not None:
+        if not any(bool(c) for c in channels):
+            return "channels must show at least one channel (all were False)."
+        n_ch = _channel_count_from_file(fn)
+        if n_ch and len(channels) != n_ch:
+            return f"channels has {len(channels)} value(s) but the file has {n_ch} channel(s)."
+    if series is not None and series > 0 and isinstance(fn, str) and os.path.isfile(fn):
+        # the reader falls back to the first series without a word
+        n_series = None
+        low = fn.lower()
+        if low.endswith((".tif", ".tiff")):
+            try:
+                import tifffile
+                with tifffile.TiffFile(fn) as t:
+                    n_series = len(t.series)
+            except Exception:
+                pass
+        elif low.endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")):
+            n_series = 1
+        if n_series is not None and series >= n_series:
+            return f"serie_to_open {series} does not exist: the file has {n_series} series (0-based)."
+    starts = [v for v in (z_start, z_end) if v is not None and v >= 0]
+    if not starts and (series is None or series < 0):
+        return None
+    if z_start is not None and z_end is not None and z_start >= 0 and z_end >= 0 \
+            and z_start >= z_end:
+        return (f"projection_z_start ({z_start}) must be below projection_z_end ({z_end}, "
+                f"exclusive).")
+    from pyfigures.stack_info import StackInfoError, stack_info
+    try:
+        info = stack_info(fn, series=series if series is not None and series >= 0 else None)
+    except StackInfoError as e:
+        if series is not None and series >= 0 and isinstance(fn, str) and os.path.isfile(fn):
+            return f"series {series} cannot be opened: {e}."
+        return None                      # unreadable here: leave the checks to the renderer
+    n_z = info["sizes"].get("d")
+    if starts and n_z:
+        if z_start is not None and z_start >= n_z:
+            return f"projection_z_start {z_start} is past the last slice (the file has {n_z} Z slices)."
+        if z_end is not None and z_end > n_z:
+            return f"projection_z_end {z_end} is past the end (the file has {n_z} Z slices, end is exclusive)."
+    elif starts and not n_z:
+        return "the file has no Z axis: projection_z_start/end do not apply."
+    return None
+
+
 def configure_image(
     pyf_path: str,
     group_path: list[int],
@@ -1151,6 +1212,13 @@ def configure_image(
 
     img = imgs[image_index]
     changed: list[str] = []
+    bad = _configure_image_error(img, channels, projection_z_start, projection_z_end,
+                                 serie_to_open, None if clear_normalization else normalization)
+    if bad:
+        return f"ERROR: {bad} Nothing was changed."
+    if normalization is not None and not clear_normalization:
+        from .core import _normalization_to_store
+        normalization = _normalization_to_store(normalization)[0]
 
     # channels — list of booleans
     if channels is not None:

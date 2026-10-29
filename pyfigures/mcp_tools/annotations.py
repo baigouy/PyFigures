@@ -491,6 +491,22 @@ def _append_bracket_shapes(annots, x1, x2, y, label, tick, color, stroke,
     return x_lo, x_hi
 
 
+def _bracket_style_error(color, stroke, font_pt, tick, label_gap) -> str | None:
+    """Why a bracket's style values cannot be drawn, or None (font_pt=0 was
+    stored as an invisible label)."""
+    try:
+        _color_to_int(color)
+    except ValueError as e:
+        return str(e)
+    for name, v, lo in (("stroke", stroke, 0.0), ("font_pt", font_pt, 0.0)):
+        if not (isinstance(v, (int, float)) and math.isfinite(v) and v > lo):
+            return f"{name} must be a positive number (got {v})."
+    for name, v in (("tick", tick), ("label_gap", label_gap)):
+        if not (isinstance(v, (int, float)) and math.isfinite(v) and v >= 0):
+            return f"{name} must be 0 or more pixels (got {v})."
+    return None
+
+
 @mcp.tool()
 def add_significance_bracket(
     pyf_path: str,
@@ -536,6 +552,9 @@ def add_significance_bracket(
     """
     if whiskers_point not in ("down", "up"):
         return "ERROR: whiskers_point must be 'down' or 'up'."
+    bad = _bracket_style_error(color, stroke, font_pt, tick, label_gap)
+    if bad:
+        return f"ERROR: {bad}"
     if x1 == x2:
         return f"ERROR: the bracket has no width: x1 and x2 are both {x1}; give the two group positions."
     tree, root = _load(pyf_path)
@@ -602,6 +621,16 @@ def add_significance_bracket_from_data(
         return "ERROR: whiskers_point must be 'down' or 'up'."
     if len(values_a) < 2 or len(values_b) < 2:
         return "ERROR: each group needs at least 2 values."
+    bad = _bracket_style_error(color, stroke, font_pt, tick, label_gap)
+    if bad:
+        return f"ERROR: {bad}"
+    try:
+        finite = all(math.isfinite(float(v)) for v in list(values_a) + list(values_b))
+    except (TypeError, ValueError):
+        finite = False
+    if not finite:
+        # NaN used to be dropped without a word, testing other n than given
+        return "ERROR: values_a and values_b must be finite numbers (no NaN, inf or text)."
     try:
         from staplot import api as _api
         from staplot.stats.tests import run_ttest, run_mann_whitney, run_wilcoxon
@@ -632,6 +661,10 @@ def add_significance_bracket_from_data(
     except Exception as e:
         return f"ERROR: statistics failed: {type(e).__name__}: {e}"
 
+    if not math.isfinite(p):
+        # e.g. two constant groups: an 'n/a' bracket with p=nan was drawn
+        return (f"ERROR: {test_name} gives no p-value for these values (constant or "
+                f"identical groups?); no bracket added.")
     stars = significance_stars(p)
     label = "n.s." if stars == "ns" else stars
 

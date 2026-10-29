@@ -192,6 +192,68 @@ def _stored_image_property(pyf_path: str, group_path: list[int], image_index: in
     return "(not stored)" if child is None else str(child.text)
 
 
+_NORMALIZATION_KEYS = {"per_channel", "range", "min_value", "max_value", "ignore_hot_spots"}
+
+
+def _normalization_to_store(text) -> tuple[str | None, str | None]:
+    """(stored text, error) for a normalization given as JSON or a Python
+    dict literal. The renderer reads it with ast.literal_eval, so the JSON form
+    of the docs ('{"per_channel": true}') must be stored as a Python literal:
+    as JSON it failed to parse and the panel was drawn solid white."""
+    bad = _normalization_error(text)
+    if bad:
+        return None, bad
+    import ast
+    import json
+    if isinstance(text, dict):
+        return repr(text), None
+    try:
+        return repr(json.loads(str(text))), None
+    except ValueError:
+        return repr(ast.literal_eval(str(text))), None
+
+
+def _normalization_error(text) -> str | None:
+    """Why *text* is not a normalization the renderer understands (a dict
+    such as '{"per_channel": true}' or '{"range": "custom", "min_value": 200,
+    "max_value": 3500}'), or None. A bare word like 'weird' used to be stored
+    and then substring-matched by the renderer ('range' in 'weird')."""
+    import ast
+    import json
+    if isinstance(text, dict):
+        d = text
+    else:
+        try:
+            d = json.loads(str(text))
+        except ValueError:
+            try:
+                d = ast.literal_eval(str(text))
+            except (ValueError, SyntaxError):
+                d = None
+    usage = ("normalization must be a dict such as '{\"per_channel\": true}', "
+             "'{\"range\": \"display\"}' or '{\"range\": \"custom\", \"min_value\": 200, "
+             "\"max_value\": 3500}'")
+    if not isinstance(d, dict):
+        return f"{usage}, not {text!r}"
+    unknown = sorted(set(d) - _NORMALIZATION_KEYS)
+    if unknown:
+        return f"unknown normalization key(s) {unknown}; use {sorted(_NORMALIZATION_KEYS)}"
+    rng = d.get("range")
+    if rng not in (None, "all", "display", "custom"):
+        return f"normalization range must be 'all', 'display' or 'custom', not {rng!r}"
+    if rng == "custom":
+        lo, hi = d.get("min_value"), d.get("max_value")
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                   for v in (lo, hi)):
+            return "a 'custom' range needs numeric min_value and max_value"
+        if lo >= hi:
+            return f"min_value ({lo}) must be below max_value ({hi})"
+    hot = d.get("ignore_hot_spots")
+    if hot not in (None, False, True) and not (isinstance(hot, (int, float)) and 0 <= hot < 1):
+        return f"ignore_hot_spots must be a fraction between 0 and 1 (got {hot!r})"
+    return None
+
+
 def _check_property_value(tag: str, raw: str) -> str | None:
     """Range checks for the properties where a bad value silently breaks the
     render. Returns an error message, or None when the value is acceptable."""
@@ -218,6 +280,17 @@ def _check_property_value(tag: str, raw: str) -> str | None:
             return f"ERROR: {tag} must be a finite number, got {raw}."
         if tag != "theta" and v is not None and v < 0:
             return f"ERROR: {tag} is the pixels removed from that side and cannot be negative."
+    if tag == "normalization" and raw not in ("None", ""):
+        bad = _normalization_error(_decode(raw) if raw.startswith('""') else raw)
+        if bad:
+            return f"ERROR: {bad}"
+    if tag == "border_size" and raw != "None":
+        try:
+            v = float(raw)
+        except ValueError:
+            return "ERROR: border_size must be a number of pixels."
+        if not (math.isfinite(v) and v >= 0):
+            return f"ERROR: border_size must be 0 (no border) or more pixels, got {raw}."
     return None
 
 
@@ -1172,6 +1245,16 @@ def _placement_error(placement) -> str | None:
         return None
     return (f"placement must be a corner or side such as 'top left', 'top right', "
             f"'bottom left', 'bottom right' or 'center', not {placement!r}")
+
+
+def _corner_error(placement) -> str | None:
+    """Why *placement* is not one of the four corners ('bottom right',
+    'top-left'…), or None — scale bars only go in a corner."""
+    words = {w for w in re.split(r"[\s\-_]+", str(placement).strip().lower()) if w}
+    if len(words) == 2 and words & {"top", "bottom"} and words & {"left", "right"}:
+        return None
+    return (f"placement must be a corner: 'top left', 'top right', 'bottom left' or "
+            f"'bottom right', not {placement!r}")
 
 
 _PIL_CHECKED = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")

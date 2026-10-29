@@ -97,6 +97,126 @@ def test_restyle_validates_font_size_and_names_what_it_restyled(fig):
     assert r.startswith("Restyled 1 text(s):"), r
 
 
+@pytest.mark.parametrize("call", [
+    lambda p: M.set_scale_bar(p, [0], 0, 10, px_to_unit=0.5, placement="centre-ish"),
+    lambda p: M.set_scale_bar(p, [0], 0, 10, px_to_unit=0.5, placement="center"),
+    lambda p: M.set_scale_bar_all(p, 10, px_to_unit=0.5, placement="top"),
+    lambda p: M.add_inset(p, [0], 0, str(os.path.join(os.path.dirname(p), "im1.png")), border_size=-2),
+    lambda p: M.add_side_label(p, [0], ""),
+    lambda p: M.add_side_label(p, [0], "<b> </b>"),
+])
+def test_bad_scale_bar_inset_and_side_label_values_are_refused(fig, call):
+    """A scale bar at 'centre-ish', an inset with a -2 px border and an empty
+    side label (a blank strip beside the row) were all stored."""
+    before = open(fig, encoding="utf-8").read()
+    assert call(fig).startswith("ERROR")
+    assert open(fig, encoding="utf-8").read() == before
+
+
+def test_inset_property_checks_border_and_placement(fig, imgs):
+    M.add_inset(fig, [0], 0, imgs[1])
+    assert M.set_inset_property(fig, [0], 0, 0, "border_size", -1).startswith("ERROR")
+    assert M.set_inset_property(fig, [0], 0, 0, "placement", "nowhere").startswith("ERROR")
+    assert not M.set_inset_property(fig, [0], 0, 0, "placement", "bottom-left").startswith("ERROR")
+    assert not M.set_scale_bar(fig, [0], 0, 10, px_to_unit=0.5, placement="Top-Left").startswith("ERROR")
+
+
+@pytest.fixture
+def zstack(tmp_path):
+    """A 5-slice, 2-channel ImageJ hyperstack (ZCYX)."""
+    import tifffile
+    p = tmp_path / "z.tif"
+    data = (np.arange(5 * 2 * 16 * 16) % 251).astype(np.uint8).reshape(5, 2, 16, 16)
+    tifffile.imwrite(p, data, imagej=True, metadata={"axes": "ZCYX"})
+    return str(p)
+
+
+@pytest.fixture
+def zfig(tmp_path, zstack):
+    pyf = str(tmp_path / "z.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], zstack)
+    return pyf
+
+
+@pytest.mark.parametrize("kw", [
+    dict(projection="max", projection_z_start=3, projection_z_end=1),
+    dict(projection="max", projection_z_start=0, projection_z_end=99),
+    dict(projection_z_start=7),
+    dict(channels=[True, False, True]),
+    dict(channels=[False, False]),
+    dict(normalization="weird"),
+    dict(normalization='{"range": "custom", "min_value": 9, "max_value": 2}'),
+    dict(normalization='{"colour": 1}'),
+    dict(serie_to_open=4),
+])
+def test_configure_image_refuses_values_the_file_cannot_take(zfig, kw):
+    """configure_image stored every one of these as given."""
+    before = open(zfig, encoding="utf-8").read()
+    r = M.configure_image(zfig, [0], 0, **kw)
+    assert r.startswith("ERROR"), r
+    assert open(zfig, encoding="utf-8").read() == before
+
+
+def test_configure_image_still_takes_good_values(zfig):
+    r = M.configure_image(zfig, [0], 0, projection="max", projection_z_start=1,
+                          projection_z_end=5, channels=[True, False], serie_to_open=0)
+    assert not r.startswith("ERROR"), r
+
+
+def test_json_normalization_is_stored_so_the_renderer_can_read_it(zfig):
+    """The documented '{"per_channel": true}' was stored as JSON, which
+    ast.literal_eval (the renderer) cannot read: the panel came out solid white."""
+    import ast
+    for call in (lambda: M.configure_image(zfig, [0], 0, normalization='{"per_channel": true}'),
+                 lambda: M.set_lut(zfig, [0], 0, ["GREEN", "RED"], normalization='{"per_channel": true}'),
+                 lambda: M.set_image_property(zfig, [0], 0, "normalization", '{"per_channel": true}')):
+        assert not call().startswith("ERROR")
+        stored = ET_text(zfig, "normalization")
+        assert ast.literal_eval(stored) == {"per_channel": True}, stored
+
+
+def ET_text(pyf, tag):
+    import xml.etree.ElementTree as ET
+    return ET.parse(pyf).getroot().find(f".//Image2D/{tag}").text
+
+
+def test_renderer_reads_normalization_saved_as_json():
+    """Figures saved before the fix still hold JSON: the renderer reads it."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    assert Image2D(normalization='{"per_channel": true}').normalization == {"per_channel": True}
+    assert Image2D(normalization="weird").normalization is None
+
+
+@pytest.mark.parametrize("call", [
+    lambda p: M.add_significance_bracket(p, [0], 0, 5, 30, 5, font_pt=0),
+    lambda p: M.add_significance_bracket(p, [0], 0, 5, 30, 5, stroke=-1),
+    lambda p: M.add_significance_bracket(p, [0], 0, 5, 30, 5, color="nope"),
+    lambda p: M.add_significance_bracket_from_data(p, [0], 0, 5, 30, 5, [1, 2, float("nan")], [2, 3, 4]),
+    lambda p: M.add_significance_bracket_from_data(p, [0], 0, 5, 30, 5, [2, 2, 2], [2, 2, 2]),
+    lambda p: M.add_significance_bracket_from_data(p, [0], 0, 5, 30, 5, [1, 2, 3], [2, 3, 4], font_pt=0),
+])
+def test_brackets_refuse_invisible_or_meaningless_values(fig, call):
+    """font_pt=0 drew no label; NaN values were dropped silently; two constant
+    groups got an 'n/a' bracket with p=nan."""
+    r = call(fig)
+    assert r.startswith("ERROR"), r
+    assert "shapes:" not in M.describe_figure(fig)
+
+
+def test_kymograph_refuses_zero_width_and_unknown_colour_map(tmp_path):
+    import tifffile
+    movie = tmp_path / "t.tif"
+    tifffile.imwrite(movie, (np.arange(6 * 32 * 32) % 251).astype(np.uint8).reshape(6, 32, 32),
+                     imagej=True, metadata={"axes": "TYX"})
+    pyf = str(tmp_path / "k.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], str(movie))
+    assert M.add_kymograph(pyf, [0], 0, 2, 2, 28, 20, line_width=0).startswith("ERROR")
+    assert M.add_kymograph(pyf, [0], 0, 2, 2, 28, 20, cmap="nope").startswith("ERROR")
+    assert not M.add_kymograph(pyf, [0], 0, 2, 2, 28, 20, cmap="magma").startswith("ERROR")
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

@@ -778,6 +778,14 @@ def add_kymograph(
         return f"ERROR: channel {channel} out of range ({nch} channel(s))."
     if projection not in ("max", "avg", "min"):
         return "ERROR: projection must be 'max', 'avg' or 'min'."
+    # both were stored as given: a 0 px line, or a colour map the panel
+    # script then failed on when drawn
+    if not line_width >= 1:
+        return f"ERROR: line_width must be at least 1 px (got {line_width})."
+    import matplotlib
+    if cmap not in matplotlib.colormaps:
+        return (f"ERROR: unknown colour map {cmap!r}: use a matplotlib name such as "
+                f"'gray', 'magma', 'viridis' or 'inferno'.")
     T = info["sizes"]["t"]
     fh = frame_height or max(1, int(round(0.5 * (length + 1) / T)))
     script = _make_kymograph_script(info["path"], ser, info["order"], (x1, y1, x2, y2),

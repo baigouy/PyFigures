@@ -22,6 +22,7 @@ from .app import (
     mcp,
 )
 from .core import (
+    _corner_error,
     _apply_scalebar_to_img,
     _first_filename,
     _pixel_size,
@@ -244,6 +245,8 @@ def set_scale_bar(
         label_color_int = _color_to_int(label_color)
     except ValueError as e:
         return f"ERROR: {e}"
+    if _corner_error(placement):
+        return f"ERROR: {_corner_error(placement)}"
 
     text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
     legend_html = _scale_bar_legend_html(text, label_color_int)
@@ -359,6 +362,8 @@ def set_scale_bar_all(
 
     if px_to_unit_scope not in ("all", "missing"):
         return "ERROR: px_to_unit_scope must be 'all' or 'missing'."
+    if _corner_error(placement):
+        return f"ERROR: {_corner_error(placement)}"
     text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
     legend_html = _scale_bar_legend_html(text, label_color_int)
     px_legend_html = _scale_bar_legend_html(_default_bar_label(bar_width_in_units, "px"),
@@ -516,6 +521,8 @@ def add_inset(
         return f"ERROR: {e}"
     if not (0.0 < size_fraction <= 1.0):
         return "ERROR: size_fraction must be between 0 (exclusive) and 1.0."
+    if border_size is not None and border_size < 0:
+        return f"ERROR: border_size must be 0 (no border) or more pixels (got {border_size})."
     from .core import _placement_error, _unreadable_image, _missing_image_note
     # an unknown placement ('middle-ish') was stored and drawn top right
     bad = _placement_error(placement) or _unreadable_image(inset_filename)
@@ -895,6 +902,10 @@ def set_inset_property(
     # Everything else goes through the smart encoder.
     if property_name == "placement":
         raw = str(value).strip()
+        from .core import _placement_error
+        bad = _placement_error(raw)
+        if bad:
+            return f"ERROR: {bad}"
     elif property_name == "filename":
         raw = _encode_str(str(value))
     else:
@@ -1143,6 +1154,10 @@ def add_side_label(
     position = position.strip().lower()
     if position not in ("left", "right", "top", "bottom"):
         return "ERROR: position must be 'left', 'right', 'top', or 'bottom'."
+    from .core import _html_to_plain
+    # an empty label still takes a strip of the row (a blank gap)
+    if not _html_to_plain(str(label or "")).strip():
+        return "ERROR: label is empty: give the text to show beside the group."
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path)

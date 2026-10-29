@@ -1882,6 +1882,11 @@ def set_image_property(
     # no ""..."" wrapping.  Everything else uses the smart encoder.
     if property_name == "placement":
         raw = str(value).strip()
+    elif property_name == "normalization" and value not in (None, "None", "null", ""):
+        from .core import _normalization_to_store
+        raw, bad = _normalization_to_store(value)
+        if bad:
+            return f"ERROR: {bad}"
     else:
         raw = _encode_value(value)
     err = _check_property_value(property_name, raw)
