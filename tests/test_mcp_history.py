@@ -112,7 +112,11 @@ def test_command_line_lists_and_undoes(figure, capsys):
     assert "add_image" in capsys.readouterr().out
     assert history.main([str(pyf), "--undo"]) == 0
     assert pyf.read_bytes() == first
-    assert history.main([str(pyf), "--undo", "5"]) == 0          # undoes what is left
+    # what is left is create_figure: undoing it deletes the figure, only with --force
+    assert history.main([str(pyf), "--undo", "5"]) == 1
+    assert pyf.is_file()
+    assert history.main([str(pyf), "--undo", "5", "--force"]) == 0
+    assert not pyf.is_file()
     assert history.main([str(pyf), "--undo"]) == 1               # nothing left
 
 
@@ -163,3 +167,10 @@ def test_gui_shows_the_history_and_undoes_the_last_mcp_change(figure, monkeypatc
     before = pyf.read_bytes()
     assert g.undo_last_mcp_change() is None and pyf.read_bytes() == before
     g._dirty = False
+    # back to the call that created the figure: the GUI never deletes the file
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: asked.append(a)))
+    assert not g.undo_last_mcp_change().startswith("ERROR")
+    assert "would delete" in g.undo_last_mcp_change()
+    assert pyf.is_file() and not asked

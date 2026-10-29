@@ -742,7 +742,7 @@ def set_lut(
     pyf_path: str,
     group_path: list[int],
     image_index: int,
-    luts: list[str | None],
+    luts: list[str | None] | str,
     normalization: str | None = None,
 ) -> str:
     """Set the colour look-up table (LUT) for each channel of an image.
@@ -800,6 +800,9 @@ def set_lut(
         set_lut("fig.pyf", [0], 2, ["MATPLOTLIB_viridis"],
                 normalization='{"per_channel": true}')
     """
+    if isinstance(luts, str):
+        # one LUT for a one-channel image, as models often send it ("GREEN")
+        luts = [luts]
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
@@ -1061,7 +1064,6 @@ def _decode_text(value) -> str:
     return "" if v in (None, "None") else str(v)
 
 
-@mcp.tool()
 def _configure_image_error(img, channels, z_start, z_end, series, normalization) -> str | None:
     """Why configure_image's values do not fit the panel's file, or None.
     Each of these used to be stored as given: a reversed or out-of-range Z
@@ -1119,6 +1121,7 @@ def _configure_image_error(img, channels, z_start, z_end, series, normalization)
     return None
 
 
+@mcp.tool()
 def configure_image(
     pyf_path: str,
     group_path: list[int],

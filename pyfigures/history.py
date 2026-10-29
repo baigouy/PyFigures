@@ -201,6 +201,13 @@ def undo_last(pyf_path: str, steps: int = 1, force: bool = False) -> str:
                 manifest = json.load(f)
         except OSError:
             return f"ERROR: the snapshot of call {last['n']} is missing (pruned or deleted)."
+        if not force and manifest.get(os.path.basename(main), "") is None:
+            # the figure did not exist before that call (create_figure): undoing
+            # it deletes the .pyf for good — undo_last(steps=500) did so unasked
+            msg = (f"undoing call {last['n']} ({last['tool']}) would delete the figure file "
+                   f"itself; pass force=True to delete it.")
+            return ("ERROR: " + msg) if not done else (
+                f"Undid {', '.join(done)}; stopped: {msg}")
         stem_dir = os.path.dirname(main)
         for base, snap in manifest.items():
             target = os.path.join(stem_dir, base)
@@ -249,7 +256,8 @@ def main(argv=None) -> int:
     ap.add_argument("--undo", type=int, nargs="?", const=1, default=0, metavar="N",
                     help="undo the last N changing calls (default 1)")
     ap.add_argument("--force", action="store_true",
-                    help="undo even if the figure was changed outside the MCP server since")
+                    help="undo even if the figure was changed outside the MCP server since, "
+                         "or if undoing its creation deletes the figure file")
     ap.add_argument("--last", type=int, default=20, help="number of calls listed (default 20)")
     a = ap.parse_args(argv)
     if a.undo:

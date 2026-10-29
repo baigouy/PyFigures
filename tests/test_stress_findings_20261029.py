@@ -270,6 +270,53 @@ def test_exports_never_overwrite_the_figure_or_its_source_images(fig, imgs, tmp_
     assert not M.export_figure(fig, str(tmp_path / "out.png")).startswith("ERROR")
 
 
+def test_every_decorated_tool_is_registered_and_no_helper_is():
+    """A helper inserted between @mcp.tool() and configure_image was registered
+    in its place: configure_image vanished from the server."""
+    import asyncio
+    import glob
+    import re
+    names = {t.name for t in asyncio.run(M.mcp.list_tools())}
+    assert not [n for n in names if n.startswith("_")]
+    src = os.path.join(os.path.dirname(M.__file__), "mcp_tools", "*.py")
+    decorated = set()
+    for f in glob.glob(src):
+        text = open(f, encoding="utf-8").read()
+        decorated |= set(re.findall(r"^@mcp\.tool\(\)\ndef (\w+)\(", text, re.M))
+    assert "configure_image" in decorated
+    assert decorated <= names, decorated - names
+
+
+def _over_mcp(name, **args):
+    import asyncio
+    try:
+        res = asyncio.run(M.mcp.call_tool(name, args))
+    except Exception as e:
+        return f"ERROR: {e}"
+    content = res[0] if isinstance(res, tuple) else res
+    return "\n".join(getattr(c, "text", "") for c in content)
+
+
+def test_undo_never_deletes_the_figure_unless_forced(tmp_path, imgs):
+    """undo_last(steps=500) undid create_figure too and deleted the .pyf."""
+    pyf = str(tmp_path / "u.pyf")
+    _over_mcp("create_figure", pyf_path=pyf, num_groups=1)
+    _over_mcp("add_image", pyf_path=pyf, group_path=[0], filename=imgs[0])
+    r = _over_mcp("undo_last", pyf_path=pyf, steps=500)
+    assert "would delete the figure file" in r and "add_image" in r, r
+    assert os.path.isfile(pyf)
+    assert "would delete" in _over_mcp("undo_last", pyf_path=pyf)
+    assert os.path.isfile(pyf)
+    assert not _over_mcp("undo_last", pyf_path=pyf, force=True).startswith("ERROR")
+    assert not os.path.isfile(pyf)
+
+
+def test_set_lut_takes_a_single_lut_as_text_over_mcp(fig):
+    r = _over_mcp("set_lut", pyf_path=fig, group_path=[0], image_index=0, luts="GREEN")
+    assert not r.startswith("ERROR"), r
+    assert "GREEN" in M.get_image_property(fig, [0], 0, "LUTs")
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

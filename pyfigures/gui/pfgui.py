@@ -5923,6 +5923,12 @@ class EZFIG_GUI(QMainWindow):
                                 'restores the file as the MCP server left it before its last change.')
             return None
         res = history.undo_last(path, 1, force)
+        if res.startswith('ERROR') and 'would delete the figure file' in res:
+            # the call that created the open figure: never delete it from here
+            QMessageBox.information(self, 'Nothing undone',
+                                    'The last MCP change created this figure: there is nothing '
+                                    'earlier to go back to.')
+            return res
         if res.startswith('ERROR') and 'force=True' in res and not force:
             answer = QMessageBox.question(
                 self, 'Undo anyway?',

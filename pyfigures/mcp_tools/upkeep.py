@@ -593,8 +593,9 @@ def undo_last(pyf_path: str, steps: int = 1, force: bool = False) -> str:
 
     Refused when the figure was changed since by something that is not logged
     (the GUI, another program), because restoring would drop that change; pass
-    force=True only if the user agrees to lose it. Use list_history first to
-    see what will be undone."""
+    force=True only if the user agrees to lose it. Undo also stops before the
+    call that created the figure (undoing it deletes the .pyf); force=True
+    deletes it. Use list_history first to see what will be undone."""
     from pyfigures import history
     return history.undo_last(pyf_path, steps, force)
 
