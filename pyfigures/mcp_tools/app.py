@@ -308,6 +308,30 @@ def _output_clash(fn, args, kwargs) -> str | None:
     return None
 
 
+def _non_finite_argument(fn, args, kwargs) -> str | None:
+    """Why the call carries a NaN / infinite number (alone or in a list), or
+    None. They were saved as ROI corners, bracket heights, arrow tails, pixel
+    sizes... (a rectangle at x=nan) or crashed int() conversions."""
+    import inspect
+    try:
+        bound = inspect.signature(fn).bind_partial(*args, **kwargs).arguments
+    except TypeError:
+        return None
+
+    def bad(v, depth=0):
+        if isinstance(v, float):
+            return not math.isfinite(v)
+        if isinstance(v, (list, tuple)) and depth < 3:
+            return any(bad(x, depth + 1) for x in v)
+        if isinstance(v, dict) and depth < 3:
+            return any(bad(x, depth + 1) for x in v.values())
+        return False
+    for name, value in bound.items():
+        if bad(value):
+            return f"ERROR: {name} must hold finite numbers (got {value!r}). Nothing was changed."
+    return None
+
+
 def _tool_with_warnings(*t_args, **t_kwargs):
     """Drop-in for ``mcp.tool()``: runs the tool, then appends any warning raised
     via _warn() during the call (e.g. a failed layout recompute) to a plain-text
@@ -320,7 +344,7 @@ def _tool_with_warnings(*t_args, **t_kwargs):
         @functools.wraps(fn)
         def inner(*args, **kwargs):
             _TOOL_WARNINGS.clear()
-            clash = _output_clash(fn, args, kwargs)
+            clash = _non_finite_argument(fn, args, kwargs) or _output_clash(fn, args, kwargs)
             if clash:
                 return clash
             try:

@@ -361,6 +361,31 @@ def test_poster_tools_refuse_non_finite_numbers_and_impossible_layouts(poster, i
     assert open(poster, encoding="utf-8").read() == before
 
 
+_NAN, _INF = float("nan"), float("inf")
+
+
+@pytest.mark.parametrize("tool,kw", [
+    ("add_arrow", dict(tip_x=10, tip_y=10, from_direction=_NAN)),
+    ("add_arrow", dict(tip_x=10, tip_y=10, stroke=_NAN)),
+    ("add_roi_rect", dict(x=_NAN, y=1, width=5, height=5)),
+    ("add_roi_rect", dict(x=1, y=1, width=_INF, height=5)),
+    ("add_roi_line", dict(x1=1, y1=1, x2=_INF, y2=5)),
+    ("add_significance_bracket", dict(x1=1, x2=5, y=_INF)),
+    ("add_zoom_callout", dict(source_x=_NAN, source_y=1, source_w=20, source_h=20,
+                              parent_width=64, parent_height=64)),
+    ("set_roi_properties", dict(annotation_index=0, move_by=[_NAN, 1])),
+    ("set_scale_bar", dict(bar_width_in_units=10, px_to_unit=_INF)),
+])
+def test_no_tool_saves_nan_or_infinity(fig, tool, kw):
+    """A rectangle at x=nan, a bracket at y=inf, an arrow tail at (nan, nan),
+    px_to_unit=inf were all saved; a NaN zoom source crashed int()."""
+    M.add_roi_rect(fig, [0], 0, 2, 2, 10, 10)
+    before = open(fig, encoding="utf-8").read()
+    r = getattr(M, tool)(fig, [0], 0, **kw)
+    assert r.startswith("ERROR") and "finite" in r, r
+    assert open(fig, encoding="utf-8").read() == before
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json
