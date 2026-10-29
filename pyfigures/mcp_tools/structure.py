@@ -366,13 +366,13 @@ def set_annotation_text(
     if err:
         return f"ERROR: {err}"
     images = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(images):
+    if not 0 <= image_index < len(images):
         return f"ERROR: image_index {image_index} out of range ({len(images)} images)."
     annotations = images[image_index].find("annotations")
     if annotations is None:
         return "ERROR: image has no <annotations>."
     ta_list = list(annotations.findall("TAText2D"))
-    if annotation_index >= len(ta_list):
+    if not 0 <= annotation_index < len(ta_list):
         return f"ERROR: annotation_index {annotation_index} out of range ({len(ta_list)} annotations)."
     _set_child_text(ta_list[annotation_index], "text", _encode_str(html_text))
     _save(tree, pyf_path)
@@ -839,7 +839,7 @@ def remove_image(pyf_path: str, group_path: list[int], image_index: int) -> str:
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     container.remove(imgs[image_index])
     _save(tree, pyf_path, recompute=True)
@@ -874,7 +874,7 @@ def add_annotation(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     annots = imgs[image_index].find("annotations")
     if annots is None:
@@ -945,7 +945,7 @@ def add_corner_labels(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     annots = img.find("annotations")
@@ -993,13 +993,13 @@ def remove_annotation(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range."
     annots = imgs[image_index].find("annotations")
     if annots is None:
         return "ERROR: no annotations on this image."
     children = list(annots)
-    if annotation_index >= len(children):
+    if not 0 <= annotation_index < len(children):
         return f"ERROR: annotation_index {annotation_index} out of range ({len(children)} items)."
     target = children[annotation_index]
     if target.tag in _ROI_PROTECTED:
@@ -1313,6 +1313,10 @@ def resize_figure(
     # *dpi* only decides how many pixels an export at that resolution will have.
     # (This used to set W_in * dpi canvas units — at 300 dpi figures came out
     # 4.17x too large and every pt font 4.17x too small once printed.)
+    for name, value in (("width_mm", width_mm), ("width_cm", width_cm), ("width_in", width_in),
+                        ("width_px", width_px), ("max_height_mm", max_height_mm)):
+        if value is not None and not (math.isfinite(value) and value > 0):
+            return f"ERROR: {name} must be a positive number (got {value})."
     if journal is not None:
         try:
             target_mm, note = _journal_width(journal, column)
@@ -1539,7 +1543,7 @@ def set_image_filename(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     _set_child_text(imgs[image_index], "filename", _encode_str(new_filename))
     _save(tree, pyf_path)
@@ -1566,7 +1570,7 @@ def move_image(
     if err:
         return f"ERROR (source): {err}"
     src_imgs = [c for c in src_container if c.tag == "Image2D"]
-    if src_image_index >= len(src_imgs):
+    if not 0 <= src_image_index < len(src_imgs):
         return f"ERROR: src_image_index {src_image_index} out of range ({len(src_imgs)} images)."
 
     dst_container, err = _get_container(root, dst_group_path)
@@ -1686,7 +1690,7 @@ def fill_template(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     if not _is_template(img):
@@ -1734,7 +1738,7 @@ def list_image_properties(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     result = {}
@@ -1776,7 +1780,7 @@ def get_image_property(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     val = _child_text(imgs[image_index], property_name)
     if val is None:
@@ -1863,7 +1867,7 @@ def set_image_property(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     property_name, err = _resolve_image_property(imgs[image_index], property_name)
     if err:
@@ -1921,7 +1925,7 @@ def get_script(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     script = _child_text(imgs[image_index], "custom_loading_script")
     if script is None:
@@ -1973,7 +1977,7 @@ def set_script(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     if script.strip() == "":

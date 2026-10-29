@@ -132,7 +132,7 @@ def add_poster_page(poster_path: str, kind: str = "spread",
 
     *kind*: "spread" (default — two physical pages designed as one
     continuous canvas, so a photo/text box can freely cross the gutter,
-    shown as a light guide line; defaults to double the document's own page
+    shown on screen as a light guide line that is never exported; defaults to double the document's own page
     width), "cover_front"/"cover_back" (a single physical page, same tooling
     as any other page — just conventionally first/last), or "single" (a
     plain extra page). Pass width_mm/height_mm to override the default size.

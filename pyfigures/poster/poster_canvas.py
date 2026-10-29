@@ -1842,24 +1842,21 @@ class PosterCanvas(QWidget):
         for shape in self.shapes_to_draw:
             shape.paint(painter, mm_to_px)
 
+        if not editor_overlays:
+            return
+
+        # page border and (for spreads) the fold are on-screen guides only:
+        # exports and print-ready PDFs carry neither
         painter.setPen(QPen(QColor(0, 0, 0), 1))
         painter.drawRect(page_rect_px)
 
         if self.current_page.kind == 'spread':
-            # Purely a visual heads-up for where the physical fold falls —
-            # content is free to cross it (or not); it never constrains
-            # placement or gets exported (see _paint_content callers: this
-            # runs for on-screen paint and for save()/export_album_pdf alike,
-            # same as the page border above, since a printed spread's own
-            # fold line is a real, physical reference too).
+            # where the physical fold falls; content is free to cross it
             mid_x_mm = self.page_width_mm / 2.0
             gx, gy0 = mm_to_px(mid_x_mm, 0.0)
             _, gy1 = mm_to_px(mid_x_mm, self.page_height_mm)
             painter.setPen(QPen(QColor(150, 150, 150), 1, Qt.DashLine))
             painter.drawLine(QPointF(gx, gy0), QPointF(gx, gy1))
-
-        if not editor_overlays:
-            return
 
         if self.multi_selected:
             self._paint_multi_selection(painter, mm_to_px)

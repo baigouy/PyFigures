@@ -25,7 +25,7 @@ from .app import (
 from .core import (
     _warn_missing_font,
     _restyle_html_batch,
-    _roi_outside_note,
+    _roi_outside_error,
     _restyle_letters,
     _append_image,
     _append_stats_entry,
@@ -123,13 +123,15 @@ def add_roi_rect(
         return f"ERROR: {err}"
     c = _color_to_int(color)
     fc = _color_to_int(fill_color) if fill_color is not None else None
+    outside = _roi_outside_error(img, [x, x + width], [y, y + height])
+    if outside:
+        return f"ERROR: {outside}"
     annots.append(_new_roi_rect(x, y, width, height, c, fc, stroke, opacity))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return (
         f"Rectangle2D ROI added to image {image_index} in {loc}: "
         f"({x},{y}) {width}×{height} px, color={color}, stroke={stroke}."
-        + _roi_outside_note(img, [x, x + width], [y, y + height])
     )
 
 
@@ -179,13 +181,15 @@ def add_roi_ellipse(
         return f"ERROR: {err}"
     c = _color_to_int(color)
     fc = _color_to_int(fill_color) if fill_color is not None else None
+    outside = _roi_outside_error(img, [x, x + width], [y, y + height])
+    if outside:
+        return f"ERROR: {outside}"
     annots.append(_new_roi_ellipse(x, y, width, height, c, fc, stroke, opacity))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return (
         f"Ellipse2D ROI added to image {image_index} in {loc}: "
         f"bbox ({x},{y}) {width}×{height} px, color={color}, stroke={stroke}."
-        + _roi_outside_note(img, [x, x + width], [y, y + height])
     )
 
 
@@ -235,6 +239,9 @@ def add_roi_line(
     if err:
         return f"ERROR: {err}"
     c = _color_to_int(color)
+    outside = _roi_outside_error(img, [x1, x2], [y1, y2])
+    if outside:
+        return f"ERROR: {outside}"
     annots.append(_new_roi_line(x1, y1, x2, y2, c, stroke, opacity, arrow, arrow_at_both_ends))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
@@ -242,7 +249,6 @@ def add_roi_line(
     return (
         f"Line2D ROI{suffix} added to image {image_index} in {loc}: "
         f"({x1},{y1})→({x2},{y2}), color={color}, stroke={stroke}."
-        + _roi_outside_note(img, [x1, x2], [y1, y2])
     )
 
 
@@ -722,6 +728,9 @@ def add_roi_polygon(
         return f"ERROR: {err}"
     c = _color_to_int(color)
     fc = _color_to_int(fill_color) if fill_color is not None else None
+    outside = _roi_outside_error(img, flat[0::2], flat[1::2])
+    if outside:
+        return f"ERROR: {outside}"
     annots.append(_new_roi_polygon(flat, _style_map[style], c, fc, stroke, opacity))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
@@ -729,7 +738,6 @@ def add_roi_polygon(
     return (
         f"{_style_map[style]} ROI added to image {image_index} in {loc}: "
         f"{n_pts} points, color={color}, stroke={stroke}."
-        + _roi_outside_note(img, flat[0::2], flat[1::2])
     )
 
 
@@ -925,7 +933,7 @@ def clone_image(
     if err:
         return f"ERROR (source): {err}"
     src_imgs = [c for c in src_cont if c.tag == "Image2D"]
-    if src_image_index >= len(src_imgs):
+    if not 0 <= src_image_index < len(src_imgs):
         return f"ERROR: src_image_index {src_image_index} out of range ({len(src_imgs)} images)."
 
     clone = copy.deepcopy(src_imgs[src_image_index])
@@ -944,6 +952,21 @@ def clone_image(
     dst_loc = "canvas" if not dst_group_path else str(dst_group_path)
     fn = _child_text(src_imgs[src_image_index], "filename") or "<no file>"
     return f"Cloned {Path(fn).name} from {src_loc}[{src_image_index}] to {dst_loc}."
+
+
+def _swap_prefix(path: str, old_prefix: str, new_prefix: str) -> str | None:
+    """*path* with *old_prefix* replaced by *new_prefix*, or None when it does
+    not start with it. '\\' and '/' count as the same separator (figures store
+    '/', Windows users type '\\'), and the prefix must end at a folder
+    boundary, so 'C:/data' never matches 'C:/data2/x.tif'."""
+    norm_p = path.replace("\\", "/")
+    norm_old = old_prefix.replace("\\", "/").rstrip("/")
+    if not norm_old or not norm_p.startswith(norm_old):
+        return None
+    rest = norm_p[len(norm_old):]
+    if rest and not rest.startswith("/"):
+        return None
+    return new_prefix.rstrip("/\\") + rest if new_prefix else rest.lstrip("/")
 
 
 def _remap_script_paths(script: str, old_prefix: str, new_prefix: str) -> tuple[str, int]:
@@ -970,10 +993,11 @@ def _remap_script_paths(script: str, old_prefix: str, new_prefix: str) -> tuple[
             val = ast.literal_eval(t.string)
         except Exception:
             continue
-        if isinstance(val, str) and val.startswith(old_prefix):
+        new_val = _swap_prefix(val, old_prefix, new_prefix) if isinstance(val, str) else None
+        if new_val is not None:
             a = offsets[t.start[0] - 1] + t.start[1]
             b = offsets[t.end[0] - 1] + t.end[1]
-            edits.append((a, b, repr(new_prefix + val[len(old_prefix):])))
+            edits.append((a, b, repr(new_val)))
     for a, b, rep in reversed(edits):
         script = script[:a] + rep + script[b:]
     return script, len(edits)
@@ -1009,6 +1033,8 @@ def remap_paths(
     Returns a summary of all changed (or would-be-changed) paths.
     """
     import ast
+    if not old_prefix.replace("\\", "/").strip("/ "):
+        return "ERROR: old_prefix is empty: give the folder the paths currently start with."
     # remap the paths exactly as stored (automatic relocation would pre-empt it)
     tree, root = _load(pyf_path, resolve=False)
     changed = []
@@ -1042,8 +1068,9 @@ def remap_paths(
                 new_paths = []
                 any_changed = False
                 for p in paths:
-                    if isinstance(p, str) and p.startswith(old_prefix):
-                        new_paths.append(new_prefix + p[len(old_prefix):])
+                    new_p = _swap_prefix(p, old_prefix, new_prefix) if isinstance(p, str) else None
+                    if new_p is not None:
+                        new_paths.append(new_p)
                         any_changed = True
                     else:
                         new_paths.append(p)
@@ -1056,8 +1083,8 @@ def remap_paths(
                     unchanged.append(decoded[:80])
             except Exception:
                 unchanged.append(decoded[:80])
-        elif decoded.startswith(old_prefix):
-            new_path = new_prefix + decoded[len(old_prefix):]
+        elif _swap_prefix(decoded, old_prefix, new_prefix) is not None:
+            new_path = _swap_prefix(decoded, old_prefix, new_prefix)
             changed.append(f"  {decoded} -> {new_path}")
             if not dry_run:
                 fn_el.text = _encode_str(new_path)
@@ -1409,6 +1436,8 @@ def restyle_texts(
               "scalebars": "scale_bars", "scale_bar": "scale_bars", "everything": "all"}.get(target, target)
     if target not in _TEXT_TARGETS:
         return f"ERROR: target must be one of {list(_TEXT_TARGETS)}."
+    if font_size is not None and not (math.isfinite(font_size) and font_size > 0):
+        return f"ERROR: font_size must be a positive number of points (got {font_size})."
     attrs = {"font_family": font_family, "font_size": font_size, "bold": bold, "italic": italic}
     if color is not None:
         try:
@@ -1456,7 +1485,9 @@ def restyle_texts(
         if "color" in attrs:
             _set_child_text(font_el, "foreground", str(_color_to_int(color)))
     _save(tree, pyf_path)
-    return (f"Restyled {len(chosen)} {target.replace('_', ' ')} text(s): "
+    what = {"letters": "panel letter(s)", "label_rows": "label-row text(s)",
+            "scale_bars": "scale-bar legend(s)"}.get(target, "text(s)")
+    return (f"Restyled {len(chosen)} {what}: "
             + ", ".join(f"{k}={v}" for k, v in attrs.items()) + ".")
 
 

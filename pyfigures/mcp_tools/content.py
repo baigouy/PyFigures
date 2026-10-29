@@ -596,7 +596,7 @@ def transform_image(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     if opacity is not None and not (0.0 <= opacity <= 1.0):
         return "ERROR: opacity must be between 0.0 and 1.0."
@@ -805,7 +805,7 @@ def set_lut(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     img = imgs[image_index]
@@ -1146,7 +1146,7 @@ def configure_image(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     img = imgs[image_index]

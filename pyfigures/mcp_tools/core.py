@@ -179,13 +179,13 @@ def _stored_image_property(pyf_path: str, group_path: list[int], image_index: in
     if err:
         return "?"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return "?"
     elem = imgs[image_index]
     if inset_index is not None:
         annots = elem.find("annotations")
         insets = [] if annots is None else [c for c in annots if c.tag == "Image2D"]
-        if inset_index >= len(insets):
+        if not 0 <= inset_index < len(insets):
             return "?"
         elem = insets[inset_index]
     child = elem.find(tag)
@@ -2211,18 +2211,19 @@ def _new_free_text(html: str, x: float, y: float) -> ET.Element:
     return ta
 
 
-def _roi_outside_note(img, xs, ys) -> str:
-    """A warning line when a shape lies entirely outside its image (it is
-    then drawn off the panel, i.e. not at all); '' otherwise or when the image
-    size is unknown. *xs*, *ys*: the shape's coordinates in raw pixels."""
+def _roi_outside_error(img, xs, ys) -> str:
+    """Why a shape cannot be added when it lies entirely outside its image
+    (drawings are cropped to the panel, so it would not show at all); '' when
+    any part is inside or the image size is unknown. *xs*, *ys*: the shape's
+    coordinates in raw pixels."""
     size = _raw_size_from_file(_first_filename(img)) if img is not None else None
     if not size or not xs or not ys:
         return ""
     w, h = size
     if max(xs) < 0 or max(ys) < 0 or min(xs) > w or min(ys) > h:
-        return (f"\nWARNING: the shape ({min(xs):g}..{max(xs):g}, {min(ys):g}..{max(ys):g}) is "
-                f"entirely outside the {w}×{h} px image, so it will not show; coordinates "
-                f"are raw image pixels from the top-left corner.")
+        return (f"the shape ({min(xs):g}..{max(xs):g}, {min(ys):g}..{max(ys):g}) is entirely "
+                f"outside the {w}×{h} px image; drawings are cropped to the panel, so it would "
+                f"not show. Coordinates are raw image pixels from the top-left corner.")
     return ""
 
 
@@ -2232,7 +2233,7 @@ def _get_annots_for_roi(root, group_path, image_index):
     if err:
         return None, None, err
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return None, None, f"image_index {image_index} out of range ({len(imgs)} images)."
     img = imgs[image_index]
     annots = img.find("annotations")

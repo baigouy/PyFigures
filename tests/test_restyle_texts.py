@@ -45,7 +45,7 @@ def _texts(pyf):
 def test_restyle_labels_only(fig):
     from pyfigures.mcp_server import restyle_texts
     r = restyle_texts(fig, "texts", font_family="Courier New", bold=True)
-    assert r.startswith("Restyled 1 texts"), r
+    assert r.startswith("Restyled 1 text(s)"), r
     t = _texts(fig)
     assert "Courier New" in t["texts"][0] and ("font-weight:700" in t["texts"][0] or "font-weight:600" in t["texts"][0])
     assert "Courier New" not in t["letters"][0] and "Courier New" not in t["scale_bars"][0]

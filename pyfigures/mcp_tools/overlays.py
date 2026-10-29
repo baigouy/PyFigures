@@ -186,7 +186,7 @@ def get_scale_bar(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     sb = _find_scale_bar(imgs[image_index])
     if sb is None:
@@ -253,7 +253,7 @@ def set_scale_bar(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit)
     if too_long:
@@ -296,7 +296,7 @@ def remove_scale_bar(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     annots = imgs[image_index].find("annotations")
     if annots is None:
@@ -527,7 +527,7 @@ def add_inset(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     parent_img = imgs[image_index]
@@ -641,7 +641,7 @@ def add_zoom_callout(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     parent_img = imgs[image_index]
     annots = parent_img.find("annotations")
@@ -763,7 +763,7 @@ def list_insets(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     insets = _get_insets(imgs[image_index])
@@ -809,11 +809,11 @@ def remove_inset(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     insets = _get_insets(imgs[image_index])
-    if inset_index >= len(insets):
+    if not 0 <= inset_index < len(insets):
         return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
 
     annots = imgs[image_index].find("annotations")
@@ -875,11 +875,11 @@ def set_inset_property(
     if err:
         return f"ERROR: {err}"
     imgs = [c for c in container if c.tag == "Image2D"]
-    if image_index >= len(imgs):
+    if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
 
     insets = _get_insets(imgs[image_index])
-    if inset_index >= len(insets):
+    if not 0 <= inset_index < len(insets):
         return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
     property_name, err = _resolve_image_property(insets[inset_index], property_name)
     if err:

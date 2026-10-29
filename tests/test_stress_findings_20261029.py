@@ -1,0 +1,120 @@
+"""Bugs found by the second day of stress-testing figure building through the
+MCP tools (29 October 2026): negative indices, NaN widths, remapping Windows
+paths, invisible shapes, print-ready spreads without guides."""
+from __future__ import annotations
+
+import os
+
+import numpy as np
+import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PIL import Image  # noqa: E402
+
+import pyfigures.mcp_server as M  # noqa: E402
+
+
+def _png(path, value=128, size=(64, 64)):
+    Image.fromarray(np.full(size, value, np.uint8)).save(path)
+    return str(path)
+
+
+@pytest.fixture
+def imgs(tmp_path):
+    return [_png(tmp_path / f"im{i}.png", 40 * i + 20) for i in range(3)]
+
+
+@pytest.fixture
+def fig(tmp_path, imgs):
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=2)
+    M.add_image(pyf, [0], imgs[0])
+    M.add_image(pyf, [0], imgs[1])
+    M.add_image(pyf, [1], imgs[2])
+    return pyf
+
+
+@pytest.mark.parametrize("call", [
+    lambda p: M.move_image(p, [0], -5, [1], 0),
+    lambda p: M.clone_image(p, [0], -5, [1], 0),
+    lambda p: M.add_roi_rect(p, [0], -3, 1, 1, 5, 5),
+    lambda p: M.set_image_property(p, [0], -9, "LUTs", "None"),
+])
+def test_negative_indices_are_refused_not_crashing(fig, call):
+    """-5 raised a raw IndexError (only 'index >= len' was checked)."""
+    assert call(fig).startswith("ERROR")
+
+
+@pytest.mark.parametrize("kw", [dict(width_mm=float("nan")), dict(width_mm=0), dict(width_cm=-1),
+                                dict(width_px=-10), dict(width_mm=180, max_height_mm=-1),
+                                dict(width_in=float("inf"))])
+def test_resize_refuses_non_positive_or_nan_widths(fig, kw):
+    """width_mm=nan raised 'cannot convert float NaN to integer'."""
+    assert M.resize_figure(fig, **kw).startswith("ERROR")
+
+
+def test_remap_paths_matches_windows_separators_and_folder_boundaries(fig, tmp_path):
+    """Stored paths use '/', so a folder typed with '\\' matched nothing; an
+    empty old prefix prepended the new one to every path."""
+    folder_bs = str(tmp_path).replace("/", "\\")
+    r = M.remap_paths(fig, folder_bs, "Z:/moved", dry_run=True)
+    assert r.startswith("Would change 3 path(s)"), r
+    # 'tmp_pa' is not a folder boundary of '.../tmp_path0/im0.png'
+    r = M.remap_paths(fig, folder_bs[:-2], "Z:/moved", dry_run=True)
+    assert r.startswith("Would change 0 path(s)"), r
+    assert M.remap_paths(fig, "", "X").startswith("ERROR")
+    assert M.remap_paths(fig, "/", "X").startswith("ERROR")
+    M.remap_paths(fig, folder_bs + "\\", "Z:/moved/")
+    from pyfigures.mcp_tools.core import _load
+    stored = [e.text for e in _load(fig, resolve=False)[1].iter("filename")]
+    assert any("Z:/moved/im0.png" in s for s in stored), stored
+
+
+@pytest.mark.parametrize("call", [
+    lambda p: M.add_roi_rect(p, [0], 0, 500, 500, 10, 10),
+    lambda p: M.add_roi_ellipse(p, [0], 0, -50, -50, 10, 10),
+    lambda p: M.add_roi_line(p, [0], 0, 100, 0, 200, 50),
+    lambda p: M.add_roi_polygon(p, [0], 0, [[-5, -5], [-9, -1], [-1, -9]]),
+])
+def test_shapes_entirely_outside_the_image_are_refused(fig, call):
+    """Drawings are cropped to the panel, so such a shape never shows: it used
+    to be saved with only a warning."""
+    r = call(fig)
+    assert r.startswith("ERROR") and "cropped to the panel" in r, r
+    assert "shapes:" not in M.describe_figure(fig)
+
+
+def test_shapes_partly_outside_are_kept(fig):
+    assert not M.add_roi_rect(fig, [0], 0, 40, 40, 100, 100).startswith("ERROR")
+
+
+def test_restyle_validates_font_size_and_names_what_it_restyled(fig):
+    M.add_annotation(fig, [0], 0, "hello")
+    assert M.restyle_texts(fig, font_size=-3).startswith("ERROR")
+    assert M.restyle_texts(fig, font_size=float("nan")).startswith("ERROR")
+    r = M.restyle_texts(fig, font_size=12)
+    assert r.startswith("Restyled 1 text(s):"), r
+
+
+def test_alt_text_without_a_title_starts_with_a_capital(fig):
+    """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
+    import json
+    d = json.loads(M.generate_alt_text(fig))
+    assert d["short"].startswith("Figure with 3 panels"), d["short"]
+    assert d["long"][0].isupper()
+
+
+def test_print_ready_spread_has_no_fold_line_or_page_border(tmp_path):
+    """A spread's dashed fold line and the black page border were printed."""
+    album = str(tmp_path / "book.pyfalbum")
+    assert "error" not in M.create_album(album, page_width_mm=60, page_height_mm=40).lower()
+    out = tmp_path / "print"
+    r = M.export_poster_album_print_ready(album, str(out), format="tiff", color_mode="rgb", dpi=72)
+    assert "error" not in r.lower(), r
+    spread = [f for f in os.listdir(out) if "spread" in f]
+    assert spread, os.listdir(out)
+    a = np.asarray(Image.open(out / spread[0]).convert("L"))
+    h, w = a.shape
+    assert a[:, w // 2 - 2:w // 2 + 3].min() == 255, "fold line printed"
+    assert min(a[0].min(), a[-1].min(), a[:, 0].min(), a[:, -1].min()) == 255, "page border printed"
