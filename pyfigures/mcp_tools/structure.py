@@ -24,6 +24,7 @@ from .app import (
 )
 from .core import (
     layout_rows,
+    _label_plain_text,
     _missing_image_note,
     _placement_error,
     _orientation,
@@ -105,7 +106,7 @@ def describe_figure(pyf_path: str) -> str:
     if groups:
         lines.append(f"{len(groups)} top-level group(s):\n")
         for i, grp in enumerate(groups):
-            lines.extend(_group_summary(grp, f"Group {i}"))
+            lines.extend(_group_summary(grp, f"Group {i}", path=[i]))
             lines.append("")
 
     if not canvas_imgs and not groups:
@@ -864,6 +865,10 @@ def add_annotation(
     bad = _placement_error(placement)
     if bad:
         return f"ERROR: {bad}"
+    if not _label_plain_text(text):
+        # an empty label was saved: invisible, yet listed and counted as a label
+        return ("ERROR: the text is empty (nothing would show); to delete a label use "
+                "remove_annotation.")
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path)
     if err:
@@ -1692,9 +1697,12 @@ def fill_template(
             "Use set_image_filename() to replace a non-template image."
         )
     _set_child_text(img, "filename", _encode_str(filename))
+    from .core import _reset_luts_for_new_file
+    lut_note = _reset_luts_for_new_file(img, filename)
     _save(tree, pyf_path, recompute=True)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Template slot {image_index} in {loc} filled with {Path(filename).name}."
+    return (f"Template slot {image_index} in {loc} filled with {Path(filename).name}."
+            + lut_note + _missing_image_note(filename))
 
 
 @mcp.tool()
@@ -1785,7 +1793,7 @@ def set_image_property(
     group_path: list[int],
     image_index: int,
     property_name: str,
-    value: str,
+    value: str | int | float | bool | list | None,
 ) -> str:
     """Set any named property on an Image2D element.
 
@@ -1869,13 +1877,19 @@ def set_image_property(
     # placement is a Position object — serialised as plain text by PyFigures,
     # no ""..."" wrapping.  Everything else uses the smart encoder.
     if property_name == "placement":
-        raw = value.strip()
+        raw = str(value).strip()
     else:
         raw = _encode_value(value)
     err = _check_property_value(property_name, raw)
     if err:
         return err
     _set_child_text(imgs[image_index], property_name, raw)
+    if property_name.startswith("crop_"):
+        # the same check as transform_image: a crop wider than the image
+        from .core import _crop_fit_error
+        crop_err = _crop_fit_error(imgs[image_index])
+        if crop_err:
+            return f"ERROR: {crop_err} Nothing was changed."
     _save(tree, pyf_path)
     stored = _stored_image_property(pyf_path, group_path, image_index, property_name)
     loc = "canvas" if not group_path else f"group {group_path}"

@@ -213,6 +213,31 @@ def _figures_of_call(fn, args, kwargs) -> list[str]:
     return list(dict.fromkeys(found))
 
 
+def _sub_group_hint(fn, args, kwargs) -> str:
+    """' — group [0] holds no image itself, only sub-group(s) [0, 0]: …' for
+    an image_index refused in a group that only holds sub-groups (after a
+    move or stack_with_image a model kept asking group [0] for its images)."""
+    import inspect
+    try:
+        bound = inspect.signature(fn).bind_partial(*args, **kwargs).arguments
+        pyf = bound.get("pyf_path")
+        gp = bound.get("group_path", bound.get("src_group_path"))
+        if not isinstance(pyf, str) or not isinstance(gp, list) or not gp:
+            return ""
+        from .core import _load, _navigate_group
+        _, root = _load(pyf)
+        grp, err = _navigate_group(root, gp)
+        content = grp.find("content") if grp is not None else None
+        n = sum(1 for c in content if c.tag == "Group") if content is not None else 0
+    except Exception:
+        return ""
+    if not n:
+        return ""
+    subs = ", ".join(str(list(gp) + [i]) for i in range(n))
+    return (f" Group {list(gp)} holds no image itself, only sub-group(s) {subs}: "
+            f"use that group_path for their images (describe_figure lists them).")
+
+
 def _tool_with_warnings(*t_args, **t_kwargs):
     """Drop-in for ``mcp.tool()``: runs the tool, then appends any warning raised
     via _warn() during the call (e.g. a failed layout recompute) to a plain-text
@@ -233,6 +258,9 @@ def _tool_with_warnings(*t_args, **t_kwargs):
                 hint = (" — create it first with create_figure (or build_figure_from_recipe)"
                         if str(missing).lower().endswith(".pyf") else "")
                 res = f"ERROR: file not found: {missing}{hint}."
+            if isinstance(res, str) and res.startswith("ERROR: image_index") \
+                    and "out of range (0 images)" in res:
+                res += _sub_group_hint(fn, args, kwargs)
             if _TOOL_WARNINGS and isinstance(res, str) \
                     and not res.lstrip().startswith(("{", "[")):
                 res = res + "\n" + "\n".join("WARNING: " + w for w in _TOOL_WARNINGS)

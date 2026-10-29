@@ -58,6 +58,22 @@ from .core import (
 # ROI tools
 # ---------------------------------------------------------------------------
 
+def _roi_style_error(color, fill_color, stroke, opacity) -> str | None:
+    """Why a ROI's colours / stroke / opacity cannot be drawn, or None (an
+    opacity of 2 was stored; a bad colour raised a raw ValueError)."""
+    try:
+        _color_to_int(color)
+        if fill_color is not None:
+            _color_to_int(fill_color)
+    except ValueError as e:
+        return str(e)
+    if not (isinstance(stroke, (int, float)) and math.isfinite(stroke) and stroke > 0):
+        return f"stroke must be a positive width in pixels (got {stroke!r})."
+    if not (isinstance(opacity, (int, float)) and 0 <= opacity <= 1):
+        return f"opacity must be between 0 and 1 (got {opacity!r})."
+    return None
+
+
 @mcp.tool()
 def add_roi_rect(
     pyf_path: str,
@@ -98,6 +114,9 @@ def add_roi_rect(
     """
     if not (width > 0 and height > 0):
         return f"ERROR: width and height must be positive (got {width} × {height})."
+    bad = _roi_style_error(color, fill_color, stroke, opacity)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
@@ -151,6 +170,9 @@ def add_roi_ellipse(
     """
     if not (width > 0 and height > 0):
         return f"ERROR: width and height must be positive (got {width} × {height})."
+    bad = _roi_style_error(color, fill_color, stroke, opacity)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
@@ -203,6 +225,11 @@ def add_roi_line(
         add_roi_line("fig.pyf", [0], 0, x1=50, y1=50, x2=150, y2=150,
                      color="yellow", stroke=2.5, arrow=True)
     """
+    if (x1, y1) == (x2, y2):
+        return f"ERROR: the line has no length: both ends are at ({x1}, {y1})."
+    bad = _roi_style_error(color, None, stroke, opacity)
+    if bad:
+        return f"ERROR: {bad}"
     tree, root = _load(pyf_path)
     img, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
@@ -503,6 +530,8 @@ def add_significance_bracket(
     """
     if whiskers_point not in ("down", "up"):
         return "ERROR: whiskers_point must be 'down' or 'up'."
+    if x1 == x2:
+        return f"ERROR: the bracket has no width: x1 and x2 are both {x1}; give the two group positions."
     tree, root = _load(pyf_path)
     _, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
@@ -673,9 +702,19 @@ def add_roi_polygon(
     if style not in _style_map:
         return f"ERROR: style must be 'polygon', 'polyline', or 'freehand'. Got {style!r}."
 
-    flat = _flatten_points(points)
-    if len(flat) < 4:
-        return "ERROR: need at least 2 points (4 coordinate values)."
+    try:
+        flat = _flatten_points(points)
+    except (TypeError, ValueError, IndexError):
+        return f"ERROR: points must be [[x, y], ...] or [x, y, x, y, ...] numbers (got {points!r})."
+    if len(flat) % 2 or not all(math.isfinite(v) for v in flat):
+        return "ERROR: points must be finite x, y pairs."
+    # a closed shape of two points is a line drawn twice
+    min_pts = 2 if style == "polyline" else 3
+    if len(flat) < 2 * min_pts:
+        return f"ERROR: a {style} needs at least {min_pts} points ({len(flat) // 2} given)."
+    bad = _roi_style_error(color, fill_color, stroke, opacity)
+    if bad:
+        return f"ERROR: {bad}"
 
     tree, root = _load(pyf_path)
     img, annots, err = _get_annots_for_roi(root, group_path, image_index)
@@ -1107,14 +1146,24 @@ def batch_fill_templates(
             f"ERROR: {len(slots)} template slot(s) but only {len(filenames)} filename(s) provided."
         )
 
+    from .core import _unreadable_image, _missing_image_note, _reset_luts_for_new_file
+    # fill_template refuses a broken file; the batch filled slots with anything
+    for fname in filenames[:len(slots)]:
+        bad = _unreadable_image(fname)
+        if bad:
+            return f"ERROR: {bad} — no slot filled."
     lines = []
     for (ii, img), fname in zip(slots, filenames):
         _set_child_text(img, "filename", _encode_str(fname))
-        lines.append(f"  slot {ii} <- {Path(fname).name}")
+        lines.append(f"  slot {ii} <- {Path(fname).name}" + _reset_luts_for_new_file(img, fname))
 
     _save(tree, pyf_path, recompute=True)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Filled {len(slots)} template slot(s) in {loc}:\n" + "\n".join(lines)
+    extra = filenames[len(slots):]
+    return (f"Filled {len(slots)} template slot(s) in {loc}:\n" + "\n".join(lines)
+            + (f"\nNOTE: {len(extra)} more filename(s) than slots were not used: "
+               + ", ".join(Path(f).name for f in extra[:10]) if extra else "")
+            + "".join(_missing_image_note(f) for f in filenames[:len(slots)]))
 
 
 @mcp.tool()
@@ -1267,24 +1316,68 @@ def set_label_background(
         if err:
             return f"ERROR: {err}"
     n = 0
+    boxed = []
     for img in _iter_panel_elements(scope):
         if "from staplot import api" in (_decode(img.findtext("custom_loading_script")) or ""):
+            continue
+        # label rows and side labels sit on the page, not on an image
+        if (_decode(img.findtext("isText")) or "False") not in ("False", "None"):
             continue
         annots = img.find("annotations")
         for ta in (annots.findall("TAText2D") if annots is not None else []):
             if not include_letters and ta.findtext("is_letter") == "True":
                 continue
             _set_child_text(ta, "fill_color", value)
+            boxed.append(ta)
             n += 1
+    # a text the colour of its box vanished (black letters in black boxes):
+    # those turn white on a dark box, black on a light one
+    recoloured = 0
+    if value != "None" and boxed:
+        box = int(value)
+        new_col = "#ffffff" if _luminance(box) < 0.5 else "#000000"
+        poor = [ta for ta in boxed if any(_contrast(box, c) < 2.0
+                                          for c in _text_colours(_decode(ta.findtext("text")) or ""))]
+        if poor:
+            new = _restyle_html_batch([_decode(ta.findtext("text")) or "" for ta in poor], color=new_col)
+            if not isinstance(new, str):
+                for ta, html in zip(poor, new):
+                    _set_child_text(ta, "text", _encode_str(html))
+                recoloured = len(poor)
     if include_letters and not group_path:
         # the GUI re-applies the figure font's background to every letter
         font_el = root.find("SerializableQFont")
         if font_el is None:
             font_el = ET.SubElement(root, "SerializableQFont")
         _set_child_text(font_el, "background", value)
+        fg = font_el.findtext("foreground")
+        if value != "None" and fg not in (None, "", "None") and _contrast(int(value), int(fg)) < 2.0:
+            _set_child_text(font_el, "foreground", str(0xFFFFFFFF if _luminance(int(value)) < 0.5
+                                                       else 0xFF000000))
     _save(tree, pyf_path)
     what = "removed from" if value == "None" else f"set to {color} on"
-    return f"Label background {what} {n} label(s)."
+    note = (f" {recoloured} text(s) the colour of the box now {'white' if new_col == '#ffffff' else 'black'}."
+            if recoloured else "")
+    return f"Label background {what} {n} label(s).{note}"
+
+
+def _luminance(rgb: int) -> float:
+    """WCAG relative luminance of 0xRRGGBB."""
+    def ch(v):
+        v /= 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * ch((rgb >> 16) & 255) + 0.7152 * ch((rgb >> 8) & 255) + 0.0722 * ch(rgb & 255)
+
+
+def _contrast(a: int, b: int) -> float:
+    la, lb = sorted((_luminance(a & 0xFFFFFF), _luminance(b & 0xFFFFFF)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def _text_colours(html: str) -> list[int]:
+    """The colours a rich text is drawn in (black when it names none: Qt's default)."""
+    found = re.findall(r"colou?r\s*[:=]\s*[\"']?#([0-9a-fA-F]{6})", html)
+    return [int(h, 16) for h in found] or [0x000000]
 
 
 _TEXT_TARGETS = ("letters", "texts", "label_rows", "scale_bars", "all")

@@ -282,9 +282,14 @@ def add_stack_montage(
     order, sizes = info["order"], info["sizes"]
     if axis_l not in order[:order.index("h")]:
         have = ", ".join(f"{k}={v}" for k, v in sizes.items() if k not in "hw")
+        other = "d" if axis_l == "t" else "t"
+        # an unlabelled TIFF's planes are read as time points: say how to reach them
+        hint = (f" Its {sizes[other]} planes are read as {'Z sections' if other == 'd' else 'time points'}: "
+                f"use axis='{'z' if other == 'd' else 't'}' for them."
+                if other in order[:order.index("h")] else "")
         return (f"ERROR: {os.path.basename(stack_path)} has no "
                 f"{'time' if axis_l == 't' else 'Z'} axis (dimensions: "
-                f"{order}{'; ' + have if have else ''}).")
+                f"{order}{'; ' + have if have else ''}).{hint}")
     n = sizes[axis_l]
     try:
         idx = parse_frames(frames if not isinstance(frames, str) or frames.strip() else None, n)

@@ -184,8 +184,10 @@ def add_channel_merge(
                 f"wins), not {mode!r}; channel colours go in 'colors'.")
     if normalization not in _MERGE_NORMALIZATIONS:
         return "ERROR: normalization must be 'per_channel' or 'none'."
-    if not channel_files or len(channel_files) < 1:
-        return "ERROR: provide at least one channel file."
+    if not channel_files or len(channel_files) < 2:
+        # one file "merged" drew a blank panel; one image in a colour is a LUT
+        return ("ERROR: a merge needs at least two channel files; to show one image "
+                "in a colour use add_image then set_lut.")
     from pyfigures.path_resolution import source_exists
     missing = [f for f in channel_files if not source_exists(f)]
     if missing:
@@ -300,6 +302,12 @@ else:
                               title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r},
                               show_title={bool(title)!r})
     fig._pyf_rc = _rc
+    # out of pyplot's list of open figures (every plot panel stayed there:
+    # "More than 20 figures have been opened"); the panel draws it with savefig
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as _Agg
+    import matplotlib.pyplot as _plt
+    _Agg(fig)                    # its own canvas, so closing frees only pyplot's
+    _plt.close(fig)
     self.img = fig
 """
 
@@ -332,19 +340,20 @@ def _csv_number_count(path: str) -> int:
     """How many finite numbers a CSV holds (0 for an empty file or a header
     alone: the plot would be an empty frame)."""
     import csv
+    try:
+        from staplot.api import csv_format
+    except ImportError:                 # soft dependency: the panel itself says it is missing
+        def csv_format(_sample):
+            return ",", "."
     n = 0
     try:
         with open(path, newline="", encoding="utf-8-sig", errors="replace") as f:
-            sample = f.read(4096)
+            sep, decimal = csv_format(f.read(4096))       # the reader the plot uses
             f.seek(0)
-            try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
-            except csv.Error:
-                dialect = csv.excel
-            for row in csv.reader(f, dialect):
+            for row in csv.reader(f, delimiter=sep):
                 for cell in row:
                     try:
-                        v = float(cell)
+                        v = float(cell.replace(",", ".") if decimal == "," else cell)
                     except ValueError:
                         continue
                     if math.isfinite(v):
@@ -437,6 +446,14 @@ def add_data_plot(
     if not _csv_number_count(csv_abs):
         return (f"ERROR: {csv_path} holds no numbers to plot (empty, or a header without "
                 f"values); nothing was added.")
+    if kind == "grouped":
+        try:
+            from staplot import api as _api
+            _api.grouped_table_from_csv(csv_abs)
+        except ImportError:
+            pass                        # the panel says staplot is missing
+        except ValueError as e:
+            return f"ERROR: {e}; nothing was added."
 
     plot_colors, bad = _plot_colours(colors)
     if bad:
@@ -583,6 +600,8 @@ def transform_image(
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     if opacity is not None and not (0.0 <= opacity <= 1.0):
         return "ERROR: opacity must be between 0.0 and 1.0."
+    if rotation is not None and not math.isfinite(float(rotation)):
+        return f"ERROR: rotation must be a number of degrees (got {rotation})."
 
     img = imgs[image_index]
     changed = []
@@ -639,6 +658,18 @@ def transform_image(
     return f"Image {image_index} in {loc}: {', '.join(changed)}."
 
 
+_FIJI_LUT_NEAREST = {
+    "FIRE": ["MATPLOTLIB_INFERNO", "AFM_HOT", "MATPLOTLIB_GNUPLOT2"],
+    "ICE": ["MATPLOTLIB_OCEAN_R", "CYAN_HOT"],
+    "16_COLORS": ["MATPLOTLIB_NIPY_SPECTRAL", "RAINBOW_1"],
+    "16 COLORS": ["MATPLOTLIB_NIPY_SPECTRAL", "RAINBOW_1"],
+    "GREYS": ["GRAY"],
+    "GRAYS": ["GRAY"],
+    "SPECTRUM": ["MATPLOTLIB_HSV", "HSV"],
+    "THERMAL": ["MATPLOTLIB_INFERNO", "MATPLOTLIB_HOT"],
+}
+
+
 def _canonical_lut_names(luts):
     """Map requested LUT names to the exact keys PyFigures knows (case-
     insensitive). Returns (names_or_None_list, error_messages)."""
@@ -658,6 +689,8 @@ def _canonical_lut_names(luts):
         key = by_lower.get(l.strip().lower())
         if key is None:
             close = difflib.get_close_matches(l.strip().upper(), [k.upper() for k in known], n=3)
+            # Fiji LUT names with no PyFigures twin: point to the nearest look
+            close = _FIJI_LUT_NEAREST.get(l.strip().upper(), close)
             hint = f" — did you mean {', '.join(by_lower[c.lower()] for c in close)}?" if close else ""
             errors.append(f"unknown LUT {l!r}{hint}")
         out.append(key)
@@ -784,6 +817,11 @@ def set_lut(
     luts_encoded, unknown = _canonical_lut_names(luts)
     if unknown:
         return "ERROR: " + "; ".join(unknown) + " (list_luts lists every LUT name)"
+    n_file = _channel_count_from_file(_first_filename(img))
+    if n_file and len(luts) > n_file:
+        # the extra LUTs were stored for channels that do not exist
+        return (f"ERROR: {len(luts)} LUTs for an image with {n_file} channel"
+                f"{'s' if n_file > 1 else ''}: give at most one LUT per channel.")
     # null keeps that channel's current LUT, as documented (a model asking for
     # [null, "YELLOW", null] used to wipe channels 1 and 3)
     import ast

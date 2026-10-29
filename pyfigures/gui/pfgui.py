@@ -6505,11 +6505,18 @@ class EZFIG_GUI(QMainWindow):
         if is_chart:
             return 1.0
         fn = getattr(elm, 'filename', None)
-        if not isinstance(fn, str) or getattr(elm, 'custom_loading_script', None):
-            return None
         placement = getattr(self.serializable_font, 'placement', None)
         if isinstance(placement, Position):
             placement = ' '.join(placement.get_position())
+        script = getattr(elm, 'custom_loading_script', None)
+        if script:
+            try:
+                from pyfigures.mcp_tools.core import script_corner_brightness
+                return script_corner_brightness(script, str(placement or 'top left'))
+            except Exception:
+                return None
+        if not isinstance(fn, str):
+            return None
         try:
             from pyfigures.mcp_tools.core import corner_brightness
             return corner_brightness(fn, str(placement or 'top left'),
@@ -6692,7 +6699,8 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Data-plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.setToolTip('auto: an x-y table (first column increasing) as a scatter, others as bars')
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)
         journal_combo = QComboBox(frame)

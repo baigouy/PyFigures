@@ -52,6 +52,8 @@ def constant_panel_value(path, channels=None, cache=None):
     cannot be read. Stacks count as constant only when every plane is."""
     if not isinstance(path, str) or not os.path.isfile(path):
         return None
+    if path.lower().endswith((".svg", ".svgz", ".pdf", ".eps", ".ps")):
+        return None     # a drawing, not pixels (an equation's .svg started Fiji to be read)
     key = path
     if cache is not None and key in cache:
         data = cache[key]

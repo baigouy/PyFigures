@@ -1552,9 +1552,12 @@ class TestCreateFigureFromFolder:
     def test_group_by_subfolder(self, tmp_path):
         folder = tmp_path / "data"
         folder.mkdir()
+        import numpy as np
+        import tifffile
         for sub in ("ctrl", "treated"):
             (folder / sub).mkdir()
-            (folder / sub / "img.tif").write_bytes(b"")
+            # a real image: empty files are dropped before the layout now
+            tifffile.imwrite(folder / sub / "img.tif", np.zeros((4, 4), np.uint8))
         p = str(tmp_path / "fig.pyf")
         create_figure_from_folder(str(p), str(folder), group_by="subfolder")
         _, root = _load(p)

@@ -169,15 +169,24 @@ def _save(canvas, poster_path):
 
 
 def _parse_indices(raw, canvas=None, photos_only=False):
-    """"0,2,3" -> [0, 2, 3], checked against *canvas*'s shapes (in range;
-    with *photos_only*, no text boxes: arrangements move photos)."""
+    """"0,2,3" -> [0, 2, 3] and "1-3,5" -> [1, 2, 3, 5], checked against
+    *canvas*'s shapes (in range; with *photos_only*, no text boxes:
+    arrangements move photos)."""
     if not raw:
         return None
+    indices = []
     try:
-        indices = [int(x) for x in raw.split(',') if x.strip() != '']
+        for part in (x.strip() for x in raw.split(',')):
+            if not part:
+                continue
+            first, dash, last = part.partition('-')
+            if dash and first.strip():
+                indices.extend(range(int(first), int(last) + 1))
+            else:
+                indices.append(int(part))
     except ValueError:
         raise ValueError(f'indices must be shape numbers separated by commas, e.g. "0,2,3" '
-                         f'(got {raw!r})') from None
+                         f'or "1-3" (got {raw!r})') from None
     if canvas is not None:
         n = len(canvas.shapes_to_draw)
         bad = [i for i in indices if not 0 <= i < n]

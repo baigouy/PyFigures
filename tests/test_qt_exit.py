@@ -36,6 +36,35 @@ def test_exit_code_is_kept(body, code):
     assert "LATER-HANDLER-RAN" in r.stdout          # handlers registered afterwards still run
 
 
+@pytest.mark.parametrize("last_line", ["raise SystemExit(main())", "import sys\nsys.exit(main())"])
+def test_code_kept_when_the_exit_was_looked_up_before_the_guard_was_armed(last_line):
+    """SystemExit / sys.exit is looked up before main() runs: when main() armed
+    the guard, the poster helper and the recipe CLI ended with 0 after an error."""
+    body = ("import pyfigures\n"
+            "def main():\n"
+            "    from pyfigures.mcp_tools.core import _ensure_qapp\n"
+            "    _ensure_qapp()\n"
+            "    return 3\n" + last_line + "\n")
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_API="pyqt6")
+    env.pop("PYFIGURES_QT_TEARDOWN", None)
+    r = subprocess.run([sys.executable, "-c", body], capture_output=True, text=True,
+                       env=env, timeout=300, stdin=subprocess.DEVNULL)
+    assert r.returncode == 3, r.stderr[-2000:]
+
+
+def test_poster_helper_reports_an_error_with_a_non_zero_code(tmp_path):
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_API="pyqt6")
+    env.pop("PYFIGURES_QT_TEARDOWN", None)
+    poster = str(tmp_path / "p.pyfposter")
+    run = [sys.executable, "-m", "pyfigures.poster.poster_headless"]
+    assert subprocess.run(run + ["create", poster], capture_output=True, env=env,
+                          timeout=300, stdin=subprocess.DEVNULL).returncode == 0
+    r = subprocess.run(run + ["align-shapes", poster, "--mode", "left", "--indices", "x"],
+                       capture_output=True, text=True, env=env, timeout=300,
+                       stdin=subprocess.DEVNULL)
+    assert r.returncode == 1 and "ERROR" in r.stderr
+
+
 def test_guard_is_off_under_pytest():
     from pyfigures import qt_exit
     qt_exit.skip_qt_teardown()

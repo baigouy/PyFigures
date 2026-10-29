@@ -81,6 +81,38 @@ def _where(img, loc):
     return loc
 
 
+def _cut_off_labels(pyf_path: str) -> list[str]:
+    """Side labels and label-row cells whose text is longer than the space the
+    layout gives them: the drawing clips them ('Treated with a long name' in a
+    row 87 pt tall printed as 'ed with a long n'). Both lengths are canvas pt."""
+    objects, Group, Image2D = _load_objects_lazy(pyf_path)
+    cut = []
+
+    def walk(o):
+        if isinstance(o, Group):
+            for c in getattr(o, "content", None) or []:
+                walk(c)
+            return
+        if not (isinstance(o, Image2D) and o.isText):
+            return
+        box = o.getRect(all=True)
+        for a in o.annotations or []:
+            if not hasattr(a, "getPlainText"):
+                continue
+            text = a.getRect(all=True)      # rotated for vertical text
+            over_w = text.width() - box.width()
+            over_h = text.height() - box.height()
+            if over_w > 1 or over_h > 1:
+                need, have = ((text.height(), box.height()) if over_h > over_w
+                              else (text.width(), box.width()))
+                cut.append(f"{a.getPlainText()!r} needs {need / 72 * 25.4:.0f} mm but has "
+                           f"{have / 72 * 25.4:.0f} mm")
+
+    for o in objects:
+        walk(o)
+    return cut
+
+
 def _panel_resolutions(pyf_path: str, target_mm: float) -> list[dict]:
     """Return one dict per raster panel describing its effective print resolution
     if the figure were printed *target_mm* wide. Vector (svg) and text panels are
@@ -456,6 +488,8 @@ def enforce_min_font_size(
 
         enforce_min_font_size("fig.pyf", min_pt=7, font_family="Arial")
     """
+    if not (isinstance(min_pt, (int, float)) and math.isfinite(min_pt) and min_pt > 0):
+        return f"ERROR: min_pt must be a positive font size in points (got {min_pt!r})."
     tree, root = _load(pyf_path)
     changed: list[str] = []
 
@@ -698,6 +732,17 @@ def check_journal_compliance(
     except Exception as e:
         results.append(("resolution", False, f"could not analyse: {e}"))
 
+    # ── labels that do not fit (clipped in the export) ─────────────────────────
+    try:
+        cut = _cut_off_labels(pyf_path)
+        if cut:
+            results.append(("labels fit", False,
+                            f"{len(cut)} label(s) cut off: " + "; ".join(cut[:4])
+                            + " — shorten the text, use a horizontal side label, or make "
+                              "that row taller (e.g. a wider figure)"))
+    except Exception as e:
+        results.append(("labels fit", False, f"could not analyse: {e}"))
+
     # ── scale bars ─────────────────────────────────────────────────────────────
     if require_scale_bars:
         n_ok, n_units = _scale_bar_coverage(root)
@@ -815,16 +860,25 @@ def apply_journal_guidelines(
 
     # 3. panel labels
     if add_panel_labels:
+        from .core import _is_label_row_group
         _, root = _load(pyf_path)
-        n_groups = len(_top_groups(root))
-        letter = panel_label_start
-        added = 0
-        for gi in range(n_groups):
-            res = add_corner_labels(pyf_path, [gi], 0, top_left=[f"<b>{letter}</b>"])
-            if not res.startswith("ERROR"):
-                added += 1
-            letter = _increment_label_letter(letter)
-        steps.append(f"panel labels: added {added} bold letter(s) starting '{panel_label_start}'")
+        groups = _top_groups(root)
+        # a lettered figure (draft_figure, recipes, the GUI) got a second set:
+        # 'A' and 'a' in the same corner
+        n_have = sum(1 for ta in root.iter("TAText2D") if _child_text(ta, "is_letter") is True)
+        if n_have:
+            steps.append(f"panel labels: the figure already has {n_have} panel letter(s) — none added")
+        else:
+            letter = panel_label_start
+            added = 0
+            for gi, grp in enumerate(groups):
+                if _is_label_row_group(grp):        # a row of column titles is no panel
+                    continue
+                res = add_corner_labels(pyf_path, [gi], 0, top_left=[f"<b>{letter}</b>"])
+                if not res.startswith("ERROR"):
+                    added += 1
+                    letter = _increment_label_letter(letter)
+            steps.append(f"panel labels: added {added} bold letter(s) starting '{panel_label_start}'")
 
     # 4. scale bars
     if scale_bar_units is not None:

@@ -10,6 +10,7 @@ will see. Timing comes from the file's own metadata when present (ImageJ
 from __future__ import annotations
 
 import os
+import re
 
 __all__ = ["stack_info", "StackInfoError", "parse_frames", "format_stamp"]
 
@@ -129,6 +130,7 @@ def parse_frames(spec, n: int, default_count: int = 6) -> list[int]:
     None -> *default_count* evenly spaced frames including the first and last;
     an int N -> N evenly spaced frames (first and last included); "all";
     "start:stop:step" (Python slice, stop exclusive, e.g. "::5" = every 5th);
+    "first-last" or "first-last:step" (inclusive, e.g. "0-11:3");
     or an explicit list [0, 5, 10]."""
     if n < 1:
         raise ValueError("the stack has no frames along that axis")
@@ -145,6 +147,16 @@ def parse_frames(spec, n: int, default_count: int = 6) -> list[int]:
         s = spec.strip().lower()
         if s == "all":
             return list(range(n))
+        # "0-11" or "0-11:3": an inclusive range, as Fiji's Make Substack writes it
+        m = re.fullmatch(r"(\d+)\s*-\s*(\d+)(?:\s*:\s*(\d+))?", s)
+        if m:
+            a, b, step = int(m.group(1)), int(m.group(2)), int(m.group(3) or 1)
+            if step < 1 or b < a:
+                raise ValueError(f"bad frame range {spec!r}: write first-last, e.g. '0-11' or '0-11:3'")
+            return parse_frames(list(range(a, b + 1, step)), n)
+        if not re.fullmatch(r"[\d\s,:-]+", s):
+            raise ValueError(f"bad frames {spec!r}: use a list [0, 5, 10], a count, 'all', "
+                             "'first-last' (e.g. '0-11', '0-11:3') or 'start:stop:step'")
         if ":" in s:
             parts = [p.strip() for p in s.split(":")]
             if len(parts) > 3:

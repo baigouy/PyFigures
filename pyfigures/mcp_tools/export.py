@@ -792,7 +792,7 @@ def add_lut_calibration_bar(
     gradient of *lut* from *vmin* to *vmax* with tick labels — as a scripted
     matplotlib panel, so it renders and exports like any other panel.
 
-    *lut*: a PyFigures LUT name (GRAY, GREEN, RED, FIRE, AFM_HOT, RAINBOW_1, …
+    *lut*: a PyFigures LUT name (GRAY, GREEN, RED, AFM_HOT, RAINBOW_1, …
     or MATPLOTLIB_viridis, MATPLOTLIB_jet, …) — pass the same name you gave the
     matching image in set_lut so the colours line up.
     *vmin*/*vmax*: the intensity values at the bar's ends (e.g. 0 and 255 for an
@@ -807,6 +807,12 @@ def add_lut_calibration_bar(
     Returns the new panel's image index.
     """
     from pyfigures.colorbar_script import build_calibration_bar_script
+    from .content import _canonical_lut_names
+    # an unknown name used to add a panel whose script fails: an empty panel
+    names, errors = _canonical_lut_names([lut])
+    if errors:
+        return f"ERROR: {errors[0]}; nothing was added (list_luts lists every LUT name)."
+    lut = names[0] or lut
     try:
         script = build_calibration_bar_script(
             lut=lut, vmin=vmin, vmax=vmax, label=label,

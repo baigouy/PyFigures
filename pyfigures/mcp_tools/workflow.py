@@ -36,6 +36,7 @@ from .core import (
     _scale_bar_legend_html,
     _set_child_text,
     _top_groups,
+    _unreadable_image,
     letter_colours,
 )
 from .structure import (
@@ -318,12 +319,32 @@ def create_figure_from_folder(
     """
     if not os.path.isdir(folder):
         return f"ERROR: Folder not found: {folder}"
+    # an unknown layout fell through to the grid branch
+    if layout.lower().strip() not in ("auto", "row", "column", "grid"):
+        return f"ERROR: layout must be 'auto', 'row', 'column' or 'grid' (got {layout!r})."
+    if group_by not in ("none", "subfolder", "prefix"):
+        return f"ERROR: group_by must be 'none', 'subfolder' or 'prefix' (got {group_by!r})."
+
+    # files that cannot be opened are dropped before the layout is planned
+    # (planned first, a broken file left an empty row behind)
+    skipped: list[str] = []
+
+    def _readable(paths: list[str]) -> list[str]:
+        good = []
+        for p in paths:
+            bad = _unreadable_image(p)
+            if bad:
+                skipped.append(f"{Path(p).name} ({bad.replace(p, '').split(' (')[0].strip()})")
+            else:
+                good.append(p)
+        return good
 
     # For subfolder grouping, images may live entirely in sub-directories;
     # defer the "no files" check until after we've scanned those sub-dirs.
-    files = _collect_image_files(folder, pattern)
+    files = _readable(_collect_image_files(folder, pattern))
     if not files and group_by != "subfolder":
-        return f"ERROR: No image files found in {folder!r} (pattern={pattern!r})."
+        return (f"ERROR: No readable image files found in {folder!r} (pattern={pattern!r})."
+                + (f" Unreadable: {'; '.join(skipped[:10])}" if skipped else ""))
 
     n = len(files)
     spacing_int = max(0, int(spacing))
@@ -338,7 +359,7 @@ def create_figure_from_folder(
             for entry in sorted(os.listdir(folder)):
                 sub_path = os.path.join(folder, entry)
                 if os.path.isdir(sub_path):
-                    sub_files = _collect_image_files(sub_path, pattern)
+                    sub_files = _readable(_collect_image_files(sub_path, pattern))
                     if sub_files:
                         groups.append((entry, sub_files))
         except OSError:
@@ -406,7 +427,6 @@ def create_figure_from_folder(
         return result
 
     total_added = 0
-    skipped = []
     for g_idx, (_lbl, group_files) in enumerate(groups):
         for img_path in group_files:
             lbl = Path(img_path).stem if label_from_filename else ""
@@ -433,6 +453,20 @@ def create_figure_from_folder(
         lines.append(
             f"  Grid: {len(groups)} row(s) × up to {cols_first} image(s) per row"
         )
+    if group_by != "subfolder":
+        # only the top level is read: say so when sub-folders hold images
+        left_out = {}
+        for entry in sorted(os.listdir(folder)):
+            sub_path = os.path.join(folder, entry)
+            if os.path.isdir(sub_path):
+                n_sub = len(_collect_image_files(sub_path, pattern))
+                if n_sub:
+                    left_out[entry] = n_sub
+        if left_out:
+            lines.append(
+                f"NOTE: {sum(left_out.values())} image(s) in sub-folder(s) "
+                + ", ".join(f"{k} ({v})" for k, v in left_out.items())
+                + " were not included; pass group_by='subfolder' for one row per sub-folder.")
     lines.append("\nNext: call auto_configure_images() to set LUTs and scale bars.")
     return "\n".join(lines)
 
@@ -514,12 +548,9 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
                 # coloured below, for the whole figure at once (white on a
                 # bright-field image vanished; a data-plot chart is white)
                 is_chart = bool(script) and "from staplot import api" in (_decode(script) or "")
-                if is_chart:
-                    bright = 1.0
-                elif is_raster:
-                    bright = _corner_brightness(img, placement)
-                else:
-                    bright = None           # merges / scripted panels: figure colour
+                # merges, kymographs, orthogonal views, equations: judged by
+                # what they draw (core.script_corner_brightness); unknown: None
+                bright = 1.0 if is_chart else _corner_brightness(img, placement)
                 new_letters.append((annots, letters[i], bright))
                 lettered += 1
         if not series_tail:
@@ -539,12 +570,29 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
     return lettered, bars
 
 
+def _auto_plot_kind(csv_path: str) -> str:
+    """'scatter' for an x-y table (two numeric columns, the first strictly
+    increasing: a dose or time series), else 'bar'. Drawn as bars, an x-y
+    table compared x against y with a t-test."""
+    try:
+        from staplot.api import _read_csv
+        df = _read_csv(csv_path)
+    except Exception:
+        return "bar"
+    num = df.select_dtypes("number")
+    if df.shape[1] == 2 and num.shape[1] == 2:
+        x = num.iloc[:, 0].dropna()
+        if len(x) >= 5 and x.is_monotonic_increasing and x.is_unique:
+            return "scatter"
+    return "bar"
+
+
 @mcp.tool()
 def draft_figure(
     folder: str,
     out_pyf: str,
     pattern: str = "*",
-    plot_kind: str = "bar",
+    plot_kind: str = "auto",
     group_by: str = "none",
     journal: str | None = None,
     column: str = "single",
@@ -570,8 +618,11 @@ def draft_figure(
 
     *folder*: directory of source files. *out_pyf*: output figure path.
     *pattern*: glob to filter images (CSVs are always included).
-    *plot_kind*: chart type for CSV panels ("bar"/"box"/"violin"/"scatter"/"grouped").
-    *group_by*: image grouping — "none" | "subfolder" | "prefix".
+    *plot_kind*: chart type for CSV panels ("auto"/"bar"/"box"/"violin"/"scatter"/
+      "grouped"); "auto" (default) draws an x-y table (two numeric columns, the
+      first increasing) as a scatter and any other as bars.
+    *group_by*: image grouping — "none" | "subfolder" | "prefix"; with
+      "subfolder" the CSVs of the sub-folders are plotted too.
     *journal* / *column*: size to a journal preset (e.g. journal="nature",
       column="double"); omit to leave native size.
     *px_to_unit* + *scale_bar_units*: pixel size (units/px) and bar length to add a
@@ -592,30 +643,47 @@ def draft_figure(
         return f"ERROR: no such folder: {folder}"
     if not out_pyf.lower().endswith(".pyf"):
         return "ERROR: out_pyf must end in .pyf."
-    if plot_kind not in _DATA_PLOT_KINDS:
-        return f"ERROR: plot_kind must be one of {_DATA_PLOT_KINDS}."
+    if plot_kind != "auto" and plot_kind not in _DATA_PLOT_KINDS:
+        return f"ERROR: plot_kind must be 'auto' or one of {_DATA_PLOT_KINDS}."
     out_pyf = os.path.abspath(out_pyf)
 
+    def _csvs_in(d):
+        return sorted([str(p) for ext in ("*.csv", "*.tsv") for p in Path(d).glob(ext)])
+
     images = _collect_image_files(folder, pattern)
+    csvs = _csvs_in(folder)
     if group_by == "subfolder":
         # images may live only in the condition sub-folders (one row each);
         # counting the top level alone drafted a figure with no images at all
+        # (and their CSVs were left out)
         for entry in sorted(os.listdir(folder)):
             sub_path = os.path.join(folder, entry)
             if os.path.isdir(sub_path):
                 images += _collect_image_files(sub_path, pattern)
-    csvs = sorted([str(p) for ext in ("*.csv", "*.tsv") for p in Path(folder).glob(ext)])
+                csvs += _csvs_in(sub_path)
     if not images and not csvs:
         return f"ERROR: no image or CSV files found in {folder!r}."
 
     steps = []
+    warnings = []
+    n_laid_out = 0
     if images:
         r = create_figure_from_folder(out_pyf, folder, pattern=pattern,
                                       group_by=group_by,
                                       label_from_filename=(not letter_panels))
         if isinstance(r, str) and r.startswith("ERROR"):
-            return r
-        steps.append(f"laid out {len(images)} image(s)")
+            if not csvs:
+                return r
+            # only unreadable images: the plots still make a figure
+            warnings.append(r[len("ERROR: "):])
+            images = []
+            create_figure(out_pyf, mode="canvas")
+        else:
+            m = re.search(r"(\d+) image\(s\) from", r)
+            n_laid_out = int(m.group(1)) if m else len(images)
+            # unreadable files were counted as laid out
+            warnings += [ln[len("WARNING: "):] for ln in r.splitlines() if ln.startswith("WARNING: ")]
+            steps.append(f"laid out {n_laid_out} image(s)")
     else:
         create_figure(out_pyf, mode="canvas")
 
@@ -635,12 +703,17 @@ def draft_figure(
             rg = add_group(out_pyf, orientation="X")
             if not (isinstance(rg, str) and rg.startswith("ERROR")):
                 plot_path = [n_rows]
+    kinds_used = []
     for c in csvs:
-        rr = add_data_plot(out_pyf, plot_path, c, kind=plot_kind, annotate_stats=True)
+        kind = _auto_plot_kind(c) if plot_kind == "auto" else plot_kind
+        rr = add_data_plot(out_pyf, plot_path, c, kind=kind, annotate_stats=True)
         if not (isinstance(rr, str) and rr.startswith("ERROR")):
             n_plots += 1
+            kinds_used.append(kind)
+        else:
+            warnings.append(f"{os.path.basename(c)} not plotted: {rr[len('ERROR: '):]}")
     if n_plots:
-        steps.append(f"added {n_plots} data-plot panel(s) ({plot_kind})")
+        steps.append(f"added {n_plots} data-plot panel(s) ({', '.join(sorted(set(kinds_used)))})")
 
     lettered, bars = _finalize_draft(out_pyf, letter_panels, "top left",
                                      px_to_unit, scale_bar_units, scale_bar_unit)
@@ -660,19 +733,21 @@ def draft_figure(
 
     return json.dumps({
         "output": out_pyf,
-        "n_images": len(images),
+        "n_images": n_laid_out,
         "n_data_plots": n_plots,
         "panels_lettered": lettered,
         "scale_bars": bars,
         "journal": f"{journal} ({column})" if journal else None,
         "steps": steps,
+        "warnings": warnings,
         "next_steps": [
             "Open in PyFigures and drag panels to fine-tune the layout.",
             "Refine the caption stub (File -> Figure caption / legend).",
             "Run QC: check_resolution, check_scale_consistency, audit_figure.",
         ],
         "summary": (f"Drafted '{os.path.basename(out_pyf)}' with "
-                    f"{len(images) + n_plots} panel(s): " + ", ".join(steps) + "."),
+                    f"{n_laid_out + n_plots} panel(s): " + ", ".join(steps) + "."
+                    + (f" {len(warnings)} warning(s)." if warnings else "")),
     }, ensure_ascii=False, indent=2)
 
 

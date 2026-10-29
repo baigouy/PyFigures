@@ -406,7 +406,10 @@ def test_set_lut_null_keeps_the_current_channel_lut(tmp_path):
     d = str(tmp_path)
     pyf = os.path.join(d, "f.pyf")
     create_figure(pyf, num_groups=1)
-    add_image(pyf, [0], _png(os.path.join(d, "a.png"), 20, 20))
+    import tifffile                  # 3 channels: more LUTs than channels are refused
+    p = os.path.join(d, "a.tif")
+    tifffile.imwrite(p, np.full((3, 20, 20), 120, np.uint8), metadata={"axes": "CYX"})
+    add_image(pyf, [0], p)
     set_lut(pyf, [0], 0, ["MAGENTA", "GREEN", "BLUE"])
     assert not set_lut(pyf, [0], 0, [None, "yellow", None]).startswith("ERROR")
     luts = next(ET.parse(pyf).getroot().iter("Image2D")).findtext("LUTs")

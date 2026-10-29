@@ -375,9 +375,16 @@ def set_scale_bar_all(
 
     def _process_img(img: ET.Element):
         nonlocal added, updated, skipped, kept_own
-        # a chart or a LUT calibration bar has no pixel size: no scale bar
+        # label-row cells and side labels are text: a bar drawn over them
+        # crossed the words (it looked like clipped text)
+        if (_decode(img.findtext("isText")) or "False") not in ("False", "None"):
+            return
+        # a chart or a LUT calibration bar has no pixel size: no scale bar,
+        # nor an equation or another vector drawing
         script = _decode(img.findtext("custom_loading_script")) or ""
-        if "from staplot import api" in script or "ColorbarBase(" in script:
+        fn = str(_decode(img.findtext("filename")) or "")
+        if "from staplot import api" in script or "ColorbarBase(" in script \
+                or fn.lower().endswith((".svg", ".pdf")):
             skipped += 1
             return
         px = px_to_unit
@@ -429,7 +436,8 @@ def set_scale_bar_all(
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
     if px_to_unit is not None and kept_own:
         px_note += f" (only for images without a pixel size; {kept_own} kept their own)"
-    skip_note = f" Skipped {skipped} data-plot / colour-bar panel(s)." if skipped else ""
+    skip_note = (f" Skipped {skipped} data-plot / colour-bar / vector panel(s)."
+                 if skipped else "")
     return (
         f"Scale bar applied to {total} image(s): "
         f"{added} added, {updated} updated. "
@@ -508,6 +516,11 @@ def add_inset(
         return f"ERROR: {e}"
     if not (0.0 < size_fraction <= 1.0):
         return "ERROR: size_fraction must be between 0 (exclusive) and 1.0."
+    from .core import _placement_error, _unreadable_image, _missing_image_note
+    # an unknown placement ('middle-ish') was stored and drawn top right
+    bad = _placement_error(placement) or _unreadable_image(inset_filename)
+    if bad:
+        return f"ERROR: {bad}"
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -541,6 +554,7 @@ def add_inset(
         f"Inset {inset_idx} added to image {image_index} in {loc}: "
         f"{Path(inset_filename).name}, {placement}, "
         f"size={int(size_fraction * 100)}%{border_note}."
+        + _missing_image_note(inset_filename)
     )
 
 
@@ -816,7 +830,7 @@ def set_inset_property(
     image_index: int,
     inset_index: int,
     property_name: str,
-    value: str,
+    value: str | int | float | bool | list | None,
 ) -> str:
     """Set any property on an inset Image2D.
 
@@ -880,9 +894,9 @@ def set_inset_property(
     # (no ""..."" wrapping).  filename always needs the double-quote wrapping.
     # Everything else goes through the smart encoder.
     if property_name == "placement":
-        raw = value.strip()
+        raw = str(value).strip()
     elif property_name == "filename":
-        raw = _encode_str(value)
+        raw = _encode_str(str(value))
     else:
         raw = _encode_value(value)
     err = _check_property_value(property_name, raw)
@@ -1079,9 +1093,13 @@ def add_label_row(
     texts_preview = ", ".join(f'"{l}"' for l in labels_list[:4])
     if len(labels_list) > 4:
         texts_preview += f" … ({len(labels_list)} total)"
+    # the row is a top-level group of its own: every later group moved one index
+    first_moved = group_path[0] + (0 if position == "above" else 1)
+    target_now = group_path[0] + (1 if position == "above" else 0)
     return (
-        f"Label row added {position} of {loc} (new path {new_label_path}): "
-        f"{texts_preview}."
+        f"Label row added {position} {loc} (new path {new_label_path}): "
+        f"{texts_preview}. Top-level groups from [{first_moved}] on moved down one "
+        f"index (the labelled group is now [{target_now}]); use the new paths."
     )
 
 

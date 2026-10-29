@@ -42,12 +42,36 @@ def scatter_layout(shapes, page_width_mm, page_height_mm, indices=None,
     if not targets:
         return
     lo_x, hi_x = margin_mm, max(margin_mm, page_width_mm - margin_mm)
-    lo_y, hi_y = margin_mm, max(margin_mm, page_height_mm - margin_mm)
+    lo_y, hi_y = _free_band(shapes, targets, page_height_mm, margin_mm)
+    # centres far enough from the band's edges for an untilted photo to stay in it
+    half_h = min(max(s.height_mm for s in targets) / 2.0, (hi_y - lo_y) / 2.0)
+    lo_y, hi_y = lo_y + half_h, hi_y - half_h
     for shape in targets:
         shape.set_center_mm(rng.uniform(lo_x, hi_x), rng.uniform(lo_y, hi_y))
         shape.theta = rng.uniform(-max_rotation_deg, max_rotation_deg)
     if fit_to_page:
         _fit_group_to_page(targets, page_width_mm, page_height_mm, margin_mm=margin_mm)
+
+
+def _free_band(shapes, targets, page_height_mm, margin_mm, gap_mm=6.0):
+    """(top, bottom) in mm of the page height left for photos once the text
+    boxes in its top and bottom thirds (a title, a footer) are kept clear:
+    a grid laid over the whole page hid the poster's title under its first
+    row. Falls back to the margins when the texts leave less than a third."""
+    from pyfigures.poster.poster_shapes import PosterText
+    top, bottom = margin_mm, page_height_mm - margin_mm
+    chosen = {id(s) for s in targets}
+    for s in shapes:
+        if id(s) in chosen or not isinstance(s, PosterText):
+            continue
+        r = s.bounding_rect_mm()
+        if r.bottom() <= page_height_mm / 3.0:
+            top = max(top, r.bottom() + gap_mm)
+        elif r.top() >= page_height_mm * 2.0 / 3.0:
+            bottom = min(bottom, r.top() - gap_mm)
+    if bottom - top < page_height_mm / 3.0:
+        return margin_mm, page_height_mm - margin_mm
+    return top, bottom
 
 
 def _fit_group_to_page(shapes, page_width_mm, page_height_mm, margin_mm=10.0):
@@ -158,14 +182,15 @@ def grid_layout(shapes, page_width_mm, page_height_mm, indices=None,
         columns = max(1, round(math.sqrt(n * page_width_mm / max(page_height_mm, 1.0))))
     columns = max(1, min(columns, n))
     rows = math.ceil(n / columns)
+    band_top, band_bottom = _free_band(shapes, targets, page_height_mm, margin_mm, gap_mm)
     avail_w = max(page_width_mm - 2 * margin_mm - gap_mm * (columns - 1), columns * 5.0)
-    avail_h = max(page_height_mm - 2 * margin_mm - gap_mm * (rows - 1), rows * 5.0)
+    avail_h = max(band_bottom - band_top - gap_mm * (rows - 1), rows * 5.0)
     cell_w = avail_w / columns
     cell_h = avail_h / rows
     for idx, shape in enumerate(targets):
         row, col = divmod(idx, columns)
         cell_cx = margin_mm + col * (cell_w + gap_mm) + cell_w / 2.0
-        cell_cy = margin_mm + row * (cell_h + gap_mm) + cell_h / 2.0
+        cell_cy = band_top + row * (cell_h + gap_mm) + cell_h / 2.0
         l, t, r, b = shape.frame_padding_mm()
         max_w = max(cell_w - l - r, 5.0)
         max_h = max(cell_h - t - b, 5.0)

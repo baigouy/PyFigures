@@ -907,7 +907,8 @@ def _check_top(recipe, base):
                 raise RecipeError(f"export {e!r}: format must be one of {sorted(_EXPORTS)}")
     if "checks" in recipe:
         checks = recipe["checks"]
-        if not isinstance(checks, list) or not checks:
+        # [] switches the checks off, as 'exports: []' does the exports
+        if not isinstance(checks, list):
             raise RecipeError(f"'checks' must be a list of {sorted(_CHECKS)}")
         for c in checks:
             name = c if isinstance(c, str) else (c.get("check") if isinstance(c, dict) else None)

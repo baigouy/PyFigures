@@ -89,7 +89,11 @@ def _encode_value(value: str) -> str:
     Anything else                ``""value""``  (PyFigures string encoding)
     ===========================  ============================================
     """
-    v = value.strip()
+    # a number, true/false or a list from a JSON client (crop_left=100 raised
+    # "'int' object has no attribute 'strip'"): its Python spelling
+    if value is None or isinstance(value, (bool, int, float, list, tuple, dict)):
+        return repr(list(value) if isinstance(value, tuple) else value)
+    v = str(value).strip()
     # Keywords / sentinels
     if v in ("None", "True", "False"):
         return v
@@ -205,6 +209,15 @@ def _check_property_value(tag: str, raw: str) -> str | None:
             return "ERROR: opacity must be a number between 0 and 1."
         if not (0.0 <= v <= 1.0):
             return f"ERROR: opacity must be between 0 and 1, got {v}."
+    if tag in ("crop_left", "crop_right", "crop_top", "crop_bottom", "theta"):
+        try:
+            v = None if raw == "None" else float(raw)
+        except ValueError:
+            return f"ERROR: {tag} must be a number."
+        if v is not None and not math.isfinite(v):
+            return f"ERROR: {tag} must be a finite number, got {raw}."
+        if tag != "theta" and v is not None and v < 0:
+            return f"ERROR: {tag} is the pixels removed from that side and cannot be negative."
     return None
 
 
@@ -297,7 +310,8 @@ def _channel_count_from_file(filename) -> int | None:
                 for ax in ("C", "S"):
                     if ax in s.axes:
                         return int(s.shape[s.axes.index(ax)])
-                return 1
+                # 'Q': an axis tifffile could not name (it may hold the channels)
+                return None if "Q" in s.axes else 1
         except Exception:
             return None
     try:
@@ -306,6 +320,27 @@ def _channel_count_from_file(filename) -> int | None:
             return len([b for b in im.getbands() if b != "A"])
     except Exception:
         return None
+
+
+def _reset_luts_for_new_file(img: ET.Element, filename: str) -> str:
+    """When a panel gets another file (a template slot filled) whose channel
+    count differs from its stored LUTs, drop the LUTs and channel choice so the
+    file shows with its defaults (a grey image in a two-channel slot was drawn
+    as a dark green one). Returns a note, or ''."""
+    luts = _child_text(img, "LUTs")
+    if isinstance(luts, str) and luts.startswith("["):      # stored as "['GREEN', 'RED']"
+        import ast
+        try:
+            luts = ast.literal_eval(luts)
+        except (ValueError, SyntaxError):
+            return ""
+    n = _channel_count_from_file(filename)
+    if not isinstance(luts, list) or not n or len(luts) == n:
+        return ""
+    _set_child_text(img, "LUTs", "None")
+    _set_child_text(img, "channels", _encode_str("None"))
+    return (f" The slot's {len(luts)} colour(s) {luts} did not fit the file's {n} channel(s): "
+            f"reset to the defaults (set_lut to choose).")
 
 
 def _crop_fit_error(img: ET.Element) -> str | None:
@@ -1012,7 +1047,18 @@ def _image_summary(img: ET.Element, idx: int, prefix: str = "") -> str:
             raw = _child_text(ta, "text") or ""
             plain = _html_to_plain(raw)[:40]
             placement = _child_text(ta, "placement") or ""
-            annot_parts.append(f'"{plain}" ({placement})')
+            # a freely placed text (arrow label, bracket star) has no placement
+            annot_parts.append(f'"{plain}"' + (f" ({placement})" if placement else " (free)"))
+        # ROIs, arrows and brackets were not listed at all
+        kinds = {"Rectangle2D": "rectangle", "Ellipse2D": "ellipse", "Line2D": "line",
+                 "Polygon2D": "polygon", "PolyLine2D": "polyline", "Freehand2D": "freehand"}
+        counts: dict[str, int] = {}
+        for c in annotations:
+            if c.tag in kinds:
+                counts[kinds[c.tag]] = counts.get(kinds[c.tag], 0) + 1
+        if counts:
+            annot_parts.append("shapes: " + ", ".join(
+                f"{n} {k}{'s' if n > 1 else ''}" for k, n in counts.items()))
     annot_str = ", ".join(annot_parts) if annot_parts else "—"
     w = _child_text(img, "width")
     h = _child_text(img, "height")
@@ -1058,10 +1104,17 @@ def _label_row_summary(grp: ET.Element, label: str, depth: int = 0) -> list[str]
                         plain = _html_to_plain(raw)[:30]
                         texts.append(f'"{plain}"')
     texts_str = ", ".join(texts) if texts else "(empty)"
-    return [f"{pad}{label} [LABEL ROW, position={ist!r}]: {texts_str}"]
+    # isText names where the images are ('below' = a row above its group)
+    where = {"below": "above the next group", "above": "below the previous group"}.get(ist, repr(ist))
+    return [f"{pad}{label} [LABEL ROW, {where}]: {texts_str}"]
 
 
-def _group_summary(grp: ET.Element, label: str, depth: int = 0) -> list[str]:
+def _group_summary(grp: ET.Element, label: str, depth: int = 0,
+                   path: list[int] | None = None) -> list[str]:
+    """Lines describing *grp*. Sub-groups are named by their group_path and
+    images by their image_index, both counted the way the tools count them
+    (sub-groups among Group children, images among Image2D children), not by
+    position among all children."""
     pad = "  " * depth
     if _is_label_row_group(grp):
         return _label_row_summary(grp, label, depth)
@@ -1070,10 +1123,15 @@ def _group_summary(grp: ET.Element, label: str, depth: int = 0) -> list[str]:
     content = grp.find("content")
     children = list(content) if content is not None else []
     lines = [f"{pad}{label} [orientation={orientation}, spacing={space}, {len(children)} children]"]
-    for i, child in enumerate(children):
+    n_groups = n_images = 0
+    for child in children:
         if child.tag == "Group":
-            lines.extend(_group_summary(child, f"Group {label}.{i}", depth + 1))
+            sub = (path or []) + [n_groups]
+            n_groups += 1
+            lines.extend(_group_summary(child, f"Group {sub}", depth + 1, sub))
         elif child.tag == "Image2D":
+            i = n_images
+            n_images += 1
             ist = child.findtext("isText", "False")
             if ist == "True":
                 # inline side label — show its text
@@ -1311,9 +1369,14 @@ def _looks_like_panel_letter(text: str) -> bool:
 def _corner_brightness(img: ET.Element, placement: str) -> float | None:
     """corner_brightness() for a panel element of a .pyf file."""
     import ast
+    script = _child_text(img, "custom_loading_script")
+    if isinstance(script, str) and script not in ("", "None"):
+        return script_corner_brightness(script, placement)
     fn = _child_text(img, "filename")
     if not isinstance(fn, str) or fn.startswith("["):
         return None                         # channel merge: fluorescence-like
+    if fn.lower().endswith((".svg", ".pdf")):
+        return 1.0                          # equation / diagram on white, as the GUI judges it
     luts = _child_text(img, "LUTs")
     if isinstance(luts, str) and luts not in ("", "None", "[]"):
         try:
@@ -1341,9 +1404,16 @@ def corner_brightness(path, placement: str = "top left", crop=(0, 0, 0, 0),
     if not isinstance(path, str) or not os.path.isfile(path) \
             or path.lower().endswith((".svg", ".pdf")):
         return None
+    peak = 1.0
     if luts and luts not in ("None", "[]") and not (
             isinstance(luts, (list, tuple)) and all(str(l).lower() in ("gray", "grey", "none") for l in luts)):
-        return None                         # coloured LUT on a dark background
+        # a coloured LUT keeps black black and makes white its own colour:
+        # judge the raw corner, dimmed by how light that colour is (it used
+        # to give up here, and the figure's black letter vanished on the
+        # dark corner of a green image)
+        peak = _lut_peak_luminance(luts)
+        if peak is None:
+            return None
     try:
         stamp = os.stat(path).st_mtime_ns
     except OSError:
@@ -1353,10 +1423,96 @@ def corner_brightness(path, placement: str = "top left", crop=(0, 0, 0, 0),
         if len(_CORNER_CACHE) > 512:
             _CORNER_CACHE.clear()
         _CORNER_CACHE[key] = _read_corner_brightness(path, str(placement).lower(), key[3])
-    return _CORNER_CACHE[key]
+    raw = _CORNER_CACHE[key]
+    return None if raw is None else raw * peak
 
 
 _CORNER_CACHE: dict = {}
+
+
+def _lut_peak_luminance(luts) -> float | None:
+    """Relative luminance (0…1) of the brightest colour of the LUT(s) shown —
+    the lightest of several channels — or None when a name is unknown."""
+    names = [luts] if isinstance(luts, str) else [l for l in (luts or []) if l]
+    names = [str(n) for n in names if str(n).lower() not in ("none", "gray", "grey")] or ["GRAY"]
+    best = 0.0
+    for name in names:
+        try:
+            if name.upper() in ("GRAY", "GREY"):
+                rgb = (1.0, 1.0, 1.0)
+            elif name.startswith("MATPLOTLIB_"):
+                import matplotlib
+                rgb = matplotlib.colormaps[name[len("MATPLOTLIB_"):]](1.0)[:3]
+            else:
+                from batoolset.luts.lut_minimal_test import PaletteCreator, list_available_luts
+                table = PaletteCreator().create3(list_available_luts()[name])
+                rgb = [v / 255.0 for v in table[-1][:3]]
+        except Exception:
+            return None
+        best = max(best, 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2])
+    return best
+
+
+def script_corner_brightness(script, placement: str = "top left") -> float | None:
+    """corner_brightness() for a scripted panel, from what its script draws:
+    charts and colour bars sit on white, channel merges on black, kymographs
+    and orthogonal views look like the stack they come from. None when the
+    script is not one PyFigures writes."""
+    import ast
+    import re
+    if not isinstance(script, str):
+        return None
+    if "from staplot import api" in script or "ColorbarBase(" in script:
+        return 1.0
+    if "# pyfigures:channel_merge" in script:
+        return 0.0                         # coloured channels added on black
+    if "# pyfigures:kymograph" in script or "# pyfigures:orthogonal_views" in script:
+        def value(name):
+            m = re.search(rf"^{name} = (.+)$", script, flags=re.M)
+            try:
+                return ast.literal_eval(m.group(1)) if m else None
+            except (ValueError, SyntaxError):
+                return None
+        path = value("_path")
+        if not isinstance(path, str):
+            return None
+        line = value("_line")
+        if "# pyfigures:kymograph" in script and isinstance(line, tuple) and len(line) == 4:
+            # time runs down, the line across: a left corner is the start of
+            # the line, a right one its end (the stack's corner is elsewhere)
+            return _line_end_brightness(path, line, "right" in str(placement).lower())
+        return corner_brightness(path, placement)
+    return None
+
+
+def _line_end_brightness(path, line, at_end: bool) -> float | None:
+    """Brightness (0…1, displayed as corner_brightness judges it) of the first
+    or last fifth of a line drawn on the first plane of *path*."""
+    import numpy as np
+    try:
+        if path.lower().endswith((".tif", ".tiff")):
+            import tifffile as _tf
+            with _tf.TiffFile(path) as t:
+                arr = t.pages[0].asarray()
+        else:
+            from PIL import Image as _PI
+            with _PI.open(path) as im:
+                arr = np.asarray(im.convert("L"))
+    except Exception:
+        return None
+    arr = np.asarray(arr, dtype=np.float64)
+    if arr.ndim == 3 and arr.shape[-1] in (3, 4):
+        arr = arr[..., :3].mean(axis=-1)
+    if arr.ndim != 2:
+        return None
+    x1, y1, x2, y2 = (float(v) for v in line)
+    t = np.linspace(0.8, 1.0, 20) if at_end else np.linspace(0.0, 0.2, 20)
+    xs = np.clip(np.round(x1 + (x2 - x1) * t).astype(int), 0, arr.shape[1] - 1)
+    ys = np.clip(np.round(y1 + (y2 - y1) * t).astype(int), 0, arr.shape[0] - 1)
+    lo, hi = np.percentile(arr, (1, 99)) if arr.max() > 255 else (0.0, 255.0)
+    if hi <= lo:
+        return 0.0
+    return float(np.clip((arr[ys, xs].mean() - lo) / (hi - lo), 0, 1))
 
 
 def _read_corner_brightness(path, placement, crop):
@@ -1428,10 +1584,10 @@ def _label_color_for(img: ET.Element, text: str, placement: str = "top left") ->
     same rule: it came out black, invisible on fluorescence."""
     if re.search(r"<\s*/?\s*[A-Za-z][^>]*>", text or "") and re.search(r"colou?r\s*[:=]", text, re.I):
         return None
-    script = _child_text(img, "custom_loading_script")
-    if isinstance(script, str) and script not in ("", "None"):
-        return None
     bright = _corner_brightness(img, placement or "top left")
+    script = _child_text(img, "custom_loading_script")
+    if isinstance(script, str) and script not in ("", "None") and bright is None:
+        return None                 # a script PyFigures did not write: the default
     if bright is not None and bright > 0.6:
         return 0x000000
     return 0xFFFFFF
@@ -2223,6 +2379,10 @@ def _resolve_target_mm(
     if journal is not None:
         mm, note = _journal_width(journal, column)
         return mm, f"{journal!r} {column}-column = {mm:g}mm" + (f" ({note})" if note else "")
+    # a width of -5 mm 'passed' every resolution check (negative DPI)
+    for name, v in (("width_mm", width_mm), ("width_cm", width_cm), ("width_in", width_in)):
+        if v is not None and not (isinstance(v, (int, float)) and math.isfinite(v) and v > 0):
+            raise ValueError(f"{name} must be a positive width (got {v!r}).")
     if width_mm is not None:
         return float(width_mm), f"{width_mm}mm"
     if width_cm is not None:

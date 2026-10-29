@@ -73,14 +73,15 @@ def _call(qapp, operation, **kw):
     return box["result"]
 
 
-def _figure(tmp_path):
+def _figure(tmp_path, channels=1):
     from batoolset.img import Img
     from pyfigures.mcp_server import create_figure, add_image
     pyf = str(tmp_path / "f.pyf")
     create_figure(pyf, mode="groups", num_groups=1)
+    shape, dims = ((40, 50), "hw") if channels == 1 else ((40, 50, channels), "hwc")
     for name in "ab":
         p = str(tmp_path / f"{name}.tif")
-        Img((np.random.default_rng(ord(name)).random((40, 50)) * 255).astype(np.uint8), dimensions="hw").save(p)
+        Img((np.random.default_rng(ord(name)).random(shape) * 255).astype(np.uint8), dimensions=dims).save(p)
         add_image(pyf, [0], p)
     return pyf
 
@@ -123,7 +124,8 @@ def test_live_set_lut_null_keeps_the_other_channels(qapp, gui, runtime, tmp_path
     from pyfigures.assistant import launch
     from pyfigures.assistant.partner_gui import panels
     g = gui(shareable=True)
-    g.reload_state(_figure(tmp_path), append=False)
+    # three channels: set_lut refuses more LUTs than the image has channels
+    g.reload_state(_figure(tmp_path, channels=3), append=False)
     first = [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0]
     first.LUTs = ["MAGENTA", "GREEN", "BLUE"]
     launch.start_live_session(g)
