@@ -406,6 +406,28 @@ def test_figure_panels_keep_their_exact_pixel_size(w):
     assert (r.width(), r.height()) == (w, 24)
 
 
+def test_new_z_stack_follows_the_max_projection_preference(tmp_path, zstack, monkeypatch):
+    """Added over MCP a Z stack always showed its first slice (often nearly
+    black), while the GUI follows 'Show new Z stacks as max projection'."""
+    import tifffile
+    from pyfigures.gui import user_prefs
+    pyf = str(tmp_path / "zp.pyf")
+    M.create_figure(pyf, num_groups=1)
+    monkeypatch.setattr(user_prefs, "load_max_project_z_stacks", lambda: True)
+    r = M.add_image(pyf, [0], zstack)
+    assert "shown as its max projection" in r, r
+    assert "max" in M.get_image_property(pyf, [0], 0, "projection")
+    monkeypatch.setattr(user_prefs, "load_max_project_z_stacks", lambda: False)
+    r = M.add_image(pyf, [0], zstack)
+    assert "first slice is shown" in r, r
+    assert M.get_image_property(pyf, [0], 1, "projection") == "None"
+    movie = tmp_path / "t.tif"                      # a time series keeps its first frame
+    tifffile.imwrite(movie, np.zeros((4, 8, 8), np.uint8), imagej=True, metadata={"axes": "TYX"})
+    monkeypatch.setattr(user_prefs, "load_max_project_z_stacks", lambda: True)
+    assert "Z stack" not in M.add_image(pyf, [0], str(movie))
+    assert M.get_image_property(pyf, [0], 2, "projection") == "None"
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

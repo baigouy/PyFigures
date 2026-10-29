@@ -587,6 +587,9 @@ def add_image(
     *page*: for a multi-page **PDF**, the page to show (1 = first page; the
       default). Stored as the panel's series (configure_image serie_to_open is
       the same, 0-based).
+    A TIFF **Z stack** shows its max projection, as in the GUI (its preference
+    View → Show new Z stacks as max projection, on by default; off: the first
+    slice); configure_image changes it. A time series shows its first frame.
     A **.tex** file works too: a whole LaTeX document (\\documentclass…: a
     TikZ / pgfplots picture, a figure with \\includegraphics, a table) is
     compiled by the computer's LaTeX (its first figure/table environment, else
@@ -631,6 +634,8 @@ def add_image(
         _set_child_text(img, "serie_to_open", str(int(page) - 1))
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
+    from .core import _z_stack_projection
+    z_note = _z_stack_projection(img, filename)
     _append_image(container, img, is_root=(not group_path))
     _save(tree, pyf_path, recompute=True)
     n = len([c for c in container if c.tag == "Image2D"]) - 1
@@ -641,7 +646,7 @@ def add_image(
     # a URL (OMERO link, OME-Zarr, http image) is named in full: its last
     # path part can be meaningless ("?show=image-1")
     shown = filename if str(filename).lower().startswith(("http://", "https://")) else Path(filename).name
-    note = _missing_image_note(filename)
+    note = _missing_image_note(filename) + z_note
     if str(filename).lower().endswith(".pdf"):
         from ..extras import has_pymupdf, pdf_vector_note
         if not has_pymupdf():

@@ -395,6 +395,39 @@ def _channel_count_from_file(filename) -> int | None:
         return None
 
 
+def _z_stack_projection(img: ET.Element, filename) -> str:
+    """A new Z stack shows its max projection when the user's preference says
+    so (View → Show new Z stacks as max projection, on by default), as in the
+    GUI: added through the MCP server it always showed its first slice, often
+    nearly black. Sets the projection on *img* and returns a note, or ''.
+    Only TIFFs are checked (from the header); only stacks whose last extra
+    axis is Z, so a time series keeps its first frame — the GUI's rule."""
+    if not isinstance(filename, str) or not filename.lower().endswith((".tif", ".tiff")) \
+            or not os.path.isfile(filename):
+        return ""
+    try:
+        import tifffile as _tf
+        with _tf.TiffFile(filename) as t:
+            axes, shape = t.series[0].axes, t.series[0].shape
+    except Exception:
+        return ""
+    extra = [a for a in axes if a not in "YXCS"]
+    if not extra or extra[-1] != "Z" or shape[axes.index("Z")] < 2:
+        return ""
+    n_z = shape[axes.index("Z")]
+    try:
+        from pyfigures.gui.user_prefs import load_max_project_z_stacks
+        project = load_max_project_z_stacks()
+    except Exception:
+        project = True
+    if project:
+        _set_child_text(img, "projection", "max")
+        return (f"\nNOTE: Z stack of {n_z} slices: shown as its max projection "
+                f"(configure_image projection='none' shows one slice).")
+    return (f"\nNOTE: Z stack of {n_z} slices: its first slice is shown "
+            f"(configure_image projection='max' for a max projection).")
+
+
 def _reset_luts_for_new_file(img: ET.Element, filename: str) -> str:
     """When a panel gets another file (a template slot filled) whose channel
     count differs from its stored LUTs, drop the LUTs and channel choice so the
