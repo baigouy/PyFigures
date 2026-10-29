@@ -386,6 +386,26 @@ def test_no_tool_saves_nan_or_infinity(fig, tool, kw):
     assert open(fig, encoding="utf-8").read() == before
 
 
+@pytest.mark.parametrize("w", [57, 58, 29, 113])
+def test_figure_panels_keep_their_exact_pixel_size(w):
+    """A 58 px kymograph (0.58 in at 100 dpi) measured 57.9999 px and was
+    saved 57 px wide by the GUI, one less than the MCP tool had laid out."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from qtpy.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from batoolset.matplolibs.tools import get_fig_rect
+    fig = plt.figure(figsize=(w / 100.0, 24 / 100.0), dpi=100)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.imshow(np.zeros((24, w)))
+    ax.axis("off")
+    fig._pyfigures_pad_inches = 0
+    r = get_fig_rect(fig)
+    plt.close(fig)
+    assert (r.width(), r.height()) == (w, 24)
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json
