@@ -684,6 +684,10 @@ def style_annotation(
     """
     if vertical_align is not None and vertical_align not in ("superscript", "subscript", "normal"):
         return "ERROR: vertical_align must be superscript, subscript or normal."
+    if color is not None:
+        from qtpy.QtGui import QColor
+        if not QColor(str(color).strip()).isValid():    # 'zzz' was written into the label
+            return f"ERROR: color {color!r} is not a colour name or #rrggbb. Nothing was changed."
     if all(v is None for v in
            (font_family, font_size, bold, italic, underline, color, background, vertical_align)):
         return ("ERROR: nothing to change — set at least one of font_family, "
@@ -812,7 +816,11 @@ def add_lut_calibration_bar(
     names, errors = _canonical_lut_names([lut])
     if errors:
         return f"ERROR: {errors[0]}; nothing was added (list_luts lists every LUT name)."
-    lut = names[0] or lut
+    if not names[0]:
+        return "ERROR: lut is empty: give a LUT name (list_luts lists them); nothing was added."
+    lut = names[0]
+    if not vmin < vmax:      # a reversed or empty range drew a bar with nonsense ticks
+        return f"ERROR: vmin ({vmin:g}) must be below vmax ({vmax:g}); nothing was added."
     try:
         script = build_calibration_bar_script(
             lut=lut, vmin=vmin, vmax=vmax, label=label,
@@ -2189,6 +2197,9 @@ def simulate_color_blindness(pyf_path: str, cvd_type: str = "deuteranopia",
         raise ValueError(f"no such .pyf file: {pyf_path}")
     from pyfigures.cvd import resolve_type, simulate_array
     resolve_type(cvd_type)                      # validate early (raises on bad type)
+    if out_path and os.path.splitext(out_path)[1].lower() not in (".png", ".jpg", ".jpeg", ".tif", ".tiff"):
+        # was found out only after rendering: "unknown file extension: "
+        raise ValueError(f"out_path must end in .png, .jpg or .tif (got {out_path!r})")
 
     tmp = os.path.join(tempfile.mkdtemp(prefix="pyf_cvd_"), "fig.png")
     ok, msg = _run_render(pyf_path, tmp, dpi)

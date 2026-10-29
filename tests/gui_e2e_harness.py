@@ -968,6 +968,10 @@ class DialogPilot:
                     return False
                 if type(c).__name__ == "PleaseWaitDialog":    # a progress window: closes itself
                     return False
+                # the QC busy bar (pfgui._run_busy) shows only when the work
+                # takes over 200 ms — on a loaded machine — and closes itself
+                if type(c).__name__ == "QProgressDialog" and c.windowTitle() == "Please wait":
+                    return False
                 return c is cands[0] or c.isModal()
             except RuntimeError:              # wrapper of a dialog Qt already deleted
                 return False

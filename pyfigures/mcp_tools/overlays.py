@@ -630,6 +630,13 @@ def add_zoom_callout(
         return "ERROR: parent_width and parent_height must be positive."
     if connectors not in (0, 1, 2):
         return "ERROR: connectors must be 0, 1 or 2."
+    if inset_filename is not None:
+        # a missing file was taken: the callout's inset stayed empty
+        from .core import _unreadable_image
+        bad = _unreadable_image(inset_filename) or (
+            None if os.path.isfile(inset_filename) else f"no such file: {inset_filename}")
+        if bad:
+            return f"ERROR: inset_filename: {bad}."
     if source_x < 0 or source_y < 0 or source_x + source_w > parent_width + 0.5 \
             or source_y + source_h > parent_height + 0.5:
         # a box beyond the image magnified a smear of edge pixels (a model gave

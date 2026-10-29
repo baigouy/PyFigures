@@ -769,7 +769,8 @@ def _rows_of(recipe):
         return _layout_rows(recipe)[2]
     has_rows, has_panels = "rows" in recipe, "panels" in recipe
     if has_rows == has_panels:
-        raise RecipeError("a recipe needs either 'rows' or 'panels' (not both)")
+        raise RecipeError("a recipe needs either 'rows' or 'panels' (not both)" if has_rows
+                          else "a recipe needs 'rows' or 'panels'")
     if has_rows:
         rows = recipe["rows"]
         if not isinstance(rows, list) or not rows:

@@ -1366,6 +1366,11 @@ def resize_figure(
     canvas_units = target_in * 72.0              # PyFigures canvas width (pt)
     if target_px <= 0 or canvas_units <= 0:
         return f"ERROR: computed width {target_px}px is invalid."
+    # checked before resizing: a bad value was refused after the figure had
+    # already been resized
+    mode = {True: "shrink", False: "off"}.get(fit_height, str(fit_height).lower())
+    if mode not in ("shrink", "column", "off"):
+        return "ERROR: fit_height must be true/'shrink', 'column' or false/'off'."
 
     # ── Delegate to set_size which uses the PyFigures layout engine ─────────
     result = set_size(pyf_path, canvas_units, group_path)   # also re-stacks the rows
@@ -1381,9 +1386,6 @@ def resize_figure(
         else:
             limit = _journal_max_height(journal)
     fitted_to = None
-    mode = {True: "shrink", False: "off"}.get(fit_height, str(fit_height).lower())
-    if mode not in ("shrink", "column", "off"):
-        return "ERROR: fit_height must be true/'shrink', 'column' or false/'off'."
     height = _figure_height_mm(pyf_path) if limit is not None else None
     if height is not None and height > limit[0] * 1.002:
         column_mm = target_in * 25.4
@@ -1567,7 +1569,7 @@ def set_image_filename(
     _set_child_text(imgs[image_index], "filename", _encode_str(new_filename))
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Image {image_index} in {loc} → {new_filename}."
+    return f"Image {image_index} in {loc} → {new_filename}." + _missing_image_note(new_filename)
 
 
 @mcp.tool()

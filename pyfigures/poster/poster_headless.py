@@ -402,11 +402,18 @@ def op_clear_background(args):
     return {'ok': True, 'background': None}
 
 
+def _image_index_message(index, canvas):
+    n = len(canvas.shapes_to_draw)
+    if not n:
+        return f'image index {index} out of range: this page has no images or text boxes'
+    return f'image index {index} out of range (0..{n - 1})'
+
+
 def op_remove_image(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if not (0 <= args.index < len(canvas.shapes_to_draw)):
-        raise IndexError(f'image index {args.index} out of range (0..{len(canvas.shapes_to_draw) - 1})')
+        raise IndexError(_image_index_message(args.index, canvas))
     del canvas.shapes_to_draw[args.index]
     canvas.selected = None
     _save(canvas, args.poster)
@@ -417,7 +424,7 @@ def op_set_frame(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if not (0 <= args.index < len(canvas.shapes_to_draw)):
-        raise IndexError(f'image index {args.index} out of range (0..{len(canvas.shapes_to_draw) - 1})')
+        raise IndexError(_image_index_message(args.index, canvas))
     shape = canvas.shapes_to_draw[args.index]
     from pyfigures.poster.poster_shapes import PosterText
     if isinstance(shape, PosterText):
@@ -551,7 +558,7 @@ def op_ungroup(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if not (0 <= args.index < len(canvas.shapes_to_draw)):
-        raise IndexError(f'image index {args.index} out of range (0..{len(canvas.shapes_to_draw) - 1})')
+        raise IndexError(_image_index_message(args.index, canvas))
     if canvas.shapes_to_draw[args.index].group_id is None:
         raise ValueError(f'shape {args.index} is not in a group (layouts group the photos they '
                          'place; see list_poster_images, group_id)')
@@ -565,7 +572,7 @@ def op_fill_slot(args):
     _app = _make_app()  # noqa: F841 (must stay referenced)
     canvas = _canvas_from(args.poster, page=getattr(args, 'page', None))
     if not (0 <= args.index < len(canvas.shapes_to_draw)):
-        raise IndexError(f'image index {args.index} out of range (0..{len(canvas.shapes_to_draw) - 1})')
+        raise IndexError(_image_index_message(args.index, canvas))
     shape = canvas.shapes_to_draw[args.index]
     if not shape.is_template:
         raise ValueError(f'image {args.index} is not an empty template slot '

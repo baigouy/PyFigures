@@ -308,6 +308,86 @@ def _output_clash(fn, args, kwargs) -> str | None:
     return None
 
 
+_PATH_SUFFIXES = ("_path", "_pyf", "_html", "_dir", "filename", "folder")
+
+
+def _empty_path_argument(fn, args, kwargs) -> str | None:
+    """Why the call passes an empty file or folder path, or None. '' resolved
+    to the working directory: index_figures(index_path='') tried to replace
+    the current folder with its index file, and get_xml('') raised a raw
+    PermissionError."""
+    import inspect
+    try:
+        sig = inspect.signature(fn)
+        bound = sig.bind_partial(*args, **kwargs).arguments
+    except TypeError:
+        return None
+    for name, value in bound.items():
+        if sig.parameters[name].default == "":     # '' means "none" there (show_me_how)
+            continue
+        if name.endswith(_PATH_SUFFIXES) and isinstance(value, str) and not value.strip():
+            return f"ERROR: {name} is empty: give a file or folder path. Nothing was changed."
+    return None
+
+
+# Numbers whose meaning is the same in every tool: (lowest, highest, lowest
+# included). A schema sweep of all tools found -1 strokes, 0 dpi renders that
+# crashed, -1 rows per kymograph frame, 10-million-dpi exports, 1e9 pt fonts.
+_RANGES = {
+    **{n: (0, 2400, False) for n in ("dpi", "thumb_dpi", "min_dpi")},
+    **{n: (0, 1000, False) for n in ("font_size", "font_pt", "min_pt", "min_font_pt")},
+    **{n: (0, 1000, True) for n in ("stroke", "border_size", "inset_border", "tick", "label_gap")},
+    **{n: (0, 100000, True) for n in ("spacing", "spacing_px", "default_spacing", "gap", "gap_mm",
+                                     "margin_mm", "frame_height")},
+    **{n: (0, 100000, False) for n in ("max_dimension", "max_dim", "width_px", "scale_bar_width",
+                                       "bar_width_in_units", "scale_bar_units", "radius_mm")},
+    **{n: (0, 10000, False) for n in ("width_mm", "height_mm", "max_height_mm")},
+    "width_cm": (0, 1000, False), "width_in": (0, 400, False),
+    "line_width": (0, 1000, False), "z_scale": (0, 1000, False),
+    **{n: (0, 1e6, False) for n in ("px_to_unit", "scale_bar_px_to_unit")},
+    **{n: (0, 1000, False) for n in ("columns", "num_cols", "num_rows", "block")},
+    "min_clones": (0, 1e6, False),
+}
+
+
+def _out_of_range_argument(fn, args, kwargs) -> str | None:
+    """Why an argument is out of its range, an unknown placement, an empty
+    font name or a negative group index, or None. Only arguments the caller
+    passed are checked, and a value equal to the parameter's default is
+    always allowed (frame_height=0 means 'automatic')."""
+    import inspect
+    try:
+        sig = inspect.signature(fn)
+        bound = sig.bind_partial(*args, **kwargs).arguments
+    except TypeError:
+        return None
+    from .core import _corner_error, _placement_error
+    for name, value in bound.items():
+        default = sig.parameters[name].default
+        if value is None or isinstance(value, bool) or value == default:
+            continue
+        if name in _RANGES and isinstance(value, (int, float)):
+            lo, hi, lo_ok = _RANGES[name]
+            if value < lo or (value == lo and not lo_ok) or value > hi:
+                low = ("not negative" if lo_ok and lo == 0 else "positive" if lo == 0
+                       else f"{'≥' if lo_ok else '>'} {lo:g}")
+                return (f"ERROR: {name} must be {low} and at most {hi:g} (got {value!r}). "
+                        "Nothing was changed.")
+        elif name.endswith("placement") and isinstance(value, str):
+            bad = _corner_error(value) if name == "bar_placement" else _placement_error(value)
+            if bad:
+                return f"ERROR: {name}: {bad}. Nothing was changed."
+        elif name == "projection" and isinstance(value, str) \
+                and value.strip().lower() not in ("max", "min", "avg", "none", ""):
+            return f"ERROR: projection must be 'max', 'min', 'avg' or 'none' (got {value!r})."
+        elif name in ("font_family", "font") and isinstance(value, str) and not value.strip():
+            return f"ERROR: {name} is empty: give a font name (list_fonts shows them)."
+        elif name.endswith("group_path") and isinstance(value, (list, tuple)) \
+                and any(isinstance(i, int) and i < 0 for i in value):
+            return f"ERROR: {name} {list(value)} has a negative index; use describe_figure for the paths."
+    return None
+
+
 def _non_finite_argument(fn, args, kwargs) -> str | None:
     """Why the call carries a NaN / infinite number (alone or in a list), or
     None. They were saved as ROI corners, bracket heights, arrow tails, pixel
@@ -344,11 +424,16 @@ def _tool_with_warnings(*t_args, **t_kwargs):
         @functools.wraps(fn)
         def inner(*args, **kwargs):
             _TOOL_WARNINGS.clear()
-            clash = _non_finite_argument(fn, args, kwargs) or _output_clash(fn, args, kwargs)
+            clash = (_non_finite_argument(fn, args, kwargs) or _empty_path_argument(fn, args, kwargs)
+                     or _out_of_range_argument(fn, args, kwargs) or _output_clash(fn, args, kwargs))
             if clash:
                 return clash
+            from .core import ColorError
             try:
                 res = fn(*args, **kwargs)
+            except ColorError as e:
+                # raised while reading the arguments, before anything is saved
+                res = f"ERROR: {e}"
             except FileNotFoundError as e:
                 # a clear answer instead of a raw "[Errno 2]" traceback text
                 missing = e.filename or str(e)

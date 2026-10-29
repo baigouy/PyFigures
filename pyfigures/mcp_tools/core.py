@@ -883,9 +883,16 @@ _NAMED_COLORS: dict[str, int] = {
 }
 
 
+class ColorError(ValueError):
+    """An unreadable colour; the tool wrapper answers it as an ERROR."""
+
+
 def _color_to_int(color_spec) -> int:
     """Convert a color specification (name, #rrggbb, or integer) to int."""
-    if isinstance(color_spec, (int, float)):
+    if isinstance(color_spec, (int, float)) and not isinstance(color_spec, bool):
+        if not 0 <= color_spec <= 0xFFFFFFFF:      # -1 was stored, and drawn white
+            raise ColorError(f"Cannot parse color {color_spec!r}: an integer colour is 0xRRGGBB, "
+                             "0 to 16777215.")
         return int(color_spec)
     s = str(color_spec).strip()
     if s.lower() in _NAMED_COLORS:
@@ -896,7 +903,7 @@ def _color_to_int(color_spec) -> int:
         s_hex = s_hex[0] * 2 + s_hex[1] * 2 + s_hex[2] * 2
     if len(s_hex) in (6, 8) and all(c in "0123456789abcdefABCDEF" for c in s_hex):
         return int(s_hex[-6:], 16)
-    raise ValueError(
+    raise ColorError(
         f"Cannot parse color {color_spec!r}. "
         "Use a name (white, yellow, …), #rrggbb hex, or an integer."
     )

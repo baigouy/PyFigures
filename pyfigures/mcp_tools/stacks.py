@@ -438,7 +438,8 @@ def add_channel_split(
                           names=["DAPI", "GFP", "RFP"], colors=["blue", "green", "magenta"])
     """
     if bool(stack_path) == bool(channel_files):
-        return "ERROR: give either stack_path or channel_files (not both)."
+        return ("ERROR: give either stack_path or channel_files (not both)." if stack_path
+                else "ERROR: give stack_path or channel_files.")
     err = _check_crop(crop)
     if err:
         return err
