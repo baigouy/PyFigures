@@ -42,7 +42,8 @@ def scatter_layout(shapes, page_width_mm, page_height_mm, indices=None,
     if not targets:
         return
     lo_x, hi_x = margin_mm, max(margin_mm, page_width_mm - margin_mm)
-    lo_y, hi_y = _free_band(shapes, targets, page_height_mm, margin_mm)
+    band = _free_band(shapes, targets, page_height_mm, margin_mm)
+    lo_y, hi_y = band
     # centres far enough from the band's edges for an untilted photo to stay in it
     half_h = min(max(s.height_mm for s in targets) / 2.0, (hi_y - lo_y) / 2.0)
     lo_y, hi_y = lo_y + half_h, hi_y - half_h
@@ -50,7 +51,7 @@ def scatter_layout(shapes, page_width_mm, page_height_mm, indices=None,
         shape.set_center_mm(rng.uniform(lo_x, hi_x), rng.uniform(lo_y, hi_y))
         shape.theta = rng.uniform(-max_rotation_deg, max_rotation_deg)
     if fit_to_page:
-        _fit_group_to_page(targets, page_width_mm, page_height_mm, margin_mm=margin_mm)
+        _fit_group_to_page(targets, page_width_mm, page_height_mm, margin_mm=margin_mm, band=band)
 
 
 def _free_band(shapes, targets, page_height_mm, margin_mm, gap_mm=6.0):
@@ -74,32 +75,38 @@ def _free_band(shapes, targets, page_height_mm, margin_mm, gap_mm=6.0):
     return top, bottom
 
 
-def _fit_group_to_page(shapes, page_width_mm, page_height_mm, margin_mm=10.0):
+def _fit_group_to_page(shapes, page_width_mm, page_height_mm, margin_mm=10.0, band=None):
     """If *shapes*' combined bounding box (frame included) doesn't already fit
     inside the page with margin_mm to spare, uniformly shrink and recenter the
     whole group (never enlarge) so it does — relative position/spacing/tilt is
     preserved, just at a size that fits. No-op if it already fits or if
     *shapes* is empty, so a caller that already lands cleanly on the page is
-    left untouched."""
+    left untouched.
+
+    *band*: (top, bottom) in mm the group must stay within vertically (the
+    room left under a title / above a footer, see _free_band); the margins
+    otherwise. Recentring on the whole page pulled thrown photos up over the
+    poster's title."""
     if not shapes:
         return
+    band_top, band_bottom = band if band else (margin_mm, page_height_mm - margin_mm)
     rects = [s.bounding_rect_mm() for s in shapes]
     left = min(r.left() for r in rects)
     right = max(r.right() for r in rects)
     top = min(r.top() for r in rects)
     bottom = max(r.bottom() for r in rects)
-    if (left >= margin_mm and top >= margin_mm and
-            right <= page_width_mm - margin_mm and bottom <= page_height_mm - margin_mm):
+    if (left >= margin_mm and top >= band_top and
+            right <= page_width_mm - margin_mm and bottom <= band_bottom):
         return  # already fits — don't touch it
     bbox_w = max(right - left, 1e-6)
     bbox_h = max(bottom - top, 1e-6)
     avail_w = max(page_width_mm - 2 * margin_mm, 1.0)
-    avail_h = max(page_height_mm - 2 * margin_mm, 1.0)
+    avail_h = max(band_bottom - band_top, 1.0)
     scale = min(avail_w / bbox_w, avail_h / bbox_h, 1.0)
     if scale <= 0:
         return
     bbox_cx, bbox_cy = (left + right) / 2.0, (top + bottom) / 2.0
-    page_cx, page_cy = page_width_mm / 2.0, page_height_mm / 2.0
+    page_cx, page_cy = page_width_mm / 2.0, (band_top + band_bottom) / 2.0
     for shape in shapes:
         c = shape.center_mm()
         shape.width_mm *= scale
@@ -205,4 +212,5 @@ def grid_layout(shapes, page_width_mm, page_height_mm, indices=None,
         shape.set_center_mm(cell_cx, cell_cy)
 
     if fit_to_page:
-        _fit_group_to_page(targets, page_width_mm, page_height_mm, margin_mm=margin_mm)
+        _fit_group_to_page(targets, page_width_mm, page_height_mm, margin_mm=margin_mm,
+                           band=(band_top, band_bottom))

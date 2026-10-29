@@ -428,6 +428,51 @@ def test_new_z_stack_follows_the_max_projection_preference(tmp_path, zstack, mon
     assert M.get_image_property(pyf, [0], 2, "projection") == "None"
 
 
+def test_alt_text_names_unlettered_panels_after_their_letter(fig):
+    """Letters per row gave 'Panel a … Panel 2 … Panel b' (two numberings)."""
+    import json
+    M.apply_journal_guidelines(fig, journal="nature", column="single", add_panel_labels=True)
+    long_text = json.loads(M.generate_alt_text(fig))["long"]
+    assert "Panel a, image 2:" in long_text and "Panel b:" in long_text, long_text
+    assert "Panel 2" not in long_text
+
+
+def test_scattered_photos_never_cover_the_title_whatever_the_throw():
+    """arrange_poster_scatter is random: now and then the shrink-to-fit
+    recentred the photos on the whole page, over the title (a flaky test of
+    28 Oct caught it at y=35.7 mm under a title ending at 40 mm)."""
+    from pyfigures.poster.poster_layouts import scatter_layout
+
+    class Shape:
+        def __init__(self, w, h, x=20, y=20):
+            self.width_mm, self.height_mm, self.theta = w, h, 0.0
+            self._c = (x + w / 2, y + h / 2)
+
+        def set_center_mm(self, x, y):
+            self._c = (x, y)
+
+        def center_mm(self):
+            from qtpy.QtCore import QPointF
+            return QPointF(*self._c)
+
+        def bounding_rect_mm(self):
+            import math
+            from qtpy.QtCore import QRectF
+            t = math.radians(self.theta)
+            w = abs(self.width_mm * math.cos(t)) + abs(self.height_mm * math.sin(t))
+            h = abs(self.width_mm * math.sin(t)) + abs(self.height_mm * math.cos(t))
+            return QRectF(self._c[0] - w / 2, self._c[1] - h / 2, w, h)
+
+    from pyfigures.poster.poster_shapes import PosterText
+    title = PosterText.__new__(PosterText)
+    title.bounding_rect_mm = lambda: __import__("qtpy.QtCore", fromlist=["QRectF"]).QRectF(10, 10, 190, 30)
+    for seed in range(300):
+        photos = [Shape(60, 60) for _ in range(4)]
+        scatter_layout([title] + photos, 210, 297, seed=seed)
+        top = min(p.bounding_rect_mm().top() for p in photos)
+        assert top >= 40, (seed, top)
+
+
 def test_alt_text_without_a_title_starts_with_a_capital(fig):
     """(28 Oct, manuscript rebuild) the alt text opened with 'figure with ...'."""
     import json

@@ -492,11 +492,21 @@ def generate_alt_text(pyf_path: str, save: bool = False) -> str:
         panels.append([letter, kind, base, labels, extras, 1, comment, False, [letter] if letter else []])
 
     parts = []
+    last_letter, nth = "", 1
     for number, (letter, kind, base, labels, extras, count, comment, has_merge, letters) \
             in enumerate(panels, start=1):
         # no letter: number it in reading order ("A panel: … A panel: …" told
-        # a screen-reader user nothing about which panel was which)
-        who = f"Panel {letter or number}"
+        # a screen-reader user nothing about which panel was which); after a
+        # lettered panel it is that panel's next image ("Panel a, image 2"):
+        # "Panel a … Panel 2 … Panel b … Panel 4" mixed two numberings
+        if letter:
+            last_letter, nth = letters[-1] if letters else letter, 1
+            who = f"Panel {letter}"
+        elif last_letter:
+            nth += 1
+            who = f"Panel {last_letter}, image {nth}"
+        else:
+            who = f"Panel {number}"
         if len(letters) > 1:
             who = f"Panels {letters[0]}–{letters[-1]}"
         if kind.startswith("series:"):
