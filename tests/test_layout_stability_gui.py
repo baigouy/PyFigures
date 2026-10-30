@@ -113,6 +113,53 @@ def test_dragging_a_nested_panel_onto_its_own_row_moves_it(gui, tmp_path, orient
     assert all(im["zstack"] is not c for c in inner.content)
 
 
+def test_split_by_a_dimension_uses_the_panel_it_was_asked_for(gui, qapp, tmp_path):
+    """Monkey seed 113: the split runs 100 ms after the click and read the
+    selection then; cleared meanwhile -> AttributeError in a slot (PyQt6
+    aborts the app). The panel is now taken when the action runs."""
+    import time
+    import tifffile
+    from batoolset.drawings.shapes.image2d import Image2D
+    z = str(tmp_path / "z.tif")
+    tifffile.imwrite(z, (np.arange(4 * 30 * 30) % 200).astype(np.uint8).reshape(4, 30, 30),
+                     imagej=True, metadata={"axes": "ZYX"})
+    p = gui.paint.EZFIG_panel
+    img = Image2D(filename=z)
+    p.shapes_to_draw = [img]
+    p.selected_shape = img
+    errors = []
+    import sys
+    old_hook = sys.excepthook
+    sys.excepthook = lambda *a: errors.append(a[1])
+    try:
+        p.run_split()
+        p.selected_shape = None                  # the selection changes meanwhile
+        t0 = time.time()
+        while time.time() - t0 < 1.0:
+            qapp.processEvents()
+            time.sleep(0.01)
+    finally:
+        sys.excepthook = old_hook
+    assert not errors, errors
+    from test_dnd_main_editor import _all_images
+    assert len(_all_images(gui)) == 5, _all_images(gui)     # the stack + its 4 planes
+
+
+def test_an_edit_run_a_moment_later_happens_before_an_undo(gui, qapp, tmp_path):
+    """Monkey seed 130: 'To panel' runs 0.3 s after the click; an undo in
+    between undid the previous action and the panel landed after it. Undo now
+    lets the waiting edit run first."""
+    p = gui.paint.EZFIG_panel
+    pyf = _two_rows(tmp_path)
+    gui.reload_state(pyf, append=False)
+    done = []
+    p.defer_edit(300, lambda: done.append(True))
+    assert gui._images_loading()                 # exports wait for it as well
+    gui.undo()
+    assert done == [True]
+    assert not gui._images_loading()
+
+
 def test_a_label_without_its_text_does_not_break_the_layout():
     from batoolset.drawings.shapes.compute_optimal_size_all_merged import resize_incompressible_rects
     from batoolset.drawings.shapes.image2d import Image2D

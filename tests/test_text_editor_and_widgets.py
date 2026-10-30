@@ -445,3 +445,20 @@ def test_colour_assistant_uses_no_real_screen(qapp):
     img = pm.toImage()
     assert img.pixelColor(img.width() // 2, img.height() // 2).red() == 200   # the synthetic patch's red
     w.close()
+
+
+def test_colour_assistant_with_an_odd_capture_width(qapp, monkeypatch):
+    """A grey channel of a width not a multiple of 4 was read with 4-byte
+    aligned rows: the preview came out skewed (and read past its buffer)."""
+    from PIL import Image, ImageGrab
+    from pyfigures.gui.colorassistant import ColorAssistant
+    patch = Image.new("RGB", (30, 10), (0, 0, 0))
+    for y in range(10):
+        patch.putpixel((y, y), (255, 0, 0))               # a diagonal line
+    monkeypatch.setattr(ImageGrab, "grab", lambda *a, **k: patch)
+    w = ColorAssistant(capture_width=30, capture_height=10)
+    w.resize(30, 30)
+    w.update_pixel_color()
+    img = w._label_red.pixmap().toImage().scaled(30, 10)
+    assert img.pixelColor(5, 5).red() > 100 and img.pixelColor(25, 5).red() < 100
+    w.close()

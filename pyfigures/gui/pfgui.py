@@ -2983,7 +2983,7 @@ class EZFIG_GUI(QMainWindow):
         # show the panel-layout dialog with Image2D objects (not raw filenames) so
         # Group.__init__ won't re-load them.
         self._load_images_then_callback(lst,
-            lambda imgs: QTimer.singleShot(300, lambda: self.paint.EZFIG_panel._create_panel_real(imgs)))
+            lambda imgs: self.paint.EZFIG_panel.defer_edit(300, lambda: self.paint.EZFIG_panel._create_panel_real(imgs)))
 
     def add_image_from_url_action(self):
         """Insert > Add image from URL / OME-Zarr / OMERO…: one image, added as a
@@ -3561,7 +3561,13 @@ class EZFIG_GUI(QMainWindow):
         """An edit made less than 0.8 s ago (spacing spinner, a move) is still
         waiting for its debounced undo checkpoint. Record it now: otherwise the
         checkpoint landed AFTER the undo/redo, re-applied the edit and wiped
-        the redo history."""
+        the redo history. An edit still waiting to run (defer_edit) runs first
+        for the same reason."""
+        import time as _time
+        t0 = _time.time()
+        while getattr(self.paint.EZFIG_panel, 'pending_edits', 0) > 0 and _time.time() - t0 < 5:
+            QApplication.processEvents()
+            _time.sleep(0.01)
         spin_timer = getattr(self, 'main_space_spinner_changed_timer', None)
         if spin_timer is not None and spin_timer.isActive():
             spin_timer.stop()
@@ -7621,7 +7627,8 @@ class EZFIG_GUI(QMainWindow):
             running = False
         return running or getattr(self, '_pyf_loads_pending', 0) > 0 \
             or bool(getattr(self, '_lazy_img_queue', None)) \
-            or bool(getattr(self, '_active_img_loaders', None))
+            or bool(getattr(self, '_active_img_loaders', None)) \
+            or getattr(self.paint.EZFIG_panel, 'pending_edits', 0) > 0
 
     def wait_for_images(self, timeout=600):
         """Block (keeping the window responsive) until the figure's images have

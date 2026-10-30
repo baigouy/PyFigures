@@ -74,7 +74,10 @@ class ColorAssistant(QWidget):
             label_height = self.height() // 3
 
             for channel, label in zip((r, g, b), (self._label_red, self._label_green, self._label_blue)):
-                qimage = QImage(channel.tobytes(), channel.width, channel.height, QImage.Format_Grayscale8)
+                # bytes per line given: without it Qt takes 4-byte aligned rows, and a
+                # width not a multiple of 4 came out skewed (reading past the buffer)
+                qimage = QImage(channel.tobytes(), channel.width, channel.height, channel.width,
+                                QImage.Format_Grayscale8)
                 pixmap = QPixmap.fromImage(qimage)
 
                 scaled_pixmap = pixmap.scaled(widget_width, label_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)

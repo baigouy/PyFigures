@@ -2084,10 +2084,28 @@ class MyWidget(QWidget):
 
         # self.contextMenu.addSeparator()
     def run_split(self):
+        # the panel is taken NOW: the split runs 100 ms later, when the
+        # selection may already be another shape or none (AttributeError in a
+        # slot - PyQt6 aborts the app)
+        target = self.selected_shape
+        if not isinstance(target, Image2D):
+            return
         self._please_wait_dialog.show()
-        QTimer.singleShot(100, lambda:self.run_slow_process(self.slow_process)) # very dirty but functional way of making the slow process dialog appear
+        self.defer_edit(100, lambda: self.run_slow_process(lambda: self.slow_process(target))) # very dirty but functional way of making the slow process dialog appear
 
-    def slow_process(self):
+    def defer_edit(self, ms, fn):
+        """Run the edit *fn* after *ms* (a dialog first shows), counted in
+        pending_edits meanwhile: an undo or an export in that window acted on
+        the figure before the edit, and the edit landed after it (the 'To
+        panel' rows appeared 0.3 s later, after an undo)."""
+        self.pending_edits = getattr(self, 'pending_edits', 0) + 1
+
+        def run():
+            self.pending_edits -= 1
+            fn()
+        QTimer.singleShot(ms, run)
+
+    def slow_process(self, target=None):
         # split the image selected by the first dimension
         # print('dabu',isinstance(self.paint.EZFIG_panel.selected_shape.img, np.ndarray))
 
@@ -2095,6 +2113,10 @@ class MyWidget(QWidget):
 
         # print('bobjsdnfsndb')
 
+        if target is not None:
+            self.selected_shape = target
+        if not isinstance(self.selected_shape, Image2D):
+            return
         extra_dims = self.selected_shape.get_extra_dimensions(handle_proj=True)
         if extra_dims:
             guessed_dimensions = guess_dimensions(self.selected_shape.img)

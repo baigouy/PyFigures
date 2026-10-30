@@ -248,7 +248,8 @@ def busy(g):
         running = th is not None and th.isRunning()
     except RuntimeError:
         running = False
-    return bool(running or getattr(g, "_lazy_img_queue", None) or getattr(g, "_active_img_loaders", None))
+    return bool(running or getattr(g, "_lazy_img_queue", None) or getattr(g, "_active_img_loaders", None)
+                or getattr(panel(g), "pending_edits", 0))      # an edit run a moment later (defer_edit)
 
 
 def settle(qapp, g, cond=None, timeout=30):
