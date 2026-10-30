@@ -769,6 +769,33 @@ def _set_alpha(fill_or_line_fill, alpha):
         pass
 
 
+def scaled_scene(scene, s):
+    """A copy of *scene* with every length multiplied by *s* (positions, sizes,
+    font sizes, line widths)."""
+    def run(r):
+        r = dict(r)
+        for k in ("size", "width", "x", "y"):
+            if isinstance(r.get(k), (int, float)):
+                r[k] = r[k] * s
+        return r
+
+    items = []
+    for it in scene["items"]:
+        it = run(it)
+        if it["kind"] == "image":
+            for k in ("cx", "cy", "w", "h"):
+                it[k] = it[k] * s
+        elif it["kind"] == "path":
+            it["subpaths"] = [([(x * s, y * s) for x, y in pts], closed) for pts, closed in it["subpaths"]]
+            it["stroke_width"] = it["stroke_width"] * s
+        if "runs" in it:
+            it["runs"] = [run(r) for r in it["runs"]]
+        items.append(it)
+    out = dict(scene, items=items)
+    out["width"], out["height"] = scene["width"] * s, scene["height"] * s
+    return out
+
+
 def write_pptx(scene, out_path):
     """Write *scene* as a one-slide .pptx with native, editable objects."""
     from pptx import Presentation
@@ -780,11 +807,11 @@ def write_pptx(scene, out_path):
         return Emu(int(round(v * EMU_PER_PT)))
 
     # PowerPoint slides are 1 to 56 inches on a side: a smaller figure sits
-    # at the top left of a 1-inch slide; a larger one cannot be a slide
+    # at the top left of a 1-inch slide; a larger one is scaled down to fit
+    # (still editable; it was refused, and real figures are often 100+ inches)
     longest = max(scene["width"], scene["height"])
     if longest > 56 * 72:
-        raise RuntimeError(f"the figure is {longest / 72:.0f} inches on its longest side; "
-                           f"PowerPoint slides are at most 56 inches: resize the figure first")
+        scene = scaled_scene(scene, 56 * 72 / longest)
     prs = Presentation()
     prs.slide_width = emu(max(scene["width"], 72))
     prs.slide_height = emu(max(scene["height"], 72))

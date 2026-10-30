@@ -24,6 +24,7 @@ from .app import (
 )
 from .core import (
     layout_rows,
+    _MIN_FIT_WIDTH_MM,
     _label_plain_text,
     _missing_image_note,
     _placement_error,
@@ -1401,24 +1402,44 @@ def resize_figure(
                 if result.startswith("ERROR"):
                     return result
                 height = _figure_height_mm(pyf_path)
+        too_narrow = None
         if picked is None and mode in ("shrink", "column"):
-            for _ in range(4):       # heights are not quite linear (gaps, labels)
-                if height is None or height <= limit[0] * 1.002:
-                    break
-                target_in = target_in * limit[0] / height * 0.999
-                result = set_size(pyf_path, target_in * 72.0, group_path)
-                if result.startswith("ERROR"):
-                    return result
-                height = _figure_height_mm(pyf_path)
-                fitted_to = limit[0]
+            # a figure far too tall (a long column of panels) would be narrowed
+            # to a sliver: 885 mm tall at 89 mm went to 0.1 mm, and gaps and
+            # labels, which do not shrink, made it TALLER (1622 mm)
+            estimate = column_mm * limit[0] / height
+            if estimate < _MIN_FIT_WIDTH_MM:
+                too_narrow = estimate
+            else:
+                best = (height, target_in)
+                for _ in range(4):       # heights are not quite linear (gaps, labels)
+                    if height is None or height <= limit[0] * 1.002:
+                        break
+                    target_in = max(target_in * limit[0] / height * 0.999, _MIN_FIT_WIDTH_MM / 25.4)
+                    result = set_size(pyf_path, target_in * 72.0, group_path)
+                    if result.startswith("ERROR"):
+                        return result
+                    height = _figure_height_mm(pyf_path)
+                    if height is None or height >= best[0]:      # narrower but no shorter: undo
+                        height, target_in = best
+                        result = set_size(pyf_path, target_in * 72.0, group_path)
+                        break
+                    best = (height, target_in)
+                    fitted_to = limit[0]
+            if too_narrow is not None or height > limit[0] * 1.002:
+                fitted_to = None
         canvas_units = target_in * 72.0
         target_px = round(target_in * dpi)
+        shrunk = (f"narrowed to {target_in * 25.4:.1f}mm, aspect kept, now {(height or 0):.1f}mm tall"
+                  if too_narrow is None else
+                  f"kept at {column_mm:.1f}mm: to fit it would have to be about {too_narrow:.0f}mm "
+                  f"wide (under {_MIN_FIT_WIDTH_MM:g}mm), its panels too small to read — split it "
+                  f"into several figures or put more panels side by side")
         done = {"off": f"kept at {column_mm:.1f}mm (fit_height off): too tall for the page",
-                "shrink": f"narrowed to {target_in * 25.4:.1f}mm, aspect kept, now "
-                          f"{(height or 0):.1f}mm tall",
+                "shrink": shrunk,
                 "column": (f"set to the {column} column ({target_in * 25.4:g}mm), now "
                            f"{(height or 0):.1f}mm tall") if picked else
-                          f"no journal column fits: narrowed to {target_in * 25.4:.1f}mm"}[mode]
+                          (f"no journal column fits: {shrunk}")}[mode]
         others = "; ".join(c[3] for c in choices)
         fit_note = (f"  At {column_mm:.1f}mm wide the figure is {first_height:.1f}mm tall, above "
                     f"the maximum height {limit[0]:g}mm ({limit[1]}): {done}. Choices: {others}.")

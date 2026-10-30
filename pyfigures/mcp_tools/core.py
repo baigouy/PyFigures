@@ -1337,8 +1337,23 @@ def _unreadable_image(filename: str) -> str | None:
                 if not t.pages:
                     return f"{name} holds no image"
     except Exception as e:
-        return f"{name} cannot be read as an image ({type(e).__name__}: {e})"
+        return f"{name} cannot be read as an image ({type(e).__name__}: {e}){cloud_placeholder_note(name)}"
     return None
+
+
+def cloud_placeholder_note(name: str) -> str:
+    """' — it is an online-only cloud file …' when *name* is a OneDrive /
+    Dropbox placeholder not on this computer (reading it fails with a bare
+    'OSError: [Errno 22] Invalid argument' when it cannot be downloaded), else ''."""
+    try:
+        attrs = getattr(os.stat(name), "st_file_attributes", 0)
+    except OSError:
+        return ""
+    offline = 0x1000 | 0x40000 | 0x400000   # OFFLINE, RECALL_ON_OPEN, RECALL_ON_DATA_ACCESS
+    if not attrs & offline:
+        return ""
+    return (" — it is an online-only cloud file (OneDrive / Dropbox placeholder) that could not be "
+            "downloaded: make it available offline ('Always keep on this device') and try again")
 
 
 def _unreadable_zarr(name: str) -> str | None:
@@ -2155,6 +2170,11 @@ def _journal_max_height(journal: str | None) -> tuple[float, str] | None:
     return best
 
 
+# fit_height never narrows a figure below this: its panels would be too small
+# to read (and gaps / labels, which do not shrink, make it taller again)
+_MIN_FIT_WIDTH_MM = 30.0
+
+
 def _height_choices(journal, width_mm: float, height_mm: float, max_mm: float) -> list:
     """What to do with a figure taller than the journal allows, for the user
     to choose: [(kind, column, width mm, text)] with kind 'shrink' (narrow
@@ -2162,7 +2182,10 @@ def _height_choices(journal, width_mm: float, height_mm: float, max_mm: float) -
     estimated as proportional to the width) and 'off' (keep the width)."""
     fit_w = width_mm * max_mm / height_mm
     out = [("shrink", None, fit_w,
-            f"fit_height='shrink' narrows it to about {fit_w:.0f}mm (between column sizes)")]
+            f"fit_height='shrink' narrows it to about {fit_w:.0f}mm (between column sizes)"
+            if fit_w >= _MIN_FIT_WIDTH_MM else
+            f"fit_height='shrink' cannot help: it would have to be about {fit_w:.0f}mm wide "
+            f"(under {_MIN_FIT_WIDTH_MM:g}mm) — split the figure or put more panels side by side")]
     cols = {}
     if journal:
         from ..journal_styles import journal_info

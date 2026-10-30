@@ -644,12 +644,17 @@ def check_journal_compliance(
             results.append(("height", False, f"could not measure the figure height "
                                              f"(maximum {max_h[0]:g}mm: {max_h[1]})"))
         else:
+            from .core import _MIN_FIT_WIDTH_MM
+            fit_w = (cur_px / 72.0 * 25.4) * max_h[0] / height_mm if cur_sizes and height_mm else None
+            hint = (" — resize_figure with the journal narrows it to fit, or choose a smaller "
+                    "column (fit_height='column')")
+            if fit_w is not None and fit_w < _MIN_FIT_WIDTH_MM:
+                hint = (f" — far too tall to fit by narrowing (it would be about {fit_w:.0f}mm "
+                        f"wide): split it into several figures or put more panels side by side")
             results.append(("height", height_mm <= max_h[0] * 1.01,
                             f"figure {height_mm:.1f}mm tall vs maximum {max_h[0]:g}mm "
                             f"({max_h[1]})"
-                            + ("" if height_mm <= max_h[0] * 1.01 else
-                               " — resize_figure with the journal narrows it to fit, or "
-                               "choose a smaller column (fit_height='column')")))
+                            + ("" if height_mm <= max_h[0] * 1.01 else hint)))
     elif height_mm is not None:
         # nothing to compare with: say how tall it is (the check was invisible)
         results.append(("height", True, f"figure {height_mm:.1f}mm tall; the journal gives no "

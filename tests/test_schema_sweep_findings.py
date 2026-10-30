@@ -251,6 +251,108 @@ def test_pptx_export_keeps_tiny_text(fig, tmp_path):
     assert os.path.getsize(out) > 0
 
 
+@pytest.mark.parametrize("norm", ['{"per_channel": true}', '{"per_channel": true, "ignore_hot_spots": true}',
+                                  '{"range": "custom", "min_value": 10, "max_value": 3000, "per_channel": true}'])
+def test_multichannel_image_with_partial_normalization_loads(tmp_path, norm):
+    """A real-file walk found it: the documented '{"per_channel": true}' (no
+    'range' key) on a multichannel image raised KeyError 'range' in the
+    renderer, so the panel was not loaded and exported empty."""
+    import tifffile
+    stack = str(tmp_path / "c.tif")
+    data = np.stack([np.indices((40, 40)).sum(0) * k for k in (20, 40, 60)]).astype(np.uint16)
+    tifffile.imwrite(stack, data, imagej=True, metadata={"axes": "CYX"})
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], stack)
+    assert not M.configure_image(pyf, [0], 0, normalization=norm).startswith("ERROR")
+    out = str(tmp_path / "o.png")
+    res = M.export_figure(pyf, out, dpi=72)
+    assert not res.startswith("ERROR") and "could not be loaded" not in res, res
+    arr = np.asarray(Image.open(out).convert("RGB")).astype(float)
+    assert arr.std() > 5, "the panel exported empty"
+
+
+@pytest.mark.parametrize("value", [255, 120])
+def test_a_uniform_image_keeps_its_grey(tmp_path, value):
+    """A real-file walk found it: a uniform image (min == max, nothing to
+    stretch) was drawn black whatever its value; a white page came out black."""
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.add_image(pyf, [0], _png(tmp_path / "u.png", value, size=(40, 60)))
+    out = str(tmp_path / "o.png")
+    assert not M.export_figure(pyf, out, dpi=72).startswith("ERROR")
+    arr = np.asarray(Image.open(out).convert("RGBA")).astype(float)
+    h, w = arr.shape[:2]
+    centre = arr[h // 3: 2 * h // 3, w // 3: 2 * w // 3]
+    assert abs(centre[..., :3].mean() - value) < 3 and centre[..., 3].mean() > 250, centre.mean((0, 1))
+
+
+def test_flat_level_on_each_dtype():
+    from batoolset.drawings.shapes.image2d import _flat_level
+    assert _flat_level(255, np.uint8) == 255 and _flat_level(0, np.uint8) == 0
+    assert _flat_level(65535, np.uint16) == 255 and _flat_level(1.0, np.float32) == 255
+    assert _flat_level(0.5, np.float64) == 128 and _flat_level(-3, np.int16) == 0
+    assert _flat_level(float("nan"), np.float32) == 0 and _flat_level(True, np.bool_) == 255
+
+
+@pytest.mark.parametrize("tool", ["journal", "resize"])
+def test_a_far_too_tall_figure_is_not_narrowed_to_a_sliver(tmp_path, tool):
+    """A real-file walk found it: a figure 885 mm tall at Nature's 89 mm was
+    'narrowed to 0.1mm' to fit the 247 mm page; gaps and labels do not shrink,
+    so it came out 1622 mm tall with negative panel scales (-20)."""
+    import xml.etree.ElementTree as ET
+    pyf = str(tmp_path / "tall.pyf")
+    M.create_figure(pyf, num_groups=8)
+    for g in range(8):
+        for k in range(4):
+            M.add_image(pyf, [g], _png(tmp_path / f"i{g}{k}.png", 40 + 20 * k, size=(40, 40)))
+    M.set_orientation(pyf, [0], "vertical")
+    for k in range(10):
+        M.add_image(pyf, [0], _png(tmp_path / f"v{k}.png", 90, size=(60, 40)))
+    res = (M.apply_journal_guidelines(pyf, journal="nature") if tool == "journal"
+           else M.resize_figure(pyf, journal="nature", column="single"))
+    assert "split" in res and "0.1mm" not in res, res
+    root = ET.parse(pyf).getroot()
+    widths = [float(g.findtext("width")) for g in root.findall("Group")]
+    assert all(abs(w - 89 / 25.4 * 72) < 2 for w in widths), widths       # kept at the column
+    scales = [float(i.findtext("scale")) for i in root.iter("Image2D") if i.findtext("scale")]
+    assert min(scales) > 0, scales
+
+
+def test_fit_height_still_narrows_a_figure_slightly_too_tall(tmp_path):
+    import xml.etree.ElementTree as ET
+    pyf = str(tmp_path / "f.pyf")
+    M.create_figure(pyf, num_groups=1)
+    M.set_orientation(pyf, [0], "vertical")
+    for k in range(3):
+        M.add_image(pyf, [0], _png(tmp_path / f"v{k}.png", 90, size=(50, 40)))   # ~330 mm tall
+    res = M.resize_figure(pyf, journal="nature", column="single")
+    assert "narrowed to" in res, res
+    w = float(ET.parse(pyf).getroot().find("Group").findtext("width")) / 72 * 25.4
+    assert 30 <= w < 89, w
+
+
+def test_pptx_scales_a_figure_larger_than_a_slide(tmp_path):
+    """A real 194-inch figure was refused ('PowerPoint slides are at most 56
+    inches'): it is now scaled down to fit the slide, text and lines too."""
+    pptx = pytest.importorskip("pptx")
+    from pyfigures.gui.editable_export import write_pptx
+    big = 200 * 72                                             # 200 inches
+    scene = {"width": big, "height": big / 4, "items": [
+        {"kind": "text", "text": "A", "x": big / 2, "y": 100, "size": 112, "family": "Arial",
+         "bold": False, "italic": False, "color": (0, 0, 0), "rotation": 0},
+        {"kind": "path", "subpaths": [([(0, 0), (big, big / 4)], False)], "fill": None, "fill_opacity": 1,
+         "stroke": (0, 0, 0), "stroke_opacity": 1, "stroke_width": 28}]}
+    out = str(tmp_path / "big.pptx")
+    write_pptx(scene, out)
+    prs = pptx.Presentation(out)
+    assert abs(prs.slide_width.inches - 56) < 0.01 and abs(prs.slide_height.inches - 14) < 0.01
+    shapes = list(prs.slides[0].shapes)
+    text = [s for s in shapes if s.has_text_frame and s.text_frame.text == "A"][0]
+    assert abs(text.text_frame.paragraphs[0].runs[0].font.size.pt - 112 * 56 / 200) < 0.6
+    assert text.left < prs.slide_width
+
+
 def test_colour_blindness_out_path_needs_an_image_extension(fig, tmp_path):
     with pytest.raises(ValueError, match="must end in"):
         M.simulate_color_blindness(fig, out_path=str(tmp_path / "sim"))
