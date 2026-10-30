@@ -708,10 +708,10 @@ class _ScaleBarAllDialog(QFrame):
 class _RemapPathsDialog(QFrame):
     """Rewrite a path prefix on every image filename in the figure."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, old_prefix=""):
         super().__init__(parent)
         grid = QGridLayout(self)
-        self.old_edit = QLineEdit("", self)
+        self.old_edit = QLineEdit(old_prefix, self)
         self.old_edit.setPlaceholderText(r"e.g. C:\old\data")
         self.new_edit = QLineEdit("", self)
         self.new_edit.setPlaceholderText(r"e.g. D:\new\data")
@@ -3717,6 +3717,7 @@ class EZFIG_GUI(QMainWindow):
             self.arrange_text_rows()
             self.paint.EZFIG_panel.update_size()
             self.paint.EZFIG_panel.update()
+            self._warn_missing_images()
 
             if not skip_add_to_stack:
                 if not self.undo_stack:  # if there is no undo --> add one
@@ -3856,6 +3857,7 @@ class EZFIG_GUI(QMainWindow):
         append=False replaces the current figure with the first loaded file
         (File>Open toolbar behaviour); reset_undo resets the undo stack right
         before the objects are applied (interactive Open)."""
+        self._missing_warned_for = None      # every opening says which images are missing
         self._login_to_omero_servers_of(pyf_list)
         # until _on_pyf_loading_done has run on this thread: the loader thread
         # can end before its queued results reach the window (wait_for_images)
@@ -3988,7 +3990,7 @@ class EZFIG_GUI(QMainWindow):
         """Load one pending Image2D's pixel data in a background thread, then continue."""
         if not getattr(self, '_lazy_img_queue', None):
             # Queue empty — nothing to load (or already exhausted); ensure cursor is restored.
-            self._reflow_after_lazy_load()
+            self._lazy_load_finished()
             QApplication.restoreOverrideCursor()
             self.pbar.hide()
             self.statusBar().clearMessage()
@@ -4004,7 +4006,7 @@ class EZFIG_GUI(QMainWindow):
             else:
                 # Queue exhausted via skips — restore cursor now.
                 self._flush_lazy_refresh()
-                self._reflow_after_lazy_load()
+                self._lazy_load_finished()
                 QApplication.restoreOverrideCursor()
                 self.pbar.hide()
                 self.statusBar().clearMessage()
@@ -4021,6 +4023,11 @@ class EZFIG_GUI(QMainWindow):
             if not _qt_alive(self) or getattr(self, '_lazy_generation', 0) != gen:
                 return  # window gone, or loading cancelled (New/replace) — discard
             img = lazy_results.get(path)
+            if isinstance(img, _LoadFailed):
+                # the panel stays empty (its img None): set as the image, the
+                # sentinel left the panel without a qimage and every repaint
+                # raised; _warn_missing_images then says which files failed
+                img = None
             if img is not None:
                 # The fast layout was computed from the size stored in the .pyf
                 # (get_raw_size() falls back to the serialized width/height while
@@ -4062,7 +4069,7 @@ class EZFIG_GUI(QMainWindow):
                 QTimer.singleShot(0, self._load_next_lazy_image)
             else:
                 self._flush_lazy_refresh()
-                self._reflow_after_lazy_load()
+                self._lazy_load_finished()
                 QApplication.restoreOverrideCursor()
                 self.pbar.hide()
                 self.statusBar().clearMessage()
@@ -4135,6 +4142,85 @@ class EZFIG_GUI(QMainWindow):
             self.arrange_text_rows()
         except Exception:
             traceback.print_exc()
+
+    def _missing_image_files(self, unreadable=False):
+        """Source files of the figure's panels and insets that are not on disk
+        (moved / renamed / deleted since the figure was saved): those panels
+        draw nothing. With *unreadable*: the files that ARE there but could
+        not be loaded (an online-only cloud file, a damaged file). Templates,
+        scripted panels and OMERO links never count."""
+        from pyfigures.path_resolution import source_exists
+        missing, stack = [], list(self.paint.EZFIG_panel.shapes_to_draw)
+        while stack:
+            obj = stack.pop(0)
+            if isinstance(obj, Image2D) and not getattr(obj, 'isText', False):
+                fn = obj.filename
+                if (fn and fn != '@template@' and not getattr(obj, 'custom_loading_script', None)
+                        and (obj.img is None or isinstance(obj.img, QRectF))
+                        and getattr(obj, 'renderer', None) is None
+                        and not str(fn).lower().startswith('omero:')
+                        and source_exists(fn) == unreadable and fn not in missing):
+                    missing.append(fn)
+            if getattr(obj, 'content', None):
+                stack.extend(obj.content)
+            stack.extend(a for a in (getattr(obj, 'annotations', None) or []) if isinstance(a, Image2D))
+        return missing
+
+    def _warn_missing_images(self):
+        """Opening a figure whose images moved left their panels silently
+        empty: say which files are missing and offer Remap image paths, with
+        the missing files' folder already filled in."""
+        missing = self._missing_image_files()
+        unreadable = self._missing_image_files(unreadable=True)
+        key = frozenset(missing + unreadable)
+        if not key or key == getattr(self, '_missing_warned_for', None):
+            return missing
+        self._missing_warned_for = key
+        n = len(missing)
+        parts = []
+        if missing:
+            logger.warning(f'{n} image file(s) not found: ' + ', '.join(missing[:5]))
+            parts.append(f'{n} image file(s) not found')
+        if unreadable:
+            logger.warning(f'{len(unreadable)} image file(s) could not be read: ' + ', '.join(unreadable[:5]))
+            parts.append(f'{len(unreadable)} could not be read')
+        self.statusBar().showMessage(' and '.join(parts) + ': their panels are empty'
+                                     + (' (QC → Remap image paths…)' if missing else ''), 15000)
+        if _nobody_to_ask():
+            return missing
+
+        def listed(files):
+            return '\n'.join(files[:8]) + (f'\n… and {len(files) - 8} more' if len(files) > 8 else '')
+        text = ''
+        if missing:
+            text += (f'{n} image file(s) of this figure could not be found, so their panels are '
+                     f'empty:\n\n{listed(missing)}\n\nIf they moved, point the figure at their new '
+                     f'folder with Remap image paths.')
+        if unreadable:
+            from pyfigures.mcp_tools.core import cloud_placeholder_note
+            cloud = any(cloud_placeholder_note(f) for f in unreadable)
+            text += (('\n\n' if text else '') + f'{len(unreadable)} image file(s) are there but could '
+                     f'not be read:\n\n{listed(unreadable)}'
+                     + ('\n\nSome are online-only cloud files (OneDrive / Dropbox) that could not be '
+                        'downloaded: make them available offline (\'Always keep on this device\') '
+                        'and open the figure again.' if cloud else ''))
+        box = QMessageBox(QMessageBox.Warning, 'Images not found' if missing else 'Images not readable',
+                          text, parent=self)
+        remap = box.addButton('Remap image paths…', QMessageBox.AcceptRole) if missing else None
+        box.addButton(QMessageBox.Close)
+        box.exec()
+        if remap is not None and box.clickedButton() is remap:
+            try:
+                folder = os.path.commonpath([os.path.dirname(str(m)) for m in missing])
+            except ValueError:                    # different drives
+                folder = os.path.dirname(str(missing[0]))
+            self.remap_paths_action(old_prefix=folder)
+        return missing
+
+    def _lazy_load_finished(self):
+        self._reflow_after_lazy_load()
+        # after the loader's own clean-up, which clears the status bar
+        QTimer.singleShot(0, lambda: _qt_alive(self) and self._warn_missing_images())
 
     def _cancel_lazy_loading(self):
         """Abandon any in-progress progressive image loading (e.g. when the user
@@ -4281,10 +4367,14 @@ class EZFIG_GUI(QMainWindow):
                     except Exception:
                         after = None
 
-                # Don't rely on isText direction: user can move label rows, making it stale.
-                # Pick the adjacent neighbor that is a real image group (not isText).
+                # The direction (isText 'below': the row it labels comes after it)
+                # comes first; the other neighbour only when that one is not an
+                # image row (the user moved label rows, making it stale). Always
+                # taking the row before resized a label row that belongs to the
+                # row after it on every reload and undo (254 -> 512 px).
                 group_to_fit_to = None
-                for candidate in (before, after):
+                preferred = (after, before) if cur_sel.isText == 'below' else (before, after)
+                for candidate in preferred:
                     if candidate is not None and not getattr(candidate, 'isText', False):
                         group_to_fit_to = candidate
                         break
@@ -4604,6 +4694,9 @@ class EZFIG_GUI(QMainWindow):
         self.logger_console.insertPlainText(text)
 
     def _save_state_to_file(self, file, popup=None):
+        ensure = getattr(self.paint.EZFIG_panel, 'ensure_layout', None)
+        if ensure is not None:
+            ensure()             # save what the canvas shows, not the geometry before its repack
         neo_list = list(self.paint.EZFIG_panel.shapes_to_draw)
         neo_list.append(self.serializable_font)
         neo_list.append(SerializableGUIparameters(
@@ -5371,7 +5464,11 @@ class EZFIG_GUI(QMainWindow):
         since it was saved (the figure now shows the new versions)."""
         try:
             from pyfigures.source_snapshot import compare, describe
-            text = describe(compare(pyf_path))
+            res = compare(pyf_path)
+            # missing files have their own warning, with Remap image paths
+            # (_warn_missing_images): two dialogs about the same files otherwise
+            res["missing"] = []
+            text = describe(res)
         except Exception:
             logger.error('source check failed:\n' + traceback.format_exc())
             return
@@ -6077,9 +6174,9 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(set_scale_bar_all,
                                "Added a scale bar to all panels.", **kwargs)
 
-    def remap_paths_action(self):
+    def remap_paths_action(self, old_prefix=""):
         from pyfigures.mcp_server import remap_paths
-        dlg = _RemapPathsDialog(self)
+        dlg = _RemapPathsDialog(self, old_prefix=old_prefix or "")
         cd = CustomDialog(title="Remap image paths",
                           message="Rewrite a path prefix on every image filename.",
                           main_widget=dlg, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)

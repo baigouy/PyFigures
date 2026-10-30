@@ -349,17 +349,31 @@ class MyWidget(QWidget):
         self.shapes_to_draw = [s for s in self.shapes_to_draw
                                if not (hasattr(s, 'content') and len(s.content) == 0)]
         if self.shapes_to_draw:
+            # each image row laid out as opening the figure lays it out
+            # (Group.__init__): an action that left a row otherwise (a drag
+            # 'Take H into the dragged row') came back different after undo +
+            # redo or save + reopen
+            for s in self.shapes_to_draw:
+                if isinstance(s, Group) and not getattr(s, 'isText', False) and s.content \
+                        and getattr(s, 'size', None):
+                    try:
+                        s.set_to_size(s.size)
+                        set_to_width(s, s.size)
+                    except (ArithmeticError, ValueError):
+                        pass                 # squeezed to nothing: kept as it is (as on load)
             self.shapes_to_draw[0].setTopLeft(self._EXTRA_PADDING, self._EXTRA_PADDING)
             align2(align_positions[2], *self.shapes_to_draw)
             pack2(self.space, 'Y', False, *self.shapes_to_draw)
             # Align label rows with their image groups — done here so positions are always final.
-            # Don't rely on isText direction value: the user can move label rows, making it stale.
-            # Instead, look at both neighbors and pick the adjacent non-label image group.
+            # The direction (isText 'below': the row it labels comes after it) first;
+            # the other neighbour when that one is not an image row (the user moved
+            # label rows, making it stale).
             for i, s in enumerate(self.shapes_to_draw):
                 if not getattr(s, 'isText', False) or not hasattr(s, 'content'):
                     continue
                 grp = None
-                for grp_idx in (i - 1, i + 1):
+                order = (i + 1, i - 1) if s.isText == 'below' else (i - 1, i + 1)
+                for grp_idx in order:
                     if 0 <= grp_idx < len(self.shapes_to_draw):
                         candidate = self.shapes_to_draw[grp_idx]
                         if not getattr(candidate, 'isText', False) and hasattr(candidate, 'content'):
@@ -406,6 +420,17 @@ class MyWidget(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         QTimer.singleShot(0, self._compute_help_arrow_x)
+
+    def ensure_layout(self):
+        """Run the lettering + repacking a paint would run, now: a figure
+        saved (an undo checkpoint above all) before the canvas painted kept
+        the unpacked geometry, so undo + redo and save + reopen came back
+        slightly different (scales 0.237 -> 0.236, a label row 512 -> 254 px)."""
+        if self._layout_dirty and not self.dragging:
+            self.update_letters_required.emit()
+            if self.mode == MyWidget.modes[0]:
+                self.repack_all()
+            self._layout_dirty = False
 
     def paintEvent(self, event):
         # lettering + repacking only run when the model actually changed
@@ -1801,6 +1826,15 @@ class MyWidget(QWidget):
             content_merge.extend(item2.content)
         else:
             content_merge.append(item2)
+        # by identity, never ==: shapes are rectangles, and two panels of the
+        # same size at the same place compare equal — list.remove() / in /
+        # index() took the other one out and the moved panel stayed in two
+        # places. A panel already in the merged row is not added twice either.
+        unique = []
+        for s in content_merge:
+            if not any(s is u for u in unique):
+                unique.append(s)
+        content_merge = unique
 
         # new_grp = Group(item1, item2, orientation=orientation)
         new_grp = Group(*content_merge, orientation=orientation)
@@ -1809,27 +1843,28 @@ class MyWidget(QWidget):
         # (item1) so the merged row/column stays where the user dropped it instead
         # of jumping to the end of the figure. Captured BEFORE any removal.
         original_order = list(self.shapes_to_draw)
-        ref = item1 if item1 in original_order else (item2 if item2 in original_order else None)
+
+        def _pos(shape, seq):
+            return next((i for i, s in enumerate(seq) if s is shape), None)
+        ref = item1 if _pos(item1, original_order) is not None else (
+            item2 if _pos(item2, original_order) is not None else None)
 
         self.set_current_selection(None)
-        try:
-            self.shapes_to_draw.remove(item1)
-        except Exception:
-            pass
-        try:
-            self.shapes_to_draw.remove(item2)
-        except Exception:
-            pass
+        # the holders are found BEFORE anything leaves the canvas: once the
+        # target row was off the canvas, a panel dragged out of a group nested
+        # in that row was not found any more, stayed there and was in the new
+        # column too (drag zstack out of (rgb | zstack) / … onto movie: To column)
+        holders = [self._group_of(it) for it in (item1, item2)]
+        outers = [self._container_of(h) if h is not None else None for h in holders]
+        self.shapes_to_draw[:] = [s for s in self.shapes_to_draw if s is not item1 and s is not item2]
         # take each item out of the group that really holds it: removing it from
         # its TOP parent missed an item inside a nested group, which then stayed
         # there too (the same image shown twice)
-        for it in (item1, item2):
-            holder = self._group_of(it)
-            if holder is None:
+        for it, holder, outer in zip((item1, item2), holders, outers):
+            if holder is None or holder is new_grp:
                 continue
             holder.content[:] = [s for s in holder.content if s is not it]
             if not holder.content:              # an emptied sub-group goes too
-                outer = self._container_of(holder)
                 if outer is not None and outer is not self.shapes_to_draw:
                     outer[:] = [s for s in outer if s is not holder]
             else:
@@ -1841,9 +1876,10 @@ class MyWidget(QWidget):
             # insert at the slot the drop target occupied, relative to the shapes
             # that are still on the canvas (handles the dragged item being before
             # or after the target)
-            ref_pos = original_order.index(ref)
+            ref_pos = _pos(ref, original_order)
             insert_index = sum(1 for s in self.shapes_to_draw
-                               if s in original_order and original_order.index(s) < ref_pos)
+                               if (_pos(s, original_order) if _pos(s, original_order) is not None
+                                   else ref_pos) < ref_pos)
             self.shapes_to_draw.insert(insert_index, new_grp)
         else:
             self.shapes_to_draw.append(new_grp)  # and I need to remove both items from any potential parent

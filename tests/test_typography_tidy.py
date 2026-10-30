@@ -107,7 +107,9 @@ class TestGuiAction:
         gui.paint.EZFIG_panel.shapes_to_draw.append(img)
         gui.paint.EZFIG_panel.update_size()
         gui.tidy_all_text()
-        p0 = img.annotations[0].getPlainText()
+        # (the panel letter is added in front when the figure is laid out)
+        texts = [a for a in img.annotations if isinstance(a, TAText2D) and not a.is_letter]
+        p0 = texts[0].getPlainText()
         for tok in ['10 µm', '5–9', '−5', '2×3']:
             assert tok in p0, (tok, p0)
-        assert img.annotations[1].getPlainText() == '2D H2O 10K cells'
+        assert texts[1].getPlainText() == '2D H2O 10K cells'

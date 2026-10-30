@@ -287,6 +287,22 @@ def test_a_uniform_image_keeps_its_grey(tmp_path, value):
     assert abs(centre[..., :3].mean() - value) < 3 and centre[..., 3].mean() > 250, centre.mean((0, 1))
 
 
+def test_a_panel_that_cannot_be_displayed_is_reported(tmp_path, monkeypatch):
+    """A failure building the Qt image only printed a traceback: the panel
+    was exported empty and export_figure said OK. It is now logged in the
+    words the exporters turn into a warning ('could not load image')."""
+    import batoolset.drawings.shapes.image2d as I
+    said = []
+    monkeypatch.setattr(I.logger, "error", lambda msg, *a, **k: said.append(str(msg)))
+
+    def boom(*a, **k):
+        raise RuntimeError("no Qt image")
+    monkeypatch.setattr(I.Image2D, "prepare_image_for_qimage", boom)
+    monkeypatch.setattr(I, "toQimage", boom)
+    I.Image2D(filename=_png(tmp_path / "a.png", 90))
+    assert any("could not load image" in s and "a.png" in s for s in said), said
+
+
 def test_flat_level_on_each_dtype():
     from batoolset.drawings.shapes.image2d import _flat_level
     assert _flat_level(255, np.uint8) == 255 and _flat_level(0, np.uint8) == 0
