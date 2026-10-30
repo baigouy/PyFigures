@@ -57,6 +57,23 @@ def _make_app():
     return app
 
 
+def _squeezed(shapes) -> bool:
+    """A panel held at the layout's 1 px minimum: its row had no room for it
+    (the figure narrower than its panels and gaps). The layout no longer goes
+    negative there, so the size of the whole figure does not show it."""
+    stack = list(shapes)
+    while stack:
+        s = stack.pop()
+        content = getattr(s, "content", None)
+        if content is not None:
+            stack.extend(content)
+        elif not getattr(s, "isText", False) and hasattr(s, "getRect"):
+            r = s.getRect(all=True)
+            if min(r.width(), r.height()) <= 1.0001:
+                return True
+    return False
+
+
 def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, crop=None) -> str:
     """Render *pyf_path* to *out_path*, returning the absolute output path.
 
@@ -124,7 +141,7 @@ def render_pyf(pyf_path: str, out_path: str, dpi: int = 300, _keep_alive=None, c
             bw, bh = float(b.width()), float(b.height())
         except Exception:
             bw = bh = 1.0
-        if bw < 1 or bh < 1:
+        if bw < 1 or bh < 1 or _squeezed(panel.shapes_to_draw):
             raise RuntimeError(f"the figure is {bw:.1f} x {bh:.1f} px: its panels have no room "
                                f"(too narrow for its panels and the gaps between them) — widen "
                                f"the figure, wrap the rows or reduce the spacing")

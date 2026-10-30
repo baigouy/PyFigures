@@ -103,13 +103,27 @@ def _name(shape):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_monkey(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed):
-    g = e2e_gui
+    _run(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, STEPS)
+
+
+# 40-step sequences that each found a bug (overnight runs, 29-30 October
+# 2026): replayed so none comes back. Each fix also has its own small test.
+REGRESSION_SEEDS = [102, 113, 119, 122, 125, 130, 137, 143, 144, 146, 149, 163, 164]
+
+
+@pytest.mark.skipif(bool(os.environ.get("PYF_E2E_SEED")), reason="replaying one seed")
+@pytest.mark.parametrize("seed", REGRESSION_SEEDS)
+def test_monkey_regression_seeds(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed):
+    _run(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, 40)
+
+
+def _run(qapp, g, e2e_files, tmp_path, menus, watch, seed, steps):
     rng = random.Random(seed)
     H.load(qapp, g, H.base_figure(tmp_path, e2e_files))
     log = []
     state = H.snapshot(g, tmp_path)
     try:
-        for step in range(STEPS):
+        for step in range(steps):
             kind = rng.choices(["right-click", "drag", "drop", "undo"], weights=[5, 3, 3, 1])[0]
             with H.dialogs(accept_all=True) as pilot:
                 if kind == "right-click":
@@ -140,4 +154,4 @@ def test_monkey(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed):
     except BaseException:
         print(f"\nmonkey seed {seed} — actions so far:\n  " + "\n  ".join(log))
         raise
-    assert len(log) >= STEPS // 2, log
+    assert len(log) >= steps // 2, log

@@ -70,7 +70,8 @@ def capture_scene(panel, movies=False) -> dict:
     bounds = panel.updateBounds()
     width = float(bounds.width())
     height = float(bounds.height())
-    if width < 1 or height < 1:
+    from pyfigures.gui.render_headless import _squeezed
+    if width < 1 or height < 1 or _squeezed(getattr(panel, "shapes_to_draw", None) or []):
         if getattr(panel, "shapes_to_draw", None):
             raise RuntimeError(f"the figure is {width:.1f} x {height:.1f} pt: its panels have no "
                                f"room (too narrow for its panels and the gaps between them) — "

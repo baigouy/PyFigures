@@ -9,6 +9,7 @@ import time
 from batoolset.drawings.shapes.serializableguiparams import SerializableGUIparameters
 # import filecmp # TODO use that to avoid duplicating a save in undo/redo --> future dev, not urgent
 from pyfigures.gui.colorassistant import ColorAssistant
+from pyfigures.gui.label_rows import fit_label_rows
 from pyfigures.path_resolution import resolve_moved_paths
 from pyfigures.gui.panelcreationwidget import PanelCreator
 from batoolset.dims.tools import pixels_to_cm, pixels_to_inch
@@ -230,6 +231,14 @@ def _nobody_to_ask():
     """Offscreen (headless tests, scripted runs): no dialog can be answered."""
     from pyfigures.gui.pdf_support import _nobody_to_ask as nobody
     return nobody()
+
+
+def _has_empty_group(shapes):
+    """A group without content anywhere in the figure (left by a drag)."""
+    for s in shapes:
+        if isinstance(s, Group) and (not s.content or _has_empty_group(s.content)):
+            return True
+    return False
 
 
 def _qt_alive(obj):
@@ -4354,6 +4363,14 @@ class EZFIG_GUI(QMainWindow):
             self._mark_clean()
 
     def arrange_text_rows(self):
+        # one implementation with the canvas repack (label_rows.py): this one
+        # sized labels per range, the repack per panel, and stacked label rows
+        # were fitted by neither — undo/redo and reopening gave other widths
+        fit_label_rows(self.paint.EZFIG_panel.shapes_to_draw)
+        self.paint.EZFIG_panel.update_size()
+        self.paint.EZFIG_panel.update()
+
+    def _arrange_text_rows_before_label_rows(self):  # previous version, kept for reference
         for iii, cur_sel in enumerate(self.paint.EZFIG_panel.shapes_to_draw):
             if cur_sel.isText:
                 idx = self.paint.EZFIG_panel.shapes_to_draw.index(cur_sel)
@@ -4702,6 +4719,10 @@ class EZFIG_GUI(QMainWindow):
     def _save_state_to_file(self, file, popup=None):
         ensure = getattr(self.paint.EZFIG_panel, 'ensure_layout', None)
         if ensure is not None:
+            if _has_empty_group(self.paint.EZFIG_panel.shapes_to_draw):
+                # left by a drag before any repaint: reopening drops it (and
+                # its gap), so the canvas must too before saving (seed 119)
+                self.paint.EZFIG_panel._layout_dirty = True
             ensure()             # save what the canvas shows, not the geometry before its repack
         neo_list = list(self.paint.EZFIG_panel.shapes_to_draw)
         neo_list.append(self.serializable_font)

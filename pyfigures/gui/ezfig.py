@@ -121,6 +121,7 @@ from batoolset.img import guess_dimensions
 from pyfigures.constant_panels import constant_free_channels
 from batoolset.pyqts.tools import distance, getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
+from pyfigures.gui.label_rows import fit_label_rows
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.simple_text_editor import TextEditor
 from batoolset.serializations.tools import deserialize_to_dict
@@ -345,9 +346,19 @@ class MyWidget(QWidget):
     #             # raise Exception('why is menu empty?')
 
     def repack_all(self):
-        # Remove empty groups (can appear after label operations)
-        self.shapes_to_draw = [s for s in self.shapes_to_draw
-                               if not (hasattr(s, 'content') and len(s.content) == 0)]
+        # Remove empty groups (can appear after label operations, and nested
+        # ones after a drag took their last panel: infinite bounds, NaN
+        # coordinates, a crash while painting — monkey seed 143)
+        def _prune(shapes):
+            kept = []
+            for s in shapes:
+                if isinstance(s, Group):
+                    s.content[:] = _prune(s.content)
+                    if not s.content:
+                        continue
+                kept.append(s)
+            return kept
+        self.shapes_to_draw = _prune(self.shapes_to_draw)
         if self.shapes_to_draw:
             # each image row laid out as opening the figure lays it out
             # (Group.__init__): an action that left a row otherwise (a drag
@@ -364,41 +375,9 @@ class MyWidget(QWidget):
             self.shapes_to_draw[0].setTopLeft(self._EXTRA_PADDING, self._EXTRA_PADDING)
             align2(align_positions[2], *self.shapes_to_draw)
             pack2(self.space, 'Y', False, *self.shapes_to_draw)
-            # Align label rows with their image groups — done here so positions are always final.
-            # The direction (isText 'below': the row it labels comes after it) first;
-            # the other neighbour when that one is not an image row (the user moved
-            # label rows, making it stale).
-            for i, s in enumerate(self.shapes_to_draw):
-                if not getattr(s, 'isText', False) or not hasattr(s, 'content'):
-                    continue
-                grp = None
-                order = (i + 1, i - 1) if s.isText == 'below' else (i - 1, i + 1)
-                for grp_idx in order:
-                    if 0 <= grp_idx < len(self.shapes_to_draw):
-                        candidate = self.shapes_to_draw[grp_idx]
-                        if not getattr(candidate, 'isText', False) and hasattr(candidate, 'content'):
-                            grp = candidate
-                            break
-                if grp is None:
-                    continue
-                non_text = [e for e in grp.content if not getattr(e, 'isText', False)]
-                if not non_text:
-                    continue
-                # Place each label directly at the x position of its corresponding image.
-                # This handles side labels anywhere in the group (left edge, between images, right edge).
-                labels = list(s.content)
-                for j, lbl in enumerate(labels):
-                    # a label left over after its panel left the row sits on the
-                    # last panel, as arrange_text_rows (run on open / undo) places
-                    # it: left as it was, undo + redo gave it another width
-                    img = non_text[min(j, len(non_text) - 1)]
-                    try:
-                        lbl.setWidth(img.width(all=True))
-                        lbl.set_to_scale(1)
-                        lbl.setTopLeft(img.x(), lbl.y())
-                    except Exception:
-                        import traceback; traceback.print_exc()
-                s.update_bounds()
+            # Align label rows with the row they label — done here so positions are always final
+            # (the same code as arrange_text_rows, run on open and undo)
+            fit_label_rows(self.shapes_to_draw)
         self.update_size()
 
     def _compute_help_arrow_x(self):
@@ -443,9 +422,15 @@ class MyWidget(QWidget):
         #     return
 
         painter = QPainter(self)
-        # paint_something(painter)
-        # with QPainterTracker(painter):
+        try:
+            self._paint(painter)
+        finally:
+            # an exception while painting left the painter active, and Qt
+            # crashed natively a moment later (access violation; monkey
+            # seeds 119 and 143). The exception itself still goes up.
+            painter.end()
 
+    def _paint(self, painter):
         painter.save()
 
         # current_clip_rect = painter.clipBoundingRect()
@@ -604,8 +589,6 @@ class MyWidget(QWidget):
                              Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
                              'Drop image files here to get started')
             painter.restore()
-
-        painter.end()
 
 
     def _get_rect(self, shape):
