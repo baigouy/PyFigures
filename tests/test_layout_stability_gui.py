@@ -145,6 +145,27 @@ def test_split_by_a_dimension_uses_the_panel_it_was_asked_for(gui, qapp, tmp_pat
     assert len(_all_images(gui)) == 5, _all_images(gui)     # the stack + its 4 planes
 
 
+def test_a_label_left_after_its_panel_moved_keeps_its_width_on_reopen(gui, tmp_path):
+    """Monkey seeds 125 / 137: a panel dragged out of a labelled row left its
+    label behind; the canvas kept the label's old width, reopening (and undo
+    + redo) put it on the last panel — two different figures."""
+    pyf = _two_rows(tmp_path, n_second=3)
+    assert not M.add_label_row(pyf, [1], ["x", "y", "z"], position="above").startswith("ERROR")
+    gui.reload_state(pyf, append=False)
+    p = gui.paint.EZFIG_panel
+    p.ensure_layout()
+    row = [s for s in p.shapes_to_draw if not s.isText][1]
+    moved = row.content.pop(1)                    # what a drag out of the row does
+    p.shapes_to_draw.append(moved)
+    p._layout_dirty = True
+    first = str(tmp_path / "first.pyf")
+    gui._save_state_to_file(first)
+    shown = _geometry(gui)
+    gui.reload_state(first, append=False)
+    gui.paint.EZFIG_panel.ensure_layout()
+    assert _geometry(gui) == shown
+
+
 def test_an_edit_run_a_moment_later_happens_before_an_undo(gui, qapp, tmp_path):
     """Monkey seed 130: 'To panel' runs 0.3 s after the click; an undo in
     between undid the previous action and the panel landed after it. Undo now

@@ -388,14 +388,16 @@ class MyWidget(QWidget):
                 # This handles side labels anywhere in the group (left edge, between images, right edge).
                 labels = list(s.content)
                 for j, lbl in enumerate(labels):
-                    if j < len(non_text):
-                        img = non_text[j]
-                        try:
-                            lbl.setWidth(img.width(all=True))
-                            lbl.set_to_scale(1)
-                            lbl.setTopLeft(img.x(), lbl.y())
-                        except Exception:
-                            import traceback; traceback.print_exc()
+                    # a label left over after its panel left the row sits on the
+                    # last panel, as arrange_text_rows (run on open / undo) places
+                    # it: left as it was, undo + redo gave it another width
+                    img = non_text[min(j, len(non_text) - 1)]
+                    try:
+                        lbl.setWidth(img.width(all=True))
+                        lbl.set_to_scale(1)
+                        lbl.setTopLeft(img.x(), lbl.y())
+                    except Exception:
+                        import traceback; traceback.print_exc()
                 s.update_bounds()
         self.update_size()
 
