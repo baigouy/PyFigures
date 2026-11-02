@@ -76,7 +76,14 @@ class Session:
         from .partner_gui import panels, letters, state as lettering_state, selection_state
         from .figure_state import specification
         from .pointer_context import geometry
+        # a panel whose image file moved draws an error placeholder; without
+        # this a model asked "why do they all say error?" could not tell
+        missing = set(self.window._missing_image_files())
+        unreadable = set(self.window._missing_image_files(unreadable=True))
         references = [{'panel_id': '/'.join(map(str, (*gp, ix))), 'group_path': list(gp),
+                       'source_file': str(p.filename) if getattr(p, 'filename', None) else None,
+                       'source_missing': ('not found' if p.filename in missing else
+                                          'could not be read' if p.filename in unreadable else None),
                        'image_index': ix, 'letters': [a.getPlainText() for a in letters(p)],
                        'rotation_degrees': getattr(p, 'theta', 0), 'geometry': geometry(p),
                        # answers "is c calibrated?", "any scale bars?", "which colours?" without another tool
@@ -99,6 +106,12 @@ class Session:
                 'selection': selection_state(self.window),
                 'verified_letter_specification': specification(lettering_state(self.window)),
                 'panel_references': references,
+                **({'missing_source_files': {
+                    'not_found': sorted(missing), 'could_not_be_read': sorted(unreadable),
+                    'effect': 'these panels show an error placeholder instead of the image',
+                    'fix': 'the files moved or were renamed: ask the user where they are now, then remap the '
+                           'paths (tool remap_paths; GUI: QC > Remap image paths...)'}}
+                   if missing or unreadable else {}),
                 'last_canvas_click': self.pointer.snapshot(),
                 'annotation_editor_status': getattr(self, '_annotation_editor_status', 'closed'),
                 'annotation_editor_open': bool(getattr(self, '_annotation_editor_pending', False)),

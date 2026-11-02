@@ -480,6 +480,21 @@ def test_how_to_questions_use_the_authored_guides():
         assert explain(question)["guide"] == guide, question
 
 
+def test_inspect_reports_panels_whose_image_file_is_missing(qapp, gui, runtime, tmp_path):
+    """"Why do they all say error?" (Hermes on a figure whose images had
+    moved, 2026-11-03): inspect says which panels lost their file and how to fix it."""
+    from pyfigures.assistant import launch
+    pyf = _figure(tmp_path)
+    os.remove(tmp_path / "b.tif")
+    g = gui(shareable=True)
+    g.reload_state(pyf, append=False)
+    s = launch.start_live_session(g).snapshot()
+    by_file = {os.path.basename(r["source_file"]): r["source_missing"] for r in s["panel_references"]}
+    assert by_file == {"a.tif": None, "b.tif": "not found"}
+    assert [os.path.basename(f) for f in s["missing_source_files"]["not_found"]] == ["b.tif"]
+    assert "remap_paths" in s["missing_source_files"]["fix"]
+
+
 def test_inset_where_the_user_clicked_and_readiness_target_from_words(qapp, gui, runtime, tmp_path):
     """Figure 3 through the chat (2026-11-02): "magnify the region where I just
     clicked" had no tool (models opened the annotation editor and were then

@@ -157,7 +157,7 @@ def build_server(full_server, send):
 
     @server.tool()
     def inspect_figure() -> dict:
-        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count) and luts (channel colour tables). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
+        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
         return send('inspect')
 
     @server.tool()
