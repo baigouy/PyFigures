@@ -987,9 +987,10 @@
         (llama-server).</li>
       <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter, Groq or any OpenAI-compatible
         server) in the chat's connection settings, with your own key. The figure descriptions and
-        previews the model asks for are then sent to that provider. <strong>Groq</strong> runs the
-        full Qwen3.8-27B (filled in when you choose Groq) without using your graphics card; it
-        sees the previews.</li>
+        previews the model asks for are then sent to that provider. Choosing
+        <strong>OpenRouter</strong> fills in Inkling (free), a free model with a very large context
+        that sees the previews, without using your graphics card; free models allow a limited
+        number of requests per day. <strong>Groq</strong> (Qwen3.8-27B) needs its paid tier.</li>
     </ul>
     <p>
       The chat is the optional package <code>qtpy-ai-sidecar</code> (not on PyPI yet; install it from
