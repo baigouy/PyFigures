@@ -186,6 +186,8 @@ def sidecar_config(descriptor=None):
             config.provider, config.base_url, config.model = 'compatible', LM_STUDIO_URL, model
     config.adapter ={**(config.adapter or {}), 'type': 'pyfigures', 'descriptor': descriptor}
     config.servers = {**(config.servers or {}), 'pyfigures': mcp_server_entry()}
+    from pyfigures.mcp_control import MODEL_WARNING
+    config.notice = MODEL_WARNING        # the line always shown under the chat
     return config
 
 

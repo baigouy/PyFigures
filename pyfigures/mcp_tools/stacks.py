@@ -91,6 +91,12 @@ _DEFAULT_SPLIT_COLORS = {1: ["gray"], 2: ["green", "magenta"],
                          3: ["red", "green", "blue"], 4: ["red", "green", "blue", "gray"]}
 
 
+def _colour_list_example(n: int) -> str:
+    """An ordered colour list of *n* items, written as a model should send it."""
+    colours = (["magenta", "green", "blue", "gray", "cyan", "yellow", "red"] * 2)[:max(1, n)]
+    return "[" + ", ".join(colours) + "]"
+
+
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -465,10 +471,15 @@ def add_channel_split(
         if n < 2:
             return "ERROR: a channel split needs at least 2 channels."
     names = list(names) if names else [f"Ch{i + 1}" for i in range(n)]
+    # a mapping ({red: magenta}) was read as its keys: the colours came out wrong
+    if isinstance(colors, dict):
+        return (f"ERROR: colors must be an ordered list, one colour per channel ({n} here), "
+                f"e.g. {_colour_list_example(n)} — never a mapping; got {colors!r}.")
     colors = [str(c).lower() for c in colors] if colors else \
         _DEFAULT_SPLIT_COLORS.get(n, (["red", "green", "blue", "gray", "cyan", "magenta", "yellow"] * 2)[:n])
     if len(names) != n or len(colors) != n:
-        return f"ERROR: {n} channels but {len(names)} names / {len(colors)} colours."
+        return (f"ERROR: {n} channels but {len(names)} names / {len(colors)} colours. colors is "
+                f"an ordered list, one colour per channel, e.g. {_colour_list_example(n)}.")
     bad = [c for c in colors if c not in _COLOR_LUTS]
     if bad:
         return f"ERROR: unsupported colour(s) {bad}; use {sorted(set(_COLOR_LUTS) - {'grey', 'white'})}."

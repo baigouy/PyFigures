@@ -463,17 +463,44 @@ def _crop_fit_error(img: ET.Element) -> str | None:
         except (TypeError, ValueError):
             return 0
 
+    crop = {k: _c(f"crop_{k}") for k in ("left", "right", "top", "bottom")}
+    return crop_size_error(size, crop, "crop_{}={}")
+
+
+def _crop_leaves_a_sliver(kept: int, full: int) -> bool:
+    # an 8B model sent left 400 + right 500 on a 922 px image meaning x 400 to
+    # 500: the 22 px left were drawn stretched into a full panel
+    return kept < 32 and kept < full * 0.1
+
+
+def crop_size_error(size, crop: dict, form: str = "{}: {}") -> str | None:
+    """An error when a crop (pixels removed per side) removes the whole image
+    or leaves only a sliver of it, else None. ``form`` writes one crop value
+    the way the caller takes it (``crop_{}={}`` for tools, ``{}: {}`` for a
+    recipe)."""
     w, h = size
-    lr = _c("crop_left") + _c("crop_right")
-    tb = _c("crop_top") + _c("crop_bottom")
-    if lr >= w or tb >= h:
-        return (f"the crop removes the whole image: the source is {w} x {h} px and the crop "
-                f"takes {lr} px across (left + right) and {tb} px down (top + bottom). "
-                f"Crop values are pixels removed from each side (not coordinates), e.g. "
-                f"crop_bottom=24 removes a 24 px strip at the bottom. To show a small "
-                f"region magnified, keep the image and add a zoom callout "
-                f"(add_zoom_callout; recipe: zoom: {{box: [x, y, width, height]}}).")
-    return None
+    left, right = crop.get("left", 0), crop.get("right", 0)
+    top, bottom = crop.get("top", 0), crop.get("bottom", 0)
+    kept_w, kept_h = w - left - right, h - top - bottom
+    if kept_w > 0 and kept_h > 0 and not (_crop_leaves_a_sliver(kept_w, w)
+                                          or _crop_leaves_a_sliver(kept_h, h)):
+        return None
+    what = ("removes the whole image" if kept_w <= 0 or kept_h <= 0
+            else f"leaves only {kept_w} x {kept_h} px")
+    hints = []
+    if 0 < left < right <= w and left + right > w * 0.9:
+        hints.append(f"to keep x {left} to {right}, use {form.format('left', left)} and "
+                     f"{form.format('right', w - right)}")
+    if 0 < top < bottom <= h and top + bottom > h * 0.9:
+        hints.append(f"to keep y {top} to {bottom}, use {form.format('top', top)} and "
+                     f"{form.format('bottom', h - bottom)}")
+    return (f"the crop {what}: the source is {w} x {h} px and the crop removes {left + right} px "
+            f"across (left + right) and {top + bottom} px down (top + bottom). Crop values are "
+            f"margins, pixels removed from each side, not x1/y1/x2/y2 coordinates"
+            + (" (" + "; ".join(hints) + ")" if hints else "")
+            + f", e.g. {form.format('bottom', 24)} removes a 24 px strip at the bottom. To show "
+            f"a small region magnified, keep the image and add a zoom callout "
+            f"(add_zoom_callout; recipe: zoom: {{box: [x, y, width, height]}}).")
 
 
 def _first_filename(img: ET.Element) -> str | None:
@@ -1099,10 +1126,15 @@ def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
         return None
     width_units = visible * px
     suggestion = _nice_bar_length(width_units * 0.25)
+    # the pixel size is checked first: an 8B model invented 0.1 µm/px instead of
+    # the user's 1.24, then followed "use a shorter bar" and drew 5 µm bars
     return (f"a {bar_width_in_units:g} {unit} bar is {bar_px:.0f} px at {px:g} {unit}/px, but the "
             f"image is only {visible} px ({width_units:g} {unit}) wide — it would be cut to "
-            f"the panel and show a wrong length. Use a shorter bar, e.g. {suggestion:g} {unit}"
-            f" (about a quarter of the width), or check px_to_unit (the pixel size).")
+            f"the panel and show a wrong length. First check px_to_unit: is {px:g} {unit}/px "
+            f"the pixel size the user gave or the file holds? Never guess it. Then check the "
+            f"crop (margins removed per side, not coordinates). Do not shorten a bar length "
+            f"the user asked for; if both are right, ask the user. Only if no length was "
+            f"asked for, a bar of about a quarter of the width is {suggestion:g} {unit}.")
 
 
 def _apply_scalebar_to_img(

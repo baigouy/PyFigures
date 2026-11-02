@@ -273,7 +273,49 @@ def test_bar_longer_than_the_image_and_zoom_box_outside_are_refused(tmp_path, qa
     bad = M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
         "output: r.pyf\ndefaults: {px_to_unit: 0.1, scale_bar: {units: 100}}\n"
         "rows:\n  - [i.png]\n"))
-    assert bad.startswith("ERROR") and "shorter bar" in bad, bad
+    assert bad.startswith("ERROR") and "px_to_unit" in bad, bad
+
+
+def test_errors_steer_a_small_model_back_to_what_the_user_asked(tmp_path, qapp):
+    """From an 8B model's Figure 3 run: it invented 0.1 µm/px instead of the
+    user's 1.24 and then followed 'use a shorter bar' down to 5 µm; it cropped
+    left 400 + right 500 from a 922 px image meaning x 400 to 500 (22 px left,
+    drawn stretched); it sent split colours as a mapping."""
+    from PIL import Image
+    src = tmp_path / "k.png"
+    Image.new("RGB", (922, 700), (30, 60, 90)).save(src)
+    pyf = tmp_path / "f.pyf"
+    M.create_figure(str(pyf), num_groups=1)
+    M.add_image(str(pyf), [0], str(src))
+    before = pyf.read_bytes()
+
+    # the pixel size is questioned first; the asked-for length is kept
+    res = M.set_scale_bar(str(pyf), [0], 0, 100, px_to_unit=0.1)
+    assert res.startswith("ERROR"), res
+    assert res.index("px_to_unit") < res.index("quarter of the width"), res
+    assert "Never guess" in res and "Do not shorten a bar length" in res, res
+
+    # a sliver is refused like a crop that removes everything, with the margins meant
+    res = M.transform_image(str(pyf), [0], 0, crop_left=400, crop_right=500)
+    assert res.startswith("ERROR") and "leaves only 22 x 700 px" in res, res
+    assert "not x1/y1/x2/y2" in res and "crop_left=400 and crop_right=422" in res, res
+    assert pyf.read_bytes() == before
+    assert not M.transform_image(str(pyf), [0], 0, crop_left=400, crop_right=422).startswith("ERROR")
+    bad = M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {image: k.png, crop: {left: 400, right: 500}}\n"))
+    assert bad.startswith("ERROR") and "left: 400 and right: 422" in bad, bad
+    assert not (tmp_path / "r.pyf").exists()
+
+    # colours: an ordered list, one per channel, never a mapping
+    chans = []
+    for i in range(3):
+        chans.append(str(tmp_path / f"c{i}.png"))
+        Image.new("L", (64, 64), 40 * (i + 1)).save(chans[-1])
+    res = M.add_channel_split(str(pyf), channel_files=chans,
+                              colors={"red": "magenta", "green": "green"})
+    assert res.startswith("ERROR") and "ordered list" in res and "mapping" in res, res
+    res = M.add_channel_split(str(pyf), channel_files=chans, colors=["magenta", "green"])
+    assert res.startswith("ERROR") and "one colour per channel" in res, res
 
 
 def test_caption_stub_matches_the_panel_letters(tmp_path, qapp):

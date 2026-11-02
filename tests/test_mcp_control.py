@@ -322,7 +322,9 @@ def test_gui_menu_opens_the_dialog(home, qapp, monkeypatch):
         if hasattr(g.menuBar, "actions") else []
     action = next(a for a in actions if a.text() == "MCP server…")
     action.trigger()
-    assert isinstance(g.open_mcp_server_dialog(), D.McpServerDialog)
+    dlg = g.open_mcp_server_dialog()
+    assert isinstance(dlg, D.McpServerDialog)
+    assert dlg.model_warning.text().endswith(C.MODEL_WARNING)    # models make mistakes
     # the toolbar's robot opens the chat, first in the toolbar so it is always visible
     opened = []
     monkeypatch.setattr(g, "open_chat_sidebar", lambda: opened.append(1))

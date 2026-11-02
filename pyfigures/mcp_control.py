@@ -42,6 +42,10 @@ import sys
 import time
 
 SERVER_NAME = "pyfigures"
+# shown under the chat and in the MCP server dialog: a model once replaced the
+# user's 1.24 µm/px by 0.1 and shrank the asked-for 100 µm bars to 5 µm
+MODEL_WARNING = ("Language models make mistakes. Check every panel, crop, colour, "
+                 "pixel size and scale bar before you use the figure.")
 DEFAULT_PORT = 8765
 CLIENTS = {
     "claude_code": "Claude Code / Claude Desktop (Code)",     # both read ~/.claude.json

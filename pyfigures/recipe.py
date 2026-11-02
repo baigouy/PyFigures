@@ -473,18 +473,11 @@ def _check_crop(crop, where, source=None):
             raise RecipeError(f"{where}: crop.{k} must be a non-negative integer (pixels), got {v!r}")
     if source:
         # before anything is built (the build used to stop half way at this panel)
-        from pyfigures.mcp_tools.core import _raw_size_from_file
+        from pyfigures.mcp_tools.core import _raw_size_from_file, crop_size_error
         size = _raw_size_from_file(source)
-        if size:
-            w, h = size
-            lr = crop.get("left", 0) + crop.get("right", 0)
-            tb = crop.get("top", 0) + crop.get("bottom", 0)
-            if lr >= w or tb >= h:
-                raise RecipeError(
-                    f"{where}: crop {crop!r} removes the whole image ({os.path.basename(source)} is "
-                    f"{w} x {h} px; left + right = {lr}, top + bottom = {tb}). Crop values are "
-                    f"pixels removed from each side, not coordinates. To show a small region "
-                    f"magnified, keep the image and add zoom: {{box: [x, y, width, height]}}.")
+        err = crop_size_error(size, crop) if size else None
+        if err:
+            raise RecipeError(f"{where} ({os.path.basename(source)}): {err}")
 
 
 def _check_scale_bar(sb, where):
@@ -862,9 +855,10 @@ def _check_top(recipe, base):
                                       for x in c] == ["colorblind"]
         if not cb and (not isinstance(c, list) or not c
                        or any(str(x).lower() not in _COLOR_LUTS for x in c)):
-            raise RecipeError(f"'colors' recolours the whole figure: a list of colour names in "
-                              f"channel order, from {sorted(_COLOR_LUTS)} — e.g. "
-                              f"colors: [magenta, green] — or colors: [colorblind]; got {c!r}")
+            raise RecipeError(f"'colors' recolours the whole figure: an ordered list of colour "
+                              f"names, one per channel, from {sorted(_COLOR_LUTS)} — e.g. "
+                              f"colors: [magenta, green] — or colors: [colorblind]; never a "
+                              f"mapping such as {{red: magenta}}; got {c!r}")
     if "fit_height" in recipe and recipe["fit_height"] not in (True, False, "shrink", "column",
                                                                "off"):
         raise RecipeError("'fit_height' (a figure taller than the journal's maximum height) "

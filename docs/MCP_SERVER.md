@@ -286,7 +286,7 @@ model browser — without it the model will ignore tool calls entirely.
 | Limitation | Details |
 |------------|---------|
 | **Context window** | Large files returned by `get_xml` may exceed smaller models' context. Prefer `describe_figure`. |
-| **Tool reliability** | Measured on the requests of the paper's Figure 3 plus three revisions (October 2026): a 28B model (Muse-Glimmer) completed all six with no error, by recipe or by individual tools; a 20B model completed four; an 8B vision model (Qwen3-VL-8B) made figures that were wrong (unsplit RGB channels, wrong colours) although its calls succeeded. Prefer models of ~20B parameters or more, ask them for a recipe (`build_figure_from_recipe`), and always look at `render_preview`. |
+| **Tool reliability** | Measured on the requests of the paper's Figure 3 plus three revisions (November 2026, three runs each): by recipe, Muse-Glimmer 28B got 17 of 18 steps right (3.5–4 min a run) and Qwen3.8 27B 16 of 18 (7–8 min); every miss kept a third colour when asked for "magenta and green" on a three-channel image. By individual tools the same models got 2 and 1 of 6. An 8B vision model failed every step (invented pixel size, crop margins read as coordinates). Ask models for a recipe (`build_figure_from_recipe`), and always check `render_preview`, above all pixel sizes and scale bars. |
 | **Multi-step plans** | May need explicit prompting: "first call describe_figure, then add scale bars". |
 | **Speed** | Each tool call is a round-trip; CPU-only inference can be slow for complex edits. |
 

@@ -446,6 +446,9 @@ def test_chat_sidebar_docks_the_sidecar(qapp, gui, runtime, monkeypatch):
     assert config.servers["pyfigures"]["args"] == ["-m", "pyfigures.assistant.live_mcp"]
     assert config.adapter["descriptor"] == str(runtime / "connection.json")
     assert g.open_chat_sidebar() is dock                      # a second click shows the same dock
+    # always under the chat: PyFigures words the sidecar's notice for figures
+    from pyfigures.mcp_control import MODEL_WARNING
+    assert config.notice == MODEL_WARNING and dock.notice.text().endswith(MODEL_WARNING)
 
 
 def test_launch_flags(qapp, gui, runtime):
