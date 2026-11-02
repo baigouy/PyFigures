@@ -995,6 +995,15 @@
       walks through all of this.
     </p>
     <p>
+      <strong>Letting the model see the figure.</strong> The previews the chat asks for are shown to
+      you, and also to the model when it can read images, so it can check its own edits (a
+      duplicated panel, a magnified region in the wrong place). The chat's settings (gear button,
+      <strong>Show previews to the model</strong>) offer <em>Automatic</em> (the default: on when LM
+      Studio reports a vision model, as it does for Qwen3.5-9B), <em>Always</em> or <em>Never</em>.
+      Only the latest preview is sent, made smaller, so the conversation stays within the context.
+      With a cloud model, these previews are sent to its provider.
+    </p>
+    <p>
       <strong>Tools → Share the open figure with the MCP server</strong> does the same for any MCP
       client (Claude Desktop, LM Studio's own chat…): it shows the configuration to paste into the
       client, which then edits this window's figure live. It runs on this computer only
