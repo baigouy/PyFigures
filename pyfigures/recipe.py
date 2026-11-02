@@ -158,7 +158,8 @@ _ROI_KEYS = set(_ROI_SHAPES) | {"color", "fill", "stroke", "opacity", "arrow", "
 _ROI_ARITY = {"rect": 4, "ellipse": 4, "line": 4, "circle": 3, "square": 3, "point": 2}
 _INSET_KEYS = {"image", "placement", "size", "border", "border_color"}
 _ZOOM_KEYS = {"box", "corner", "size", "color", "line_color", "stroke", "connectors", "border",
-              "image"}
+              "image", "center", "box_size"}
+_ZOOM_BOX_SIZE = 120     # px: the region around a zoom's centre when box_size is not given
 _BRACKET_KEYS = {"x1", "x2", "y", "label", "tick", "color", "stroke", "font_pt", "label_gap",
                  "whiskers"}
 _FONT_KEYS = {"family", "size", "italic"}
@@ -382,6 +383,20 @@ _ZOOM_ALIASES = {"size_fraction": "size", "inset_fraction": "size", "fraction": 
                  "region": "box", "rect": "box", "placement": "corner"}
 
 
+def _box_around(center, box_size, where, k):
+    """zoom: {center: [x, y], box_size: s | [w, h]} -> box [x, y, w, h]. Given
+    "a bundle around (435, 415)", every local model used that point as the
+    box's top-left corner and magnified tissue beside the bundle."""
+    if not (isinstance(center, list) and len(center) == 2 and all(_is_num(v) for v in center)):
+        raise RecipeError(f"{where}: zoom {k + 1} center must be [x, y] (pixels), got {center!r}")
+    wh = box_size if isinstance(box_size, list) else [box_size, box_size]
+    if not (len(wh) == 2 and all(_is_num(v) and v > 0 for v in wh)):
+        raise RecipeError(f"{where}: zoom {k + 1} box_size is the region's width (or [width, "
+                          f"height]) in pixels, got {box_size!r}")
+    w, h = (int(round(v)) for v in wh)
+    return [int(round(center[0] - w / 2)), int(round(center[1] - h / 2)), w, h]
+
+
 def _percent_hint(v):
     """'(a percentage? 40 -> 0.4)' for a fraction given as a percentage."""
     if _is_num(v) and 1 < v <= 100:
@@ -527,6 +542,9 @@ def _normalise_panel_opts(opts, where):
         for k, z in enumerate(_as_list(opts["zoom"])):
             if isinstance(z, dict):
                 z = _renamed(z, _ZOOM_ALIASES)
+                if "center" in z and "box" not in z:
+                    z["box"] = _box_around(z["center"], z.get("box_size", _ZOOM_BOX_SIZE),
+                                           where, k)
                 guess = None if "box" in z else _inset_as_zoom(z)
                 if guess:
                     # [x, y] could be the corner or the centre: not guessed silently
@@ -1205,6 +1223,24 @@ def _strip_error(text: str) -> str:
     return text
 
 
+def _repeated_panel_warnings(actual_rows):
+    """A file shown as two separate panels (not the panels of one channel
+    split or montage): Qwen 9B kept a second lily panel through every
+    revision while its build reply listed both."""
+    seen = {}
+    for row in actual_rows:
+        body = re.sub(r"\[[^\]]*\]", "", row.split(":", 1)[-1])     # splits / montages
+        # panels that are no file: plots, script panels, empty or template slots
+        body = re.sub(r"\S+ \(plot\)|\((?:script panel|empty|template slot)\)", "", body)
+        for tok in re.split(r"\s+[|/]\s+|[()]", body):
+            tok = tok.strip(" |/")
+            if tok:
+                seen[tok] = seen.get(tok, 0) + 1
+    return [f"{name} is shown as {n} separate panels: check that this was asked for (a zoom "
+            f"of it goes on the panel itself, zoom: {{...}}, not in a panel of its own)"
+            for name, n in seen.items() if n > 1]
+
+
 def _check(result, step):
     """Fail loudly on an ERROR from a tool; return any WARNING lines."""
     if isinstance(result, str) and result.startswith("ERROR"):
@@ -1410,6 +1446,15 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
                 x, y, zw, zh = 3 * iw // 8, 3 * ih // 8, max(1, iw // 4), max(1, ih // 4)
             else:
                 x, y, zw, zh = z["box"]
+            if "center" in z and pw and ph:
+                # around a point near an edge: the region slides inside the image
+                nx = min(max(0, x), max(0, int(pw) - zw))
+                ny = min(max(0, y), max(0, int(ph) - zh))
+                if (nx, ny) != (x, y):
+                    w.append(f"{step} zoom {k + 1}: the {zw} x {zh} px region around "
+                             f"{z['center']} ran past the image edge; it was moved to start at "
+                             f"({nx}, {ny}), so it is no longer centred there")
+                    x, y = nx, ny
             kw = {"inset_corner": z.get("corner", "top right"),
                   "inset_fraction": z.get("size", 0.4),
                   "box_color": z.get("color", "yellow"),
@@ -2109,6 +2154,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
         actual = layout_rows(_ET.parse(out).getroot())
     except Exception:
         actual = []
+    warnings += _repeated_panel_warnings(actual)
     width_desc = (f"{plan['journal']} ({plan['column']})" if plan["journal"] else
                   (", ".join(f"{k}={v}" for k, v in plan["width"].items()) or None))
     return {

@@ -340,6 +340,34 @@ def test_errors_steer_a_small_model_back_to_what_the_user_asked(tmp_path, qapp):
     assert res.startswith("ERROR") and "ordered list" in res and "mapping" in res, res
     res = M.add_channel_split(str(pyf), channel_files=chans, colors=["magenta", "green"])
     assert res.startswith("ERROR") and "one colour per channel" in res, res
+    # placeholders, not colours: Qwen 9B copied [magenta, green, blue] over "magenta and green"
+    assert "<colour of channel 3>" in res and "blue" not in res, res
+
+
+def test_zoom_around_a_point_and_repeated_panels(tmp_path, qapp):
+    """From Qwen 9B's Figure 3 runs: "a bundle around (435, 415)" was used as
+    the box's top-left corner (the zoom showed tissue beside the bundle), and
+    a second lily panel was kept through every revision."""
+    import json as _json
+    from PIL import Image
+    Image.new("RGB", (922, 922), (30, 60, 90)).save(tmp_path / "lily.png")
+    res = _json.loads(M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {image: lily.png, zoom: {center: [435, 415], box_size: 100}}\n")))
+    from pyfigures.mcp_tools.overlays import list_insets
+    zoom = _json.loads(list_insets(str(tmp_path / "r.pyf"), [0], 0))
+    assert "385" in _json.dumps(zoom) and "365" in _json.dumps(zoom), zoom
+    assert not res["warnings"], res
+    # near an edge the region slides inside the image, with a warning
+    res = _json.loads(M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {image: lily.png, zoom: {center: [20, 900]}}\n")))
+    assert any("moved to start at (0, 802)" in w for w in res["warnings"]), res
+    bad = M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - - {image: lily.png, zoom: {center: [20]}}\n"))
+    assert bad.startswith("ERROR") and "center must be [x, y]" in bad, bad
+    # the same file as two panels is pointed out
+    res = _json.loads(M.build_figure_from_recipe(str(tmp_path / "r.yaml"), recipe_text=(
+        "output: r.pyf\nrows:\n  - [lily.png]\n  - [lily.png]\n")))
+    assert any("lily.png is shown as 2 separate panels" in w for w in res["warnings"]), res
 
 
 def test_caption_stub_matches_the_panel_letters(tmp_path, qapp):

@@ -92,9 +92,11 @@ _DEFAULT_SPLIT_COLORS = {1: ["gray"], 2: ["green", "magenta"],
 
 
 def _colour_list_example(n: int) -> str:
-    """An ordered colour list of *n* items, written as a model should send it."""
-    colours = (["magenta", "green", "blue", "gray", "cyan", "yellow", "red"] * 2)[:max(1, n)]
-    return "[" + ", ".join(colours) + "]"
+    """The shape of an ordered colour list of *n* items. Placeholders, not
+    colours: Qwen 9B copied a real example ([magenta, green, blue]) over the
+    user's "magenta and green"."""
+    return ("[" + ", ".join(f"<colour of channel {i + 1}>" for i in range(max(1, n)))
+            + "], with the colours the user asked for")
 
 
 

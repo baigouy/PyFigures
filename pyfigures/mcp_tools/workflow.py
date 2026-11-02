@@ -920,6 +920,9 @@ def recipe_reference() -> str:
             "auto_configure": sorted(R._AUTO_KEYS), "exports[] (mapping form)": sorted(R._EXPORT_KEYS),
         },
         "roi_values": {k: f"{n} numbers" for k, n in R._ROI_ARITY.items()},
+        "zoom_region": "box: [x, y, width, height] in image pixels, x/y = the region's TOP-LEFT "
+                       "corner; for a region around a point (\"a bundle around (435, 415)\") "
+                       "write center: [435, 415] and box_size: 120 (px, or [w, h]) instead.",
         "flip": sorted(R._FLIPS),
         "exports": sorted(R._EXPORTS),
         "checks": {k: sorted(v) for k, v in R._CHECKS.items()},

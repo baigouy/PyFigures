@@ -740,7 +740,9 @@ that region in a corner, and leader lines joining them (or a list of them).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `box` | **required** | `[x, y, w, h]` of the region, in raw pixels, or `auto` (the centre quarter, to refine in the GUI). |
+| `box` | **required** (or `center`) | `[x, y, w, h]` of the region, in raw pixels, x/y = its **top-left corner**, or `auto` (the centre quarter, to refine in the GUI). |
+| `center` | — | `[x, y]`: the point the region is centred on (e.g. "a bundle around (435, 415)" → `center: [435, 415]`), instead of `box`. Near an edge the region slides inside the image (with a warning). |
+| `box_size` | `120` | With `center`: the region's width in pixels, or `[w, h]`. |
 | `corner` | `top right` | Where the magnified view goes. |
 | `size` | `0.4` | Magnified view width as a fraction of the panel width (0 < size ≤ 1; `inset_fraction` is accepted too). |
 | `color` / `line_color` | `yellow` | Box and leader-line colours. |
