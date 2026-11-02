@@ -2830,9 +2830,9 @@ def sharing_steps() -> list[TutorialStep]:
             message=(
                 'You now know the full collaboration and accessibility toolkit.<br><br>'
                 'Still to explore in the <b>Help</b> menu: the <b>Stacks, Channels &amp; '
-                'Movies</b>, <b>Automate</b>, <b>Poster</b> and <b>Photo Album</b> tutorials. '
-                'The <b>MCP server</b> (see the docs) also lets an MCP client such as '
-                'Claude drive all of this in plain language.<br><br>'
+                'Movies</b>, <b>Automate</b>, <b>Chat &amp; MCP</b>, <b>Poster</b> and <b>Photo '
+                'Album</b> tutorials; <b>Chat &amp; MCP</b> shows how a language model can do all '
+                'of this for you in plain language.<br><br>'
                 'Happy figure-making!'
             ),
             get_target=None,
@@ -3226,10 +3226,132 @@ def automation_steps() -> list[TutorialStep]:
                 'PyFigures also ships an <b>MCP server</b> with the same tools (see '
                 '<code>docs/MCP_SERVER.md</code>): connect it to an MCP client such as '
                 'Claude, ask for "a 3-panel figure from this folder with 10 µm scale bars" '
-                'and it drives PyFigures for you.'
+                'and it drives PyFigures for you. <b>Help → Chat &amp; MCP Tutorial</b> shows how.'
             ),
         ),
     ], first=4)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Chat & MCP (runs in a window that can share its figure)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _chat_is_open(win) -> bool:
+    dock = getattr(win, 'local_chat_dock', None)
+    return dock is not None and not dock.isHidden()       # closing the dock hides it
+
+
+def chat_steps() -> list[TutorialStep]:
+    """Building and editing the figure in plain language: a model in the chat
+    sidebar, or any MCP client, works on the figure open in this window."""
+    return _require_figure([
+        TutorialStep(
+            title='Chat &amp; MCP tutorial',
+            message=(
+                'A language model can edit this figure for you: you ask in plain words '
+                '("add 10 µm scale bars", "use magenta and green"), it calls PyFigures\' '
+                'own tools, and each change appears here, <b>one undo step each</b>.<br><br>'
+                'Two ways: the <b>chat sidebar</b> inside PyFigures, or any <b>MCP client</b> '
+                '(Claude Desktop, LM Studio…). The model never draws pixels: it only runs '
+                'documented operations on your images.<br><br>'
+                'Have a figure with images open (or use sample images), then click <b>Next</b>.'
+            ),
+        ),
+        TutorialStep(
+            title='Step 1 — Get a model',
+            message=(
+                'The chat needs a model to talk to. Pick one:<br>'
+                '• <b>LM Studio</b> (free, runs on your computer, data stay private): install it, '
+                'download a model with tool use (a 9-billion-parameter Qwen works with 8 GB of '
+                'graphics memory; 27 billion parameters is more reliable), load it, and start its '
+                'server. PyFigures finds it by itself.<br>'
+                '• or the chat\'s own <b>Model Library</b>, which downloads a model and its runtime;<br>'
+                '• or a <b>cloud API</b> (OpenAI, Anthropic, OpenRouter) in the chat\'s connection '
+                'settings, with your own key; the figure descriptions and previews are then sent '
+                'to that provider.<br><br>'
+                'The chat is the optional package <code>qtpy-ai-sidecar</code>. Click <b>Next</b>.'
+            ),
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 2 — Open the chat',
+            message=(
+                'Open <b>Tools → Chat sidebar (local model)…</b>.<br><br>'
+                'The chat docks on the right and is connected to <i>this</i> window\'s figure, '
+                'unsaved changes included. If it has no model yet, it says how to get one.'
+            ),
+            get_target=lambda win: win.menuBar,
+            completion_check=_chat_is_open,
+        ),
+        TutorialStep(
+            title='Step 3 — Ask for a change',
+            message=(
+                'Type in the chat, for example:<br>'
+                '<i>"Add 10 µm scale bars to every image (0.1 µm per pixel)."</i><br><br>'
+                'Watch the scale bars appear here. A model checks its own work with '
+                '<b>render_preview</b> (an image of the figure) and <b>describe_figure</b>; '
+                'impossible requests are refused with an explanation.'
+            ),
+            completion_check=_has_scalebar,
+        ),
+        TutorialStep(
+            title='Step 4 — Undo what the model did',
+            message=(
+                'Press <b>Ctrl+Z</b>: the model\'s last change is undone, like any edit of yours. '
+                '<b>Ctrl+Y</b> redoes it.<br><br>'
+                'You keep the last word: nothing is saved to disk until <i>you</i> save. '
+                'Click <b>Next</b>.'
+            ),
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 5 — Ask questions too',
+            message=(
+                'Questions work as well as orders:<br>'
+                '<i>"Is the figure ready for a Nature double column?"</i> runs the journal '
+                'checks and reports what fails (size, fonts, resolution) without changing '
+                'anything.<br><br>'
+                '<i>"How do I split the channels?"</i> answers with the same short guides as '
+                '<b>Help → Show me how…</b>, which highlight the menus to use while '
+                '<i>you</i> click. Click <b>Next</b>.'
+            ),
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 6 — Use another MCP client',
+            message=(
+                'To work from Claude Desktop, LM Studio\'s own chat or any MCP client instead, use '
+                '<b>Tools → Share the open figure with the MCP server</b>: it shows the '
+                'configuration to paste into the client, and the client then edits this window\'s '
+                'figure live, as the chat does. Untick it to stop sharing.<br><br>'
+                '<b>Tools → MCP server…</b> sets up the other way of working: the client edits '
+                'saved <code>.pyf</code> files without PyFigures open (see '
+                '<code>docs/MCP_SERVER.md</code>). Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.menuBar,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 7 — What a client did to a saved file',
+            message=(
+                'When a client edited a saved figure through the MCP server, '
+                '<b>Tools → MCP call history / undo…</b> lists every call it made, with its '
+                'arguments, and undoes its last changes. Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.menuBar,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Chat &amp; MCP complete!',
+            message=(
+                'You can now build and revise figures in conversation.<br><br>'
+                'Language models still make mistakes, small ones more often: look at each '
+                'result (the preview and <b>QC</b> checks make this quick) before you rely on it. '
+                'For unpublished data, prefer a local model: with a cloud model the figure '
+                'descriptions and previews go to its provider.'
+            ),
+        ),
+    ], first=3)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

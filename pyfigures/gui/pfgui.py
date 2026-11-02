@@ -1882,6 +1882,12 @@ class EZFIG_GUI(QMainWindow):
         automation_tuto_action.triggered.connect(self.start_automation_tutorial)
         help_menu.addAction(automation_tuto_action)
 
+        chat_tuto_action = QAction('▶  Chat & MCP Tutorial', self)
+        chat_tuto_action.setToolTip('Edit the figure in plain language: a model in the chat sidebar '
+                                    'or any MCP client (Claude, LM Studio…)')
+        chat_tuto_action.triggered.connect(lambda _checked=False: self.start_chat_tutorial())
+        help_menu.addAction(chat_tuto_action)
+
         poster_tuto_action = QAction('▶  Poster Tutorial', self)
         poster_tuto_action.setToolTip('Opens the poster / collage designer and guides you through it')
         poster_tuto_action.triggered.connect(self.start_poster_tutorial)
@@ -2156,6 +2162,28 @@ class EZFIG_GUI(QMainWindow):
     def start_automation_tutorial(self):
         from pyfigures.gui.tutorial import automation_steps
         self._tutorial.start(automation_steps())
+
+    def start_chat_tutorial(self):
+        """The chat tutorial runs in a window that can share its figure: a
+        plain window first hands its figure over to one (as Tools → Chat
+        sidebar would, which would otherwise end the tutorial halfway)."""
+        from pyfigures.assistant.partner_gui import PartnerGUI
+        from pyfigures.gui.tutorial import chat_steps
+        win = self
+        if not isinstance(self, PartnerGUI):
+            answer = QMessageBox.question(
+                self, 'Chat & MCP tutorial',
+                "A model can only work on a figure that is shared with it, so PyFigures first "
+                "reopens this figure in a new window (with your unsaved changes and undo "
+                "history) and closes this one.\n\nContinue?",
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Ok)
+            if answer != QMessageBox.StandardButton.Ok:
+                return None
+            from pyfigures.assistant.launch import shareable_window
+            win = shareable_window(self)
+        win._tutorial.start(chat_steps())
+        return win
 
     def start_poster_tutorial(self):
         """The poster tutorial runs in the poster window, which it opens."""

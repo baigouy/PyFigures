@@ -36,13 +36,14 @@ _TUTORIALS = {
     "sharing": T.sharing_steps,
     "stacks": T.stacks_steps,
     "automation": T.automation_steps,
+    "chat": T.chat_steps,
 }
 # the poster tutorial runs on the poster window: see test_tutorial_controller.py
 
 _START_METHODS = {
     "start_beginner_tutorial", "start_advanced_tutorial", "start_expert_tutorial",
     "start_publication_tutorial", "start_sharing_tutorial", "start_stacks_tutorial",
-    "start_automation_tutorial", "start_poster_tutorial", "start_album_tutorial",
+    "start_automation_tutorial", "start_chat_tutorial", "start_poster_tutorial", "start_album_tutorial",
 }
 
 

@@ -211,5 +211,6 @@ def attach_sidecar(window):
     window = start_live_session(window).window
     config = sidecar_config(window._live_descriptor)
     dock = attach_to_window(window, config, window._live_descriptor)
+    dock.show()        # created hidden: it only appeared with the window's next show
     dock.needs_model = needs_model(config)
     return dock

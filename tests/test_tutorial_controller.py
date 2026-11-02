@@ -487,6 +487,61 @@ def test_poster_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
         g.close()
 
 
+def test_chat_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
+    """It hands the figure over to a window that can share it first (opening
+    the chat from a plain window would end the tutorial halfway), then the
+    chat opens in that same window and every step can be set up or skipped."""
+    from qtpy.QtWidgets import QMessageBox
+    import pyfigures.assistant as A
+    from pyfigures.assistant import launch, session
+    from pyfigures.assistant.partner_gui import PartnerGUI
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    monkeypatch.setenv("PYFIGURES_LIVE_RUNTIME", str(tmp_path / "runtime"))
+    monkeypatch.setattr(session, "STATE", tmp_path / "runtime")
+    (tmp_path / "runtime").mkdir()
+    monkeypatch.setattr(T, "_DEMO_DIR", [str(tmp_path / "samples")])
+    os.makedirs(str(tmp_path / "samples"))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: QMessageBox.Ok))
+    monkeypatch.setattr(launch, "lm_studio_model", lambda: None)
+    EZFIG_GUI.show_tips = lambda self: None
+    g = EZFIG_GUI()
+    g.show()
+    win = None
+    try:
+        monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Cancel))
+        assert g.start_chat_tutorial() is None and not g._tutorial._bubble.isVisible()
+        monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok))
+        win = g.start_chat_tutorial()
+        _process()
+        assert isinstance(win, PartnerGUI) and win._tutorial._bubble.isVisible()
+        ctrl = win._tutorial
+
+        def on_step(step):
+            if "Open the chat" in step.title and A.sidecar_available():
+                dock = win.open_chat_sidebar()
+                assert dock is not None and dock.parent() is win
+                assert step.completion_check(win), (win.isVisible(), dock.isHidden())
+            if "Ask for a change" in step.title:
+                # what the model's set_scale_bar_all call does, done directly
+                from batoolset.drawings.shapes.image2d import Image2D
+                from batoolset.drawings.shapes.scalebar import ScaleBar
+                from batoolset.drawings.shapes.group import get_all_contained_images
+                imgs = [i for s in win.paint.EZFIG_panel.shapes_to_draw
+                        for i in ([s] if isinstance(s, Image2D) else get_all_contained_images(s))]
+                imgs[0].annotations.append(ScaleBar(bar_width_in_units=10, unit_to_pixel_conversion_factor=0.1))
+                assert step.completion_check(win)
+        assert _walk_with_setups(ctrl, qapp, win, on_step=on_step) == []
+        assert not ctrl._bubble.isVisible()
+    finally:
+        for w in qapp.topLevelWidgets():
+            if isinstance(w, EZFIG_GUI):
+                launch.stop_live_session(w)
+                w._tutorial.stop()
+                w._dirty = False
+                w.close()
+        _process()
+
+
 def test_album_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
     from pyfigures.gui.pfgui import EZFIG_GUI
     EZFIG_GUI.show_tips = lambda self: None

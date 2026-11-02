@@ -36,6 +36,7 @@ TUTORIAL_KEYS = {
 }
 # the poster / album tutorials run in their own windows:
 ELSEWHERE = {
+    "menu: Help > ▶  Chat & MCP Tutorial": ["test_tutorial_controller.py::test_chat_tutorial_from_the_help_menu"],
     "menu: Help > ▶  Poster Tutorial": ["test_tutorial_controller.py::test_poster_tutorial_from_the_help_menu",
                                        "test_tutorial_controller.py::test_poster_tutorial_skip_and_set_up"],
     "menu: Help > ▶  Photo Album Tutorial": ["test_tutorial_controller.py::test_album_tutorial_from_the_help_menu",
