@@ -2683,7 +2683,7 @@ class MyWidget(QWidget):
                 rm_all_insets.triggered.connect(lambda: self.remove_stuff(type_of_stuff=Image2D))
 
                 # ── Crop & size ▶ (submenu) ───────────────────────────
-                crop_menu = self.contextMenu.addMenu("Crop & size ▶")
+                crop_menu = self.contextMenu.addMenu("Crop && size ▶")   # '&&': a lone '&' is not shown
                 crop_menu.addSection("Match first image")
                 matched = self._already_matching()
                 all_same_wh = crop_menu.addAction("Force same width and height")
@@ -2721,7 +2721,7 @@ class MyWidget(QWidget):
                 reset_bg.triggered.connect(lambda: self.set_bg(bg=None))
 
                 # ── Text & lettering ▶ (submenu) ──────────────────────
-                txt_menu = self.contextMenu.addMenu("Text & lettering ▶")
+                txt_menu = self.contextMenu.addMenu("Text && lettering ▶")
                 set_font = txt_menu.addAction("Change font (non-Letter text)")
                 set_font.triggered.connect(self.set_text_font_all_but_letter)
                 set_bg_txt = txt_menu.addAction("Change background (non-Letter text)")

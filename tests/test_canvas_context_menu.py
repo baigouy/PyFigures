@@ -252,9 +252,9 @@ def test_image_in_row_menu(gui, cap):
                      "Convert to template", "Extrude (remove from group)", "Arrange",
                      "Add labels ▶", "Add labels ▶ / Above the row",
                      "Add labels ▶ / Left / top of row/col", "Remove annotations ▶",
-                     "Remove annotations ▶ / Scale bars", "Crop & size ▶",
-                     "Crop & size ▶ / Reset crop only", "Appearance ▶", "Appearance ▶ / Set LUT(s)",
-                     "Text & lettering ▶", "Ignore"):
+                     "Remove annotations ▶ / Scale bars", "Crop && size ▶",
+                     "Crop && size ▶ / Reset crop only", "Appearance ▶", "Appearance ▶ / Set LUT(s)",
+                     "Text && lettering ▶", "Ignore"):
         assert expected in labels, (expected, labels)
     assert "Split ▶" not in labels                      # plain grey image: nothing to split
     assert "Reshape to panel (if possible)" not in labels   # one image: nothing to reshape
@@ -371,7 +371,7 @@ def test_remove_all_annotations_on_selection(gui, cap):
 def test_force_same_width_and_height(gui, cap):
     row = rows(gui)[0]
     gui.paint.EZFIG_panel.set_current_selection(row)
-    right_click(gui, cap, row, select=False, pick=["Crop & size ▶", "Force same width and height"])
+    right_click(gui, cap, row, select=False, pick=["Crop && size ▶", "Force same width and height"])
     a, b = images(row)
     assert abs(a.boundingRect().width() - b.boundingRect().width()) < 1
     assert abs(a.boundingRect().height() - b.boundingRect().height()) < 1
@@ -379,7 +379,7 @@ def test_force_same_width_and_height(gui, cap):
 
 def test_force_same_aspect_ratio(gui, cap):
     row = rows(gui)[0]
-    right_click(gui, cap, row, pick=["Crop & size ▶", "Force same aspect ratio"])
+    right_click(gui, cap, row, pick=["Crop && size ▶", "Force same aspect ratio"])
     a, b = images(row)
     ar = lambda s: s.boundingRect().width() / s.boundingRect().height()  # noqa: E731
     assert abs(ar(a) - ar(b)) < 0.05          # crops are whole pixels: 1 px of a 26 px side
@@ -392,7 +392,7 @@ def test_reset_crop_and_rotation(gui, cap, entry, crop_reset, rot_reset):
     img = images(rows(gui)[0])[0]
     img.crop_left, img.crop_top = 5, 3
     img.theta = 30
-    right_click(gui, cap, img, pick=["Crop & size ▶", entry])
+    right_click(gui, cap, img, pick=["Crop && size ▶", entry])
     assert ((img.crop_left or 0) == 0) == crop_reset
     assert ((img.theta or 0) == 0) == rot_reset
 
@@ -401,7 +401,7 @@ def test_force_same_crop_rotation_as_first(gui, cap):
     row = rows(gui)[0]
     a, b = images(row)
     a.theta = 15
-    right_click(gui, cap, row, pick=["Crop & size ▶", "Force same crop, rotation and bg"])
+    right_click(gui, cap, row, pick=["Crop && size ▶", "Force same crop, rotation and bg"])
     assert b.theta == 15
 
 
@@ -494,13 +494,13 @@ def test_reshape_to_panel(gui, cap, ui):
 ])
 def test_text_menu_dialogs(gui, cap, ui, entry, title):
     ui["accept"] = False
-    right_click(gui, cap, images(rows(gui)[0])[0], pick=["Text & lettering ▶", entry])
+    right_click(gui, cap, images(rows(gui)[0])[0], pick=["Text && lettering ▶", entry])
     assert ui["custom"][-1] == title
 
 
 def test_change_lettering_parameters_opens_dialog(gui, cap, ui):
     ui["accept"] = False
-    right_click(gui, cap, images(rows(gui)[0])[0], pick=["Text & lettering ▶", "Change lettering parameters"])
+    right_click(gui, cap, images(rows(gui)[0])[0], pick=["Text && lettering ▶", "Change lettering parameters"])
     assert ui["custom"][-1] == "Auto lettering"
 
 

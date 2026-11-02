@@ -1864,25 +1864,27 @@ class EZFIG_GUI(QMainWindow):
         expert_tuto_action.triggered.connect(self.start_expert_tutorial)
         help_menu.addAction(expert_tuto_action)
 
-        publication_tuto_action = QAction('▶  Publication & QC Tutorial', self)
+        # '&&': a single '&' is a keyboard accelerator in Qt and was not shown
+        # ("Publication  QC Tutorial")
+        publication_tuto_action = QAction('▶  Publication && QC Tutorial', self)
         publication_tuto_action.triggered.connect(self.start_publication_tutorial)
         help_menu.addAction(publication_tuto_action)
 
-        sharing_tuto_action = QAction('▶  Sharing, Review & Accessibility Tutorial', self)
+        sharing_tuto_action = QAction('▶  Sharing, Review && Accessibility Tutorial', self)
         sharing_tuto_action.triggered.connect(self.start_sharing_tutorial)
         help_menu.addAction(sharing_tuto_action)
 
-        stacks_tuto_action = QAction('▶  Stacks, Channels & Movies Tutorial', self)
+        stacks_tuto_action = QAction('▶  Stacks, Channels && Movies Tutorial', self)
         stacks_tuto_action.setToolTip('Projections, channel split, montages, kymographs, '
                                       'orthogonal views, channel merges and movie export')
         stacks_tuto_action.triggered.connect(self.start_stacks_tutorial)
         help_menu.addAction(stacks_tuto_action)
 
-        automation_tuto_action = QAction('▶  Automate: Drafts, Recipes & Library Tutorial', self)
+        automation_tuto_action = QAction('▶  Automate: Drafts, Recipes && Library Tutorial', self)
         automation_tuto_action.triggered.connect(self.start_automation_tutorial)
         help_menu.addAction(automation_tuto_action)
 
-        chat_tuto_action = QAction('▶  Chat & MCP Tutorial', self)
+        chat_tuto_action = QAction('▶  Chat && MCP Tutorial', self)
         chat_tuto_action.setToolTip('Edit the figure in plain language: a model in the chat sidebar '
                                     'or any MCP client (Claude, LM Studio…)')
         chat_tuto_action.triggered.connect(lambda _checked=False: self.start_chat_tutorial())

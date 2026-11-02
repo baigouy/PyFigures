@@ -296,7 +296,7 @@ def test_text_background_applies_to_non_letter_text_only(gui, cap, ui):
     def configure(dialog):
         dialog.main_widget.get_color = lambda: 0xFF00FF
     ui["configure"] = configure
-    right_click(gui, cap, img, pick=["Text & lettering ▶", "Change background (non-Letter text)"])
+    right_click(gui, cap, img, pick=["Text && lettering ▶", "Change background (non-Letter text)"])
     texts = [a for a in img.annotations if isinstance(a, TAText2D)]
     assert any(not t.is_letter and t.fill_color == 0xFF00FF for t in texts)
     assert all(t.fill_color != 0xFF00FF for t in texts if t.is_letter)
@@ -312,7 +312,7 @@ def test_text_font_applies_to_non_letter_text_only(gui, cap, ui):
     def configure(dialog):
         dialog.main_widget.get_font = lambda: font
     ui["configure"] = configure
-    right_click(gui, cap, img, pick=["Text & lettering ▶", "Change font (non-Letter text)"])
+    right_click(gui, cap, img, pick=["Text && lettering ▶", "Change font (non-Letter text)"])
     texts = [a for a in img.annotations if isinstance(a, TAText2D)]
     caption = next(t for t in texts if t.getPlainText() == "caption")
     assert "17" in caption.doc.toHtml() or "Courier" in caption.doc.toHtml()

@@ -341,7 +341,10 @@ API model. It is the separate package `qtpy-ai-sidecar`
 (`pip install pyfigures[chat]` once it is published). Its profile is read from
 `PYFIGURES_SIDECAR_CONFIG` or `sidecar.json` in the live folder
 (`%LOCALAPPDATA%\PyFigures\assistant` on Windows); connection settings made in
-the chat itself are remembered.
+the chat itself are remembered. While no model is set there, the chat uses the
+model LM Studio serves on this computer (`http://127.0.0.1:1234/v1`); without
+one, it says on opening how to get a model (Model Library, LM Studio or a cloud
+API). **Help → Chat & MCP Tutorial** walks through it.
 
 ---
 

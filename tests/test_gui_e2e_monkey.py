@@ -30,7 +30,7 @@ SEEDS = [int(os.environ["PYF_E2E_SEED"])] if os.environ.get("PYF_E2E_SEED") else
 STEPS = int(os.environ.get("PYF_E2E_MONKEY_STEPS", "18"))
 
 # entries that leave to another window / need a human (covered elsewhere)
-SKIP_ENTRIES = ("Edit Image", "Edit text", "Edit equation", "Edit LaTeX", "Ignore", "Text & lettering")
+SKIP_ENTRIES = ("Edit Image", "Edit text", "Edit equation", "Edit LaTeX", "Ignore", "Text && lettering")
 
 
 def _shapes(g):

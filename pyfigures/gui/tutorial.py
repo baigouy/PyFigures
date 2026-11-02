@@ -3226,7 +3226,7 @@ def automation_steps() -> list[TutorialStep]:
                 'PyFigures also ships an <b>MCP server</b> with the same tools (see '
                 '<code>docs/MCP_SERVER.md</code>): connect it to an MCP client such as '
                 'Claude, ask for "a 3-panel figure from this folder with 10 µm scale bars" '
-                'and it drives PyFigures for you. <b>Help → Chat &amp; MCP Tutorial</b> shows how.'
+                'and it drives PyFigures for you. The <b>Chat &amp; MCP</b> tutorial (Help menu) shows how.'
             ),
         ),
     ], first=4)

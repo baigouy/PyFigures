@@ -330,6 +330,8 @@
     <li><a href="#automation">Drafts, recipes, library</a></li>
     <li><a href="#stacks">Stacks &amp; movies</a></li>
     <li><a href="#mcp">MCP server</a></li>
+    <li><a href="#chat">Chat sidebar &amp; live sharing</a></li>
+    <li><a href="#bug-recorder">Reporting a bug</a></li>
     <li><a href="#templates">Templates</a></li>
     <li><a href="#consolidate">Consolidation</a></li>
     <li><a href="#annotations">Annotations</a></li>
@@ -498,7 +500,7 @@
     <div class="table-wrap">
       <table>
         <tr><th>Entry</th><th>Description</th><th></th></tr>
-        <tr><td><strong>Images from files ▸</strong></td><td>Pick image files and choose what dropping them would offer: <em>to a new row</em>, <em>to a new column</em>, <em>to a grid panel</em>, <em>as single images</em>, <em>to a row / column with the selected panel</em>, or <em>a stack as a montage of frames</em>. New Z stacks show their maximum projection (<em>View</em> menu option), time series their first frame.</td><td></td></tr>
+        <tr><td><strong>Images from files ▸</strong></td><td>Pick image files and choose what dropping them would offer: <em>to a new row</em>, <em>to a new column</em>, <em>to a grid panel</em>, <em>as single images</em>, <em>To a row with the selected panel</em> / <em>To a column with the selected panel</em>, or <em>a stack as a montage of frames</em>. New Z stacks show their maximum projection (<em>View</em> menu option), time series their first frame.</td><td></td></tr>
         <tr><td><strong>Add image from URL / OME-Zarr / OMERO…</strong></td><td>Adds an image from an http(s) URL, an OME-Zarr image (a URL such as <code>https://…/image.zarr</code>, e.g. from the IDR, or a local <code>.zarr</code> folder; needs <code>pip install pyfigures[zarr]</code>) or an image on your <strong>OMERO</strong> server (paste the image's OMERO.web link, e.g. <code>https://omero.my-institute.org/webclient/img_detail/1234/</code>) as a new row. For OME-Zarr you pick the pyramid level. For OMERO you log in if the server asks (the password is kept for this session only, never saved), and for a large stack you choose the planes to read (e.g. <code>z=0-9&amp;t=0</code>). Pixel size, channel names and colours come from the image. Opening a figure with images from a private OMERO server asks for the login again. OMERO images are read with 256 levels per channel through OMERO's web interface; with <code>omero-py</code> installed (<code>pip install pyfigures[omero]</code>) and a login, the raw 16-bit / float pixels are read instead.</td><td></td></tr>
         <tr><td><strong>Add equation (LaTeX)…</strong></td><td>Type LaTeX mathematics (e.g. <code>\Delta F/F_0 = \frac{F-F_0}{F_0}</code>) with a live preview, a font size and a font (Computer Modern gives the LaTeX look); it is added as a new row as a vector panel. No TeX installation needed. With TeX Live, MiKTeX or MacTeX installed, tick <em>Full LaTeX</em> for any environment (<code>align*</code>, <code>cases</code>…) and any package (preamble, e.g. <code>\usepackage{siunitx}</code>), in Latin Modern or in an installed font such as Arial to match the figure (<em>Font</em>, needs XeLaTeX); <em>Load .tex…</em> takes the equation from a file, and a <code>.tex</code> file dropped on the canvas becomes an equation panel. In any label, <code>$…$</code> is typeset as maths (<code>\$</code> for a dollar sign) — by LaTeX itself when it is installed (full LaTeX, e.g. <code>\SI{5}{\micro\metre}</code>; kept next to the figure in <code>equations/labels</code> so it looks the same on computers without TeX), else by Matplotlib's built-in maths. A <code>.tex</code> <em>document</em> (TikZ / pgfplots picture, figure with <code>\includegraphics</code>, table) dropped on the canvas is compiled and added as a vector PDF panel (with several figures or tables, you choose which); one holding only maths becomes an editable equation. When its <code>.tex</code> changes, PyFigures offers to recompile it on opening, and right-click → <em>Recompile from .tex</em> does it any time. Label maths become native equations in the PowerPoint export and Unicode text in the Illustrator script. Right-click the panel → <em>Edit equation…</em> to change it later. PDF files (e.g. plots) dropped on the canvas become panels, rendered at 600 dpi, or kept as vector panels with <code>pip install pyfigures[pdf]</code> (not in the standalone apps); for a multi-page PDF you choose the page. SVG files keep their clip paths. In an SVG export, every vector panel (SVG, PDF, plot) is written from its own SVG source, so its clip paths and its text stay as they are (text remains editable).</td><td></td></tr>
         <tr><td><strong>Add LaTeX code panel…</strong></td><td>Write LaTeX code (a TikZ or pgfplots picture, a table, maths, or a whole document with its own preamble; <em>Start from</em> gives examples, <em>Preview</em> compiles it). It becomes a vector panel; right-click → <em>Edit LaTeX code…</em> to change it. A panel's script can be LaTeX code too, and a Python script can call <code>latex(code)</code>, for example to build a table from data. The compiled PDF is kept next to the figure (<code>equations/labels</code>), so it opens on computers without TeX. Needs LaTeX (<em>Help → Install LaTeX for PyFigures…</em>).</td><td></td></tr>
@@ -521,8 +523,9 @@
         <tr><td><strong>Draw ROIs, text, crop or rotate (double-click a panel)…</strong></td><td>Opens the image editor of the selected panel, as double-clicking it does.</td></tr>
         <tr><td><strong>Figure colours…</strong></td><td>Recolours the whole figure at once (e.g. magenta / green): every multi-channel image, merge, channel split and plot; single-channel images become gray, colour photographs are kept.</td></tr>
         <tr><td><strong>Panel letters (A, B, C…)…</strong></td><td>Starting letter, case, font, size and colour of the automatic panel letters. See <a href="#lettering">Auto-lettering</a>.</td></tr>
+        <tr><td><strong>Text style (letters, labels, scale bars…)…</strong></td><td>Font, size, colour, bold and italic of a whole family of texts at once: the panel letters, the labels on panels, the label rows or the scale-bar legends.</td></tr>
         <tr><td><strong>Tidy text typography</strong></td><td>Safe typography fixes on every label: 2*3→2×3, 37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5.</td></tr>
-        <tr><td><strong>Remove ▸</strong></td><td>Remove all annotations, or only the scale bars, texts, ROIs or insets.</td></tr>
+        <tr><td><strong>Remove ▸</strong></td><td><em>Remove all annotations</em>, or only one kind: <em>Remove all scale bars</em>, <em>Remove all texts</em>, <em>Remove all ROIs</em>, <em>Remove all insets</em> — of the selected panel, or of every panel when nothing is selected.</td></tr>
       </table>
     </div>
 
@@ -534,6 +537,7 @@
         <tr><th>Entry</th><th>Description</th></tr>
         <tr><td><strong>Audit figure</strong></td><td>Lists panels missing a scale bar or a letter.</td></tr>
         <tr><td><strong>Check journal compliance… / Apply journal guidelines…</strong></td><td>Checks (or applies) a journal's width, fonts, minimum font size and resolution.</td></tr>
+        <tr><td><strong>Journal styles (from a journal's guidelines)…</strong></td><td>For a journal that is not in the list: paste its figure guidelines from its web page, a language model extracts the rules (column widths, fonts, minimum size, resolution), you check them and save them as a journal style that the checks above then offer.</td></tr>
         <tr><td><strong>Check print resolution… / Enforce minimum font size…</strong></td><td>Effective dpi of every panel at the printed size; raises every text to a minimum size.</td></tr>
         <tr><td><strong>Check image integrity…</strong></td><td>Screens panels for reused, flipped/rotated or internally cloned images.</td></tr>
         <tr><td><strong>Check scale-bar consistency…</strong></td><td>Flags panels whose displayed physical scale differs.</td></tr>
@@ -551,7 +555,11 @@
       <table>
         <tr><th>Entry</th><th>Description</th></tr>
         <tr><td><strong>Poster / collage designer… / Photo album designer…</strong></td><td>Separate tools for posters, photo-collage pages and photo albums, where images can be freely placed and rotated. Guide: <code>docs/poster.md</code>.</td></tr>
+        <tr><td><strong>Send this figure to the poster designer</strong></td><td>Saves the figure, then places it on the poster as one block, as dropping its <code>.pyf</code> there would: shown from a 300 DPI render, drawn as vectors in the poster's PDF / SVG exports.</td></tr>
         <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register or start the PyFigures MCP server; list every call it made on this figure and undo its last changes.</td></tr>
+        <tr><td><strong>Share the open figure with the MCP server</strong></td><td>Lets an MCP client (Claude Desktop, LM Studio…) edit the figure open in this window live, unsaved changes included, one undo step per edit; shows the configuration to paste into the client. Untick to stop. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
+        <tr><td><strong>Chat sidebar (local model)…</strong></td><td>Docks a chat on the right: ask for changes in plain words and a language model makes them on this figure. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
+        <tr><td><strong>Vector PDF panels (PyMuPDF)…</strong></td><td>Says whether PDF files can be kept as vector panels and offers to install PyMuPDF (AGPL, so it is not in the standalone apps); without it, PDF panels are rendered at 600 dpi.</td></tr>
       </table>
     </div>
 
@@ -586,6 +594,8 @@
         <tr><td><strong>List shortcuts</strong></td><td>Opens a dialog listing all keyboard shortcuts.</td></tr>
         <tr><td><strong>User Guide</strong></td><td>Opens this user guide in your default web browser.</td></tr>
         <tr><td><strong>Install LaTeX for PyFigures…</strong></td><td>Downloads TinyTeX, a small TeX Live (about 75 MB; 400 MB on disk), into your user folder (no administrator rights), with every package PyFigures uses, for full-LaTeX equations, <code>.tex</code> documents and LaTeX data plots. It is also offered when one of these needs LaTeX. Packages a <code>.tex</code> document needs later are installed automatically.</td></tr>
+        <tr><td><strong>Debug ▸</strong></td><td><em>Start recording a bug…</em>, <em>Stop recording and describe the bug…</em>, <em>Open the recordings folder</em>. See <a href="#bug-recorder">Reporting a bug</a>.</td></tr>
+        <tr><td><strong>Show me how… ▸</strong></td><td>Short guides for one operation each (split channels, scale bars, zoom inset, reorder panels, draw an ROI, Greek letters in a text…): they highlight the menus and controls to use while you do the clicks. The chat answers "how do I…?" questions with the same guides.</td></tr>
         <tr><td><strong>▶ Beginner Tutorial</strong></td><td>Starts a step-by-step interactive tutorial covering the core workflow: drop images, arrange rows, resize, add a scale bar and lettering, then save.</td></tr>
         <tr><td><strong>▶ Medium Tutorial</strong></td><td>Starts an intermediate interactive tutorial covering .pyf files, labels above/below images, text annotations, and templates.</td></tr>
         <tr><td><strong>▶ Advanced Tutorial</strong></td><td>Starts an advanced interactive tutorial with expert-level tips and workflows. The tutorial panel appears at the bottom-right of the window and can be dragged to any position.</td></tr>
@@ -593,6 +603,7 @@
         <tr><td><strong>▶ Sharing, Review &amp; Accessibility Tutorial</strong></td><td>Collaboration and accessibility: portable (consolidated) copies, the Review comment round-trip, fixing moved-file links, colour-blindness checks and theming.</td></tr>
         <tr><td><strong>▶ Stacks, Channels &amp; Movies Tutorial</strong></td><td>Projections, channel split, montages, kymographs, orthogonal views, channel merges and movie export.</td></tr>
         <tr><td><strong>▶ Automate: Drafts, Recipes &amp; Library Tutorial</strong></td><td>Draft a figure from a folder, build one from a recipe, search past figures.</td></tr>
+        <tr><td><strong>▶ Chat &amp; MCP Tutorial</strong></td><td>Getting a model (LM Studio, the chat's Model Library or a cloud API), the chat sidebar, a first request, undoing it, questions, other MCP clients and the call history. It first reopens the figure in a window that can share it.</td></tr>
         <tr><td><strong>▶ Poster Tutorial</strong></td><td>Opens the poster / collage designer and guides you through it.</td></tr>
         <tr><td><strong>▶ Photo Album Tutorial</strong></td><td>Opens the photo album designer (front cover, spreads, back cover) and guides you through it.</td></tr>
       </table>
@@ -706,6 +717,13 @@
       <img src="screenshots/dnd_context_menu.png" alt="DnD context menu" onerror="this.parentElement.classList.add('placeholder'); this.remove();" />
       <figcaption>Fig 11 — The pop-up menu that appears after dropping image files. Screenshot: drop images onto the canvas and capture the menu.</figcaption>
     </figure>
+    <p>
+      Every entry shows a small <strong>sketch of the result</strong>, and the entry under the mouse
+      is drawn larger beside the menu, so you see where the images will go before choosing.
+      Entries that would give the same result are shown once. Dragging panels inside the figure
+      opens the same kind of menu, and <em>Edit Group</em> shows the row / column choices as icons
+      with a live sketch.
+    </p>
     <div class="ctx-grid">
       <div class="ctx-card">
         <h4>➕ Add as single image(s)</h4>
@@ -722,6 +740,14 @@
       <div class="ctx-card">
         <h4>▦ To panel</h4>
         <p>Opens a dialog to configure the number of rows and columns, then arranges the images into a grid. <em>(Only shown when more than one image is dropped.)</em></p>
+      </div>
+      <div class="ctx-card">
+        <h4>↔ / ↕ … (with image below)</h4>
+        <p>Dropped on a panel: makes a row or column with the panel under the mouse and the dropped image(s).</p>
+      </div>
+      <div class="ctx-card">
+        <h4>🎞 Montage of frames (time / Z)…</h4>
+        <p>Offered when a single stack or movie is dropped: all its frames as a grid (at most a few columns per row, as many rows as needed), or a chosen range and step.</p>
       </div>
       <div class="ctx-card">
         <h4>🎯 Assign to template image</h4>
@@ -798,11 +824,12 @@
       <div class="ctx-card"><h4>Add text labels above / below</h4><p>Adds a row of text annotations above or below each image in the row. <em>Row groups only.</em></p></div>
       <div class="ctx-card"><h4>Add text label left / right of row</h4><p>Adds a single label to the left or right of the row.</p></div>
       <div class="ctx-card"><h4>To row / To column / To panel</h4><p>Re-arrange the group's layout.</p></div>
-      <div class="ctx-card"><h4>Force same width and height</h4><p>Crops all images in the group to match the first image's dimensions.</p></div>
-      <div class="ctx-card"><h4>Force same AR as first image</h4><p>Adjusts crop to match the aspect ratio of the first image.</p></div>
+      <div class="ctx-card"><h4>Crop &amp; size ▶</h4><p>Match the first image: <em>Force same width and height</em>, <em>Force same aspect ratio</em>, <em>Force same crop, rotation and bg</em> (greyed out when already the case); <em>Reset crop and rotation</em>, <em>Reset crop only</em>, <em>Reset rotation only</em>.</p></div>
+      <div class="ctx-card"><h4>Reshape to panel (if possible)</h4><p>Rearranges a row, a column or several selected panels into a grid.</p></div>
+      <div class="ctx-card"><h4>Combine Horizontally (Row) / Vertically (Col)</h4><p>With several panels selected (Ctrl+click): puts them together in a new row or column.</p></div>
       <div class="ctx-card"><h4>Set / Reset LUT(s)</h4><p>Apply or clear Look-Up Tables for all images in the group.</p></div>
       <div class="ctx-card"><h4>Change font for all non-Letter text</h4><p>Opens a font dialog and applies the chosen font to every text annotation in the group.</p></div>
-      <div class="ctx-card"><h4>Remove all annotations</h4><p>Strips all ROIs, scale bars, and text from every image in the group.</p></div>
+      <div class="ctx-card"><h4>Remove annotations ▶</h4><p>Strips all annotations, or only the scale bars, texts, ROIs or insets, from every image in the group.</p></div>
     </div>
   </section>
 
@@ -858,6 +885,7 @@
         <tr><td><strong>PowerPoint (editable)</strong></td><td>Export As → PowerPoint (editable)…</td><td>One slide the size of the figure, one group per panel: pictures plus editable text boxes (letters, labels, scale-bar text) and shapes (scale bars, ROIs, arrows, brackets). Text inside data plots comes as outlines.</td></tr>
         <tr><td><strong>Adobe Illustrator script</strong></td><td>Export As → Adobe Illustrator script (.jsx)…</td><td>A script plus a <code>&lt;name&gt;_assets</code> image folder. In Illustrator, File → Scripts → Other Script… rebuilds the figure with one group per panel, live text and vector paths.</td></tr>
         <tr><td><strong>VectorCraft document</strong></td><td>Export As → VectorCraft (editable)…</td><td>A native <code>.vectorcraft</code> file for <a href="https://github.com/storytold/vectorcraft">VectorCraft</a>, the open-source Illustrator replacement: open it with File → Open. One clipped group per panel, live text, vector paths and the images embedded, in one file. VectorCraft also opens the SVG and PDF exports.</td></tr>
+        <tr><td><strong>DeckCraft slide</strong></td><td>Export As → DeckCraft slide (editable)…</td><td>A native <code>.deckcraft</code> deck for DeckCraft, the open-source PowerPoint replacement: one slide the size of the figure, one group per panel, editable text and shapes. DeckCraft also opens the PowerPoint export.</td></tr>
         <tr><td><strong>Raster (PNG / TIF / JPEG)</strong></td><td>Export As → PNG / TIF / JPEG</td><td>A dialog lets you choose the DPI. TIFF is recommended for publication.</td></tr>
         <tr><td><strong>Print-ready TIFF</strong></td><td>Export As → Print-ready TIFF (CMYK)…</td><td>High-DPI CMYK (or RGB) TIFF for print submission.</td></tr>
         <tr><td><strong>Video</strong></td><td>Export As → Video (animate time-stacks)…</td><td>Animates the figure's movies and time stacks. See <a href="#stacks">Stacks &amp; movies</a>.</td></tr>
@@ -876,6 +904,15 @@
       rebuild it whenever the data change. The same recipe runs from the command line
       (<code>python -m pyfigures.recipe build fig.yaml</code>) and through the <a href="#mcp">MCP server</a>.
       Full guide: <code>docs/RECIPES.md</code>; example: <code>docs/recipe_example.yaml</code>.
+    </p>
+    <p>
+      In a recipe, the layout can be written as a short <strong>formula</strong> instead of a list
+      of rows: <code>layout: "(split, plot) / [wt, ko / rescue, ctrl]"</code> — <code>,</code> or
+      <code>|</code> puts panels side by side, <code>/</code> stacks them, parentheses group (a group
+      spans the rows or columns it holds), square brackets make an aligned grid, and
+      <code>a^b</code> shows <code>b</code> as an inset of <code>a</code>. The notation is inspired by
+      Griphus. A <strong>picture</strong> (one line of panel names per row, a name repeated over
+      the cells it spans) works too. See section 4b of <code>docs/RECIPES.md</code>.
     </p>
     <p>
       <strong>File → Search figure library…</strong> indexes your past figures so you can find
@@ -911,7 +948,73 @@
       PyFigures ships an MCP server: connected to an MCP client such as Claude, it builds, edits,
       checks and exports figures from plain-language requests (install with
       <code>pip install pyfigures[ai]</code>). Every menu feature has an equivalent tool.
-      Setup and tool list: <code>docs/MCP_SERVER.md</code>.
+      Setup and tool list: <code>docs/MCP_SERVER.md</code>. The client can work on saved
+      <code>.pyf</code> files without PyFigures open (<em>Tools → MCP server…</em>), or on the figure
+      open in a window (see below). Every call made on a saved file is logged beside it:
+      <em>Tools → MCP call history / undo…</em> lists them and undoes the last changes.
+    </p>
+  </section>
+
+  <section id="chat">
+    <h2>Chat sidebar &amp; live sharing</h2>
+    <p>
+      <strong>Tools → Chat sidebar (local model)…</strong> docks a chat on the right of the window.
+      Ask in plain words — "add 10 µm scale bars to every image (0.1 µm per pixel)", "use magenta
+      and green", "is the figure ready for a Nature double column?" — and a language model makes the
+      change on the figure open in the window, unsaved changes included. Each change is <strong>one
+      undo step</strong> (Ctrl+Z), and nothing is written to disk until you save. The model only calls
+      PyFigures' documented operations on your images; it never draws or alters pixels itself, and
+      it checks its own work with a rendered preview and a description of the figure. "How do I…?"
+      questions are answered with the <em>Help → Show me how…</em> guides.
+    </p>
+    <p><strong>Choosing a model.</strong> The chat needs a model to talk to:</p>
+    <ul style="margin: .6em 0 1em 1.4em;">
+      <li><strong>LM Studio</strong> (free; the model runs on your computer and your data stay
+        private): load a model that supports tool use and start LM Studio's server; when no model is
+        set in the chat, PyFigures uses the one LM Studio serves. As a guide, a 9-billion-parameter
+        model gave the expected result for 151 of 153 single requests and a 27-billion-parameter
+        model for all of them; multi-step requests need the larger models.</li>
+      <li>The chat's own <strong>Model Library</strong>, which downloads a model and its runtime
+        (llama-server).</li>
+      <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter or any OpenAI-compatible
+        server) in the chat's connection settings, with your own key. The figure descriptions and
+        previews the model asks for are then sent to that provider.</li>
+    </ul>
+    <p>
+      The chat is the optional package <code>qtpy-ai-sidecar</code> (not on PyPI yet; install it from
+      its source folder with <code>pip install -e</code>). <strong>Help → Chat &amp; MCP Tutorial</strong>
+      walks through all of this.
+    </p>
+    <p>
+      <strong>Tools → Share the open figure with the MCP server</strong> does the same for any MCP
+      client (Claude Desktop, LM Studio's own chat…): it shows the configuration to paste into the
+      client, which then edits this window's figure live. It runs on this computer only
+      (127.0.0.1), one window at a time; untick it to stop. A plain window first reopens its figure,
+      unsaved changes and undo history in a new window that can be shared. From the command line:
+      <code>python -m pyfigures --share</code> or <code>--chat</code>.
+    </p>
+    <div class="callout">
+      Language models still make mistakes, small ones more often: look at each result before relying
+      on it. The preview and the QC checks make this quick.
+    </div>
+  </section>
+
+  <section id="bug-recorder">
+    <h2>Reporting a bug</h2>
+    <p>
+      When something goes wrong, <strong>Help → Debug → Start recording a bug…</strong>, then do again
+      what went wrong. Every step is logged — menus and toolbar buttons, right-click and drop menu
+      choices, files dropped, dialogs and their values, double-clicks and drags on the canvas — with
+      the figure's structure and a small screenshot after each step, and any error.
+      <strong>Stop recording and describe the bug…</strong> asks what went wrong and what you
+      expected (quitting while recording asks too).
+    </p>
+    <p>
+      A recording is a folder in your own data directory (<em>Open the recordings folder</em>): the
+      starting figure, copies of its images, the steps and the screenshots. It stays on this
+      computer. <code>python -m pyfigures.gui.bug_recorder make-test &lt;folder&gt; &lt;out_dir&gt;</code>
+      turns it into a small regression test; the MCP server can read it too
+      (<code>list_bug_recordings</code>, <code>read_bug_recording</code>).
     </p>
   </section>
 
