@@ -24,7 +24,11 @@ def request(operation, session_id=None, expected_revision=None, arguments=None, 
     try:
         connection = json.loads(descriptor.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
-        raise LiveBridgeError('GUI_OFFLINE', 'The PyFigures window is closed or not sharing its figure (Tools > Share the open figure with the MCP server). Start it, then inspect the new session. No edit was submitted; do not repeat delete/add loops.') from exc
+        # the path tried and why: an MCP client that starts this server with
+        # another environment (another PYFIGURES_LIVE_RUNTIME or user folder)
+        # looks in the wrong place, and only the path shows it
+        raise LiveBridgeError('GUI_OFFLINE', 'The PyFigures window is closed or not sharing its figure (Tools > Share the open figure with the MCP server). Start it, then inspect the new session. No edit was submitted; do not repeat delete/add loops. '
+                              f'(Looked for {descriptor}: {type(exc).__name__}: {exc}.)') from exc
     payload = dict(operation=operation, session_id=session_id, expected_revision=expected_revision,
                    arguments=arguments or {}, request_id=request_id or str(uuid.uuid4()))
     req = urllib.request.Request(connection['url'], data=json.dumps(payload).encode(),
