@@ -18,6 +18,16 @@ class LiveBridgeError(ValueError):
         super().__init__(f'[{code}] {message}')
 
 
+def _folder_seen(folder):
+    """What this process sees of the runtime folder: a client that runs MCP
+    servers in a sandbox sees an empty or different folder."""
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError as exc:
+        return f'This process cannot list {folder}: {type(exc).__name__}.'
+    return f'This process (pid {os.getpid()}) sees in that folder: {", ".join(names[:12]) or "nothing"}.'
+
+
 def request(operation, session_id=None, expected_revision=None, arguments=None, request_id=None):
     import urllib.error
     descriptor = runtime_dir() / 'connection.json'
@@ -28,7 +38,7 @@ def request(operation, session_id=None, expected_revision=None, arguments=None, 
         # another environment (another PYFIGURES_LIVE_RUNTIME or user folder)
         # looks in the wrong place, and only the path shows it
         raise LiveBridgeError('GUI_OFFLINE', 'The PyFigures window is closed or not sharing its figure (Tools > Share the open figure with the MCP server). Start it, then inspect the new session. No edit was submitted; do not repeat delete/add loops. '
-                              f'(Looked for {descriptor}: {type(exc).__name__}: {exc}.)') from exc
+                              f'(Looked for {descriptor}: {type(exc).__name__}: {exc}. {_folder_seen(descriptor.parent)})') from exc
     payload = dict(operation=operation, session_id=session_id, expected_revision=expected_revision,
                    arguments=arguments or {}, request_id=request_id or str(uuid.uuid4()))
     req = urllib.request.Request(connection['url'], data=json.dumps(payload).encode(),
