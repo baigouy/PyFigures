@@ -324,6 +324,27 @@ def test_an_empty_group_keeps_its_width_for_the_panels_added_later():
         assert empty.size == 200
 
 
+def test_a_squeezed_nested_layout_keeps_its_sizes_when_laid_out_again(qapp):
+    """Monkey seed 201 (found by ChatGPT): squeezed below what its nested rows
+    can hold, a row clamped them at 1 px inside, so it came out wider than its
+    parent solved for; laid out again at that width, every panel changed
+    (redo and reopen drifted)."""
+    from batoolset.drawings.shapes.group import Group, set_to_width, get_all_contained_images
+    from batoolset.drawings.shapes.image2d import Image2D
+
+    def image():
+        return Image2D(width=60, height=40)
+    inner = Group(image(), image(), image(), orientation="X", space=3, size=512)
+    column = Group(inner, image(), orientation="Y", space=3, size=512)
+    row = Group(column, image(), orientation="X", space=3, size=512)
+    set_to_width(row, 10)
+    before = [p.scale for p in get_all_contained_images(row)]
+    set_to_width(row, row.width())
+    after = [p.scale for p in get_all_contained_images(row)]
+    assert after == pytest.approx(before, rel=1e-12, abs=1e-12)
+    assert min(p.width() for p in get_all_contained_images(row)) >= 1 - 1e-9
+
+
 def test_a_vertical_label_measures_the_same_wherever_it_is(qapp):
     """Monkey seed 149: a side label's rotated box was rounded to whole
     pixels at its current position, 15 x 494 at one place and 16 x 493 at

@@ -106,15 +106,16 @@ def test_monkey(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed):
     _run(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, STEPS)
 
 
-# 40-step sequences that each found a bug (overnight runs, 29-30 October
-# 2026): replayed so none comes back. Each fix also has its own small test.
-REGRESSION_SEEDS = [102, 113, 119, 122, 125, 130, 137, 143, 144, 146, 149, 163, 164]
+# Sequences that each found a bug (overnight runs, 29-30 October 2026; seed
+# 201 by ChatGPT), as (seed, steps): replayed so none comes back. Each fix
+# also has its own small test.
+REGRESSION_SEEDS = [(s, 40) for s in (102, 113, 119, 122, 125, 130, 137, 143, 144, 146, 149, 163, 164)] + [(201, 60)]
 
 
 @pytest.mark.skipif(bool(os.environ.get("PYF_E2E_SEED")), reason="replaying one seed")
-@pytest.mark.parametrize("seed", REGRESSION_SEEDS)
-def test_monkey_regression_seeds(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed):
-    _run(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, 40)
+@pytest.mark.parametrize("seed,steps", REGRESSION_SEEDS)
+def test_monkey_regression_seeds(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, steps):
+    _run(qapp, e2e_gui, e2e_files, tmp_path, menus, watch, seed, steps)
 
 
 def _run(qapp, g, e2e_files, tmp_path, menus, watch, seed, steps):
