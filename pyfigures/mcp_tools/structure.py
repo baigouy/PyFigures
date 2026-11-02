@@ -302,6 +302,11 @@ def set_orientation(pyf_path: str, group_path: list[int], orientation: str) -> s
     """Set the layout orientation of a group to 'X' (horizontal) or 'Y' (vertical).
 
     *group_path*: [0] for top-level group 0, [0,1] for a sub-group.
+
+    The top-level groups of a figure are ALREADY stacked as its rows: to add a
+    second row, add another top-level group with add_group(orientation='X');
+    there is no need to make the figure vertical, and [] is the figure, not a
+    group. Turning a row ('X') into 'Y' stacks that row's own panels.
     """
     o = _orientation(orientation)
     if o is None:
@@ -310,13 +315,15 @@ def set_orientation(pyf_path: str, group_path: list[int], orientation: str) -> s
     orientation = o
     tree, root = _load(pyf_path)
     if not group_path:
-        return "ERROR: set_orientation requires a group (group_path cannot be [])."
+        return ("ERROR: set_orientation needs a group; [] is the figure, whose top-level groups "
+                "are already stacked as rows. For a new row, add a top-level group with "
+                "add_group(orientation='X')." + _actual_layout(pyf_path))
     grp, err = _navigate_group(root, group_path)
     if err:
         return f"ERROR: {err}"
     _set_child_text(grp, "orientation", _encode_str(orientation))
     _save(tree, pyf_path, recompute=True)
-    return f"Group {group_path} orientation set to {orientation}."
+    return f"Group {group_path} orientation set to {orientation}." + _actual_layout(pyf_path)
 
 
 @mcp.tool()
@@ -1092,7 +1099,21 @@ def add_group(
     return (
         f"Added group at path {new_path} "
         f"(ID={new_id}, orientation={orientation}, spacing={spacing})."
-    )
+    ) + _actual_layout(pyf_path)
+
+
+def _actual_layout(pyf_path: str) -> str:
+    """The saved arrangement, appended to the replies of layout edits: a 28B
+    model read two correct rows, then rebuilt them into one mixed column with
+    set_orientation and move_image and went on as if nothing had changed."""
+    try:
+        rows = layout_rows(_load(pyf_path)[1])
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    return (" Actual layout now: " + "; ".join(rows) + " (' | ' side by side, ' / ' stacked). "
+            "Compare it with what was asked before saying it is done.")
 
 
 @mcp.tool()
@@ -1601,11 +1622,13 @@ def move_image(
     dst_group_path: list[int],
     dst_image_index: int = -1,
 ) -> str:
-    """Move an image from one location to another (or reposition within the same location).
+    """Move ONE image from one location to another (or reposition within the same location).
 
     Both *src_group_path* and *dst_group_path* follow the group_path convention:
     [] = free-canvas, [0] = top-level group 0, etc.
     *dst_image_index*=-1 (default) appends at the end of the destination.
+    It cannot move a whole row (reorder_children reorders rows), and the
+    images after the moved one shift down by one index in the source.
     """
     tree, root = _load(pyf_path)
     src_container, err = _get_container(root, src_group_path)
@@ -1635,7 +1658,8 @@ def move_image(
     src_loc = "canvas" if not src_group_path else str(src_group_path)
     dst_loc = "canvas" if not dst_group_path else str(dst_group_path)
     dst_label = dst_image_index if dst_image_index >= 0 else "end"
-    return f"Moved image from {src_loc}[{src_image_index}] to {dst_loc}[{dst_label}]."
+    return (f"Moved image from {src_loc}[{src_image_index}] to {dst_loc}[{dst_label}]."
+            + _actual_layout(pyf_path))
 
 
 @mcp.tool()

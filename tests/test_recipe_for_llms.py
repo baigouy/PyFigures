@@ -276,6 +276,30 @@ def test_bar_longer_than_the_image_and_zoom_box_outside_are_refused(tmp_path, qa
     assert bad.startswith("ERROR") and "px_to_unit" in bad, bad
 
 
+def test_layout_edits_reply_with_the_actual_layout(tmp_path, qapp):
+    """From a 28B model's tools run: two correct rows were rebuilt into one
+    mixed column through set_orientation([]) and move_image while the model
+    went on as if nothing had changed. Layout edits now return the saved
+    arrangement, and set_orientation([]) says the top groups already are rows."""
+    from PIL import Image
+    for n in ("a", "b", "c"):
+        Image.new("L", (64, 64), 90).save(tmp_path / f"{n}.png")
+    pyf = tmp_path / "f.pyf"
+    M.create_figure(str(pyf), num_groups=1)
+    M.add_image(str(pyf), [0], str(tmp_path / "a.png"))
+    M.add_image(str(pyf), [0], str(tmp_path / "b.png"))
+    res = M.add_group(str(pyf), orientation="X")
+    assert "Actual layout now: row 1: a.png | b.png" in res and "Compare it" in res, res
+    M.add_image(str(pyf), [1], str(tmp_path / "c.png"))
+    res = M.set_orientation(str(pyf), [], "Y")
+    assert res.startswith("ERROR") and "already stacked as rows" in res and "add_group" in res, res
+    assert "row 2: c.png" in res, res
+    res = M.move_image(str(pyf), [0], 1, [1])
+    assert "row 1: a.png; row 2: c.png | b.png" in res, res
+    res = M.set_orientation(str(pyf), [1], "Y")
+    assert "row 2: c.png / b.png" in res, res
+
+
 def test_errors_steer_a_small_model_back_to_what_the_user_asked(tmp_path, qapp):
     """From an 8B model's Figure 3 run: it invented 0.1 µm/px instead of the
     user's 1.24 and then followed 'use a shorter bar' down to 5 µm; it cropped

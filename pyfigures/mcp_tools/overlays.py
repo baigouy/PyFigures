@@ -327,6 +327,11 @@ def set_scale_bar_all(
 ) -> str:
     """Add or update the scale bar on EVERY image in the figure at once.
 
+    When the user gives ONE pixel size for the figure, pass it as *px_to_unit*
+    and leave *px_to_unit_scope* at "all" (the default): every image then uses
+    it. "missing" leaves each image that already has a pixel size with its
+    own, so the bars of those images do NOT use the value given.
+
     Applies the same scale bar settings to all Image2D elements, including
     images inside nested sub-groups (grids).  Existing scale bars are updated;
     images without one get a new scale bar added.
@@ -377,6 +382,7 @@ def set_scale_bar_all(
     kept_own = 0
     too_long: list[str] = []
     uncalibrated: list[str] = []
+    used: list[str] = []         # the pixel size each bar was drawn with
 
     def _process_img(img: ET.Element):
         nonlocal added, updated, skipped, kept_own
@@ -402,9 +408,15 @@ def set_scale_bar_all(
             too_long.append(f"{os.path.basename(str(_first_filename(img)))}: {err}")
             return
         legend = legend_html
+        name = os.path.basename(str(_first_filename(img)))
         if px is None and own is None:
-            uncalibrated.append(os.path.basename(str(_first_filename(img))))
+            uncalibrated.append(name)
             legend = px_legend_html          # no pixel size: the bar says pixels
+        elif px is not None:
+            used.append(f"{name} {px:g} (given)")
+        else:
+            used.append(f"{name} {own:g} (its own"
+                        + (", kept: NOT the value given)" if px_to_unit is not None else ")"))
         action = _apply_scalebar_to_img(
             img, bar_width_in_units, legend,
             placement, bar_color_int, px,
@@ -447,6 +459,12 @@ def set_scale_bar_all(
         f"Scale bar applied to {total} image(s): "
         f"{added} added, {updated} updated. "
         f"Settings: '{text}', {placement}{px_note}.{skip_note}"
+        # per image: a 27B model chose "missing", then said every image used 1.24
+        + (f"\nPixel size per image ({unit}/px): " + "; ".join(used[:12])
+           + (f"; and {len(used) - 12} more" if len(used) > 12 else "") + "." if used else "")
+        + (f"\nNOTE: {kept_own} image(s) kept their own pixel size instead of "
+           f"px_to_unit={px_to_unit:g}. If the user gave one pixel size for the whole figure, "
+           f"call again with px_to_unit_scope='all'." if px_to_unit is not None and kept_own else "")
         + _uncalibrated_warning(uncalibrated, unit)
     )
 

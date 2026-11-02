@@ -970,6 +970,15 @@ def set_figure_colors(pyf_path: str, colors: list[str], single_channel: str = "g
     gray: list[str] = []
     photos: list[str] = []
     palette_plots: list[str] = []
+    # channels beyond the list keep their colour: "use magenta and green" on a
+    # 3-channel image kept a third colour in every model run (Figure 3 trials)
+    kept_extra: list[str] = []
+
+    def _note_extra(name, cur):
+        if len(cur) > len(names):
+            kept = ", ".join(f"channel {i + 1} {_lut_name(c)}" for i, c in enumerate(cur)
+                             if i >= len(names))
+            kept_extra.append(f"{name or 'merge'} ({len(cur)} channels: {kept})")
 
     def visit(container):
         for img in [c for c in container if c.tag == "Image2D"]:
@@ -991,6 +1000,7 @@ def set_figure_colors(pyf_path: str, colors: list[str], single_channel: str = "g
                 if m:
                     cur = [tuple(c) for c in ast.literal_eval(m.group(1))]
                     new = [rgb[i] if i < len(rgb) else c for i, c in enumerate(cur)]
+                    _note_extra(name, cur)
                     lit = "[" + ", ".join(repr(tuple(float(v) for v in c)) for c in new) + "]"
                     script = script[:m.start(1)] + lit + script[m.end(1):]
                     _set_child_text(img, "custom_loading_script", _encode_str(script))
@@ -1031,6 +1041,7 @@ def set_figure_colors(pyf_path: str, colors: list[str], single_channel: str = "g
                                                                             "blue"])][:n]
                 cur += ["GRAY"] * (n - len(cur))
             new = [luts[i] if i < len(luts) and cur[i] is not None else cur[i] for i in range(n)]
+            _note_extra(name, cur)
             _set_child_text(img, "LUTs", repr(new))
             synced.extend(_sync_split_colours(container, img, new))
             done["images"] += 1
@@ -1055,7 +1066,22 @@ def set_figure_colors(pyf_path: str, colors: list[str], single_channel: str = "g
                 f". Plots with another number of groups ({', '.join(palette_plots)}) use the "
                 f"colour-blind-safe Okabe-Ito palette instead") if palette_plots else "")
             + (f". Colour photographs left as they are: {', '.join(photos)}" if photos else "")
-            + (f". Left as they are (single channel): {', '.join(left)}" if left else "") + ".")
+            + (f". Left as they are (single channel): {', '.join(left)}" if left else "") + "."
+            + (f"\nWARNING: {len(names)} colour(s) for more channels: "
+               + "; ".join(dict.fromkeys(kept_extra))
+               + f" kept their colour. Tell the user which colour those channels have now, or "
+               f"ask: for two colours on three channels, give every channel one, e.g. "
+               f"[{', '.join(names[:2])}, {names[0]}] or [{', '.join(names[:2])}, gray]."
+               if kept_extra else ""))
+
+
+def _lut_name(c) -> str:
+    """'MAGENTA' → 'magenta'; a merge colour (r, g, b) in 0..1 → its name."""
+    if isinstance(c, (tuple, list)) and len(c) == 3:
+        rgb = tuple(round(float(v)) for v in c)
+        return {(1, 0, 0): "red", (0, 1, 0): "green", (0, 0, 1): "blue", (1, 0, 1): "magenta",
+                (0, 1, 1): "cyan", (1, 1, 0): "yellow", (1, 1, 1): "gray"}.get(rgb, str(c))
+    return str(c).lower()
 
 
 def _decode_text(value) -> str:

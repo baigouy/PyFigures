@@ -84,6 +84,12 @@ def test_typed_pixel_size_fills_only_missing(fig):
     sizes = [float(i.findtext("px_to_unit_conversion_factor") or 0) for i in root.iter("Image2D")]
     assert sizes[0] == 0.5 and sizes[1] != 0.5          # the TIFF keeps its 0.25
     assert set_scale_bar_all(fig, 10, px_to_unit_scope="some").startswith("ERROR")
+    # each image's pixel size is in the reply, and the kept one is called out:
+    # a 27B model chose "missing", then said every image used the given value
+    assert "plain.png 0.5 (given)" in r and "calibrated.tif 0.25 (its own, kept: NOT" in r, r
+    assert "px_to_unit_scope='all'" in r
+    r = set_scale_bar_all(fig, 10, px_to_unit=0.5)
+    assert "calibrated.tif 0.5 (given)" in r and "NOTE" not in r, r
 
 
 def test_audit_flags_uncalibrated_and_hand_set(fig):

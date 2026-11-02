@@ -55,6 +55,12 @@ def test_set_figure_colors_recolours_images_merges_and_plots(fig3):
     # what ChatGPT's verifier checks for "use magenta and green"
     for q in (merge, other):
         assert "MAGENTA" in q.findtext("LUTs") and "GREEN" in q.findtext("LUTs")
+    # the third channel kept blue: said so, with the ways to say what was meant
+    # (every Figure 3 model run kept a third colour silently)
+    assert "WARNING: 2 colour(s) for more channels" in r and "channel 3 blue" in r, r
+    assert "[magenta, green, magenta]" in r and "or ask" in r, r
+    r = M.set_figure_colors(pyf, ["magenta", "green", "magenta"])
+    assert "WARNING" not in r and merge.findtext("LUTs") != _panels(pyf)[3].findtext("LUTs")
     # the figure still renders
     assert not isinstance(M.render_preview(pyf), str)
 
