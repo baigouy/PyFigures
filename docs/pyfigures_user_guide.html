@@ -409,6 +409,8 @@
     </figure>
 
     <div class="toolbar-strip">
+      <span class="tb-btn">🤖 Chat</span>
+      <span class="tb-sep"></span>
       <span class="tb-btn">📂 Open</span>
       <span class="tb-btn">🗒 New</span>
       <span class="tb-sep"></span>
@@ -418,35 +420,39 @@
       <span class="tb-btn">↩ Undo</span>
       <span class="tb-btn">↪ Redo</span>
       <span class="tb-sep"></span>
-      <span class="tb-label">Figure width:</span>
+      <span class="tb-label">Width:</span>
       <span class="tb-widget">512 px</span>
-      <span class="tb-widget">≈18.06 cm</span>
-      <span class="tb-widget">Cm ▾</span>
+      <span class="tb-widget">≈180.6 mm</span>
+      <span class="tb-widget">mm ▾</span>
       <span class="tb-btn">✓</span>
+      <span class="tb-label">→ all</span>
       <span class="tb-sep"></span>
-      <span class="tb-label">Y Spacing:</span>
+      <span class="tb-label">Gap:</span>
       <span class="tb-widget">3</span>
+      <span class="tb-widget">Bg ▾</span>
       <span class="tb-sep"></span>
-      <span class="tb-widget">☑ Auto Lettering</span>
+      <span class="tb-widget">☑ Letters</span>
       <span class="tb-widget">a</span>
       <span class="tb-sep"></span>
-      <span class="tb-widget">☐ Page Bounds</span>
+      <span class="tb-widget">☐ Page</span>
     </div>
 
     <div class="table-wrap">
       <table>
         <tr><th>Control</th><th>Action</th></tr>
+        <tr><td><strong>🤖 Chat</strong></td><td>Opens the chat sidebar: ask a language model to build or edit the figure in plain words. See <a href="#chat">Chat sidebar &amp; live sharing</a>. The MCP server for other clients is set up in <em>Tools → MCP server…</em>.</td></tr>
         <tr><td><strong>Open</strong></td><td>Open a <code>.pyf</code> file and append its contents to the current canvas.</td></tr>
         <tr><td><strong>New</strong></td><td>Clear the canvas and start a new blank figure.</td></tr>
         <tr><td><strong>Save</strong></td><td>Save the current figure to its <code>.pyf</code> file. Uses <kbd>Ctrl S</kbd>.</td></tr>
         <tr><td><strong>Export raster</strong></td><td>Export as JPG, TIFF, or PNG (see <a href="#export">Export</a>).</td></tr>
         <tr><td><strong>Undo / Redo</strong></td><td>Step through the edit history. <kbd>Ctrl Z</kbd> / <kbd>Ctrl Shift Z</kbd>.</td></tr>
-        <tr><td><strong>Figure width</strong></td><td>Set the pixel width of the selected element(s). The label next to it shows the equivalent in the chosen unit.</td></tr>
-        <tr><td><strong>Unit selector</strong></td><td>Switch the display unit between <em>Cm</em> and <em>Inches</em>.</td></tr>
-        <tr><td><strong>✓ (Apply size)</strong></td><td>Apply the width value to the current selection.</td></tr>
-        <tr><td><strong>Y Spacing</strong></td><td>Vertical gap (pixels) between elements in the canvas layout.</td></tr>
-        <tr><td><strong>Auto Lettering</strong></td><td>When checked, panels are automatically labelled a, b, c… starting from the letter in the adjacent field.</td></tr>
-        <tr><td><strong>Page Bounds</strong></td><td>Toggle a page-size overlay on the canvas. Opens a dialog to set width and height.</td></tr>
+        <tr><td><strong>Width</strong></td><td>Set the pixel width of the figure, or of the selected element(s). The label next to it shows the equivalent in the chosen unit.</td></tr>
+        <tr><td><strong>Unit selector</strong></td><td>Switch the display unit between <em>mm</em> (the default, as journals), <em>Cm</em> and <em>Inches</em>.</td></tr>
+        <tr><td><strong>✓ (Apply size)</strong></td><td>Apply the width value; the label after it says to what: <em>→ all</em> (the whole figure) or <em>→ sel.</em> (only what is selected).</td></tr>
+        <tr><td><strong>Gap</strong></td><td>Gap (pixels) between panels in the layout.</td></tr>
+        <tr><td><strong>Bg</strong></td><td>Colour of the figure background (white, black, transparent or another colour).</td></tr>
+        <tr><td><strong>Letters</strong></td><td>When checked, panels are automatically labelled a, b, c… starting from the letter in the adjacent field.</td></tr>
+        <tr><td><strong>Page</strong></td><td>Toggle a page-size overlay on the canvas. Opens a dialog to set width and height.</td></tr>
       </table>
     </div>
   </section>
@@ -573,6 +579,7 @@
         <tr><td><strong>Theme → Light</strong></td><td>Switches the application to the default light color scheme. The choice is remembered across sessions.</td></tr>
         <tr><td><strong>Theme → Dark</strong></td><td>Switches the application to a dark color scheme (dark-gray backgrounds, light text). The figure/canvas area turns near-black. The choice is remembered across sessions.</td></tr>
         <tr><td><strong>Show the 'double-click to edit' hint</strong></td><td>The reminder bubble shown once per session after images are added.</td></tr>
+        <tr><td><strong>Open the chat at start-up</strong></td><td>The chat sidebar opens beside the figure every time PyFigures starts (when the chat package is installed).</td></tr>
         <tr><td><strong>Show new Z stacks as max projection</strong></td><td>On by default; off, a new Z stack shows its first slice (the image editor sets the projection of one panel).</td></tr>
       </table>
     </div>
@@ -843,7 +850,7 @@
       <figcaption>Fig 15 — Lettering parameters dialog (Annotations → Panel letters (A, B, C…)).</figcaption>
     </figure>
     <p>
-      When the <strong>Auto Lettering</strong> checkbox in the toolbar is enabled, PyFigures
+      When the <strong>Letters</strong> checkbox in the toolbar is enabled, PyFigures
       automatically overlays panel labels (a, b, c… or A, B, C…) on each top-level element.
     </p>
     <ul style="margin: .6em 0 1em 1.4em;">
@@ -958,7 +965,9 @@
   <section id="chat">
     <h2>Chat sidebar &amp; live sharing</h2>
     <p>
-      <strong>Tools → Chat sidebar (local model)…</strong> docks a chat on the right of the window.
+      The <strong>robot</strong> at the left end of the toolbar (or <strong>Tools → Chat sidebar
+      (local model)…</strong>) docks a chat on the right of the window; <em>View → Open the chat at
+      start-up</em> keeps it there every time PyFigures starts.
       Ask in plain words — "add 10 µm scale bars to every image (0.1 µm per pixel)", "use magenta
       and green", "is the figure ready for a Nature double column?" — and a language model makes the
       change on the figure open in the window, unsaved changes included. Each change is <strong>one

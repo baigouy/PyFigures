@@ -580,6 +580,16 @@ class MyWidget(QWidget):
                              Qt.AlignHCenter | Qt.AlignVCenter,
                              'Help  →  Interactive Tutorials')
 
+            # the chat: its robot is the first button of the toolbar, above
+            # the canvas's left end (the user's wish: everyone should see it)
+            painter.setFont(arrow_font)
+            painter.drawText(QRect(8, 6, 40, 34), Qt.AlignHCenter | Qt.AlignVCenter, '↑')
+            painter.setFont(label_font)
+            room = max(0, min(320, arrow_x - 90 - 40 - 16))    # never over the Help hint
+            painter.drawText(QRect(40, 42, room, 20), Qt.AlignLeft | Qt.AlignVCenter,   # right of the ruler
+                             painter.fontMetrics().elidedText('Chat: a model builds it for you',
+                                                              Qt.ElideRight, room))
+
             # Centred main hint
             body_font = QFont(painter.font())
             body_font.setPointSize(11)
@@ -587,7 +597,8 @@ class MyWidget(QWidget):
             body_rect = QRect(0, self.height() // 2 - 40, self.width(), 80)
             painter.drawText(body_rect,
                              Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
-                             'Drop image files here to get started')
+                             'Drop image files here to get started\n'
+                             'or ask the chat (robot, top left) to build the figure for you')
             painter.restore()
 
 

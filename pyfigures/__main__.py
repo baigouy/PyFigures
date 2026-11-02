@@ -278,6 +278,10 @@ def run_pyfigures():
                 threading.Thread(target=_init_fiji_cached, daemon=True).start()
 
     # Only NOW create the main window — Fiji is fully ready (or skipped)
+    from pyfigures.gui.user_prefs import load_chat_at_start
+    from pyfigures.assistant import sidecar_available
+    if load_chat_at_start() and '--chat' not in sys.argv and sidecar_available():
+        sys.argv.append('--chat')       # View → Open the chat at start-up
     share = '--share' in sys.argv or '--chat' in sys.argv
     if share:
         # a window that can share its figure with `python -m pyfigures.assistant.live_mcp`

@@ -43,6 +43,14 @@ def save_show_edit_hint(value):
     _s().setValue('ui/show_edit_hint', bool(value))
 
 
+def load_chat_at_start():
+    """Open the chat sidebar every time PyFigures starts."""
+    return _s().value('ui/chat_at_start', False, type=bool)
+
+def save_chat_at_start(value):
+    _s().setValue('ui/chat_at_start', bool(value))
+
+
 # ── Adding images ────────────────────────────────────────────────────
 def load_max_project_z_stacks():
     """New Z stacks show their max projection (else the first slice)."""

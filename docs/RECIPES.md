@@ -1364,10 +1364,10 @@ server, and edited afterwards in either.
 |---|---|---|
 | building the recipe | File → Build figure from recipe… | `build_figure_from_recipe` |
 | `journal` / `column` | QC → Apply journal guidelines…; size box in the toolbar | `resize_figure`, `apply_journal_guidelines` |
-| `spacing` | "Y Spacing" in the toolbar; right-click a group → Change space between elements | `set_spacing`, `set_figure_properties(default_spacing=)` |
+| `spacing` | "Gap" in the toolbar; right-click a group → Change space between elements | `set_spacing`, `set_figure_properties(default_spacing=)` |
 | `background` | "Background" button in the toolbar | `set_figure_properties(page_background=)` |
 | `label_background` | right-click → Text & lettering ▶ → Change background (non-Letter text); Annotations → Panel letters (A, B, C…) for the letters | `set_label_background`, `style_annotation(background=)` |
-| `letter_panels` | "Auto Lettering" in the toolbar | `add_corner_labels` |
+| `letter_panels` | "Letters" in the toolbar | `add_corner_labels` |
 | `caption`, `title` | File → Figure caption / legend… | `set_figure_caption` |
 | `lut` | right-click → Appearance ▶ → Set LUT(s); Edit Image | `set_lut` |
 | `projection` | Edit Image (double-click the panel) | `configure_image` |

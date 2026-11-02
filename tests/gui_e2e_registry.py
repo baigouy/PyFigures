@@ -33,7 +33,8 @@ LINKED = {
     # registers servers in the user's client configs: done in a fake home there
     "menu: Tools > MCP server…": ["test_mcp_control.py::test_gui_menu_opens_the_dialog",
                                   "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
-    "toolbar: MCP server": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
+    "toolbar: Chat": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
+    "menu: View > Open the chat at start-up": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
     "menu: Annotations > Text style (letters, labels, scale bars…)…": [
         "test_restyle_texts.py::test_gui_text_style_dialog", "test_restyle_texts.py::test_restyle_labels_only"],
     # A | (B / C): a panel stacked with the one it is dropped on, inside its row

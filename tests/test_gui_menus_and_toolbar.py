@@ -573,7 +573,7 @@ def test_colour_blindness_preview(gui, monkeypatch, dialogs):
 
 def test_tutorial_entries_start_and_stop(gui, qapp):
     for label in ("▶  Beginner Tutorial", "▶  Medium Tutorial", "▶  Advanced Tutorial",
-                  "▶  Publication & QC Tutorial", "▶  Sharing, Review & Accessibility Tutorial"):
+                  "▶  Publication && QC Tutorial", "▶  Sharing, Review && Accessibility Tutorial"):
         _menu_action(gui, "Help", label).trigger()
         qapp.processEvents()
         assert gui._tutorial.is_running() if hasattr(gui._tutorial, "is_running") else True
@@ -627,10 +627,12 @@ def test_width_label_says_what_it_applies_to_and_mm(gui, qapp):
     panel = gui.paint.EZFIG_panel
     panel.set_current_selection(None)
     gui.selectionUpdated()
-    assert gui.force_update_layout_button_associated.text() == "→ whole figure"
+    assert gui.force_update_layout_button_associated.text() == "→ all"
+    assert "whole figure" in gui.force_update_layout_button_associated.toolTip()
     panel.set_current_selection(panel.shapes_to_draw[0])
     gui.selectionUpdated()
-    assert gui.force_update_layout_button_associated.text() == "→ selection only"
+    assert gui.force_update_layout_button_associated.text() == "→ sel."
+    assert "selected" in gui.force_update_layout_button_associated.toolTip()
     assert "Double-click a panel" in gui.statusBar().currentMessage()
     gui.size_spinbox.setValue(720)                   # 10 inches at 72 px per inch
     gui.unit_combobox.setCurrentText("mm")

@@ -323,12 +323,22 @@ def test_gui_menu_opens_the_dialog(home, qapp, monkeypatch):
     action = next(a for a in actions if a.text() == "MCP server…")
     action.trigger()
     assert isinstance(g.open_mcp_server_dialog(), D.McpServerDialog)
-    # also one click from the toolbar (it was buried under Tools)
+    # the toolbar's robot opens the chat, first in the toolbar so it is always visible
     opened = []
-    monkeypatch.setattr(g, "open_mcp_server_dialog", lambda: opened.append(1))
-    assert g.mcp_toolbar_action in g.mainToolBar.actions()
-    g.mcp_toolbar_action.trigger()
+    monkeypatch.setattr(g, "open_chat_sidebar", lambda: opened.append(1))
+    assert g.mainToolBar.actions()[0] is g.chat_toolbar_action
+    g.chat_toolbar_action.trigger()
     assert opened == [1]
+    # View → Open the chat at start-up is remembered (pyfigures/__main__.py reads it)
+    from pyfigures.gui.user_prefs import load_chat_at_start
+    was = load_chat_at_start()
+    try:
+        g.chat_at_start_action.setChecked(True)
+        assert load_chat_at_start() is True
+        g.chat_at_start_action.setChecked(False)
+        assert load_chat_at_start() is False
+    finally:
+        g.chat_at_start_action.setChecked(was)
     # the dialog says how to use it (LM Studio's plug icon, saved files)
     dlg = D.McpServerDialog(g)
     from qtpy.QtWidgets import QLabel

@@ -1051,7 +1051,7 @@ class EZFIG_GUI(QMainWindow):
         self.export_as_tif_ico.triggered.connect(self.export_as_tif)
 
         # Create QComboBox for 'Fit to'
-        fit_to_label = QLabel("Figure width:")
+        fit_to_label = QLabel("Width:")
         self.fit_to_combo = QComboBox()
         self.fit_to_combo.addItems(["Width", "Height"])
         if False:
@@ -1081,7 +1081,8 @@ class EZFIG_GUI(QMainWindow):
         self.force_update_layout_button = QAction(get_icon('fa.check', color_disabled='lightgray'),
                                                   'Update selection size', self)
         # self.force_update_layout_button_associated = QAction('All', self)
-        self.force_update_layout_button_associated = QLabel('→ whole figure', self)
+        # short labels: the toolbar must fit (the tooltip says it in full)
+        self.force_update_layout_button_associated = QLabel('→ all', self)
         self.force_update_layout_button_associated.setToolTip('The width applies to the whole figure')
         self.force_update_layout_button.triggered.connect(self.on_size_spinbox_value_changed_delayed)
         # self.force_update_layout_button_associated.triggered.connect(self.on_size_spinbox_value_changed_delayed)
@@ -1093,7 +1094,7 @@ class EZFIG_GUI(QMainWindow):
         self.main_space_spinner_changed_timer.setInterval(800)  # Delay in milliseconds (e.g., 500ms)
         self.main_space_spinner_changed_timer.timeout.connect(self.update_space_and_paint)
 
-        space_label = QLabel('Y Spacing:')
+        space_label = QLabel('Gap:')
         self.main_space_spinner =  QSpinBox()
         self.main_space_spinner.setRange(0, 1024)
         self.main_space_spinner.setValue(3)  # 21 cm is 595 px
@@ -1102,7 +1103,7 @@ class EZFIG_GUI(QMainWindow):
 
         # figure-wide background: fills the gaps between panels (none = transparent)
         self.page_background_button = QToolButton()
-        self.page_background_button.setText('Background')
+        self.page_background_button.setText('Bg')
         self.page_background_button.setPopupMode(QToolButton.InstantPopup)
         bg_menu = QMenu(self.page_background_button)
         for name, value in (('None (transparent)', None), ('White', 0xFFFFFF),
@@ -1149,7 +1150,7 @@ class EZFIG_GUI(QMainWindow):
         self.undo_button.triggered.connect(self.undo)
         self.redo_button.triggered.connect(self.redo)
 
-        self.auto_lettering_checkbox = QCheckBox('Auto Lettering', self)
+        self.auto_lettering_checkbox = QCheckBox('Letters', self)    # short: the toolbar must fit
         self.auto_lettering_checkbox.setChecked(True)
         # Connect the stateChanged signal to the on_state_changed method
         self.auto_lettering_checkbox.stateChanged.connect(self.paint.EZFIG_panel.update)
@@ -1170,7 +1171,7 @@ class EZFIG_GUI(QMainWindow):
         # Create "Current size in cm" label
         # current_size_label = QLabel("Correspondence px to unit:")
 
-        self.page_bounds_checkbox = QCheckBox("Page Bounds")
+        self.page_bounds_checkbox = QCheckBox("Page")
         self.page_bounds_checkbox.setChecked(False)
         self.page_bounds_checkbox.stateChanged.connect(self.on_page_bounds_changed)
 
@@ -1186,6 +1187,17 @@ class EZFIG_GUI(QMainWindow):
         self.letter_line_edit.setToolTip("First letter (type 'A' for capitals, 'a' for lower case)")
         self.page_bounds_checkbox.setToolTip("Show a page outline (A4, letter…) to see how the "
                                              "figure fits on a page")
+
+        # the chat first, so it is always visible (at the right end it was
+        # pushed off narrow windows); the MCP server set-up is in Tools
+        self.chat_toolbar_action = QAction(get_icon('mdi.robot-outline', color_disabled='lightgray'),
+                                           'Chat', self)
+        self.chat_toolbar_action.setToolTip("Chat: ask a language model to build or edit this figure "
+                                            "in plain words (Tools → MCP server… connects other MCP "
+                                            "clients such as Claude or LM Studio)")
+        self.chat_toolbar_action.triggered.connect(lambda _checked=False: self.open_chat_sidebar())
+        self.mainToolBar.addAction(self.chat_toolbar_action)
+        self.mainToolBar.addSeparator()
 
         # Add QWidgets directly to  the QToolBar
         self.mainToolBar.addAction(self.open_ico)
@@ -1219,15 +1231,6 @@ class EZFIG_GUI(QMainWindow):
         self.mainToolBar.addWidget(self.letter_line_edit)
         self.mainToolBar.addSeparator()
         self.mainToolBar.addWidget(self.page_bounds_checkbox)
-        # MCP was only under Tools: one click from the toolbar
-        self.mcp_toolbar_action = QAction(get_icon('mdi.robot-outline', color_disabled='lightgray'),
-                                          'MCP server', self)
-        self.mcp_toolbar_action.setToolTip("MCP server: let an MCP client (Claude, LM Studio…) build "
-                                           "and edit figures — register PyFigures with it, or start "
-                                           "the HTTP server")
-        self.mcp_toolbar_action.triggered.connect(lambda _checked=False: self.open_mcp_server_dialog())
-        self.mainToolBar.addSeparator()
-        self.mainToolBar.addAction(self.mcp_toolbar_action)
 
         self.setStatusBar(statusBar)
         self.menuBar = QMenuBar(self)
@@ -1787,6 +1790,14 @@ class EZFIG_GUI(QMainWindow):
                                         "image editor changes the projection of one panel)")
         self.max_proj_action.toggled.connect(self._set_max_project_z)
         view_menu.addAction(self.max_proj_action)
+        from pyfigures.gui.user_prefs import load_chat_at_start, save_chat_at_start
+        self.chat_at_start_action = QAction("Open the chat at start-up", self)
+        self.chat_at_start_action.setCheckable(True)
+        self.chat_at_start_action.setChecked(load_chat_at_start())
+        self.chat_at_start_action.setToolTip("Every time PyFigures starts, the chat sidebar (the robot "
+                                             "of the toolbar) is open beside the figure")
+        self.chat_at_start_action.toggled.connect(save_chat_at_start)
+        view_menu.addAction(self.chat_at_start_action)
         view_menu.addSeparator()
         theme_menu = view_menu.addMenu('Theme')
         self._theme_actions = {}
@@ -2293,11 +2304,11 @@ class EZFIG_GUI(QMainWindow):
             tmp = [tmp]
 
         if (compare_lists_sets(tmp, self.paint.EZFIG_panel.shapes_to_draw) and self.paint.EZFIG_panel.shapes_to_draw) or not self.paint.EZFIG_panel.selected_shape:
-            self.force_update_layout_button_associated.setText('→ whole figure')
+            self.force_update_layout_button_associated.setText('→ all')
             self.force_update_layout_button_associated.setToolTip(
                 'The width applies to the whole figure')
         else:
-            self.force_update_layout_button_associated.setText('→ selection only')
+            self.force_update_layout_button_associated.setText('→ sel.')
             self.force_update_layout_button_associated.setToolTip(
                 'Something is selected: the width applies to it only. Click the empty canvas '
                 '(or Edit → Reset Selection) to size the whole figure.')

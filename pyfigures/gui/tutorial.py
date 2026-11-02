@@ -1900,7 +1900,7 @@ def beginner_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 8 — Toggle auto-lettering off',
             message=(
-                '<b>Uncheck</b> the <b>Auto Lettering</b> checkbox in the toolbar.<br><br>'
+                '<b>Uncheck</b> the <b>Letters</b> checkbox in the toolbar.<br><br>'
                 'Panel letters (a, b, c…) disappear — see the figure without labels.'
             ),
             get_target=lambda win: win.auto_lettering_checkbox,
@@ -1912,7 +1912,7 @@ def beginner_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 9 — Toggle auto-lettering back on',
             message=(
-                '<b>Check</b> the <b>Auto Lettering</b> checkbox again.<br><br>'
+                '<b>Check</b> the <b>Letters</b> checkbox again.<br><br>'
                 'Letters reappear. Use the text field next to it to change '
                 'the starting letter (e.g. <b>b</b>).'
             ),
@@ -3276,11 +3276,14 @@ def chat_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 2 — Open the chat',
             message=(
-                'Open <b>Tools → Chat sidebar (local model)…</b>.<br><br>'
+                'Click the <b>robot</b> at the left end of the toolbar '
+                '(or <b>Tools → Chat sidebar (local model)…</b>).<br><br>'
                 'The chat docks on the right and is connected to <i>this</i> window\'s figure, '
-                'unsaved changes included. If it has no model yet, it says how to get one.'
+                'unsaved changes included. If it has no model yet, it says how to get one. '
+                'To have it open every time PyFigures starts, tick '
+                '<b>View → Open the chat at start-up</b>.'
             ),
-            get_target=lambda win: win.menuBar,
+            get_target=lambda win: win.mainToolBar.widgetForAction(win.chat_toolbar_action),
             completion_check=_chat_is_open,
         ),
         TutorialStep(
