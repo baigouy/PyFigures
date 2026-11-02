@@ -5999,8 +5999,11 @@ class EZFIG_GUI(QMainWindow):
         from pyfigures.assistant import launch, sidecar_available
         if not sidecar_available():
             QMessageBox.information(self, 'Chat sidebar',
-                                    "The chat is a separate, optional package. Install it with\n\n"
-                                    "    pip install qtpy-ai-sidecar\n\nthen choose this entry again.")
+                                    "The chat is a separate, optional package, qtpy-ai-sidecar. "
+                                    "It is not on PyPI yet: install it from its source folder with\n\n"
+                                    "    pip install -e <folder of qtpy_ai_sidecar>\n\n"
+                                    "then choose this entry again. MCP clients (Claude, LM Studio…) "
+                                    "work without it: Tools → Share the open figure with the MCP server.")
             return None
         if not launch.is_sharing(self) and not self._confirm_share_handover():
             return None
@@ -6010,6 +6013,17 @@ class EZFIG_GUI(QMainWindow):
             QMessageBox.warning(self, 'Chat sidebar', str(e))
             return None
         dock.parent().share_figure_action.setChecked(True)
+        if getattr(dock, 'needs_model', False):
+            # said only after the first message before ("the model did not launch")
+            QMessageBox.information(dock.parent(), 'Chat sidebar: choose a model',
+                                    "The chat has no model to talk to yet. Either:\n\n"
+                                    "• start LM Studio, load a model and open the chat again: "
+                                    "PyFigures uses it automatically; or\n"
+                                    "• in the chat's Model Library, download a model and its "
+                                    "runtime (llama-server); or\n"
+                                    "• in the chat's Connection settings, choose a cloud API "
+                                    "(OpenAI, Anthropic, OpenRouter) or another OpenAI-compatible "
+                                    "server.\n\nHelp → Chat & MCP Tutorial walks you through it.")
         return dock
 
     def mcp_history_dialog(self):

@@ -134,6 +134,35 @@ def mcp_server_entry() -> dict:
             'env': {'PYFIGURES_MCP_SURFACE': 'categories', 'PYFIGURES_LIVE_RUNTIME': str(runtime_dir())}}
 
 
+LM_STUDIO_URL = 'http://127.0.0.1:1234/v1'
+
+
+def lm_studio_model(timeout=1.0):
+    """The model LM Studio is serving on this computer (the loaded one when
+    it says which), or None when it is not running."""
+    import urllib.request
+    base = LM_STUDIO_URL.rsplit('/v1', 1)[0]
+    try:
+        with urllib.request.urlopen(base + '/api/v0/models', timeout=timeout) as r:
+            models = json.load(r).get('data', [])
+        loaded = [m['id'] for m in models if m.get('state') == 'loaded' and m.get('type', 'llm') != 'embeddings']
+        if loaded:
+            return loaded[0]
+    except Exception:
+        pass
+    try:
+        with urllib.request.urlopen(LM_STUDIO_URL + '/models', timeout=timeout) as r:
+            ids = [m['id'] for m in json.load(r).get('data', []) if 'embed' not in m['id']]
+        return ids[0] if ids else None
+    except Exception:
+        return None
+
+
+def needs_model(config) -> bool:
+    """The chat has no model to talk to: local mode without a model of its own."""
+    return config.provider == 'local' and not config.runtime
+
+
 def sidecar_config(descriptor=None):
     """The chat dock's profile: the user's own JSON (PYFIGURES_SIDECAR_CONFIG,
     else <runtime>/sidecar.json) when there is one, always pointed at this
@@ -148,7 +177,14 @@ def sidecar_config(descriptor=None):
         with open(profile, 'w', encoding='utf-8') as f:
             json.dump({'application': 'PyFigures'}, f)
     config = Config.load(profile)
-    config.adapter = {**(config.adapter or {}), 'type': 'pyfigures', 'descriptor': descriptor}
+    if needs_model(config):
+        # nothing chosen yet: local mode only runs a model the chat manages
+        # itself, and said so only after the first message ("the model did
+        # not launch") although LM Studio was serving one
+        model = lm_studio_model()
+        if model:
+            config.provider, config.base_url, config.model = 'compatible', LM_STUDIO_URL, model
+    config.adapter ={**(config.adapter or {}), 'type': 'pyfigures', 'descriptor': descriptor}
     config.servers = {**(config.servers or {}), 'pyfigures': mcp_server_entry()}
     return config
 
@@ -173,4 +209,7 @@ def attach_sidecar(window):
         return existing
     from qtpy_ai_sidecar.adapters.pyfigures import attach_to_window
     window = start_live_session(window).window
-    return attach_to_window(window, sidecar_config(window._live_descriptor), window._live_descriptor)
+    config = sidecar_config(window._live_descriptor)
+    dock = attach_to_window(window, config, window._live_descriptor)
+    dock.needs_model = needs_model(config)
+    return dock

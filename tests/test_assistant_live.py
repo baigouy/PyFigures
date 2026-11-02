@@ -385,13 +385,57 @@ def test_chat_sidebar_without_the_package_says_how_to_install(qapp, gui, runtime
     monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: said.append(a[2]))
     g = gui()
     assert g.open_chat_sidebar() is None
-    assert "pip install qtpy-ai-sidecar" in said[0] and not g.share_figure_action.isChecked()
+    assert "qtpy-ai-sidecar" in said[0] and "pip install -e" in said[0]   # not on PyPI yet
+    assert not g.share_figure_action.isChecked()
 
 
-@pytest.mark.skipif(not __import__("pyfigures.assistant", fromlist=["x"]).sidecar_available(),
-                    reason="qtpy_ai_sidecar not installed")
-def test_chat_sidebar_docks_the_sidecar(qapp, gui, runtime):
+_needs_sidecar = pytest.mark.skipif(not __import__("pyfigures.assistant", fromlist=["x"]).sidecar_available(),
+                                    reason="qtpy_ai_sidecar not installed")
+
+
+@_needs_sidecar
+def test_chat_without_a_model_uses_lm_studio_when_it_serves_one(runtime, monkeypatch, tmp_path):
+    """First use: 'local' mode runs only a model the chat manages itself, so
+    the first message failed ("the model did not launch") although LM Studio
+    was serving one."""
+    from pyfigures.assistant import launch
+    monkeypatch.setenv("PYFIGURES_SIDECAR_CONFIG", str(tmp_path / "p.json"))
+    (tmp_path / "p.json").write_text(json.dumps({"application": "PyFigures", "state_dir": str(tmp_path / "s")}),
+                                     encoding="utf-8")
+    monkeypatch.setattr(launch, "lm_studio_model", lambda: "qwen/qwen3.8-27b")
+    config = launch.sidecar_config()
+    assert (config.provider, config.base_url, config.model) == ("compatible", launch.LM_STUDIO_URL, "qwen/qwen3.8-27b")
+    assert not launch.needs_model(config)
+    monkeypatch.setattr(launch, "lm_studio_model", lambda: None)
+    assert launch.needs_model(launch.sidecar_config())
+
+
+def test_lm_studio_model_is_none_when_nothing_listens(monkeypatch):
+    from pyfigures.assistant import launch
+    monkeypatch.setattr(launch, "LM_STUDIO_URL", "http://127.0.0.1:9/v1")
+    assert launch.lm_studio_model(timeout=0.5) is None
+
+
+@_needs_sidecar
+def test_chat_sidebar_says_how_to_get_a_model(qapp, gui, runtime, monkeypatch):
+    from qtpy.QtWidgets import QMessageBox
+    from pyfigures.assistant import launch
+    said = []
+    monkeypatch.setattr(launch, "lm_studio_model", lambda: None)
+    monkeypatch.setattr(launch, "needs_model", lambda config: True)
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: said.append(a[2]))
+    g = gui(shareable=True)
+    assert g.open_chat_sidebar() is not None
+    assert said and "LM Studio" in said[0] and "Model Library" in said[0]
+
+
+@_needs_sidecar
+def test_chat_sidebar_docks_the_sidecar(qapp, gui, runtime, monkeypatch):
     from qtpy.QtCore import Qt
+    from qtpy.QtWidgets import QMessageBox
+    from pyfigures.assistant import launch
+    monkeypatch.setattr(launch, "lm_studio_model", lambda: None)
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
     g = gui(shareable=True)
     dock = g.open_chat_sidebar()
     assert dock is not None and dock.parent() is g and not dock.isFloating()
