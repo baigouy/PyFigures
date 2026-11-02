@@ -241,7 +241,8 @@ def build_server(full_server, send):
                 score += 350
             if name == 'explain_live_interaction' and any(w in ('arrow', 'arrows', 'keyboard', 'shortcut', 'shortcuts', 'drag', 'drop', 'dnd', 'split', 'channel', 'channels') for w in words):
                 score += 300
-            if name == 'roi_to_inset' and 'inset' in words and any(w in ('roi', 'convert', 'rectangle') for w in words):
+            if name == 'roi_to_inset' and ('inset' in words or 'magnify' in words) and any(
+                    w in ('roi', 'convert', 'rectangle', 'click', 'clicked', 'magnify', 'region') for w in words):
                 score += 350
             if name == 'inspect_figure' and any(w in ('inspect', 'state', 'describe') for w in words):
                 score += 250

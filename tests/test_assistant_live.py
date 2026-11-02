@@ -480,6 +480,64 @@ def test_how_to_questions_use_the_authored_guides():
         assert explain(question)["guide"] == guide, question
 
 
+def test_inset_where_the_user_clicked_and_readiness_target_from_words(qapp, gui, runtime, tmp_path):
+    """Figure 3 through the chat (2026-11-02): "magnify the region where I just
+    clicked" had no tool (models opened the annotation editor and were then
+    blocked), and "is it ready?" forgot the journal named one request earlier."""
+    import uuid
+    from qtpy.QtCore import QPointF
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import Image2D, panels
+    from pyfigures.assistant.submission_review import target_from_text
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+    canvas = g.paint.EZFIG_panel
+
+    def cmd(operation, **arguments):
+        s = session.snapshot()
+        return session.execute(dict(operation=operation, arguments=arguments, request_id=str(uuid.uuid4()),
+                                    session_id=s["session_id"], expected_revision=s["revision"]))
+
+    def click(panel, x, y):                      # raw image pixel (x, y), as a person clicks it
+        rect = panel.getRect(all=True)
+        zoom = float(canvas.scale)
+        session.pointer.capture(QPointF((rect.x() + (x - (panel.crop_left or 0)) / float(panel.scale)) * zoom,
+                                        (rect.y() + (y - (panel.crop_top or 0)) / float(panel.scale)) * zoom))
+        assert session.pointer.snapshot()["valid"]
+
+    first, second = [p for _, _, p in panels(canvas.shapes_to_draw)][:2]
+    with pytest.raises(ValueError, match="click the region"):     # no ROI, no click on that panel
+        cmd("roi_to_inset", panel_ref="0/1")
+    click(second, 30, 20)
+    report = cmd("roi_to_inset", panel_ref="0/1", box_size=16)
+    rois = [a for a in second.annotations if isinstance(a, Rectangle2D) and not isinstance(a, Image2D)]
+    assert len(rois) == 1
+    assert [rois[0].x(), rois[0].y(), rois[0].width(), rois[0].height()] == pytest.approx([22, 12, 16, 16])
+    assert any(isinstance(a, Image2D) for a in second.annotations)
+    assert report["operation_result"]["roi_from_last_click"]["x"] == pytest.approx(22)
+    first = [p for _, _, p in panels(canvas.shapes_to_draw)][0]
+    click(first, 2, 2)                           # near a corner: the box slides inside the image
+    cmd("roi_to_inset", panel_ref="0/0", box_size=16)
+    roi = next(a for a in first.annotations if isinstance(a, Rectangle2D) and not isinstance(a, Image2D))
+    assert (roi.x(), roi.y()) == pytest.approx((0, 0))
+
+    assert target_from_text("Make it fit a Nature double column. Is it ready?") == {"journal": "nature", "column": "double"}
+    assert target_from_text("for Nature Communications please") == {"journal": "nature communications"}
+    assert target_from_text("use one and a half columns of Cell") == {"journal": "cell", "column": "1.5"}
+    assert target_from_text("is the figure ready for submission?") is None
+    with pytest.raises(ValueError, match="NO_TARGET"):            # nothing known: ask, never guess
+        session.execute(dict(operation="submission_review", arguments={}))
+    cmd("action_begin", text="Make it fit a Nature double column")
+    cmd("action_discard")
+    assert session._named_submission_target == {"journal": "nature", "column": "double"}
+    cmd("action_begin", text="is the figure ready for submission?")   # a later turn names no journal
+    review = session.execute(dict(operation="submission_review", arguments={}))
+    cmd("action_discard")
+    assert review["target"] == {"journal": "nature", "column": "double"}
+
+
 def test_live_mcp_server_builds_its_tools():
     from pyfigures.assistant import live_mcp
     from pyfigures.assistant.categorized_mcp import build_server

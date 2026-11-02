@@ -124,6 +124,10 @@ class ActionManager:
         if self.active:
             raise ValueError('Apply/discard the pending preview before sending another edit.')
         self.session._turn_submission_target=None
+        from .submission_review import target_from_text
+        named = target_from_text(text)
+        if named:                    # kept for later turns ("is it ready?")
+            self.session._named_submission_target = named
         start = time.monotonic()
         ident = uuid.uuid4().hex
         folder = self.root / ident

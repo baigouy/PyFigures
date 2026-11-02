@@ -33,11 +33,40 @@ def review_file(path,arguments):
         'target':common,'read_only':True,'snapshot_sha256':before,
         'scope':'Technical journal/resolution checks only; scientific content and statistical assumptions are not certified.'}
 
+NO_TARGET=('NO_TARGET: no journal or figure width is known for this figure yet. Ask the user which '
+           'journal and column (or which width) to check it against; do not guess one.')
+
+def target_from_text(text):
+    """The journal (and column) a person names in a request ("make it fit a
+    Nature double column"), so a later "is it ready?" checks THAT target; None
+    when no known journal is named."""
+    from ..mcp_tools.core import _JOURNAL_PRESETS,_JOURNAL_ALIASES
+    words=' '.join(re.sub(r'[^a-z0-9.]+',' ',str(text or '').lower()).split())
+    names=sorted(set(_JOURNAL_PRESETS)|set(_JOURNAL_ALIASES),key=len,reverse=True)
+    journal=next((n for n in names if re.search(r'(?<![a-z])'+re.escape(n)+r'(?![a-z])',words)),None)
+    if journal is None:return None
+    target={'journal':journal}
+    column=re.search(r'\b(single|one|1|1\.5|double|two|2|triple|three|3)[ ]?columns?\b'
+                     r'|\b(column and a half|one and a half columns?|full width|full page|half page)\b',words)
+    if column:
+        found=column[1] or column[2]
+        target['column']={'one':'single','1':'single','two':'double','2':'double','three':'triple','3':'triple',
+                          'column and a half':'1.5','full width':'full width','full page':'full page',
+                          'half page':'half page'}.get(found,found.replace(' columns','').replace(' column',''))
+        if target['column'].startswith('one and a half'):target['column']='1.5'
+    return target
+
 def review_live(session,arguments):
     import json,tempfile
+    from ..mcp_tools.core import _stored_target
     session.sync()
     if arguments:session._turn_submission_target=dict(arguments)
-    else:arguments=dict(getattr(session,'_turn_submission_target',{}) or {})
+    else:
+        # what this turn checked, else the journal the user named in this or an
+        # earlier request ("fit a Nature double column" ... "is it ready?"),
+        # else what the figure was last sized for (its stored target)
+        arguments=dict(getattr(session,'_turn_submission_target',None) or
+                       getattr(session,'_named_submission_target',None) or {})
     key=(session.revision,json.dumps(arguments,sort_keys=True))
     cache=getattr(session,'_submission_review_cache',None)
     if cache and cache[0]==key:return cache[1]
@@ -47,6 +76,8 @@ def review_live(session,arguments):
         session.window._copy_sidecars(session.window._sidecar_base(),str(target.with_suffix('')))
         current=session.runtime/('original_'+session.id)/'current'
         session.window._copy_sidecars(str(current),str(target.with_suffix('')))
+        if not arguments and not _stored_target(str(target)):
+            raise ValueError(NO_TARGET)
         result=review_file(target,arguments)
     result.update(review_revision=session.revision,panel_count=len(session.snapshot()['panel_references']))
     if not result['panel_count']:

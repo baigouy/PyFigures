@@ -222,14 +222,14 @@ def select_live_objects(panel_refs: list[str] | None = None, group_paths: list[l
 
 @mcp.tool()
 def open_annotation_editor(panel_ref: str | None = None) -> dict:
-    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click. Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
+    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click, FOR THE USER to work in. Only when the user asks for the editor: it blocks every other tool until the user presses OK/Cancel, and no tool can close it. Never open it to make an edit yourself (inset where the user clicked: roi_to_inset; ROIs, arrows, text: their tools). Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
     return call_live('open_annotation_editor', dict(panel_ref=panel_ref))
 
 
 @mcp.tool()
-def roi_to_inset(panel_ref: str, annotation_index: int | None = None) -> dict:
-    """Convert an EXISTING rectangular ROI into an inset from the SAME panel source, matching native Rect ROI --> Inset. No external image filename needed. panel_ref is a visible letter or panel ID. If exactly one rectangle exists, omit annotation_index; otherwise inspect get_annotations and specify its index. Keeps the source ROI, other annotations, letter styles, channels/LUTs and source. One verified undo transaction. Existing native ROI rotation/crop helper is reused."""
-    return call_live('roi_to_inset', dict(panel_ref=panel_ref, annotation_index=annotation_index))
+def roi_to_inset(panel_ref: str, annotation_index: int | None = None, box_size: float = 120) -> dict:
+    """Magnify a region of a panel in an inset from the SAME panel source, matching native Rect ROI --> Inset. Use it for "magnify/zoom where I clicked": when the panel has no rectangular ROI, a square ROI of box_size raw pixels CENTRED on the user's last canvas click on that panel is drawn and converted (no coordinates, no editor). With exactly one rectangle, omit annotation_index; with several, inspect get_annotations and give its index. No external image filename needed. panel_ref is a visible letter or panel ID. Keeps the source ROI, other annotations, letter styles, channels/LUTs and source. One verified undo transaction."""
+    return call_live('roi_to_inset', dict(panel_ref=panel_ref, annotation_index=annotation_index, box_size=box_size))
 
 
 @mcp.tool()

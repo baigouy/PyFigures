@@ -321,7 +321,27 @@ class PartnerGUI(BaseGUI):
 
 
 
-    def roi_to_inset(self, panel_ref, annotation_index=None, validate_only=False):
+    def _roi_at_click(self, panel, box_size):
+        """A square ROI of *box_size* raw pixels centred on the user's last
+        canvas click, when that click is on *panel* (a person points rather
+        than typing coordinates); slid inside the image near an edge."""
+        session = getattr(self, '_live_session', None)
+        click = session.pointer.snapshot() if session is not None and getattr(session, 'pointer', None) else None
+        canvas = self.paint.EZFIG_panel
+        pid = next(('/'.join(map(str, (*gp, ix))) for gp, ix, p in panels(canvas.shapes_to_draw) if p is panel), None)
+        if not click or not click.get('valid') or click.get('panel_id') != pid:
+            return None
+        width, height = panel.get_raw_size()
+        side = float(box_size)
+        if not (side > 0):
+            raise ValueError('box_size must be a positive number of image pixels')
+        w_box, h_box = min(side, width), min(side, height)
+        cx, cy = click['image_position']
+        x = min(max(cx - w_box / 2, 0), width - w_box)
+        y = min(max(cy - h_box / 2, 0), height - h_box)
+        return x, y, w_box, h_box
+
+    def roi_to_inset(self, panel_ref, annotation_index=None, box_size=120, validate_only=False):
         from .gui_selection import resolve_panel
         from batoolset.drawings.shapes.rectangle2d import Rectangle2D
         from batoolset.serializations.tools import clone_object
@@ -329,13 +349,24 @@ class PartnerGUI(BaseGUI):
         panel = resolve_panel(self, panel_ref)
         candidates = [(i, a) for i, a in enumerate(panel.annotations or []) if isinstance(a, Rectangle2D)
                       and not isinstance(a, (Image2D, TAText2D))]
+        at_click = None
         if annotation_index is not None:
             candidates = [(i, a) for i, a in candidates if i == annotation_index]
-        if len(candidates) != 1:
+        elif not candidates:
+            at_click = self._roi_at_click(panel, box_size)
+            if at_click is None:
+                raise ValueError('CLARIFICATION_REQUIRED: This panel has no rectangular ROI and the last canvas click is '
+                                 'not on it. Ask the user to click the region to magnify (or draw an ROI) on this panel.')
+        if at_click is None and len(candidates) != 1:
             raise ValueError('CLARIFICATION_REQUIRED: Choose one rectangular ROI using its inspected annotation_index')
-        index, roi = candidates[0]
         if validate_only:
             return
+        if at_click is not None:
+            # the ROI is kept on the panel, as the native Rect ROI --> Inset keeps it
+            panel.annotations = list(panel.annotations or [])
+            panel.annotations.append(Rectangle2D(*at_click, stroke=2, color=0xFFFF00))
+            candidates = [(len(panel.annotations) - 1, panel.annotations[-1])]
+        index, roi = candidates[0]
         # Same helper and clone/crop steps as native Rect ROI --> Inset.
         from qtpy.QtCore import QRectF
         width, height = panel.get_raw_size()
@@ -364,7 +395,10 @@ class PartnerGUI(BaseGUI):
         return dict(action='roi_to_inset', changed=1, matched_panel_ids=[pid], changed_panel_ids=[pid],
                     completion_verified=True, source_roi_index=index, inset_index=len(panel.annotations)-1,
                     crop=dict(left=left,right=right,top=top,bottom=bottom), rotation_degrees=angle,
-                    source_filename=str(inset.filename), roi_preserved=True)
+                    source_filename=str(inset.filename), roi_preserved=True,
+                    **({'roi_from_last_click': dict(x=at_click[0], y=at_click[1], width=at_click[2], height=at_click[3],
+                                                    note='square ROI centred on the last canvas click')}
+                       if at_click is not None else {}))
 
     def swap_rows(self, first_row, second_row, validate_only=False):
         canvas = self.paint.EZFIG_panel

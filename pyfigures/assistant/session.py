@@ -161,7 +161,9 @@ class Session:
                     from .advanced_annotations import edit_draft
                     return edit_draft(self, **req.get('arguments', {}))
             if getattr(self, '_annotation_editor_pending', False) and op not in ('inspect', 'readability', 'inspect_annotation_objects', 'open_annotation_properties'):
-                raise ValueError('ANNOTATION_EDITOR_OPEN: Finish or cancel the native editor before another tool action')
+                raise ValueError('ANNOTATION_EDITOR_OPEN: the native "Annotate the image" editor is open and waits for the '
+                                 'user. No other tool works until the user presses OK or Cancel in it; there is no tool to '
+                                 'close it. Stop calling tools and ask the user to finish or cancel the editor.')
             if op in ('select_live_objects', 'open_annotation_editor', 'open_annotation_properties'):
                 self.sync()
                 if req.get('session_id') != self.id or req.get('expected_revision') != self.revision:
