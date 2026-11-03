@@ -416,6 +416,24 @@ def test_set_lut_null_keeps_the_current_channel_lut(tmp_path):
     assert luts == repr(["MAGENTA", "YELLOW", "BLUE"])
 
 
+def test_fewer_luts_than_channels_keep_the_others_and_say_so(tmp_path):
+    """["MAGENTA", "GREEN"] on a 3-channel merge stored a list one short and
+    channel 3 was drawn in a default colour (Mistral Large 4, Figure 3 trial)."""
+    from pyfigures.mcp_server import create_figure, add_image, set_lut
+    d = str(tmp_path)
+    pyf = os.path.join(d, "f.pyf")
+    create_figure(pyf, num_groups=1)
+    import tifffile
+    p = os.path.join(d, "a.tif")
+    tifffile.imwrite(p, np.full((3, 20, 20), 120, np.uint8), metadata={"axes": "CYX"})
+    add_image(pyf, [0], p)
+    set_lut(pyf, [0], 0, ["BLUE", "GREEN", "RED"])
+    out = set_lut(pyf, [0], 0, ["MAGENTA", "GREEN"])
+    luts = next(ET.parse(pyf).getroot().iter("Image2D")).findtext("LUTs")
+    assert luts == repr(["MAGENTA", "GREEN", "RED"])
+    assert "channel 3 (RED) kept its LUT" in out and "channels=[True, True, False]" in out
+
+
 def test_list_luts_lists_and_checks_names():
     import json
     from pyfigures.mcp_server import list_luts

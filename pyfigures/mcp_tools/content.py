@@ -865,6 +865,14 @@ def set_lut(
         current = []
     luts_encoded = [current[i] if new is None and i < len(current) else new
                     for i, new in enumerate(luts_encoded)]
+    kept = []
+    if n_file and 1 < len(luts_encoded) < n_file:
+        # ["MAGENTA", "GREEN"] on a 3-channel merge stored a list one short and
+        # channel 3 was drawn in a default colour (Mistral Large 4, Figure 3
+        # trial, 2026-11-03): the channels not given keep their LUT, and it is said
+        for i in range(len(luts_encoded), n_file):
+            luts_encoded.append(current[i] if i < len(current) else None)
+            kept.append(f"channel {i + 1} ({current[i] if i < len(current) and current[i] else 'its default'})")
     _set_child_text(img, "LUTs", repr(luts_encoded))
     changed.append(f"LUTs={luts_encoded}")
     from .stacks import _sync_split_colours
@@ -880,6 +888,13 @@ def set_lut(
                    f"only the first (RED on an RGB image changes nothing); to show the "
                    f"channels separately use "
                    f"add_channel_split (recipe: split:), or give one LUT per channel.")
+    if kept:
+        shown = [True] * len(luts) + [False] * (n_channels - len(luts))
+        warning += (f"\nNOTE: {len(luts)} LUTs for {n_channels} channels: "
+                    f"{', '.join(kept)} kept {'its' if len(kept) == 1 else 'their'} LUT and "
+                    f"{'is' if len(kept) == 1 else 'are'} still shown. To show only the "
+                    f"{len(luts)} coloured channels, hide the others with configure_image "
+                    f"(channels={shown}).")
 
     if normalization is not None:
         from .core import _normalization_to_store
