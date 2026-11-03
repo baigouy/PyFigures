@@ -430,6 +430,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `layout_canvas(pyf_path, ...)` | Apply a full canvas layout |
 | `set_image_filename(pyf_path, group_path, image_index, filename)` | Change the file a panel points to |
 | `set_image_property(pyf_path, group_path, image_index, property_name, value)` | Set any Image2D field |
+| `add_placeholder_grid(pyf_path, rows, columns, aspect_ratio, spacing)` | Add rows of empty placeholder panels (template slots) to fill later — a layout before the images exist, instead of fake images (GUI: Insert → Empty panel grid…) |
 | `fill_template(pyf_path, group_path, image_index, filename)` | Fill a template slot |
 | `batch_fill_templates(pyf_path, group_path, filenames)` | Fill all template slots at once |
 | `clone_image(pyf_path, ...)` | Duplicate a panel |

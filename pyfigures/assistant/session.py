@@ -100,7 +100,9 @@ class Session:
               for gp,ix,p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
               for index,a in enumerate(p.annotations or [])
               if type(a).__name__ in ('Rectangle2D','Rect2D','Ellipse2D','Circle2D','Square2D','Line2D','Polygon2D','PolyLine2D','Freehand2D')]
-        return {'session_id': self.id, 'revision': self.revision,
+        objects = self.window.paint.EZFIG_panel.shapes_to_draw
+        return {'figure_summary': figure_summary(objects, references, missing | unreadable),
+                'session_id': self.id, 'revision': self.revision,
                 'text_annotations': annotations,
                 'roi_annotations': rois,
                 'selection': selection_state(self.window),
@@ -718,6 +720,29 @@ def resolve_relative_sources(window, arguments, skip=None):
             continue
         out[key] = [resolve(key, v) for v in value] if isinstance(value, list) else resolve(key, value)
     return out
+
+
+# an empty canvas needs a one-line answer, not a state dump and a preview
+# (2026-11-03: a cloud model took two slow steps to say "nothing is loaded")
+ADD_CONTENT = ('Ask for images to be added (tool add_image with each file\'s full path; add_group first for a new row), '
+               'lay the figure out first with empty placeholder panels (add_placeholder_grid), '
+               'or draft a figure from a folder of results (draft_figure). '
+               'In the GUI: drag image files onto the canvas, Insert > Images from files or Insert > Empty panel grid, '
+               'or File > Open a saved .pyf figure.')
+
+
+def figure_summary(objects, references, missing=()):
+    if not objects:
+        return {'empty': True,
+                'answer': 'The figure is empty: no images, plots or text yet. Nothing to preview or describe.',
+                'how_to_add_content': ADD_CONTENT}
+    letters = [l for r in references for l in r['letters'] if l]
+    text = f"{len(references)} image panel(s) in {len(objects)} top-level object(s)"
+    if letters:
+        text += ', letters ' + ', '.join(letters)
+    if missing:
+        text += f'; {len(missing)} image file(s) missing (see missing_source_files)'
+    return {'empty': False, 'answer': text}
 
 
 def label_text(obj):

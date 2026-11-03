@@ -491,6 +491,7 @@ def test_chat_requests_find_their_tool_first():
     assert first("use magenta and green") == "set_figure_colors"
     assert first("magnify the region where I clicked in an inset") == "roi_to_inset"
     assert first("which colors are available") == "list_colors"
+    assert first("make 3 rows per 2 cols with fake images") == "add_placeholder_grid"
 
 
 def test_list_colors_tells_channel_from_drawing_colours():
@@ -562,6 +563,52 @@ def test_inspect_reports_panels_whose_image_file_is_missing(qapp, gui, runtime, 
     assert by_file == {"a.tif": None, "b.tif": "not found"}
     assert [os.path.basename(f) for f in s["missing_source_files"]["not_found"]] == ["b.tif"]
     assert "remap_paths" in s["missing_source_files"]["fix"]
+
+
+def test_empty_nested_rows_survive_filling_their_neighbours(qapp, gui, runtime, tmp_path):
+    """"3 rows per 2 cols": a column of three empty rows, then images row by row.
+    Filling row 1 pruned rows 2 and 3 (VERIFICATION_FAILED, edit rolled back) and
+    each empty row gave "layout recompute failed: ZeroDivisionError" (2026-11-03)."""
+    from batoolset.img import Img
+    from pyfigures.assistant import launch
+    g = gui(shareable=True)
+    launch.start_live_session(g)
+    image = str(tmp_path / "a.tif")
+    Img((np.random.default_rng(1).random((40, 50)) * 255).astype(np.uint8), dimensions="hw").save(image)
+
+    def run(tool, request_id, **arguments):
+        state = _call(qapp, "inspect")
+        return _call(qapp, "original_tool", session_id=state["session_id"], expected_revision=state["revision"],
+                     arguments={"tool": tool, "arguments": {"pyf_path": "live", **arguments}}, request_id=request_id)
+    run("add_group", "g0", orientation="Y")
+    for row in range(3):
+        result = run("add_group", f"g{row + 1}", orientation="X", parent_group_path=[0])
+        assert "layout recompute failed" not in json.dumps(result)
+    for row in range(3):
+        for column in range(2):
+            run("add_image", f"i{row}{column}", group_path=[0, row], filename=image)
+    from pyfigures.assistant.partner_gui import panels
+    paths = [tuple(gp) for gp, _, _ in panels(g.paint.EZFIG_panel.shapes_to_draw)]
+    assert paths == [(0, 0), (0, 0), (0, 1), (0, 1), (0, 2), (0, 2)]
+
+
+def test_an_empty_figure_gets_a_short_answer(qapp, gui, runtime, tmp_path):
+    """"Tell me more about the fig" on an empty window took a cloud model two
+    slow steps (state dump, then a preview) (2026-11-03): one short answer
+    that says how to add images, and no preview."""
+    from pyfigures.assistant import launch, live_mcp
+    from pyfigures.assistant.categorized_mcp import build_server
+    g = gui(shareable=True)
+    state = launch.start_live_session(g).snapshot()
+    summary = state["figure_summary"]
+    assert summary["empty"] and "empty" in summary["answer"]
+    assert "add_image" in summary["how_to_add_content"] and "drag" in summary["how_to_add_content"]
+    tools = build_server(live_mcp.mcp, lambda *a, **k: state)._tool_manager._tools
+    assert set(tools["inspect_figure"].fn()) == {"figure_summary", "path", "revision"}
+    assert tools["preview_figure"].fn().startswith("The figure is empty")
+    g.reload_state(_figure(tmp_path), append=False)
+    summary = launch.start_live_session(g).snapshot()["figure_summary"]
+    assert not summary["empty"] and summary["answer"].startswith("2 image panel(s)")
 
 
 def test_inset_where_the_user_clicked_and_readiness_target_from_words(qapp, gui, runtime, tmp_path):

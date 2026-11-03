@@ -541,6 +541,7 @@ ACTIONS = {
         files={"open": "tstack"}),
     "menu: Insert > Add image from URL / OME-Zarr / OMERO…": spec(
         rows_are(BASE + ["row 3: cells2.png"]), [("URL", text_input("@png2"))]),
+    "menu: Insert > Empty panel grid…": spec(panels_added(4, name="@template@"), [("Empty panel grid", ok)]),
     "menu: Insert > Data plot from CSV…": spec(panels_added(1, script=True), [("plot", ok)],
                                                files={"open_many": ["csv"], "open": "csv"}),
     "menu: Insert > Multi-channel merge…": spec(panels_added(1, script=True), [("merge", ok)],

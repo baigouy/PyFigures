@@ -151,6 +151,8 @@ def build_server(full_server, send):
         'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
         'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
         'Is a font available? Use list_fonts(query=the_font), answer from font_check. '
+        'Fake, dummy or placeholder images, or a layout before the images exist ("3 rows of 2 panels"): add_placeholder_grid in one call, never invented scripted images; the user fills the grey slots later (fill_template or drag and drop). '
+        'figure_summary in the state answers "what is in the figure?". When it says empty=true, reply at once from its answer and how_to_add_content, without calling tools or previewing. '
         'Colours named without a target ("use magenta and green"): on a figure whose only coloured things are multichannel images they mean the CHANNEL colours (set_figure_colors, one per channel in channel order). If it also has coloured ROIs, arrows or text, or the colours could fit several things, ASK which ones the user means before changing anything. Which colour names work? list_colors(query=the_colour), answer from color_check. '
         'Which LUTs/colour tables exist, or is a LUT available? Use list_luts(query=the_name), answer from lut_check and pass its exact_key to set_lut. In set_lut, null keeps a channel unchanged. '
         'Column headers or a heading above/below a row: add_label_row(group_path=[row index], labels=[one per image] or one string). A label left/right of a row: add_side_label. add_annotation writes text INSIDE an image, not beside a row. '
@@ -159,12 +161,19 @@ def build_server(full_server, send):
     @server.tool()
     def inspect_figure() -> dict:
         """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
-        return send('inspect')
+        state = send('inspect')
+        summary = state.get('figure_summary') or {}
+        if summary.get('empty'):          # nothing else in the state says anything useful
+            return {'figure_summary': summary, 'path': state.get('path'), 'revision': state.get('revision')}
+        return state
 
     @server.tool()
-    def preview_figure() -> Image:
-        """Show the current GUI canvas; no session parameters required."""
+    def preview_figure():     # Image, or text for an empty figure ('Image | str' breaks FastMCP's schema)
+        """Show the current GUI canvas; no session parameters required. An empty figure gives a short text instead."""
         from .live_mcp import call_live
+        summary = send('inspect').get('figure_summary') or {}
+        if summary.get('empty'):
+            return summary['answer'] + ' ' + summary['how_to_add_content']
         result = call_live('preview')
         return Image(path=result['path'])
 
@@ -256,6 +265,9 @@ def build_server(full_server, send):
             if name == 'roi_to_inset' and ('inset' in words or 'magnify' in words) and any(
                     w in ('roi', 'convert', 'rectangle', 'click', 'clicked', 'magnify', 'region') for w in words):
                 score += 350
+            if name == 'add_placeholder_grid' and any(w in ('fake', 'placeholder', 'placeholders', 'empty', 'dummy', 'mock', 'blank', 'grid') for w in words) and any(
+                    w in ('image', 'images', 'panel', 'panels', 'rows', 'row', 'cols', 'columns', 'grid', 'layout', 'slots') for w in words):
+                score += 450      # "3 rows per 2 cols with fake images": one call, not 25 steps
             if name == 'inspect_figure' and any(w in ('inspect', 'state', 'describe') for w in words):
                 score += 250
             if name == 'select_live_objects' and any(w in ('select', 'selection', 'highlight') for w in words):

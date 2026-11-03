@@ -106,6 +106,13 @@ setuptools.setup(
             "zarr",
             "pymupdf",
         ],
+        # running the test suite (pytest.ini sets a per-test timeout so a stuck
+        # modal dialog fails the test instead of hanging the run)
+        'test': [
+            "pytest",
+            "pytest-qt",
+            "pytest-timeout",
+        ],
     },
     python_requires='>=3.9'  # PyQt6 dropped 3.7/3.8; tested up to 3.12
 )

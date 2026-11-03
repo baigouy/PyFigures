@@ -1515,6 +1515,11 @@ class EZFIG_GUI(QMainWindow):
             images_menu.addAction(act)
             act.triggered.connect(lambda _checked=False, h=how: self.add_images_from_files_action(h))
         insert_menu.addAction(url_action)
+        placeholder_grid_action = QAction("Empty panel grid…", self)
+        placeholder_grid_action.setToolTip("Rows of grey placeholder panels to lay the figure out before "
+                                           "the images exist; drag an image onto a placeholder to fill it")
+        insert_menu.addAction(placeholder_grid_action)
+        placeholder_grid_action.triggered.connect(self.add_placeholder_grid_action)
         insert_menu.addSeparator()
 
         data_plot_action = QAction("Data plot from CSV…", self)
@@ -4958,6 +4963,40 @@ class EZFIG_GUI(QMainWindow):
                     return found
             return None
         return search(list(self.paint.EZFIG_panel.shapes_to_draw), [], True)
+
+    def _ask_placeholder_grid(self):
+        """(rows, columns, aspect ratio text) from a small dialog, or None."""
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        rows, columns = QSpinBox(frame), QSpinBox(frame)
+        for r, (text, spin) in enumerate((('Rows:', rows), ('Panels per row:', columns))):
+            spin.setRange(1, 20)
+            spin.setValue(2)
+            grid.addWidget(QLabel(text, frame), r, 0)
+            grid.addWidget(spin, r, 1)
+        grid.addWidget(QLabel('Panel shape (width:height):', frame), 2, 0)
+        aspect = QComboBox(frame)
+        aspect.setEditable(True)
+        aspect.addItems(['1:1', '4:3', '3:2', '16:9', '3:4'])
+        grid.addWidget(aspect, 2, 1)
+        cd = CustomDialog(title="Empty panel grid",
+                          message="Grey placeholders: drag an image onto one to fill it.",
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return None
+        return rows.value(), columns.value(), aspect.currentText()
+
+    def add_placeholder_grid_action(self):
+        """Insert → Empty panel grid… (MCP: add_placeholder_grid; recipe key
+        placeholder_grid): rows of empty template slots, filled later by dropping
+        images onto them."""
+        answer = self._ask_placeholder_grid()
+        if not answer:
+            return
+        rows, columns, aspect = answer
+        from pyfigures.mcp_server import add_placeholder_grid
+        self._run_mcp_mutation(add_placeholder_grid, f"Added {rows} × {columns} empty panels.",
+                               rows=rows, columns=columns, aspect_ratio=aspect)
 
     def add_zoom_callout_action(self):
         """Box a region of the selected image, magnify it in a corner inset and

@@ -178,11 +178,13 @@ def test_every_extra_named_in_the_docs_exists():
     assert named and not named - extras, named - extras
     # 'all' really is all the other extras — except 'omero': omero-py needs
     # zeroc-ice, which has no wheel on PyPI for Windows (and often fails to
-    # build elsewhere), so it would break `pip install pyfigures[all]`
+    # build elsewhere), so it would break `pip install pyfigures[all]`; and
+    # 'test' (pytest & co.), which no user feature needs
     all_block = block[block.index("'all'"):]
     all_block = all_block[:all_block.index("]")]
     assert "omero" in extras and "omero-py" not in all_block
-    for extra in extras - {"all", "omero"}:
+    assert "test" in extras and "pytest" not in all_block
+    for extra in extras - {"all", "omero", "test"}:
         sub = block[block.index(f"'{extra}'"):]
         for req in re.findall(r'"([^"]+)"', sub[:sub.index("]")]):
             assert f'"{req}"' in all_block, (extra, req)

@@ -100,7 +100,9 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              "tidy_text", "letter_placement", "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
-             "checks", "consolidate", "download_remote", "template", "fill"}
+             "checks", "consolidate", "download_remote", "template", "fill",
+             # empty panels to fill later (Insert → Empty panel grid…)
+             "placeholder_grid"}
 _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
@@ -1064,8 +1066,23 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
     layout_tree, layout_ids, rows_src = None, None, []
     if "layout" in recipe and "template" not in recipe:
         layout_tree, layout_ids, rows_src = _layout_rows(recipe, base)
-    elif "template" not in recipe:
+    elif "template" not in recipe and not ("placeholder_grid" in recipe
+                                           and "rows" not in recipe and "panels" not in recipe):
         rows_src = _rows_of(recipe)
+    grid = recipe.get("placeholder_grid")
+    if grid is not None:
+        from pyfigures.mcp_tools.core import parse_aspect_ratio
+        if not isinstance(grid, dict) or set(grid) - {"rows", "columns", "aspect_ratio"}:
+            raise RecipeError("'placeholder_grid' takes rows, columns and aspect_ratio, "
+                              "e.g. {rows: 3, columns: 2, aspect_ratio: '4:3'}")
+        for key in ("rows", "columns"):
+            n = grid.get(key, 2)
+            if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= 20:
+                raise RecipeError(f"placeholder_grid {key} must be a whole number from 1 to 20")
+        if parse_aspect_ratio(grid.get("aspect_ratio", 1.0)) is None:
+            raise RecipeError("placeholder_grid aspect_ratio must be a width/height ratio such as 1.5 or '3:2'")
+        if "template" in recipe:
+            raise RecipeError("'placeholder_grid' does not go with 'template'")
     plan_rows = []
     for r, (row_opts, row) in enumerate(rows_src):
         _check_row_opts(row_opts, len(row), f"row {r + 1}")
@@ -1208,6 +1225,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "download_remote": recipe.get("download_remote", False),
         "template": _resolve(base, recipe["template"]) if "template" in recipe else None,
         "fill": fill,
+        "placeholder_grid": grid,
     }
 
 
@@ -2021,6 +2039,12 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             w, added = _add_derived_panels(M, out, gp, i, opts, step)
             warnings += w
             i += added
+    if plan.get("placeholder_grid") is not None:
+        grid = plan["placeholder_grid"]
+        warnings += _check(M.add_placeholder_grid(out, rows=grid.get("rows", 2), columns=grid.get("columns", 2),
+                                                  aspect_ratio=grid.get("aspect_ratio", 1.0),
+                                                  spacing=plan["spacing"]), "placeholder_grid")
+        n_other += grid.get("rows", 2) * grid.get("columns", 2)
 
     # pass 2: pixel size / LUTs from the files' metadata — before the explicit
     # per-panel settings, so those always win

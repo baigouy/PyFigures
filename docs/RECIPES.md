@@ -183,6 +183,7 @@ created as needed. Forward slashes work on every OS.
 | `consolidate` | `false` | `true`: copy every source file into `<figure>.files/` and link the figure to the copies; or a `.pyf` path to write that self-contained copy elsewhere. §20. |
 | `download_remote` | `false` | With `consolidate`: also save remote images (web links, OME-Zarr URLs, OMERO links) into the bundle instead of keeping their links. §20. |
 | `template` + `fill` | none | Build from a template `.pyf` (instead of `rows`): `fill` lists the image files (or globs) for its slots, in order. §20. |
+| `placeholder_grid` | none | Empty grey panels to fill later: `{rows, columns, aspect_ratio}`; alone or below `rows`. §20. |
 
 Multi-line captions — use YAML's folded style:
 
@@ -1058,6 +1059,21 @@ everything in this section (size, fonts, caption, checks, exports…) still
 applies. Letters are not added again (the template has its own) unless you set
 `letter_panels: true`. More files than slots is an error; fewer leaves the rest
 empty with a warning.
+
+### Empty placeholder panels — `placeholder_grid`
+
+```yaml
+output: Figure2_layout.pyf
+placeholder_grid: {rows: 3, columns: 2, aspect_ratio: "4:3"}
+letter_panels: true
+```
+
+Lays a figure out before the images exist: a grid of grey, empty slots
+(GUI: Insert → Empty panel grid…; MCP: `add_placeholder_grid`). It can stand
+alone or follow `rows` / `panels`, below them. Fill the slots later by
+dragging images onto them, with `fill_template`, or by using the saved figure
+as the `template` of another recipe. `aspect_ratio` is width / height
+(`1.5`, `"3:2"`; default square); rows and columns 1–20 (default 2 × 2).
 
 ---
 

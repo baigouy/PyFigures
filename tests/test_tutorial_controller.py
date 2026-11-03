@@ -8,6 +8,7 @@ Run with PYTEST_QT_API=pyqt6.
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 
@@ -502,6 +503,15 @@ def test_chat_tutorial_from_the_help_menu(qapp, monkeypatch, tmp_path):
     monkeypatch.setattr(T, "_DEMO_DIR", [str(tmp_path / "samples")])
     os.makedirs(str(tmp_path / "samples"))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: QMessageBox.Ok))
+
+    def warning(parent, title, text, *a, **k):
+        # a modal warning hung the whole suite (2026-11-03): fail with its text instead
+        raise AssertionError(f"{title}: {text}")
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(warning))
+    # the chat's own settings, not the user's saved connection (read by Config.load)
+    profile = tmp_path / "sidecar.json"
+    profile.write_text(json.dumps({"application": "PyFigures", "state_dir": str(tmp_path / "sidecar_state")}))
+    monkeypatch.setenv("PYFIGURES_SIDECAR_CONFIG", str(profile))
     monkeypatch.setattr(launch, "lm_studio_model", lambda: None)
     EZFIG_GUI.show_tips = lambda self: None
     g = EZFIG_GUI()

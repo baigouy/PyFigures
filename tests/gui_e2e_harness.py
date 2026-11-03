@@ -844,9 +844,20 @@ def drop_files(g, paths, canvas_point=None):
     return True
 
 
-def drop_menu(g):
-    frames = [f for f in g.findChildren(QFrame) if f.isVisible() and f.parent() is g
-              and f.objectName() != "hintBubble" and f.findChildren(QPushButton)]
+def _button_frames(g):
+    return [f for f in g.findChildren(QFrame) if f.isVisible() and f.parent() is g
+            and f.objectName() != "hintBubble" and f.findChildren(QPushButton)]
+
+
+def drop_menu(g, label=None):
+    """The drop-choice frame. A guided tutorial's panel is a button frame too,
+    and in a long run it can come last (full suite, 2026-11-03): with *label*,
+    the frame holding that choice wins."""
+    frames = _button_frames(g)
+    if label is not None:
+        for f in reversed(frames):
+            if any(label_key(b.text()) == label_key(label) for b in f.findChildren(QPushButton)):
+                return f
     return frames[-1] if frames else None
 
 
@@ -856,12 +867,12 @@ def drop_choices(g):
 
 
 def click_drop_choice(g, label):
-    m = drop_menu(g)
+    m = drop_menu(g, label)
     assert m is not None, "no drop menu"
     btns = m.findChildren(QPushButton)
     btn = next((b for b in btns if b.text() == label), None) or \
         next((b for b in btns if label_key(b.text()) == label_key(label)), None)
-    assert btn is not None, (label, drop_choices(g))
+    assert btn is not None, (label, [[b.text() for b in f.findChildren(QPushButton)] for f in _button_frames(g)])
     btn.click()
     QApplication.processEvents()
 

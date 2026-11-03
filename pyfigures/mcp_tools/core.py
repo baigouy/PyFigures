@@ -597,7 +597,8 @@ def _auto_recompute(pyf_path: str) -> str:
             create_object as _co,
             object_to_xml as _to_xml,
         )
-        from batoolset.drawings.shapes.group import Group as _Group, set_to_width as _stw
+        from batoolset.drawings.shapes.group import Group as _Group, set_to_width as _stw, \
+            get_all_contained_images as _get_all_images
         from batoolset.figure.alignment import pack2 as _pack2, align2 as _align2, \
             align_positions as _align_positions
     except Exception as exc:
@@ -624,6 +625,22 @@ def _auto_recompute(pyf_path: str) -> str:
         top_groups = [o for o in objects if isinstance(o, _Group)]
         if not top_groups:
             return ""  # free-canvas figure — nothing to recompute
+        # rows added empty, to be filled next ("3 rows per 2 cols"), have no
+        # size: set aside while the others are laid out, then put back as they
+        # were (laid out with them, they divided by zero or were saved at size 0)
+        set_aside = []
+
+        def _set_aside(group):
+            for index in range(len(group.content) - 1, -1, -1):
+                child = group.content[index]
+                if isinstance(child, _Group):
+                    if _get_all_images(child):
+                        _set_aside(child)
+                    else:
+                        set_aside.append((group, index, child))
+                        del group.content[index]
+        for grp in top_groups:
+            _set_aside(grp)
         for grp in top_groups:
             try:
                 w = float(getattr(grp, "size", 0) or 0)
@@ -645,8 +662,15 @@ def _auto_recompute(pyf_path: str) -> str:
             drawables[0].setTopLeft(50, 50)
             _align2(_align_positions[2], *drawables)
             _pack2(space, "Y", False, *drawables)
+        for group, index, child in reversed(set_aside):
+            group.content.insert(index, child)
+            for g in (child, group):         # an empty row is as wide as its parent until filled
+                size = float(getattr(g, "size", 0) or 0)
+                if not (math.isfinite(size) and size > 0):
+                    parent = float(getattr(group, "size", 0) or 0)
+                    g.size = parent if math.isfinite(parent) and parent > 0 else 512.0
 
-        new_xml = _sanitize_recomputed_xml(_to_xml(objects, is_list=True))
+        new_xml =_sanitize_recomputed_xml(_to_xml(objects, is_list=True))
         if new_xml is not None:
             # the engine drops an object it cannot rebuild (a whole group
             # when its layout raised): never write a figure that lost panels
@@ -877,6 +901,25 @@ def _html_to_plain(html: str) -> str:
 
 
 _TEMPLATE_SENTINEL = "@template@"
+
+
+def parse_aspect_ratio(value) -> float | None:
+    """1.5, "3:2", "3/2" or "4x3" -> width / height; None when not a positive
+    ratio (placeholder grids: MCP add_placeholder_grid and Insert → Empty panel grid)."""
+    try:
+        if isinstance(value, str):
+            parts = re.split(r"\s*[:/x×]\s*", value.strip())
+            ratio = float(parts[0]) / float(parts[1]) if len(parts) == 2 else float(parts[0])
+        else:
+            ratio = float(value)
+    except (ValueError, ZeroDivisionError, IndexError):
+        return None
+    return ratio if math.isfinite(ratio) and ratio > 0 else None
+
+
+def placeholder_slot_size(ratio: float, width: float = 512.0) -> tuple[float, float]:
+    """Raw width, height of one empty placeholder slot of *ratio* (width / height)."""
+    return width, width / ratio
 
 
 def _is_template(img: ET.Element) -> bool:

@@ -56,7 +56,19 @@ def install_canvas(canvas):
         protected=[s for s in original if isinstance(s,Group) and not populated(s) and getattr(s,PENDING,False)]
         for s in original:
             if isinstance(s,Group) and populated(s) and hasattr(s,PENDING):delattr(s,PENDING)
-        if not protected:return native()
+        # empty rows inside a filled column ("3 rows per 2 cols", filled row by row):
+        # the native repack prunes every empty group, so they vanished when row 1 was filled
+        nested=[]
+        def detach(group):
+            for index in range(len(group.content)-1,-1,-1):
+                child=group.content[index]
+                if not isinstance(child,Group):continue
+                if populated(child):detach(child)
+                elif getattr(child,PENDING,False):
+                    nested.append((group,index,child));del group.content[index]
+        for s in original:
+            if isinstance(s,Group) and populated(s):detach(s)
+        if not protected and not nested:return native()
         keep={id(s) for s in protected}
         this.shapes_to_draw=[s for s in original if id(s) not in keep]
         try:
@@ -64,6 +76,9 @@ def install_canvas(canvas):
         finally:
             survivors={id(s) for s in this.shapes_to_draw}|keep
             this.shapes_to_draw=[s for s in original if id(s) in survivors]
+            for group,index,child in reversed(nested):
+                group.content.insert(index,child)
+                child.setRect(group.x(),group.y(),0,0)
             this.update_size()
     native_bounds=canvas.updateBounds
     def bounds(this):

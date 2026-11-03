@@ -1102,6 +1102,62 @@ def add_group(
     ) + _actual_layout(pyf_path)
 
 
+@mcp.tool()
+def add_placeholder_grid(
+    pyf_path: str,
+    rows: int = 2,
+    columns: int = 2,
+    aspect_ratio: float | str = 1.0,
+    spacing: int = 3,
+) -> str:
+    """Add a grid of empty placeholder panels to fill with real images later
+    (GUI: Insert → Empty panel grid…; recipe key ``placeholder_grid``).
+
+    Use it to lay out a figure before the images exist ("make 3 rows of 2
+    panels"), instead of inventing fake images. Each placeholder is an empty
+    template slot drawn as a grey box: fill it with fill_template /
+    batch_fill_templates, or in the GUI drag an image onto it. Panel letters,
+    labels and the layout are kept when slots are filled.
+
+    *rows* × *columns*: 1–20 each; one new top-level column of rows.
+    *aspect_ratio*: width / height of each slot: 1.5, "3:2", "4/3"…
+    *spacing*: pixels between panels.
+    Returns the new group's path; its rows are [path, 0], [path, 1]…
+    """
+    for name, n in (("rows", rows), ("columns", columns)):
+        if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= 20:
+            return f"ERROR: {name} must be a whole number from 1 to 20 (got {n!r})."
+    from .core import parse_aspect_ratio
+    ratio = parse_aspect_ratio(aspect_ratio)
+    if ratio is None:
+        return f"ERROR: aspect_ratio must be a positive width/height ratio such as 1.5 or '3:2' (got {aspect_ratio!r})."
+    if not isinstance(spacing, (int, float)) or spacing < 0:
+        return f"ERROR: spacing must be 0 or more pixels (got {spacing})."
+    tree, root = _load(pyf_path)
+    group_id = _next_group_id(root)
+    outer = _new_group_elem("Y", spacing, group_id=group_id)
+    from .core import placeholder_slot_size
+    width, height = placeholder_slot_size(ratio)
+    for r in range(rows):
+        row = _new_group_elem("X", spacing, group_id=group_id + 1 + r)
+        for _ in range(columns):
+            slot = _new_image2d("@template@")
+            ET.SubElement(slot, "template_rect").text = f"PyQt6.QtCore.QRectF(0.0, 0.0, {width}, {height})"
+            row.find("content").append(slot)
+        outer.find("content").append(row)
+    last_pos = -1
+    for i, child in enumerate(root):
+        if child.tag == "Group":
+            last_pos = i
+    path = [len(_top_groups(root))]
+    root.insert(last_pos + 1, outer)
+    _save(tree, pyf_path, recompute=True)
+    return (f"Added {rows} row(s) × {columns} empty placeholder panel(s) as group {path} "
+            f"(rows {path + [0]} to {path + [rows - 1]}). Fill them with fill_template or "
+            "batch_fill_templates, or drag images onto them in PyFigures."
+            ) + _actual_layout(pyf_path)
+
+
 def _actual_layout(pyf_path: str) -> str:
     """The saved arrangement, appended to the replies of layout edits: a 28B
     model read two correct rows, then rebuilt them into one mixed column with
