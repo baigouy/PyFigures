@@ -235,9 +235,17 @@ def select_live_objects(panel_refs: list[str] | None = None, group_paths: list[l
     return call_live('select_live_objects', dict(panel_refs=panel_refs, group_paths=group_paths, row_numbers=row_numbers, clear=clear))
 
 @mcp.tool()
-def open_annotation_editor(panel_ref: str | None = None) -> dict:
-    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click, FOR THE USER to work in. Only when the user asks for the editor: it blocks every other tool until the user presses OK/Cancel, and no tool can close it. Never open it to make an edit yourself (inset where the user clicked: roi_to_inset; ROIs, arrows, text: their tools). Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
-    return call_live('open_annotation_editor', dict(panel_ref=panel_ref))
+def open_annotation_editor(panel_ref: str | None = None, tab: str | None = None) -> dict:
+    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click, FOR THE USER to work in. tab: the tab it opens on, matching what the user wants to do there: 'crop' or 'rotate' (Rotate + Crop), 'text' (Texts), 'scale' (File Infos + Scale, pixel size), 'script', 'export' (Export style), 'layers'; default 'annotations' (drawing ROIs, arrows). Only when the user asks for the editor: it blocks every other tool until the user presses OK/Cancel, and no tool can close it. Never open it to make an edit yourself (inset where the user clicked: roi_to_inset; ROIs, arrows, text: their tools). Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
+    return call_live('open_annotation_editor', dict(panel_ref=panel_ref, tab=tab))
+
+
+@mcp.tool()
+def preview_panel(panel_ref: str, brighten: bool = True) -> list:
+    """See ONE panel's whole source image, uncropped, with pixel rulers and its current crop as a dashed yellow box. Use it BEFORE transform_image crops ("crop to the nuclei", "zoom on the cells"): read the region's pixel coordinates off the rulers, then crop once (crop_left=x0, crop_top=y0, crop_right=width-x1, crop_bottom=height-y1). Never remove a crop just to look at the whole image: this shows it. brighten stretches the contrast of this preview only (dim fluorescence); the figure is unchanged. Read-only."""
+    from mcp.server.fastmcp import Image
+    result = call_live('panel_source', dict(panel_ref=panel_ref, brighten=brighten))
+    return [result['description'], Image(path=result['path'])]
 
 
 @mcp.tool()

@@ -295,6 +295,17 @@ class Session:
                 if not panel.grab().save(str(output)):
                     raise RuntimeError('Could not capture canvas')
                 result = {'path': str(output), 'revision': self.revision}
+            elif op == 'panel_source':
+                # one panel's whole source with pixel rulers, to choose crop values
+                from .gui_selection import resolve_panel
+                from ..panel_source_preview import preview_panel
+                ref = args.get('panel_ref')
+                if not isinstance(ref, str) or not ref.strip():
+                    raise ValueError('panel_ref must be a current visible letter or panel ID')
+                output = STATE / 'panel_source.png'
+                text = preview_panel(resolve_panel(w, ref), str(output), title='panel ' + ref,
+                                     brighten=bool(args.get('brighten', True)))
+                result = {'path': str(output), 'description': text, 'revision': self.revision}
             elif op in ('undo', 'redo'):
                 getattr(w, op)()
                 result = self.snapshot()

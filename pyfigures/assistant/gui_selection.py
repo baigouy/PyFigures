@@ -52,9 +52,33 @@ def select(window, panel_refs=None, group_paths=None, row_numbers=None, clear=Fa
         raise RuntimeError('Selection verification failed')
     return dict(status='selected' if chosen else 'cleared', selection=actual, document_changed=False)
 
-def open_editor(session, panel_ref=None):
+# the image editor's tabs, by the words a request uses for them
+EDITOR_TABS = {'annotations': 'Annotations', 'draw': 'Annotations', 'roi': 'Annotations',
+               'crop': 'Rotate + Crop', 'rotate': 'Rotate + Crop', 'rotation': 'Rotate + Crop', 'flip': 'Rotate + Crop',
+               'text': 'Texts', 'texts': 'Texts', 'scale': 'File Infos + Scale', 'info': 'File Infos + Scale',
+               'pixel': 'File Infos + Scale', 'script': 'Script', 'export': 'Export style', 'style': 'Export style',
+               'layers': 'Layers'}
+
+
+def editor_tab(tab):
+    """The editor tab title for *tab* (a title or one of EDITOR_TABS' words)."""
+    if not tab:
+        return 'Annotations'
+    key = str(tab).strip().lower()
+    titles = set(EDITOR_TABS.values())
+    for title in titles:
+        if key == title.lower():
+            return title
+    for word, title in EDITOR_TABS.items():
+        if word in key.replace('+', ' ').split() or key == word:
+            return title
+    raise ValueError('Unknown editor tab ' + repr(tab) + '; use one of: ' + ', '.join(sorted(titles)))
+
+
+def open_editor(session, panel_ref=None, tab=None):
     window = session.window
     canvas = window.paint.EZFIG_panel
+    title = editor_tab(tab)
     if getattr(session, '_annotation_editor_pending', False):
         raise ValueError('Annotation editor already opening or open')
     if panel_ref is not None:
@@ -76,7 +100,7 @@ def open_editor(session, panel_ref=None):
             if not any(p is panel for _, _, p in panels(canvas.shapes_to_draw)):
                 raise ValueError('Panel changed before editor opened')
             session._annotation_editor_status = 'open'
-            canvas.update_image_annotations(image2d=panel, tab='Annotations')
+            canvas.update_image_annotations(image2d=panel, tab=title)
             current = resolve_panel(window, panel_id)
             if current is not panel and policy is not None and not getattr(current, POLICY, None):
                 # Native clone drops prototype-only extension metadata.
@@ -90,8 +114,8 @@ def open_editor(session, panel_ref=None):
         finally:
             session._annotation_editor_pending = False
     QTimer.singleShot(200, launch)
-    return dict(status='scheduled', selection=selection_state(window), document_changed=False,
-                message='Native annotation editor will open for this panel. Human edits use native OK/Cancel; no annotation has been added by this tool.')
+    return dict(status='scheduled', selection=selection_state(window), document_changed=False, tab=title,
+                message='Native image editor will open for this panel on its "' + title + '" tab. Human edits use native OK/Cancel; nothing has been changed by this tool.')
 
 
 def resolve_panel_arguments(window,arguments):

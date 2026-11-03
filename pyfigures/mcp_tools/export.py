@@ -168,6 +168,40 @@ def export_figure(pyf_path: str, out_path: str, dpi: int = 300) -> str:
 
 
 @mcp.tool()
+def preview_panel_source(pyf_path: str, group_path: list[int], image_index: int,
+                         brighten: bool = True) -> list:
+    """See ONE panel's whole source image, uncropped, with pixel rulers and its
+    current crop as a dashed yellow box. Use it before transform_image crops
+    ("crop to the nuclei"): read the region's pixel coordinates off the rulers,
+    then crop once (crop_left=x0, crop_top=y0, crop_right=width-x1,
+    crop_bottom=height-y1), instead of cropping and uncropping blind.
+
+    *brighten* stretches the contrast of this preview only (dim fluorescence);
+    the figure is unchanged. Read-only.
+    *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
+    *image_index*: 0-based index among Image2D elements at that location.
+    """
+    from batoolset.serializations.tools import element_to_dict, create_object
+    from .core import _ensure_qapp
+    from ..panel_source_preview import preview_panel
+    _tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        raise ValueError(err)
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        raise ValueError(f"image_index {image_index} out of range ({len(imgs)} images)")
+    from batoolset.settings.global_settings import set_UI
+    set_UI()
+    _ensure_qapp()
+    props = element_to_dict(imgs[image_index])
+    panel = create_object("Image2D", props.get("Image2D", props))
+    out = os.path.join(tempfile.mkdtemp(prefix="pyf_panel_"), "panel_source.png")
+    text = preview_panel(panel, out, title=f"group {group_path} image {image_index}", brighten=brighten)
+    return [text, Image(path=out)]
+
+
+@mcp.tool()
 def render_preview(pyf_path: str, dpi: int = 100, max_dimension: int = 1400) -> Image:
     """Render a .pyf figure to a PNG and return it as an image you can see.
 

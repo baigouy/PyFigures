@@ -563,7 +563,10 @@ def transform_image(
                 A flip is a drawing property like the rotation: the image's
                 pixels, channels and pixel size stay the original.
     *crop_left / crop_right / crop_top / crop_bottom*: pixels to remove from
-                each edge of the raw image (applied before rotation).
+                each edge of the raw image (applied before rotation). To crop
+                to something in the image, first look at the whole source with
+                its pixel rulers (preview_panel live, preview_panel_source on a
+                file) and crop once; never uncrop just to look.
     *opacity*:  0.0 (invisible) – 1.0 (fully opaque, default).
     *fill_color*: background behind rotated/transparent edges.
                   Name ("black", "white"), #rrggbb hex, or integer.

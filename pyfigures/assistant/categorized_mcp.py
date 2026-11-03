@@ -46,6 +46,8 @@ def category_for(name):
         return 'help'
     if name == 'inspect_figure':
         return 'inspect'
+    if name == 'preview_panel':
+        return 'images'
     if name in ('open_annotation_editor', 'roi_to_inset'):
         return 'annotations'
     if name in ('list_how_to_guides', 'explain_how', 'show_me_how', 'guidance_status', 'close_guidance'):
@@ -87,8 +89,9 @@ def build_server(full_server, send):
     from .original_registry import registry
     originals = set(registry())
     names = originals | {'arrange_live_images', 'set_panel_letter_position', 'edit_live_label',
-        'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'roi_to_inset', 'explain_live_interaction', 'save_live_figure',
+        'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'roi_to_inset', 'preview_panel', 'explain_live_interaction', 'save_live_figure',
         'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row'}
+    names.discard('preview_panel_source')   # the live preview_panel shows the open figure's panel
     names.update({'open_annotation_properties','inspect_annotation_objects','edit_annotation_properties','review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
     available = {n: t for n, t in full_server._tool_manager._tools.items() if n in names}
     font_tool = available.get('list_fonts')
@@ -254,6 +257,10 @@ def build_server(full_server, send):
             if name=='add_lut_calibration_bar' and bar_words:score+=450   # "add the corresponding LUT on the right of b"
             if name=='invert_lut' and any(w in ('invert','inverted','inverse','negative','reverse','reversed') for w in words) and (lut_words or any(w in ('colours','colors','colour','color','gradient') for w in words)):score+=420
             if name=='preview_luts' and lut_words and any(w in ('preview','show','compare','look','see') for w in words):score+=400
+            # "crop g to the nuclei": see the whole source with rulers first (a model cropped/uncropped blind until out of steps)
+            # (not "zoom"/"region": those ask for an inset)
+            if name=='preview_panel' and any(w in ('crop','cropping','cropped','uncropped','uncrop') for w in words):score+=430
+            if name=='transform_image' and any(w in ('crop','cropping','rotate','rotation','flip') for w in words):score+=200
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
             side=any(w in ('left','right','side','vertical') for w in words)
             if name in ('add_label_row','add_side_label') and (any(w in ('column','columns','heading','header','headers','above','below','beside') for w in words) or (side and any(w in ('label','labels') for w in words))):
