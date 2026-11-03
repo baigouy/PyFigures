@@ -480,6 +480,75 @@ def test_how_to_questions_use_the_authored_guides():
         assert explain(question)["guide"] == guide, question
 
 
+def test_chat_requests_find_their_tool_first():
+    """Figure 3 chat runs (2026-11-02): "make the inset larger" drew a second
+    inset, "use magenta and green" recoloured ROI outlines."""
+    from pyfigures.assistant import live_mcp
+    from pyfigures.assistant.categorized_mcp import build_server
+    find = build_server(live_mcp.mcp, live_mcp.request)._tool_manager._tools['find_pyfigures_tools'].fn
+    first = lambda q: find(query=q)['tools'][0]['name']
+    assert first("make the inset larger") == "edit_annotation_properties"
+    assert first("use magenta and green") == "set_figure_colors"
+    assert first("magnify the region where I clicked in an inset") == "roi_to_inset"
+    assert first("which colors are available") == "list_colors"
+
+
+def test_list_colors_tells_channel_from_drawing_colours():
+    from pyfigures.mcp_tools.content import list_colors
+    everything = json.loads(list_colors())
+    assert "magenta" in everything["channel_colors"] and "orange" in everything["drawing_colors"]
+    check = json.loads(list_colors("orange"))["color_check"]
+    assert check["for_channels"] is False and check["for_drawings"] is True
+    assert json.loads(list_colors("#ff00ff"))["color_check"]["for_drawings"] is True
+
+
+def test_bare_file_names_are_looked_for_next_to_the_figure(qapp, gui, runtime, tmp_path, monkeypatch):
+    """A model's "kidney.tif" was opened from the folder PyFigures started in
+    (Figure 3 chat runs): now next to the figure's images, else a clear refusal."""
+    from pyfigures.assistant.session import resolve_relative_sources
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    monkeypatch.chdir(tmp_path.parent)                      # PyFigures started elsewhere
+    out = resolve_relative_sources(g, {"image_path": "a.tif", "output_path": "x.png", "pyf_path": "live"},
+                                   skip="pyf_path")
+    assert out["image_path"] == os.path.join(os.path.normcase(os.path.normpath(str(tmp_path))), "a.tif")
+    assert out["output_path"] == "x.png" and out["pyf_path"] == "live"
+    with pytest.raises(ValueError, match="not a full path"):
+        resolve_relative_sources(g, {"image_path": "nowhere.tif"})
+
+
+def test_inset_is_resized_not_duplicated(qapp, gui, runtime, tmp_path):
+    import uuid
+    from qtpy.QtCore import QPointF
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.advanced_annotations import describe
+    from pyfigures.assistant.partner_gui import Image2D, panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+
+    def cmd(operation, **arguments):
+        s = session.snapshot()
+        return session.execute(dict(operation=operation, arguments=arguments, request_id=str(uuid.uuid4()),
+                                    session_id=s["session_id"], expected_revision=s["revision"]))
+    panel = next(p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw))
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    panel.annotations.append(Rectangle2D(5, 6, 20, 15, color=0xFFFF00))
+    report = cmd("roi_to_inset", panel_ref="0/0")["operation_result"]
+    assert "size_fraction" in report["resize_hint"]
+    index = report["inset_index"]
+    inset = panel.annotations[index]
+    before = inset.fraction_of_parent_image_width_if_image_is_inset
+    out = cmd("edit_annotation_properties", panel_ref="0/0", annotation_index=index,
+              token=describe(inset)["token"], changes={"size_fraction": before * 1.6})
+    assert out["outcome"] == "VERIFIED_CHANGE"
+    assert inset.fraction_of_parent_image_width_if_image_is_inset == pytest.approx(before * 1.6)
+    assert sum(isinstance(a, Image2D) for a in panel.annotations) == 1
+    with pytest.raises(ValueError, match="size_fraction"):
+        cmd("edit_annotation_properties", panel_ref="0/0", annotation_index=index,
+            token=describe(inset)["token"], changes={"width": 3})
+
+
 def test_inspect_reports_panels_whose_image_file_is_missing(qapp, gui, runtime, tmp_path):
     """"Why do they all say error?" (Hermes on a figure whose images had
     moved, 2026-11-03): inspect says which panels lost their file and how to fix it."""

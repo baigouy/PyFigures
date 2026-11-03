@@ -681,6 +681,7 @@ logged call.
 | Tool | Description |
 |------|-------------|
 | `list_fonts(pyf_path)` | Report the figure's font situation, including PyFigures' bundled portable fonts |
+| `list_colors(query)` | Colour names for image channels (`set_figure_colors`) and for drawings (outlines, text, arrows, ROIs); with a query, whether that colour works for each |
 | `tidy_text(pyf_path)` | Conservative typography auto-fixes across all labels (also listed under annotations) |
 
 ### Rendering & export tools

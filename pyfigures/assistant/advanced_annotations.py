@@ -210,6 +210,27 @@ def prepare_roi(obj, changes):
                 setattr(obj,key,v)
     return apply
 
+INSET_SIZE='fraction_of_parent_image_width_if_image_is_inset'
+
+def prepare_inset(obj, changes):
+    """An inset (an image drawn on its panel): size_fraction = its width as a
+    share of the panel's width, border. "make the inset larger" had no tool a
+    model could find, so models drew a second inset (Figure 3 chat runs, 2026-11-02)."""
+    allowed={'size_fraction',INSET_SIZE,'border_size','border_color'}
+    if not changes or set(changes)-allowed:
+        raise ValueError('Inset changes: size_fraction (width as a share of the panel width, 0-1; '
+                         '"larger" = a bigger fraction than the current one), border_size, border_color')
+    plan={}
+    for key,v in changes.items():
+        if key in ('size_fraction',INSET_SIZE):
+            plan[INSET_SIZE]=number(v,True)
+            if not 0<plan[INSET_SIZE]<=1:raise ValueError('size_fraction must be above 0 and at most 1')
+        elif key=='border_size':plan[key]=number(v)
+        elif key=='border_color':plan[key]=color(v)
+    def apply():
+        for key,v in plan.items():setattr(obj,key,v)
+    return apply
+
 def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurrence=None):
     from .gui_selection import resolve_panel
     from .session import STATE
@@ -228,7 +249,7 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
     if hasattr(obj,'doc'):apply=prepare_text(obj,changes,substring,occurrence)
     else:
         if substring is not None or occurrence is not None:raise ValueError('Text selection cannot target an ROI')
-        apply=prepare_roi(obj,changes)
+        apply=prepare_inset(obj,changes) if type(obj).__name__=='Image2D' else prepare_roi(obj,changes)
     w=session.window
     folder=STATE/('annotation_'+uuid.uuid4().hex);folder.mkdir()
     backup=folder/'before.pyf';w._save_state_to_file(str(backup))

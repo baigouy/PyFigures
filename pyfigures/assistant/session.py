@@ -506,6 +506,7 @@ class Session:
         supplied = dict(args.get('arguments', {}))
         from .gui_selection import resolve_panel_arguments
         supplied = resolve_panel_arguments(self.window, supplied)
+        supplied = resolve_relative_sources(self.window, supplied, skip=parameter)
         supplied[parameter] = 'live'
         w = self.window
         from .partner_gui import state as letter_state, panels as image_panels
@@ -674,6 +675,49 @@ class Session:
                 code = ('SESSION_CHANGED' if message.startswith('Session unavailable') else
                         'REVISION_CONFLICT' if message.startswith('Stale revision') else 'TOOL_FAILED')
                 reply.put({'error': message, 'error_code': code})
+
+
+_SOURCE_KEYS = ('path', 'paths', 'file', 'files', 'filename', 'filenames', 'csv')
+_OUTPUT_WORDS = ('out', 'save', 'export', 'dest')
+
+
+def resolve_relative_sources(window, arguments, skip=None):
+    """A bare file name from a model ("kidney.tif") was opened from whatever
+    folder PyFigures was started in (Figure 3 chat runs, 2026-11-02). Look for
+    it next to the open figure and next to its images instead; refuse,
+    saying where it looked, when it is in none or in several of them."""
+    from .partner_gui import panels
+    folders = []
+    if window.current_file:
+        folders.append(os.path.dirname(os.path.abspath(window.current_file)))
+    for _gp, _ix, p in panels(window.paint.EZFIG_panel.shapes_to_draw):
+        fn = str(getattr(p, 'filename', '') or '')
+        if fn and os.path.isabs(fn):
+            folders.append(os.path.dirname(fn))
+    folders = list(dict.fromkeys(os.path.normcase(os.path.normpath(f)) for f in folders))
+
+    def resolve(key, value):
+        if not isinstance(value, str) or not value or os.path.isabs(value) or '://' in value or value.startswith('@'):
+            return value
+        found = [os.path.join(f, value) for f in folders if os.path.exists(os.path.join(f, value))]
+        if len(found) == 1:
+            return found[0]
+        if not found and os.path.exists(value):      # last resort: the folder PyFigures runs in
+            return os.path.abspath(value)
+        if len(found) > 1:
+            raise ValueError(f'{key}={value!r} is not a full path and exists in several folders of this figure '
+                             f'({", ".join(found)}). Use the full path the user means.')
+        raise ValueError(f'{key}={value!r} is not a full path and is not next to the open figure or its images'
+                         + (f' (looked in {", ".join(folders)})' if folders else '')
+                         + '. Use the full path; ask the user which folder the file is in if it was not said.')
+
+    out = dict(arguments)
+    for key, value in arguments.items():
+        k = key.lower()
+        if key == skip or not k.endswith(_SOURCE_KEYS) or any(w in k for w in _OUTPUT_WORDS):
+            continue
+        out[key] = [resolve(key, v) for v in value] if isinstance(value, list) else resolve(key, value)
+    return out
 
 
 def label_text(obj):

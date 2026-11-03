@@ -151,6 +151,7 @@ def build_server(full_server, send):
         'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
         'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
         'Is a font available? Use list_fonts(query=the_font), answer from font_check. '
+        'Colours named without a target ("use magenta and green"): on a figure whose only coloured things are multichannel images they mean the CHANNEL colours (set_figure_colors, one per channel in channel order). If it also has coloured ROIs, arrows or text, or the colours could fit several things, ASK which ones the user means before changing anything. Which colour names work? list_colors(query=the_colour), answer from color_check. '
         'Which LUTs/colour tables exist, or is a LUT available? Use list_luts(query=the_name), answer from lut_check and pass its exact_key to set_lut. In set_lut, null keeps a channel unchanged. '
         'Column headers or a heading above/below a row: add_label_row(group_path=[row index], labels=[one per image] or one string). A label left/right of a row: add_side_label. add_annotation writes text INSIDE an image, not beside a row. '
         'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
@@ -225,6 +226,17 @@ def build_server(full_server, send):
             if name in ('set_figure_caption','get_figure_caption') and 'caption' in words:
                 score+=300 if name.startswith('set_') and not any(w in ('get','read','inspect') for w in words) else 200
             if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties') and any(w in ('subscript','superscript','rich','substring','roi','properties') for w in words):score+=230
+            if name in ('inspect_annotation_objects','edit_annotation_properties') and any(w in ('inset','insets') for w in words) and any(
+                    w in ('larger','bigger','smaller','size','resize','enlarge','shrink','border') for w in words):
+                score+=420        # "make the inset larger": size_fraction, not a second inset
+            colour_words = {'magenta', 'green', 'red', 'blue', 'cyan', 'yellow', 'gray', 'grey', 'colours', 'colors'}
+            if name == 'set_figure_colors' and colour_words & set(words) and not {
+                    'roi', 'rois', 'arrow', 'arrows', 'outline', 'border', 'letter', 'letters', 'text',
+                    'which', 'available', 'list', 'exist', 'names', 'options'} & set(words):
+                score += 380      # "use magenta and green": the channel colours
+            if name == 'list_colors' and any(w in ('colour', 'color', 'colours', 'colors') for w in words) and any(
+                    w in ('list', 'which', 'available', 'exist', 'names', 'options', 'there', 'can') for w in words):
+                score += 360
             lut_words=any(w in ('lut','luts','colormap','colormaps','colourmap','lookup','palette','palettes') for w in words)
             if name=='list_fonts' and not lut_words and any(w in ('font','typeface','helvetica','arial','available','installed') for w in words):score+=300
             if name=='list_luts' and lut_words and any(w in ('list','which','available','exist','exists','names','options','there') for w in words):score+=350

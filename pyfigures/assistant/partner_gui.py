@@ -396,6 +396,8 @@ class PartnerGUI(BaseGUI):
                     completion_verified=True, source_roi_index=index, inset_index=len(panel.annotations)-1,
                     crop=dict(left=left,right=right,top=top,bottom=bottom), rotation_degrees=angle,
                     source_filename=str(inset.filename), roi_preserved=True,
+                    resize_hint='to make this inset larger or smaller later: edit_annotation_properties on it '
+                                '(inset_index) with changes {"size_fraction": ...}; never add a second inset',
                     **({'roi_from_last_click': dict(x=at_click[0], y=at_click[1], width=at_click[2], height=at_click[3],
                                                     note='square ROI centred on the last canvas click')}
                        if at_click is not None else {}))

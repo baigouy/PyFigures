@@ -738,6 +738,37 @@ def list_luts(query: str | None = None) -> str:
 
 
 @mcp.tool()
+def list_colors(query: str | None = None) -> str:
+    """List the colour names PyFigures accepts, as list_fonts does for fonts.
+
+    Two kinds, because they apply to different things:
+    - channel_colors: the colours of image CHANNELS (set_figure_colors,
+      channel splits) — gray, red, green, blue, cyan, magenta, yellow…;
+    - drawing_colors: outlines, text, arrows, ROIs, scale bars, borders —
+      these names, or any #rrggbb.
+
+    *query*: a colour name ("magenta", "orange") to check: color_check says
+    whether it works for channels, for drawings, and close names to offer.
+
+    When the user names colours without saying what they are for and the
+    figure has both channels and coloured drawings (ROIs, arrows, text), ask
+    which they mean instead of guessing.
+    """
+    import difflib
+    from .core import _NAMED_COLORS
+    from .stacks import _COLOR_LUTS
+    channels, drawings = sorted(_COLOR_LUTS), sorted(_NAMED_COLORS)
+    if not query or not str(query).strip():
+        return json.dumps({"channel_colors": channels, "drawing_colors": drawings,
+                           "drawing_colors_also": "#rrggbb hex"}, ensure_ascii=False, indent=2)
+    q = str(query).strip().lower()
+    return json.dumps({"query": query, "color_check": {
+        "for_channels": q in _COLOR_LUTS, "for_drawings": q in _NAMED_COLORS or bool(re.fullmatch(r"#?[0-9a-f]{6}", q)),
+        "close_matches": difflib.get_close_matches(q, sorted(set(channels) | set(drawings)), n=5, cutoff=0.6)}},
+        ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
 def set_lut(
     pyf_path: str,
     group_path: list[int],
