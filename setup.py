@@ -57,8 +57,8 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        f"batoolset>={__VERSION__}",
-        f"batoolset-gui>={__VERSION__}",   # batoolset.drawings / figure / luts / pyqts (Qt layer)
+        "batoolset>=0.2.0",          # 0.2.0: the split, the Qt layer moved to batoolset-gui
+        "batoolset-gui>=0.2.0",      # batoolset.drawings / figure / luts / pyqts (Qt layer); inverted LUTs
         "pyautogui",
         "imagecodecs",
         "psutil",
