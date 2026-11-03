@@ -510,10 +510,12 @@ figure should show more of it. GUI: Insert → Stack views.
 |------|-------------|
 | `transform_image(pyf_path, group_path, image_index, ...)` | Rotate, flip (H/V), crop edges, set opacity or fill colour |
 | `set_figure_colors(pyf_path, colors, single_channel)` | Recolour the whole figure in one call ("use magenta and green"): channel *i* of every multi-channel image, merge and channel split takes colour *i* (split labels follow); single-channel images become gray (`single_channel="keep"` leaves them); colour photographs are kept; plots take the colours only when they have that many groups, else Okabe–Ito; `["colorblind"]` = magenta/green + Okabe–Ito on every plot. Recipe: top-level `colors`. GUI: Annotations → Figure colours… |
-| `set_lut(pyf_path, group_path, image_index, luts, ...)` | Set colour LUTs per channel; optional intensity normalisation. Names are case-insensitive (`matplotlib_viridis` works); unknown names are rejected with suggestions |
+| `set_lut(pyf_path, group_path, image_index, luts, ...)` | Set colour LUTs per channel; optional intensity normalisation. Names are case-insensitive (`matplotlib_viridis` works), as people write them (`viridis`, `inverted gray`, `reversed viridis`); unknown names are rejected with suggestions. Inverted LUTs: `<NAME>_INVERTED` (GRAY_INVERTED: dark on white), `MATPLOTLIB_<name>_r`. A plotting-script panel is refused (change its script's `cmap`) |
+| `invert_lut(pyf_path, group_path, image_index, channels=None)` | Invert the panel's current LUTs (Fiji's Invert LUT; again restores them): GRAY ↔ GRAY_INVERTED, viridis ↔ viridis_r. GUI: Set LUT(s) → Invert |
+| `preview_luts(luts)` | Image of the LUTs' colour ramps, to compare before choosing (read-only). GUI: ramps in the Set LUT(s) dialog |
 | `configure_image(pyf_path, group_path, image_index, ...)` | Set active channels, Z-projection mode, Z range, series index, normalisation |
 | `add_channel_merge(pyf_path, group_path, channel_files, colors, mode, ..., normalization)` | Overlay 2–4 single-channel images into one pseudo-coloured composite panel. `normalization="per_channel"` (min–max stretch, disclosed in the adjustment ledger) or `"none"` (raw intensities) |
-| `add_lut_calibration_bar(pyf_path, group_path, ...)` | Add a LUT/intensity calibration colour bar next to a panel |
+| `add_lut_calibration_bar(pyf_path, group_path, ..., image_index=None)` | Add a LUT/intensity calibration colour bar. With a panel (`image_index`, or `panel_ref` live) it goes right after that panel and, without `lut`, uses the panel's LUT or its script's colour map. GUI: Insert → LUT colour bar… with the panel selected |
 
 `configure_image` parameter overview:
 
@@ -644,7 +646,7 @@ result (a split row appears, the LUTs change…) and reports `completed`.
 | Tool | Description |
 |------|-------------|
 | `list_how_to_guides()` | The guides: id, title, summary, and `do_it_tool` (the tool that does the same operation directly) |
-| `show_me_how(operation, pyf_path)` | Open a guide by id (`split_channels`, `crop_image`, `set_lut`, `zoom_inset`, `add_scale_bars`, `panel_letters`, `add_data_plot`, `channel_merge`, `journal_check`, `apply_journal`, `check_resolution`, `export_pptx`, `figure_caption`, `presubmission_review`, `colour_blind_preview`) or by the user's words ("how do I crop?"; an ambiguous request returns candidates). `pyf_path` picks the window when several are open. No window open → `gui_unavailable` plus the steps as text |
+| `show_me_how(operation, pyf_path)` | Open a guide by id (`split_channels`, `crop_image`, `set_lut`, `zoom_inset`, `add_scale_bars`, `panel_letters`, `add_data_plot`, `channel_merge`, `journal_check`, `apply_journal`, `check_resolution`, `export_pptx`, `figure_caption`, `presubmission_review`, `colour_bar`, `colour_blind_preview`) or by the user's words ("how do I crop?"; an ambiguous request returns candidates). `pyf_path` picks the window when several are open. No window open → `gui_unavailable` plus the steps as text |
 | `guidance_status(pyf_path)` | `guidance_shown` (with the current step), `completed`, `cancelled`, `guidance_closed` or `no_guide` |
 | `close_guidance(pyf_path)` | Close the guide; the figure is not changed |
 | `explain_how(operation)` | The same authored steps as text, no GUI needed |

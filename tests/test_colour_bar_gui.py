@@ -112,6 +112,42 @@ def test_add_colour_bar_inserts_scripted_panel(gui, monkeypatch):
 
 
 @needs_qt
+def test_colour_bar_follows_the_selected_panel(gui, monkeypatch):
+    """'add the corresponding LUT on the right of b' (2026-11-03): the dialog
+    starts on the selected panel's colour map and the bar lands right after it."""
+    from qtpy.QtWidgets import QDialog
+    from pyfigures.gui import pfgui
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.group import Group
+
+    class _AutoAccept:
+        def __init__(self, *a, **k):
+            pass
+
+        def exec_(self):
+            return QDialog.Accepted
+
+    monkeypatch.setattr(pfgui, "CustomDialog", _AutoAccept)
+    script = ("x = np.linspace(0, 1, 64)\nfig, ax = plt.subplots()\n"
+              "ax.imshow(np.tile(x, (64, 1)), cmap='magma')\nself.img = fig")
+    first, second = Image2D(custom_loading_script=script), Image2D(custom_loading_script=script)
+    row = Group(first, second, orientation="X")
+    panel = gui.paint.EZFIG_panel
+    panel.shapes_to_draw.append(row)
+    panel.selected_shape = first
+    gui.add_colour_bar()
+    assert len(row.content) == 3 and row.content[0] is first and row.content[2] is second
+    assert "'MATPLOTLIB_magma'" in row.content[1].custom_loading_script
+
+
+def test_panel_lut_reads_luts_then_the_plot_script():
+    from pyfigures.colorbar_script import panel_lut
+    assert panel_lut(["GRAY_INVERTED", None], None) == "GRAY_INVERTED"
+    assert panel_lut([None], "ax.imshow(a, cmap='viridis_r')") == "MATPLOTLIB_viridis_r"
+    assert panel_lut(["DEFAULT"], None) is None
+
+
+@needs_qt
 def test_add_colour_bar_cancel_adds_nothing(gui, monkeypatch):
     from qtpy.QtWidgets import QDialog
     from pyfigures.gui import pfgui

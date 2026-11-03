@@ -788,17 +788,25 @@ def add_lut_calibration_bar(
     tick_labels: list[str] | None = None,
     panel_label: str = "",
     panel_label_placement: str = "top left",
+    image_index: int | None = None,
 ) -> str:
     """Add an intensity calibration bar (colour bar) matching a LUT.
+
+    For "add the LUT / colour bar / colour scale on the right of b": give the
+    panel (image_index with its group_path, or panel_ref live). The bar is then
+    placed right after that panel (on its right in a row, below it in a column)
+    and, when *lut* is omitted, shows that panel's own LUT — or the colour map
+    of its plotting script (cmap='viridis').
 
     Reviewers routinely ask for the intensity scale that goes with a
     pseudo-coloured / LUT image. This adds a compact colour-bar panel — a
     gradient of *lut* from *vmin* to *vmax* with tick labels — as a scripted
     matplotlib panel, so it renders and exports like any other panel.
 
-    *lut*: a PyFigures LUT name (GRAY, GREEN, RED, AFM_HOT, RAINBOW_1, …
-    or MATPLOTLIB_viridis, MATPLOTLIB_jet, …) — pass the same name you gave the
-    matching image in set_lut so the colours line up.
+    *lut*: a PyFigures LUT name (GRAY, GREEN, RED, AFM_HOT, RAINBOW_1, …,
+    GRAY_INVERTED, or MATPLOTLIB_viridis, MATPLOTLIB_jet, …) — the same name as
+    the matching image's LUT so the colours line up. Empty: the panel's LUT
+    (GRAY without a panel).
     *vmin*/*vmax*: the intensity values at the bar's ends (e.g. 0 and 255 for an
     8-bit image, or the min/max you normalised a 16-bit image to).
     *label*: axis label, e.g. "Intensity (a.u.)" or "GFP (a.u.)".
@@ -808,10 +816,26 @@ def add_lut_calibration_bar(
     *panel_label*: optional corner letter for the bar panel itself.
 
     *group_path*: [] free-canvas, [0] group 0, [0,1] sub-group.
+    *image_index*: optional panel the bar belongs to, in *group_path*.
     Returns the new panel's image index.
     """
     from pyfigures.colorbar_script import build_calibration_bar_script
     from .content import _canonical_lut_names
+    target_lut = None
+    if image_index is not None:
+        # "add the corresponding LUT on the right of b" (2026-11-03): the bar goes
+        # next to the panel and takes its colours
+        tree, root = _load(pyf_path)
+        container, err = _get_container(root, group_path, refuse_label_rows=True)
+        if err:
+            return f"ERROR: {err}"
+        imgs = [c for c in container if c.tag == "Image2D"]
+        if not 0 <= image_index < len(imgs):
+            return f"ERROR: image_index {image_index} out of range ({len(imgs)} images); nothing was added."
+        target_lut = _panel_lut(imgs[image_index])
+    if not str(lut or "").strip() and image_index is None:
+        return "ERROR: lut is empty: give a LUT name (list_luts lists them), or the panel (image_index) whose LUT to show; nothing was added."
+    lut = lut if str(lut or "").strip() else (target_lut or "GRAY")
     # an unknown name used to add a panel whose script fails: an empty panel
     names, errors = _canonical_lut_names([lut])
     if errors:
@@ -828,10 +852,36 @@ def add_lut_calibration_bar(
     except ValueError as e:
         return f"ERROR: {e}"
 
-    return add_scripted_image(
+    result = add_scripted_image(
         pyf_path, group_path, script,
         label=panel_label, label_placement=panel_label_placement,
     )
+    if image_index is None or result.startswith("ERROR"):
+        return result
+    # the new bar was appended: move it right after its panel
+    tree, root = _load(pyf_path)
+    container, _ = _get_container(root, group_path, refuse_label_rows=True)
+    imgs = [c for c in container if c.tag == "Image2D"]
+    bar, target = imgs[-1], imgs[image_index]
+    container.remove(bar)
+    container.insert(list(container).index(target) + 1, bar)
+    _save(tree, pyf_path, recompute=True)
+    return (f"{lut} colour bar added as index {image_index + 1}, right after panel {image_index} "
+            f"in {'canvas' if not group_path else f'group {group_path}'}"
+            f"{' (the panel LUT)' if lut == target_lut else ''}.")
+
+
+def _panel_lut(img) -> str | None:
+    """The LUT a panel shows: its first set channel LUT, else the colour map of
+    its plotting script (cmap='viridis' -> MATPLOTLIB_viridis), else None."""
+    import ast
+    from .core import _child_text
+    from pyfigures.colorbar_script import panel_lut
+    try:
+        luts = ast.literal_eval(_child_text(img, "LUTs") or "None") or []
+    except (ValueError, SyntaxError):
+        luts = []
+    return panel_lut(luts, _decode(_child_text(img, "custom_loading_script")))
 
 
 # ---------------------------------------------------------------------------

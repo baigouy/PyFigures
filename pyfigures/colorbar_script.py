@@ -10,7 +10,20 @@ Pure text generation — no Qt, no matplotlib imported here.
 """
 from __future__ import annotations
 
+import re
+
 ORIENTATIONS = ("vertical", "horizontal")
+
+
+def panel_lut(luts, script) -> str | None:
+    """The LUT a panel shows, for a colour bar that matches it: its first set
+    channel LUT, else the colour map of its plotting script (cmap='viridis' ->
+    MATPLOTLIB_viridis), else None. Shared by the MCP tool and the GUI."""
+    chosen = next((l for l in (luts or []) if isinstance(l, str) and l not in ("DEFAULT", "None")), None)
+    if chosen:
+        return chosen
+    match = re.search(r"cmap\s*=\s*['\"]([\w.]+)['\"]", script) if isinstance(script, str) else None
+    return "MATPLOTLIB_" + match.group(1) if match else None
 
 
 def build_calibration_bar_script(

@@ -376,6 +376,7 @@ class _ColourBarDialog(QFrame):
         "AFM_HOT", "RED_HOT", "GREEN_HOT", "BLUE_HOT", "RAINBOW_1",
         "MATPLOTLIB_viridis", "MATPLOTLIB_plasma", "MATPLOTLIB_inferno",
         "MATPLOTLIB_magma", "MATPLOTLIB_jet", "MATPLOTLIB_turbo",
+        "GRAY_INVERTED", "MATPLOTLIB_viridis_r",
     ]
 
     def __init__(self, parent=None):
@@ -3526,20 +3527,66 @@ class EZFIG_GUI(QMainWindow):
     def _mark_dirty(self):
         if not getattr(self, '_dirty', False):
             self._dirty = True
+            self._dirty_since = time.monotonic()
             self._update_window_title()
+            if getattr(self, '_save_reminder_timer', None) is None:
+                self._save_reminder_timer = QTimer(self)
+                self._save_reminder_timer.setInterval(60000)
+                self._save_reminder_timer.timeout.connect(self._save_reminder_tick)
+                self._save_reminder_timer.start()
 
     def _mark_clean(self):
         self._dirty = False
         self._update_window_title()
+
+    SAVE_REMINDER_S = 600
+
+    def _recovery_folder(self):
+        """Where the live session (chat / MCP sharing) keeps recovery copies of
+        this figure, or None when the figure is not shared."""
+        session = getattr(self, '_live_session', None)
+        recovery = getattr(session, 'recovery', None)
+        return str(recovery.folder) if recovery is not None else None
+
+    def _save_reminder_tick(self, now=None):
+        """Unsaved changes for 10 minutes: a small non-blocking reminder to save
+        and, when the chat shares the figure, where its recovery copies are (a
+        figure built in the chat was closed with no idea where it went,
+        2026-11-03). Every 10 minutes at most; "Don't show this again" stops it
+        for this session."""
+        now = time.monotonic() if now is None else now
+        if not getattr(self, '_dirty', False) or getattr(self, '_save_reminders_off', False) or _nobody_to_ask():
+            return None
+        if now - getattr(self, '_dirty_since', now) < self.SAVE_REMINDER_S or \
+                now - getattr(self, '_last_save_reminder', -1e9) < self.SAVE_REMINDER_S:
+            return None
+        if QApplication.activeModalWidget() is not None or not self.isVisible():
+            return None                                      # try again at the next tick
+        self._last_save_reminder = now
+        minutes = int((now - self._dirty_since) // 60)
+        name = os.path.basename(self.current_file) if self.current_file else None
+        html = (f'<b>Unsaved changes for {minutes} min.</b> Press <b>Ctrl+S</b> to save '
+                + (f'<i>{name}</i>.' if name else 'this figure: it has never been saved.'))
+        folder = self._recovery_folder()
+        if folder:
+            html += (f'<br>The chat keeps a recovery copy after each change in '
+                     f'<i>{folder}</i>; it is not your file.')
+        box = _HintBubble(self, html, timeout_ms=30000)
+        box.dont.toggled.connect(lambda on: setattr(self, '_save_reminders_off', on))
+        box.show_in(self.centralWidget() or self)
+        self._save_reminder_box = box
+        return box
 
     def _maybe_save_before_discard(self, action_label='continuing'):
         """If there are unsaved changes, ask the user. Returns True if the caller
         may proceed (saved or explicitly discarded), False to cancel the action."""
         if not getattr(self, '_dirty', False):
             return True
+        folder = self._recovery_folder()
         reply = QMessageBox.warning(
             self, 'Unsaved changes',
-            f'This figure has unsaved changes. Save before {action_label}?',
+            f'This figure has unsaved changes. Save before {action_label}?'
+            + (f'\n\nThe chat kept a recovery copy of it in {folder}.' if folder else ''),
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
             QMessageBox.Save)
         if reply == QMessageBox.Cancel:
@@ -4842,8 +4889,21 @@ class EZFIG_GUI(QMainWindow):
 
     def add_colour_bar(self):
         """Ask for LUT / range / label, then insert a matching intensity
-        calibration bar (colour bar) as a scripted panel on the canvas."""
+        calibration bar (colour bar) as a scripted panel. With one panel
+        selected, the dialog starts on that panel's LUT and the bar is placed
+        right after it (MCP: add_lut_calibration_bar with the panel)."""
+        from pyfigures.colorbar_script import panel_lut
+        from batoolset.drawings.shapes.group import get_parent_of_obj
+        panel = self.paint.EZFIG_panel
+        sel = panel.selected_shape
+        if isinstance(sel, list):
+            sel = sel[0] if len(sel) == 1 else None
+        sel = sel if isinstance(sel, Image2D) else None
         dlg = _ColourBarDialog(self)
+        if sel is not None:
+            lut = panel_lut(getattr(sel, 'LUTs', None), getattr(sel, 'custom_loading_script', None))
+            if lut:
+                dlg.lut_combo.setCurrentText(lut)
         cd = CustomDialog(
             title="Add colour bar",
             message="Configure the intensity calibration bar, then press Ok.",
@@ -4866,10 +4926,19 @@ class EZFIG_GUI(QMainWindow):
                                 'Could not build the colour bar (see log).')
             return
 
-        # Insert like a single dropped panel (mirrors _finish_add_single_images).
-        panel = self.paint.EZFIG_panel
-        panel.shapes_to_draw.append(img2d)
-        panel.force_update_size_of_parent.emit(img2d)
+        top = panel.get_top_parent_of_shape(sel) if sel is not None else None
+        row = get_parent_of_obj(sel, top) if top is not None else None
+        if isinstance(row, Group):
+            # right after the selected panel (on its right in a row)
+            row.content.insert(row.content.index(sel) + 1, img2d)
+            top.update()
+            panel.force_update_size_of_parent.emit(top)
+            where = "placed after the selected panel"
+        else:
+            # Insert like a single dropped panel (mirrors _finish_add_single_images).
+            panel.shapes_to_draw.append(img2d)
+            panel.force_update_size_of_parent.emit(img2d)
+            where = "drag it into place"
         panel.update()
         panel.update_size()
         panel.set_current_selection(img2d)
@@ -4878,7 +4947,7 @@ class EZFIG_GUI(QMainWindow):
         panel.focus_required.emit()
         panel.undo_redo_save_required.emit()
         self.statusBar().showMessage(
-            f"Added a {params['lut']} colour bar — drag it into place.")
+            f"Added a {params['lut']} colour bar — {where}.")
 
     def add_channel_merge_action(self):
         """Pick N single-channel images + a colour each, then add a merged

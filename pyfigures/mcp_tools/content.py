@@ -670,9 +670,32 @@ _FIJI_LUT_NEAREST = {
 }
 
 
+_INVERT_WORDS = r"(?:inverted|inverse|invert|reversed|reverse|negative)"
+
+
+def _lut_alias(name, by_lower):
+    """The exact key for a LUT name as people and models write it: "viridis"
+    (MATPLOTLIB_viridis), and inversions — "inverted gray", "GRAY_r",
+    "reversed viridis", "viridis_inverted" (GRAY_INVERTED, MATPLOTLIB_viridis_r;
+    "invert the gradient" asked for MATPLOTLIB_viridis_r, 2026-11-03)."""
+    s = re.sub(r"[\s\-]+", "_", name.strip().lower())
+    for candidate in (s, "matplotlib_" + s):
+        if candidate in by_lower:
+            return by_lower[candidate]
+    base = re.sub(rf"^{_INVERT_WORDS}_|_(?:{_INVERT_WORDS}|r)$", "", s)
+    if base == s:
+        return None
+    base = base[len("matplotlib_"):] if base.startswith("matplotlib_") else base
+    for candidate in (base + "_inverted", "matplotlib_" + base + "_r"):
+        if candidate in by_lower:
+            return by_lower[candidate]
+    return None
+
+
 def _canonical_lut_names(luts):
     """Map requested LUT names to the exact keys PyFigures knows (case-
-    insensitive). Returns (names_or_None_list, error_messages)."""
+    insensitive, with the aliases of _lut_alias). Returns
+    (names_or_None_list, error_messages)."""
     import difflib
     try:
         from batoolset.luts.lut_minimal_test import list_available_luts
@@ -686,7 +709,7 @@ def _canonical_lut_names(luts):
         if not isinstance(l, str) or l.strip() in ("", "None", "null"):
             out.append(None)
             continue
-        key = by_lower.get(l.strip().lower())
+        key = by_lower.get(l.strip().lower()) or _lut_alias(l, by_lower)
         if key is None:
             close = difflib.get_close_matches(l.strip().upper(), [k.upper() for k in known], n=3)
             # Fiji LUT names with no PyFigures twin: point to the nearest look
@@ -709,7 +732,10 @@ def list_luts(query: str | None = None) -> str:
     count; standard (the plain PyFigures LUTs) and matplotlib_count when no
     query is given; with a query, lut_check: whether that exact name exists,
     its exact key, and close matches to offer when it does not. Names are
-    case-insensitive in set_lut; MATPLOTLIB_<name>_r is the reversed map.
+    case-insensitive in set_lut. Inverted LUTs (Fiji's Invert LUT; "negative",
+    "reversed"): <NAME>_INVERTED for the PyFigures LUTs (GRAY_INVERTED: dark
+    signal on white), MATPLOTLIB_<name>_r for matplotlib maps; set_lut also
+    accepts "inverted gray" or "viridis_r".
     """
     import difflib
     try:
@@ -719,8 +745,10 @@ def list_luts(query: str | None = None) -> str:
         return f"ERROR: LUT table unavailable ({type(e).__name__}: {e})"
     query = str(query).strip() if query else None
     if not query:
-        standard = [k for k in known if not k.startswith("MATPLOTLIB_")]
+        standard = [k for k in known if not k.startswith("MATPLOTLIB_") and not k.endswith("_INVERTED")]
         return json.dumps({"query": None, "count": len(known), "standard": standard,
+                           "inverted": "<NAME>_INVERTED for each standard LUT (GRAY_INVERTED: dark "
+                                       "on white); MATPLOTLIB_<name>_r for matplotlib maps",
                            "matplotlib_count": len(known) - len(standard),
                            "matplotlib_examples": [k for k in known if k.startswith("MATPLOTLIB_")
                                                    and not k.endswith("_r")][:12],
@@ -795,6 +823,11 @@ def set_lut(
                   MATPLOTLIB_magma, MATPLOTLIB_jet, MATPLOTLIB_hot,
                   MATPLOTLIB_coolwarm, MATPLOTLIB_gray, and all others
                   from matplotlib (append _r for the reversed version).
+      Inverted (Fiji's Invert LUT; "invert", "negative", "reversed"):
+                  append _INVERTED to a standard LUT — GRAY_INVERTED shows a
+                  dark signal on white, GREEN_INVERTED, FIRE-like HOT LUTs… —
+                  and _r to a matplotlib map. "inverted gray" and "viridis_r"
+                  are accepted too.
 
     *normalization*: optional JSON-like dict string controlling intensity range.
       Common forms::
@@ -844,6 +877,9 @@ def set_lut(
 
     img = imgs[image_index]
     changed = []
+    refusal = _plot_script_refusal(img)
+    if refusal:
+        return refusal
 
     # Resolve each name case-insensitively to its real key. (Blindly upper-casing
     # broke mixed-case names — "MATPLOTLIB_viridis" became a non-existent
@@ -910,6 +946,124 @@ def set_lut(
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return f"Image {image_index} in {loc}: {', '.join(changed)}.{warning}"
+
+
+def _plot_script_refusal(img) -> str | None:
+    """A panel drawn by a plotting script (a matplotlib figure, a data plot)
+    has no channels: a LUT stored on it changes nothing visible ("invert the
+    gradient in b" on a script-drawn viridis gradient, 2026-11-03)."""
+    from .core import _decode
+    script = _decode(_child_text(img, "custom_loading_script"))
+    if not isinstance(script, str) or script.strip() in ("", "None") or script.startswith(_MERGE_MARKER) \
+            or legacy_flip_state(script) is not None:
+        return None
+    if re.search(r"\bplt\.|subplots\(|Figure\(|staplot", script):
+        return ("ERROR: this panel is drawn by a plotting script, so it has no image channels and "
+                "a LUT would change nothing. Change the colour map in its script instead "
+                "(get_script, then set_script; e.g. cmap='viridis' -> cmap='viridis_r' to invert it). "
+                "Nothing was changed.")
+    return None
+
+
+@mcp.tool()
+def invert_lut(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    channels: list[int] | None = None,
+) -> str:
+    """Invert the LUT (colour look-up table) of an image's channels, as Fiji's
+    Invert LUT: dark becomes light. Use for "invert the colours", "negative",
+    "white background, dark signal", "reverse the colour map" when no new LUT
+    is named. Calling it again restores the original.
+
+    The current LUT is swapped for its inverted twin, stored by name so the
+    saved figure keeps it: GRAY <-> GRAY_INVERTED, GREEN <-> GREEN_INVERTED,
+    MATPLOTLIB_viridis <-> MATPLOTLIB_viridis_r. A one-channel image still on
+    its acquisition colour becomes GRAY_INVERTED. preview_luts shows the result.
+
+    *channels*: 0-based channel indices to invert; None inverts every channel.
+    *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
+    *image_index*: 0-based index among Image2D elements at that location.
+    """
+    import ast
+    from batoolset.luts.lut_minimal_test import invert_lut_name, list_available_luts
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    img = imgs[image_index]
+    refusal = _plot_script_refusal(img)
+    if refusal:
+        return refusal
+    try:
+        current = list(ast.literal_eval(_child_text(img, "LUTs") or "None") or [])
+    except (ValueError, SyntaxError):
+        current = []
+    n_file = _channel_count_from_file(_first_filename(img)) or max(len(current), 1)
+    current += [None] * (n_file - len(current))
+    wanted = list(range(n_file)) if channels is None else channels
+    bad = [c for c in wanted if not isinstance(c, int) or not 0 <= c < n_file]
+    if bad:
+        return f"ERROR: channel {bad[0]} does not exist (the image has {n_file}). Nothing was changed."
+    available = list_available_luts()
+    new, done = list(current), []
+    for c in wanted:
+        lut = current[c]
+        if lut in (None, "DEFAULT"):
+            if n_file != 1:
+                return (f"ERROR: channel {c} shows its acquisition colour, which has no inverted twin. "
+                        f"Which LUT should it get (e.g. GRAY_INVERTED, GREEN_INVERTED)? Nothing was changed.")
+            lut = "GRAY"
+        twin = invert_lut_name(lut, available)
+        if twin is None:
+            return f"ERROR: the LUT {lut} of channel {c} cannot be inverted. Nothing was changed."
+        new[c] = twin
+        done.append(f"channel {c}: {current[c] or 'acquisition colour'} -> {twin}")
+    _set_child_text(img, "LUTs", repr(new))
+    from .stacks import _sync_split_colours
+    _sync_split_colours(container, img, new)
+    _save(tree, pyf_path)
+    loc = "canvas" if not group_path else f"group {group_path}"
+    return f"Image {image_index} in {loc}: LUT inverted — " + "; ".join(done) + f". LUTs={new}."
+
+
+@mcp.tool()
+def preview_luts(luts: list[str] | str) -> Image:
+    """Show colour ramps of LUTs (colour look-up tables) as an image, darkest
+    value on the left, so the user can compare them before choosing — e.g.
+    preview_luts(["GRAY", "GRAY_INVERTED", "MATPLOTLIB_viridis", "MAGENTA_HOT"]).
+    Accepts the same names as set_lut (case-insensitive; "inverted gray",
+    "viridis_r"). At most 24 LUTs. Read-only: changes no figure.
+    """
+    import numpy as np
+    from batoolset.luts.lut_minimal_test import list_available_luts, PaletteCreator
+    if isinstance(luts, str):
+        luts = [luts]
+    names, errors = _canonical_lut_names(list(luts)[:24])
+    if errors:
+        raise ValueError("; ".join(errors) + " (list_luts lists every LUT name)")
+    names = [n for n in names if n]
+    if not names:
+        raise ValueError("Name at least one LUT to preview (list_luts lists them).")
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    available, creator = list_available_luts(), PaletteCreator()
+    fig = Figure(figsize=(6, 0.42 * len(names) + 0.2), dpi=110)
+    FigureCanvasAgg(fig)
+    for i, name in enumerate(names):
+        ramp = np.asarray(creator.create3(available[name]), dtype=np.uint8)[:256, :3]
+        ax = fig.add_axes([0.36, 1 - (i + 1) / len(names) + 0.12 / len(names), 0.6, 0.76 / len(names)])
+        ax.imshow(ramp[np.newaxis], aspect="auto", interpolation="nearest")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.text(-0.02, 0.5, name, transform=ax.transAxes, ha="right", va="center", fontsize=8)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    return Image(data=buf.getvalue(), format="png")
 
 
 # Okabe & Ito colour-blind-safe palette (black left out: it is the text colour)

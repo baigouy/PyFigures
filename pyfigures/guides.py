@@ -614,6 +614,26 @@ GUIDES: dict[str, dict] = {
         "done": "dialog_closed",
         "mcp": "figure_review_brief",
     },
+    "colour_bar": {
+        "title": "Add a LUT colour bar",
+        "summary": "Add the colour scale (calibration bar) of a LUT next to a panel.",
+        # "add LUT colorbar next to panel right side" used to get the scale-bar guide
+        "keywords": ["colour bar", "color bar", "colourbar", "colorbar", "calibration bar",
+                     "colour scale", "color scale", "intensity scale", "corresponding lut",
+                     "lut on the right", "lut next to", "lut", "legend", "colour table",
+                     "color table"],
+        "steps": [
+            {"select": "image", "text": "Click the panel the colour bar belongs to: the dialog "
+                                        "starts on its LUT."},
+            {"menu": ["Insert", "LUT colour bar…"]},
+            {"dialog": "Check the LUT and the value range (e.g. 0–255), add an axis label if "
+                       "you want one and click <b>Ok</b>. The bar is placed right after the "
+                       "selected panel (on its right in a row)."},
+        ],
+        "alternative": "",
+        "done": "dialog_closed",
+        "mcp": "add_lut_calibration_bar",
+    },
     "colour_blind_preview": {
         "title": "Preview for colour-blind readers",
         "summary": "See the figure as readers with colour-vision deficiencies see it.",

@@ -514,7 +514,7 @@
         <tr><td><strong>Data plot from CSV…</strong></td><td>Bar / box / violin / scatter / grouped plot from a CSV of measurements, with significance brackets. With LaTeX installed, tick <em>Typeset the text with LaTeX</em> for LaTeX axis labels, ticks and title.</td><td></td></tr>
         <tr><td><strong>Multi-channel merge…</strong></td><td>Overlays 2–4 single-channel images (e.g. DAPI + GFP + RFP) into one pseudo-coloured panel.</td><td></td></tr>
         <tr><td><strong>Stack views ▸</strong></td><td>On the selected image: montage of frames, channel split (gray, or magenta/green), kymograph along a line, orthogonal views (XZ / YZ). See <a href="#stacks">Stacks &amp; movies</a>.</td><td></td></tr>
-        <tr><td><strong>LUT colour bar…</strong></td><td>Inserts an intensity calibration bar matching a LUT.</td><td></td></tr>
+        <tr><td><strong>LUT colour bar…</strong></td><td>Inserts an intensity calibration bar matching a LUT. With a panel selected, the dialog starts on that panel's LUT (or the colour map of its plotting script) and the bar is placed right after it, on its right in a row.</td><td></td></tr>
       </table>
     </div>
 
@@ -808,7 +808,7 @@
     </figure>
     <p>Right-clicking a selected image offers image-specific operations:</p>
     <div class="ctx-grid">
-      <div class="ctx-card"><h4>Edit Image</h4><p>Open the image properties dialog (channels, LUTs, crop, rotation, background).</p></div>
+      <div class="ctx-card"><h4>Edit Image</h4><p>Open the image properties dialog (channels, LUTs, crop, rotation, background). Its LUT dialog previews each LUT and has an <em>Invert</em> box per channel.</p></div>
       <div class="ctx-card"><h4>Duplicate Selection</h4><p>Creates a copy of the image.</p></div>
       <div class="ctx-card"><h4>Add scale bar</h4><p>Attaches a scale bar annotation. Requires the pixel-to-unit conversion factor to be set.</p></div>
       <div class="ctx-card"><h4>Add text</h4><p>Adds a text annotation to the image.</p></div>
@@ -835,7 +835,7 @@
       <div class="ctx-card"><h4>Crop &amp; size ▶</h4><p>Match the first image: <em>Force same width and height</em>, <em>Force same aspect ratio</em>, <em>Force same crop, rotation and bg</em> (greyed out when already the case); <em>Reset crop and rotation</em>, <em>Reset crop only</em>, <em>Reset rotation only</em>.</p></div>
       <div class="ctx-card"><h4>Reshape to panel (if possible)</h4><p>Rearranges a row, a column or several selected panels into a grid.</p></div>
       <div class="ctx-card"><h4>Combine Horizontally (Row) / Vertically (Col)</h4><p>With several panels selected (Ctrl+click): puts them together in a new row or column.</p></div>
-      <div class="ctx-card"><h4>Set / Reset LUT(s)</h4><p>Apply or clear Look-Up Tables for all images in the group.</p></div>
+      <div class="ctx-card"><h4>Set / Reset LUT(s)</h4><p>Apply or clear Look-Up Tables for all images in the group. Each list entry shows its colour ramp and each channel shows a preview of its LUT. <em>Invert</em> inverts the channel's LUT, as Fiji's Invert LUT (GRAY ↔ GRAY_INVERTED: dark signal on white; a matplotlib map ↔ its <code>_r</code> twin); the inversion is saved with the figure.</p></div>
       <div class="ctx-card"><h4>Change font for all non-Letter text</h4><p>Opens a font dialog and applies the chosen font to every text annotation in the group.</p></div>
       <div class="ctx-card"><h4>Remove annotations ▶</h4><p>Strips all annotations, or only the scale bars, texts, ROIs or insets, from every image in the group.</p></div>
     </div>
@@ -961,6 +961,15 @@
       open in a window (see below). Every call made on a saved file is logged beside it:
       <em>Tools → MCP call history / undo…</em> lists them and undoes the last changes.
     </p>
+    <p>
+      LUTs through the MCP server: <code>set_lut</code> accepts names as people write them
+      ("inverted gray", "reversed viridis"), <code>invert_lut</code> inverts a panel's current
+      LUTs without naming them ("invert the colours of b"), <code>preview_luts</code> shows colour
+      ramps to compare before choosing, and <code>add_lut_calibration_bar</code> given a panel
+      places the colour bar right after it with that panel's LUT ("add the corresponding LUT on
+      the right of b"). A panel drawn by a plotting script has no channels: its colour map is
+      changed in its script instead, as the server explains.
+    </p>
   </section>
 
   <section id="chat">
@@ -972,7 +981,12 @@
       Ask in plain words — "add 10 µm scale bars to every image (0.1 µm per pixel)", "use magenta
       and green", "is the figure ready for a Nature double column?" — and a language model makes the
       change on the figure open in the window, unsaved changes included. Each change is <strong>one
-      undo step</strong> (Ctrl+Z), and nothing is written to disk until you save. The model only calls
+      undo step</strong> (Ctrl+Z), and nothing is written to disk until you save. While the figure
+      is shared, a recovery copy is kept after each change in PyFigures' app-data folder
+      (<code>%LOCALAPPDATA%\PyFigures\assistant\recovery</code> on Windows; it is not your file).
+      When changes stay unsaved for 10 minutes, a small reminder in the corner says so, with that
+      folder (any figure, chat or not; "Don't show this again" stops it until PyFigures is
+      restarted), and the quit prompt names the folder too. The model only calls
       PyFigures' documented operations on your images; it never draws or alters pixels itself, and
       it checks its own work with a rendered preview and a description of the figure. "How do I…?"
       questions are answered with the <em>Help → Show me how…</em> guides.

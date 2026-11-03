@@ -249,6 +249,11 @@ def build_server(full_server, send):
             lut_words=any(w in ('lut','luts','colormap','colormaps','colourmap','lookup','palette','palettes') for w in words)
             if name=='list_fonts' and not lut_words and any(w in ('font','typeface','helvetica','arial','available','installed') for w in words):score+=300
             if name=='list_luts' and lut_words and any(w in ('list','which','available','exist','exists','names','options','there') for w in words):score+=350
+            bar_words=any(w in ('colorbar','colourbar','calibration') for w in words) or re.search(r'\bcolou?r (?:bar|scale)\b|\bintensity scale\b',' '.join(words)) \
+                or (lut_words and any(w in ('right','beside','next','corresponding','legend') for w in words))
+            if name=='add_lut_calibration_bar' and bar_words:score+=450   # "add the corresponding LUT on the right of b"
+            if name=='invert_lut' and any(w in ('invert','inverted','inverse','negative','reverse','reversed') for w in words) and (lut_words or any(w in ('colours','colors','colour','color','gradient') for w in words)):score+=420
+            if name=='preview_luts' and lut_words and any(w in ('preview','show','compare','look','see') for w in words):score+=400
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
             side=any(w in ('left','right','side','vertical') for w in words)
             if name in ('add_label_row','add_side_label') and (any(w in ('column','columns','heading','header','headers','above','below','beside') for w in words) or (side and any(w in ('label','labels') for w in words))):
