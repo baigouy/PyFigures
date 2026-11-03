@@ -986,7 +986,7 @@
         model for all of them; multi-step requests need the larger models.</li>
       <li>The chat's own <strong>Model Library</strong>, which downloads a model and its runtime
         (llama-server).</li>
-      <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter, Groq or any OpenAI-compatible
+      <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter, Groq, Mistral or any OpenAI-compatible
         server) in the chat's connection settings, with your own key. The figure descriptions and
         previews the model asks for are then sent to that provider. Choosing
         <strong>OpenRouter</strong> (recommended) fills in its free router (<code>openrouter/free</code>), which
@@ -994,7 +994,8 @@
         using your graphics card; free models allow a limited number of requests per day.
         IteraCompute (Qwen3.8-27B, slow) and NVIDIA NIM are listed too, with free tiers;
         <strong>List models…</strong> shows which models your key can use.
-        <strong>Groq</strong> (Qwen3.8-27B) needs its paid tier.</li>
+        <strong>Groq</strong> (Qwen3.8-27B) needs its paid tier. <strong>Mistral AI</strong> fills in
+        Mistral Large (<code>mistral-large-latest</code>), with a paid Mistral key.</li>
     </ul>
     <p>
       The chat is the optional package <code>qtpy-ai-sidecar</code> (not on PyPI yet; install it from
