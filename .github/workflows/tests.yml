@@ -1,7 +1,10 @@
 name: Tests
 
 # The whole test suite (GUI actions headless, recipes, MCP tools, exports) on
-# Windows, macOS and Linux, on every push and pull request.
+# Windows and Linux, on every push and pull request. macOS runs in its own
+# workflow (tests_macos.yml): GitHub's macOS runners are often unavailable,
+# and a job that never got a runner is cancelled, which turned this whole
+# check red although no test had failed.
 on:
   push:
   pull_request:
@@ -12,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         python-version: ['3.10', '3.11', '3.12', '3.13']
 
     runs-on: ${{ matrix.os }}

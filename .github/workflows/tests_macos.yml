@@ -1,0 +1,52 @@
+name: Tests (macOS)
+
+# The test suite on macOS, apart from the Windows/Linux "Tests" check: GitHub's
+# macOS runners are often short of capacity, and a job that never gets one is
+# cancelled. Here that shows as a cancelled (grey) macOS check; it is red only
+# when a test really fails. Two Python versions (oldest recommended + newest)
+# to ask for fewer of the scarce runners.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    env:
+      QT_API: pyqt6
+      PYTEST_QT_API: pyqt6
+      QT_QPA_PLATFORM: offscreen
+      PYTHONIOENCODING: utf-8
+      # companion packages; a repository variable can point them at a git URL
+      # (e.g. git+https://github.com/<user>/<repo>) before they are on PyPI
+      BATOOLSET_SPEC: ${{ vars.BATOOLSET_SPEC || 'batoolset' }}
+      BATOOLSET_GUI_SPEC: ${{ vars.BATOOLSET_GUI_SPEC || 'batoolset-gui' }}
+      STAPLOT_SPEC: ${{ vars.STAPLOT_SPEC || 'staplot' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pyfigures, its companions and the test tools
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install "$BATOOLSET_SPEC" "$BATOOLSET_GUI_SPEC" "$STAPLOT_SPEC"
+          pip install ".[ai,video,zarr,pdf,fiji]" pytest pytest-qt pytest-timeout
+
+      # a test stuck on a modal dialog fails after 5 min instead of stalling the job
+      - name: Run the test suite
+        run: python -m pytest -q -p no:cacheprovider --timeout=300 -rfE tests
