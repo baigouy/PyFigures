@@ -186,13 +186,15 @@ Perform the following steps **only once** to set up your environment:
 
 Alternatively, you can install the software as a standalone executable. This does not require Conda and can be run on any system without the need for additional dependencies, but scripting capabilities will be limited to the bundled dependencies. 
 
-- Windows **coming soon!** 
-- MacOS **coming soon!**
-- Linux **coming soon!**
+Download them from the [latest release](https://github.com/baigouy/PyFigures/releases/latest). They are portable: nothing is installed and **no administrator rights are needed**.
+
+- **Windows:** `PyFigures-Windows.zip`. Unzip it anywhere you can write (Documents, Desktop, a USB stick) and run `PyFigures.exe` (also `PyFigures Album.exe` and `PyFigures Poster.exe`). If SmartScreen warns about an unknown publisher, click *More info → Run anyway*. To remove it, delete the folder.
+- **macOS:** `PyFigures-macOS-AppleSilicon.dmg` (M1 and newer) or `PyFigures-macOS-Intel.dmg`. Open it and drag the apps to *Applications*, or, without administrator rights, to the *Applications* folder inside your home folder (or any folder).
+- **Linux:** no standalone build; install with pip (see above).
 
 **Supported Macs:** the macOS executables include video support, which needs **macOS 14 (Sonoma) or newer on Apple Silicon** Macs and macOS 11 or newer on Intel Macs. On older Apple Silicon systems the app still opens, but movies cannot be read or exported; older systems are not supported (install with Conda/pip instead, see above).
 
-**First launch on a Mac:** the app is not signed by Apple, so macOS refuses to open it the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once). On macOS 14 or older, right-click the app → **Open** → **Open** also works. Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/PyFigures.app`.
+**First launch on a Mac:** the app is not signed by Apple, so macOS refuses to open it the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once). On macOS 14 or older, right-click the app → **Open** → **Open** also works. Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/PyFigures.app` (give the folder you put it in).
 
 # Third party libraries
 
