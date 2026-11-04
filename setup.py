@@ -103,9 +103,10 @@ setuptools.setup(
             "mcp>=1.0,<2",
             "qtpy-ai-sidecar",
         ],
+        # no qtpy-ai-sidecar here until it is on PyPI: pip would refuse the
+        # whole [all] install for one missing package
         'all': [
             "mcp>=1.0,<2",
-            "qtpy-ai-sidecar",
             "av",
             "opencv-python-headless",
             "pyimagej",

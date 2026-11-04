@@ -179,7 +179,8 @@ def test_every_extra_named_in_the_docs_exists():
     # 'all' really is all the other extras — except 'omero': omero-py needs
     # zeroc-ice, which has no wheel on PyPI for Windows (and often fails to
     # build elsewhere), so it would break `pip install pyfigures[all]`; and
-    # 'test' (pytest & co.), which no user feature needs
+    # 'test' (pytest & co.), which no user feature needs; and qtpy-ai-sidecar
+    # (from 'chat'), which is not on PyPI yet, so pip would refuse all of [all]
     all_block = block[block.index("'all'"):]
     all_block = all_block[:all_block.index("]")]
     assert "omero" in extras and "omero-py" not in all_block
@@ -187,4 +188,7 @@ def test_every_extra_named_in_the_docs_exists():
     for extra in extras - {"all", "omero", "test"}:
         sub = block[block.index(f"'{extra}'"):]
         for req in re.findall(r'"([^"]+)"', sub[:sub.index("]")]):
+            if req == "qtpy-ai-sidecar":
+                assert f'"{req}"' not in all_block   # not on PyPI yet
+                continue
             assert f'"{req}"' in all_block, (extra, req)
