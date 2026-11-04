@@ -16,6 +16,31 @@ figure files through natural language.
 
 ➜ See **[docs/MCP_SERVER.md](docs/MCP_SERVER.md)** for setup instructions and a full tool reference.
 
+## Image search
+
+Find your image files by what they show ("confocal gut with DAPI", "western blot",
+"brightfield embryo") instead of by file name. Ask the chat sidebar, e.g. *"index my folder
+~/data/2024"* and then *"find the gut images stained with DAPI"*: it shows the best matches
+as numbered thumbnails and can add the one you pick to the figure. From a terminal:
+
+    python -m pyfigures.image_search index ~/data/2024
+    python -m pyfigures.image_search search ~/data/2024 "gut stained with DAPI"
+
+It needs the chat sidebar's optional embeddings: in the chat panel, tools menu >
+**Embeddings (optional)…**, choose **Mistral AI API** (uses the Mistral key you already stored
+for the chat) or a local server. Each image is described in a few sentences by a vision model
+(Mistral: `mistral-small-latest`, the dialog's *Image descriptions* field), then its file name,
+folder, size, channels and description are embedded (`mistral-embed`). **Describing sends a
+512 px thumbnail of each image to Mistral**; `--describe off` (or `describe="off"` in the chat)
+indexes names and metadata only and sends no pixels. With a local server nothing leaves the
+computer, and images are described only if that server serves a vision model you name.
+
+The index is kept in the folder (`.pyfigures_image_index/`), covers its subfolders and is
+incremental: re-indexing reads only new or changed images. Searching a subfolder uses its
+parent's index. Changing the embedding model means indexing again (the descriptions are kept,
+only the texts are re-embedded). In the chat, one indexing call works for about 100 s and then
+continues on the next call; use the terminal command for folders of thousands of images.
+
 # Poster / collage designer
 
 Alongside the main figure editor, PyFigures includes a separate **Poster /

@@ -26,6 +26,7 @@ the HTTP server: GUI Tools > MCP server…, or python -m pyfigures.mcp_control.
 #   poster      poster designer
 #   stacks      stack montages, channel splits, kymographs, orthogonal views
 #   upkeep      changed-source detection, copy style between figures, alt text
+#   image_search  index a folder of images, find images by what they show
 # Importing a module registers its tools on the shared server. Every name is
 # re-exported here so `from pyfigures.mcp_server import <anything>` keeps working.
 # NB: monkeypatch helpers in the module that DEFINES them (e.g.
@@ -37,10 +38,10 @@ import os
 import sys
 
 from .mcp_tools import app, core, structure, content, annotations, overlays, workflow, qc, export, poster
-from .mcp_tools import stacks, upkeep, guidance, journal
+from .mcp_tools import stacks, upkeep, guidance, journal, image_search
 
 _TOOL_MODULES = (app, core, structure, content, annotations, overlays, workflow, qc, export, poster,
-                 stacks, upkeep, guidance, journal,)
+                 stacks, upkeep, guidance, journal, image_search,)
 for _m in _TOOL_MODULES:
     globals().update({_k: _v for _k, _v in vars(_m).items()
                       if not (_k.startswith("__") and _k.endswith("__"))})

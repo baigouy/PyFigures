@@ -37,6 +37,7 @@ CATEGORIES = {
 
 
 def category_for(name):
+    if name in ('index_image_folder', 'search_images'):return 'images'
     if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties'):return 'annotations'
     if name=='restyle_texts':return 'lettering'
     if name=='review_submission_readiness':return 'quality'
@@ -266,6 +267,11 @@ def build_server(full_server, send):
             if name in ('add_label_row','add_side_label') and (any(w in ('column','columns','heading','header','headers','above','below','beside') for w in words) or (side and any(w in ('label','labels') for w in words))):
                 score+=300 if (name=='add_side_label')==side else 150   # beside a row -> side label, else a label row
 
+            picture_words=any(w in ('image','picture','pictures','photo','photos','micrograph','micrographs','blot','gel','scan','scans') for w in words)
+            if name=='search_images' and picture_words and any(w in ('find','search','look','looking','where','which','similar','showing','shows','contain','containing','locate') for w in words):
+                score+=420        # "find the image of the gut with DAPI": by content, not by figure keyword
+            if name=='index_image_folder' and any(w in ('index','indexing','reindex','catalog','catalogue') for w in words) and (picture_words or 'folder' in words):
+                score+=420
             if name=='review_submission_readiness' and any(w in ('ready','readiness','submission','publish','publication','compliance','resolution','dpi') for w in words):
                 score+=400
             if name == 'inspect_native_gui' and any(w in ('gui','menu','dialog','button','control','native') for w in words):
