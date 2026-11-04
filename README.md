@@ -76,12 +76,14 @@ Perform the following steps **only once** to set up your environment:
    - To open a **command prompt** on **Ubuntu**, press **Ctrl+Alt+T**.
 
 
-2. **Create and activate a new Conda environment:**
+2. **Create and activate a new Conda environment (Python 3.11 recommended):**
    
     ```sh
-    conda create -y -n PyFigures python==3.10.12
+    conda create -y -n PyFigures python=3.11
     conda activate PyFigures
     ```
+
+    Python 3.10 to 3.13 work, but 3.11 is the tested default; some optional extras need 3.11 or newer (OME-Zarr).
 
 3. **Upgrade pip:**
     
@@ -128,7 +130,7 @@ Perform the following steps **only once** to set up your environment:
     - The GUI offers to run `pip install av` for you (once per session) the first time you add a movie or export a video without it. The standalone executables already include it.
     - A movie too long to fit in memory (more than a quarter of the free RAM, at most 4 GB) is loaded keeping every k-th frame; its frame rate is divided by k so time stamps stay right.
 
-8. **Optional: Install OME-Zarr support (images from OME-Zarr servers or local `.zarr` folders):**
+8. **Optional: Install OME-Zarr support (images from OME-Zarr servers or local `.zarr` folders; needs Python 3.11 or newer):**
 
     ```sh
     pip install -U pyfigures[zarr]
@@ -199,6 +201,7 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | Library name            | Use                                                         | Link                                          | License            |
 |-------------------------|-------------------------------------------------------------|-----------------------------------------------|--------------------|
 | **Markdown**            | Python implementation of Markdown                           | https://pypi.org/project/Markdown/            | BSD                |
+| **PyYAML**              | Reads YAML figure recipes                                   | https://pypi.org/project/PyYAML/              | MIT                |
 | **matplotlib**          | Plots images and graphs                                     | https://pypi.org/project/matplotlib/          | PSF                |
 | **numpy**               | Array/Image computing                                       | https://pypi.org/project/numpy/               | BSD                |
 | **Pillow**              | Reads 'basic' images (.bmp, .png, .pnm, ...)                | https://pypi.org/project/Pillow/              | HPND               |

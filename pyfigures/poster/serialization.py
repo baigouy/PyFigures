@@ -69,9 +69,19 @@ def sniff_root_tag(path):
     for PosterCanvas.load() to tell a .pyfposter from a .pyfalbum regardless
     of the file's actual extension. None if the file can't be parsed at all
     (the caller's own full parse will raise a proper error for that)."""
+    root = _root_element(path)
+    return None if root is None else root.tag
+
+
+def _root_element(path):
+    """The root element (tag + attributes only), or None. The file is opened
+    here and closed on return: ET.iterparse(path) left early kept the file
+    open until garbage collection (Python 3.10), and saving over the poster
+    then failed on Windows (PermissionError in os.replace)."""
     try:
-        for _event, elem in ET.iterparse(path, events=('start',)):
-            return elem.tag
+        with open(path, 'rb') as fh:
+            for _event, elem in ET.iterparse(fh, events=('start',)):
+                return elem
     except Exception:
         return None
     return None
@@ -81,12 +91,8 @@ def is_photo_album(path):
     """True for a .pyfalbum saved in photo album mode (pinned covers) — those
     open in the photo album designer, everything else in the poster
     designer. Reads only the root element, like sniff_root_tag."""
-    try:
-        for _event, elem in ET.iterparse(path, events=('start',)):
-            return elem.tag == ALBUM_ROOT_TAG and elem.get('album_mode', '0') == '1'
-    except Exception:
-        return False
-    return False
+    root = _root_element(path)
+    return root is not None and root.tag == ALBUM_ROOT_TAG and root.get('album_mode', '0') == '1'
 
 
 def _write_page_shapes(parent_elem, background, shapes_to_draw, doc_dir=None):

@@ -36,6 +36,7 @@ setuptools.setup(
     ],
     install_requires=[
         "Markdown",
+        "PyYAML",          # YAML recipes (on 3.11+ another package happened to bring it)
         "matplotlib>=3.5.2",
         "numpy>=1.24",
         "Pillow>=8.1.2",
@@ -81,8 +82,9 @@ setuptools.setup(
         'fiji': [
             "pyimagej",      # Fiji / Bio-Formats reader for .lif, .czi, .nd2, ... (needs Java)
         ],
+        # zarr 3 needs Python 3.11+; zarr 2 (all Python 3.10 gets) can't read them here
         'zarr': [
-            "zarr",          # OME-Zarr images, local or from a URL (read over http with requests)
+            "zarr>=3; python_version >= '3.11'",   # OME-Zarr images, local or from a URL (read over http with requests)
         ],
         'pdf': [
             "pymupdf",       # PDF files as vector panels (AGPL v3; not in the standalone apps)
@@ -107,7 +109,7 @@ setuptools.setup(
             "av",
             "opencv-python-headless",
             "pyimagej",
-            "zarr",
+            "zarr>=3; python_version >= '3.11'",
             "pymupdf",
         ],
         # running the test suite (pytest.ini sets a per-test timeout so a stuck

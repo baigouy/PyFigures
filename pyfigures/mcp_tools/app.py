@@ -303,6 +303,16 @@ def _output_clash(fn, args, kwargs) -> str | None:
                     protected.setdefault(key(n), f"a source image of the figure ({os.path.basename(n)})")
     for o in outs:
         what = protected.get(key(o))
+        if not what and os.path.exists(o):
+            # macOS disks are case-insensitive too (normcase only folds on
+            # Windows), and links: ask the file system
+            for p, w in protected.items():
+                try:
+                    if os.path.exists(p) and os.path.samefile(o, p):
+                        what = w
+                        break
+                except OSError:
+                    continue
         if what:
             return f"ERROR: {o} is {what}: exporting there would overwrite it. Choose another out_path."
     return None

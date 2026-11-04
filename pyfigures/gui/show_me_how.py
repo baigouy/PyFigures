@@ -75,6 +75,14 @@ def _selected_image(win, channel=False):
     return sel
 
 
+def _norm_file(name) -> str:
+    """A panel's file name, comparable across / and \\ (and case on Windows)."""
+    name = str(name)
+    if name in ("None", "") or name.startswith("@"):
+        return name
+    return os.path.normcase(os.path.normpath(name))
+
+
 def _modal_open():
     return QApplication.activeModalWidget() is not None
 
@@ -121,7 +129,8 @@ class GuideRunner:
             return (id(shape), tuple(nesting(c) for c in content))
         structure = tuple(nesting(s) for s in self.win.paint.EZFIG_panel.shapes_to_draw)
         # real pictures only: a grey template slot is half-way, not a replacement
-        files = tuple(str(getattr(i, "filename", None)) for i in imgs
+        # (normalised: the same file with / or \ is not a new picture)
+        files = tuple(_norm_file(getattr(i, "filename", None)) for i in imgs
                       if not (hasattr(i, "is_template") and i.is_template()))
         return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
                 "order": order, "rows": rows, "structure": structure, "files": files,

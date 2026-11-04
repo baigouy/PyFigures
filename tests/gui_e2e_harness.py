@@ -312,7 +312,7 @@ _BENIGN_QT = (
     # SVGs; batoolset-gui > 0.2.1 fills it (fill_empty_svg_paths). Drop these
     # two once CI installs that version.
     "Invalid path data; path truncated.",
-    "-3 is undefined!",
+    "is undefined!",          # "link #ArialMT-20 is undefined!" (the glyph's <use>)
 )
 
 
@@ -907,7 +907,9 @@ def _qt_dialog_methods():
         for name in _DIALOG_METHODS:
             getattr(cls, name, None)              # (sip fills the class dict lazily)
             attr = cls.__dict__.get(name)
-            if attr is not None and not inspect.isfunction(getattr(attr, "__func__", attr)):
+            func = getattr(attr, "__func__", attr)
+            if attr is not None and (not inspect.isfunction(func)
+                                     or getattr(func, "_suite_dialog_patch", False)):
                 out[(cls, name)] = attr
     return out
 
@@ -932,6 +934,7 @@ def ensure_real_dialogs():
             attr = cls.__dict__.get(name)
             func = getattr(attr, "__func__", attr)
             if attr is not None and inspect.isfunction(func) \
+                    and not getattr(func, "_suite_dialog_patch", False) \
                     and not (getattr(func, "__module__", "") or "").startswith("qtpy"):
                 if (cls, name) in _QT_DIALOG_METHODS:
                     setattr(cls, name, _QT_DIALOG_METHODS[(cls, name)])

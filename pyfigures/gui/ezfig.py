@@ -119,7 +119,8 @@ from pyfigures.gui.panelcreationwidget import PanelCreator
 from batoolset.dims.tools import scaling_factor_to_achieve_DPI
 from batoolset.img import guess_dimensions
 from pyfigures.constant_panels import constant_free_channels
-from batoolset.pyqts.tools import distance, getCtrlModifier
+from batoolset.pyqts.tools import distance
+from pyfigures.gui.ctrl_key import getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
 from pyfigures.gui.label_rows import fit_label_rows
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget

@@ -99,7 +99,8 @@ def test_window_icons(qapp, monkeypatch):
 
 def test_icons_ship_in_the_package():
     setup = _read("setup.py")
-    assert "'pyfigures': ['icons/*.png']" in setup
+    assert "'pyfigures': ['icons/*.png'" in setup
+    assert "'gui/fonts/*.ttf'" in setup      # gui/fonts is no package: needs its own pattern
 
 
 def test_workflow_ships_the_launchers_on_macos():

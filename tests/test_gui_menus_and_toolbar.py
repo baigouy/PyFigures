@@ -216,9 +216,17 @@ def test_every_menu_and_toolbar_action_survives_cancel(gui, qapp, dialogs, monke
 
 def test_every_action_has_a_handler(gui):
     from qtpy.QtWidgets import QWidgetAction
+
+    def unhandled(act):
+        try:
+            return act.receivers(act.triggered) == 0
+        except RuntimeError:
+            # an action Qt created itself (e.g. a dock's toggleViewAction on
+            # Linux/macOS): PyQt can't count its receivers, Qt handles it
+            return False
     missing = [label for label, act in _all_actions(gui)
                if act.isEnabled() and not label.endswith("—") and not isinstance(act, QWidgetAction)
-               and act.text() and act.receivers(act.triggered) == 0]
+               and act.text() and unhandled(act)]
     assert missing == []
 
 

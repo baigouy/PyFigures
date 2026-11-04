@@ -8,7 +8,9 @@ import pytest
 import xml.etree.ElementTree as ET
 
 from batoolset.serializations.tools import deserialize_to_dict
-from conftest import SAMPLE_DIR
+from conftest import SAMPLE_DIR, needs_sample_dir
+
+pytestmark = needs_sample_dir
 
 
 def _read_pyf(path):

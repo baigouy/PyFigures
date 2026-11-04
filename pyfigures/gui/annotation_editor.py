@@ -14,8 +14,8 @@ import traceback
 from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 from batoolset.GUI.open import OpenFileOrFolderWidget
 from batoolset.pyqts.tools import check_antialiasing, get_shape_after_rotation_and_crop, \
-    get_original_shape_from_rect_and_angle, get_centroid, create_dim_slider, clear_layout, select_in_combobox, \
-    getCtrlModifier, getCtrlModifierAsString
+    get_original_shape_from_rect_and_angle, get_centroid, create_dim_slider, clear_layout, select_in_combobox
+from pyfigures.gui.ctrl_key import getCtrlModifier, getCtrlModifierAsString
 from batoolset.serializations.tools import clone_object
 from pyfigures.flip import legacy_state as legacy_flip_state
 from batoolset.GUI.customdialog import CustomDialog

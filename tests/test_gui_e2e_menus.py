@@ -721,6 +721,10 @@ def test_menu_action(qapp, e2e_gui, e2e_files, no_file_dialogs, tmp_path, watch,
     g = e2e_gui
     if H.resolve_key([k for k, _a in H.menu_actions(g)], key) is None:
         pytest.skip(f"{key!r} is no longer in the GUI (renamed beyond recognition or removed)")
+    if "LaTeX code panel" in key:
+        from batoolset.latex_tools import latex_available
+        if not latex_available():           # it would offer to download TinyTeX
+            pytest.skip("no LaTeX installation on this computer")
     out = tmp_path / "out"
     out.mkdir()
     run = {"out": str(out)}

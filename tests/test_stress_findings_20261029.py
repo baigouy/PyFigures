@@ -253,8 +253,12 @@ def test_exports_never_overwrite_the_figure_or_its_source_images(fig, imgs, tmp_
     """export_figure(fig, 'camera.png') replaced the camera.png the figure was
     built from; render_poster did the same to a poster's photo."""
     original = open(imgs[0], "rb").read()
-    for call in (lambda: M.export_figure(fig, imgs[0]),
-                 lambda: M.export_figure(fig, imgs[0].upper()),           # Windows: same file
+    d, name = os.path.split(imgs[0])
+    other_case = os.path.join(d, name.upper())       # the same file on Windows / macOS disks
+    calls = [lambda: M.export_figure(fig, imgs[0])]
+    if os.path.exists(other_case):                   # not on Linux (case-sensitive)
+        calls.append(lambda: M.export_figure(fig, other_case))
+    for call in (*calls,
                  lambda: M.export_figure(fig, fig),
                  lambda: M.export_print_ready(fig, imgs[0]),
                  lambda: M.export_pptx(fig, fig)):

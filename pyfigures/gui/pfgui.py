@@ -31,7 +31,8 @@ from batoolset.drawings.shapes.Position import Position
 from batoolset.drawings.shapes.serializablefont import SerializableQFont
 from batoolset.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
     divide_list_into_sublists, compare_lists_sets
-from batoolset.pyqts.tools import get_html_text_with_font, get_shape_after_rotation_and_crop, getCtrlModifierAsString
+from batoolset.pyqts.tools import get_html_text_with_font, get_shape_after_rotation_and_crop
+from pyfigures.gui.ctrl_key import getCtrlModifierAsString
 import os
 from batoolset.files.tools import write_string_to_file, read_string_from_file, consolidate_files, \
     smartly_consolidate_files_to_reduce_dupes, consolidate_files2
@@ -3428,6 +3429,8 @@ class EZFIG_GUI(QMainWindow):
         sel = self.paint.EZFIG_panel.selected_shape
         if isinstance(sel, list) and len(sel) == 1:
             sel = sel[0]
+        if isinstance(sel, Image2D) and getattr(sel, 'img', None) is None:
+            sel.load_img()          # pixels not read yet (lazily loaded figure)
         img = getattr(sel, 'img', None)
         if not isinstance(sel, Image2D) or not isinstance(img, np.ndarray) \
                 or 'c' not in (guess_dimensions(img) or '') or img.shape[-1] < 2:

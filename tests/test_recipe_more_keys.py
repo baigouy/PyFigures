@@ -112,7 +112,9 @@ def _props(pyf, gp, i):
 
 def test_summary_and_no_warnings(built):
     res, _d = built
-    assert res["warnings"] == [], res["warnings"]
+    # the recipe asks for Arial: computers without it (Linux CI) are told so
+    warnings = [w for w in res["warnings"] if "is not installed here" not in w]
+    assert warnings == [], warnings
     assert (res["rows"], res["images"], res["other_panels"]) == (2, 3, 3)
 
 

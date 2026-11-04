@@ -524,7 +524,10 @@ def _guide_context(c, guide_id):
             c.right_click(img, "Convert to template")
         else:
             slot = next(i for i in H.images(c.g) if i.filename == "@template@")
-            c.drop(["rgb"], "⬜  Assign to template slot", where=H.centre(c.g, slot))
+            # a file the figure does not have yet (rgb.tif is in it: on Linux /
+            # macOS its path matched exactly and the guide saw no new picture;
+            # on Windows only the slashes differed)
+            c.drop(["png2"], "⬜  Assign to template slot", where=H.centre(c.g, slot))
     elif guide_id == "stack_in_row":
         # drag the selected panel onto an image of the other row
         c.menus.pick = "Stack with it (column in the row)"

@@ -13,7 +13,9 @@ import pytest
 from batoolset.serializations.tools import deserialize_to_dict, create_object
 from batoolset.drawings.shapes.group import Group
 from batoolset.drawings.shapes.image2d import Image2D
-from conftest import SAMPLE_DIR
+from conftest import SAMPLE_DIR, needs_sample_dir
+
+pytestmark = needs_sample_dir
 
 
 def _load_pyf(path):

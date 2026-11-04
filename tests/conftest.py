@@ -175,6 +175,74 @@ def poster_render_cache_in_tmp(tmp_path, monkeypatch):
     yield
 
 
+def _keep_message_box_titles():
+    """QMessageBox ignores its window title on macOS (Apple's guidelines), so
+    the GUI tests, which recognise dialogs by title, saw anonymous boxes there.
+    The title is set through QWidget.setWindowTitle instead, on every platform
+    (so the same code runs on Windows/Linux, where it changes nothing)."""
+    try:
+        from qtpy.QtWidgets import QMessageBox, QWidget
+    except Exception:
+        return
+    if getattr(QMessageBox, "_tests_keep_titles", False):
+        return
+    QMessageBox._tests_keep_titles = True
+    Button = QMessageBox.StandardButton
+    original_init = QMessageBox.__init__
+
+    def __init__(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        title = kwargs.get("title", args[1] if len(args) > 1 else None)
+        if isinstance(title, str):
+            QWidget.setWindowTitle(self, title)
+
+    def setWindowTitle(self, title):
+        QWidget.setWindowTitle(self, title)
+
+    def static(icon, default_buttons):
+        # Qt's static helpers set the title in C++ (ignored on macOS): same
+        # behaviour rebuilt in Python, returning the clicked standard button
+        def show(parent, title, text, buttons=default_buttons, defaultButton=Button.NoButton):
+            box = QMessageBox(icon, title, text, buttons, parent)
+            box.setDefaultButton(defaultButton)
+            if box.exec() == -1:
+                return Button.Cancel
+            clicked = box.clickedButton()
+            return box.standardButton(clicked) if clicked is not None else Button.NoButton
+        show._suite_dialog_patch = True       # ensure_real_dialogs keeps it (gui_e2e_harness)
+        return staticmethod(show)
+
+    Icon = QMessageBox.Icon
+    QMessageBox.__init__ = __init__
+    QMessageBox.setWindowTitle = setWindowTitle
+    QMessageBox.information = static(Icon.Information, Button.Ok)
+    QMessageBox.warning = static(Icon.Warning, Button.Ok)
+    QMessageBox.critical = static(Icon.Critical, Button.Ok)
+    QMessageBox.question = static(Icon.Question, Button.Yes | Button.No)
+
+
+_keep_message_box_titles()
+
+
+@pytest.fixture(autouse=True)
+def no_tinytex_download(monkeypatch):
+    """No real TinyTeX download or tlmgr run: a GUI test answering Yes to
+    'Install LaTeX?' downloaded TinyTeX on the CI runners, half-installed it
+    (packages failed) and later LaTeX tests found a broken latex. Tests that
+    exercise the installer patch these two with their own fakes."""
+    try:
+        from batoolset import tex_install
+    except Exception:
+        yield
+        return
+
+    def _refuse(*_a, **_k):
+        raise RuntimeError("no TinyTeX download in the test suite")
+    monkeypatch.setattr(tex_install, "_download", _refuse)
+    monkeypatch.setattr(tex_install, "_run", _refuse)
+    yield
+
+
 @pytest.fixture(autouse=True)
 def no_fiji_jvm_in_the_test_process(monkeypatch):
     """No Fiji fallback reader inside the test process: it starts a Java VM
@@ -232,8 +300,15 @@ def sample_pyf(name):
     return os.path.join(SAMPLE_DIR, name)
 
 
+# the sample .pyf files live outside the repository (not on CI runners)
+needs_sample_dir = pytest.mark.skipif(not os.path.isdir(SAMPLE_DIR),
+                                      reason="the sample .pyf files are not on this computer")
+
+
 @pytest.fixture(scope='session')
 def sample_dir():
+    if not os.path.isdir(SAMPLE_DIR):
+        pytest.skip("the sample .pyf files are not on this computer")
     return SAMPLE_DIR
 
 
