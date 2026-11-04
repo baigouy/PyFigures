@@ -24,3 +24,35 @@ DOCS_ONLINE.md
 # example figures hold the builder's absolute paths; rebuilt from their recipe.yaml
 docs/examples/*/*.pyf
 docs/examples/*/*.pyfposter
+
+# repo_manager: AI-assistant notes and credentials stay out of git
+*chatgpt*/
+*ChatGPT*/
+AGENTS.md
+GEMINI.md
+.codex/
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.windsurf*
+.copilot/
+.github/copilot-instructions.md
+codex_*.md
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+.pypirc
+.netrc
+*credentials*.json
+*secret*.json
+*token*.txt
+*.kdbx
+client_secret*.json
