@@ -143,3 +143,88 @@ def test_resize_updates_the_mm_label(qapp, gui, runtime, tmp_path):
                          arguments={"tool": "resize_figure", "arguments": {"pyf_path": "live", "width_cm": 20}}))
     value = float(g.value_label.text().split("≈")[1])
     assert value == pytest.approx(200, abs=3)
+
+
+# -- rotated / cropped panels (caveats of the first version) ---------------------
+def _panel_with_inset(tmp_path, crops=(0, 0, 0, 0), theta=0):
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.serializations.tools import clone_object
+    _big_figure(tmp_path)
+    panel = Image2D(str(tmp_path / "big.tif"))
+    inset = clone_object(panel)
+    inset.setTopLeft(0, 0)
+    inset.set_to_scale(1)
+    inset.crop(160, 600 - 250, 250, 400 - 320)
+    inset.annotations = []
+    panel.crop(*crops)
+    panel.theta = theta
+    panel.annotations = [inset]
+    return panel, inset
+
+
+@pytest.mark.parametrize("crops,scale", [((0, 0, 0, 0), 1.0), ((0, 0, 0, 0), 0.5), ((100, 0, 0, 50), 1.0),
+                                         ((30, 70, 20, 10), 0.7)])
+def test_measured_inset_matches_the_formula_when_upright(qapp, tmp_path, crops, scale):
+    from pyfigures.zoom_geometry import measured_inset_corners, inset_rect
+    panel, inset = _panel_with_inset(tmp_path, crops)
+    panel.set_to_scale(scale)
+    panel.setTopLeft(30, 40)
+    corners = measured_inset_corners(panel, inset)
+    x, y, w, h = inset_rect((600, 400), crops, (600, 400), (160, 350, 250, 80), 0.25, inset.placement)
+    assert [(c.x(), c.y()) for c in corners] == [pytest.approx(p, abs=0.01) for p in
+                                                 [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]]
+
+
+def test_rotated_panel_lines_end_on_the_upright_inset(qapp, tmp_path):
+    """On a rotated panel the ROI turns with the image but the inset stays
+    upright: the lines go to its measured (rotated, in image pixels) corners,
+    as the two outer tangents."""
+    import math
+    import xml.etree.ElementTree as ET
+    from pyfigures.mcp_server import add_roi_rect, add_inset, connect_roi_to_inset, transform_image
+    from pyfigures.zoom_geometry import measured_inset_corners
+    from batoolset.serializations.tools import create_object, element_to_dict
+    pyf = _big_figure(tmp_path)
+    add_roi_rect(pyf, [0], 0, 160, 250, 90, 70)
+    add_inset(pyf, [0], 0, str(tmp_path / "big.tif"), placement="top right", size_fraction=0.25)
+    transform_image(pyf, [0], 0, rotation=15, crop_left=40)
+    out = connect_roi_to_inset(pyf, [0], 0)
+    assert out.startswith("2 leader line"), out
+    el = [c for c in ET.parse(pyf).getroot().iter("Image2D") if c.find("annotations") is not None][0]
+    props = element_to_dict(el)
+    panel = create_object("Image2D", props.get("Image2D", props))
+    inset = [a for a in panel.annotations if type(a).__name__ == "Image2D"][0]
+    corners = [(c.x(), c.y()) for c in measured_inset_corners(panel, inset)]
+    lines = [a for a in panel.annotations if type(a).__name__ == "Line2D"]
+    assert len(lines) == 2
+    for line in lines:
+        end = (line.p2().x(), line.p2().y())
+        assert min(math.dist(end, c) for c in corners) < 0.01
+        assert (line.p1().x(), line.p1().y()) in [(160, 250), (250, 250), (250, 320), (160, 320)]
+    # rotated: the inset's corners are not an upright box in image pixels
+    assert abs(corners[0][1] - corners[1][1]) > 1
+
+
+def test_editor_draws_the_inset_where_the_figure_does(qapp, tmp_path):
+    """The editor shows the image uncropped: its insets were drawn in the full
+    image's corner, not in the crop window where the figure puts them, so
+    lines that met them in the figure missed them in the editor."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
+    _big_figure(tmp_path)
+    main = MainWindow(qt_viewer=VectorialDrawPane2(background=Image2D(str(tmp_path / "big.tif"))))
+    main.restore_crops((100, 0, 0, 50))
+    roi = Rectangle2D(160, 250, 90, 70, color=0xFFFF00, stroke=2)
+    main.update_annotations_list(lst=[roi], update=True, repopulate_list=True)
+    main.qt_viewer.selected_shape = [roi]
+    main.ROI_to_crop_or_inset()
+    assert main.connect_roi_to_inset()
+    main.qt_viewer.grab()                                   # a paint
+    inset = next(a for a in main.qt_viewer.shapes if isinstance(a, Image2D))
+    r = inset.getRect(all=True)
+    assert (r.x(), r.y(), r.width(), r.height()) == pytest.approx((475, 0, 125, 125 * 70 / 90), abs=0.01)
+    ends = {(round(l.p2().x(), 3), round(l.p2().y(), 3)) for l in main.qt_viewer.shapes if isinstance(l, Line2D)}
+    assert ends == {(475, 0), (475, round(125 * 70 / 90, 3))}
+    main.close()

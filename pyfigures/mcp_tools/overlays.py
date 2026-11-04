@@ -783,6 +783,24 @@ def _xml_raw_size(el) -> tuple[float, float] | None:
         return None
 
 
+def _measured_inset_corners(parent_el, annotation_index):
+    """The drawn corners of annotation *annotation_index* (an inset) of the
+    panel *parent_el*, in its image pixels, from a real paint; None on failure."""
+    try:
+        from batoolset.settings.global_settings import set_UI
+        set_UI()
+        from batoolset.serializations.tools import create_object, element_to_dict
+        from .core import _ensure_qapp
+        from ..zoom_geometry import measured_inset_corners
+        _ensure_qapp()
+        props = element_to_dict(parent_el)
+        panel = create_object("Image2D", props.get("Image2D", props))
+        corners = measured_inset_corners(panel, panel.annotations[annotation_index])
+        return [(c.x(), c.y()) for c in corners] if corners else None
+    except Exception:
+        return None
+
+
 @mcp.tool()
 def connect_roi_to_inset(
     pyf_path: str,
@@ -807,7 +825,7 @@ def connect_roi_to_inset(
     Leader lines already joining these two are replaced, not doubled.
     GUI: image editor → Annotations → Connect ROI ↔ inset.
     """
-    from ..zoom_geometry import inset_rect, leader_lines
+    from ..zoom_geometry import inset_rect, leader_lines, leader_lines_to_corners
     if connectors not in (1, 2):
         return "ERROR: connectors must be 1 or 2."
     tree, root = _load(pyf_path)
@@ -854,6 +872,14 @@ def connect_roi_to_inset(
     where = inset_rect(parent_size, _xml_crops(parent), inset_size, _xml_crops(inset),
                        fraction, inset.findtext("placement") or "top right")
     lines = leader_lines(box, where, connectors)
+    if num(parent, "theta", 0.0):
+        # a rotated panel: ROIs turn with the image, the inset stays upright —
+        # measured on a real paint of the panel
+        corners = _measured_inset_corners(parent, items.index(inset))
+        if corners:
+            xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+            where = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+            lines = leader_lines_to_corners(box, corners, connectors)
     color = _color_to_int(line_color) if line_color is not None else int(num(roi, "color", 0xFFFF00))
     width = float(stroke) if stroke is not None else num(roi, "stroke", 1.5) or 1.5
 

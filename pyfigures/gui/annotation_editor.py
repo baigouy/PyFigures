@@ -110,6 +110,7 @@ class VectorialDrawPane2(QWidget):
         self._drag_endpoint = None     # 1 / 2 while an end of the selected line is dragged
         self._crop_grab = None         # a crop side / corner / 'move' being dragged
         self.crop_controller = None    # MainWindow while the Rotate + Crop tab is shown
+        self.inset_geometry = None     # MainWindow: an inset's corners as the figure draws it
 
         # line style parameters
         self.line_style = None
@@ -242,6 +243,49 @@ class VectorialDrawPane2(QWidget):
             self.update()
             return True
         return False
+
+    def _insets_at_figure_position(self):
+        """[(inset, corners)] for the placed insets the figure draws elsewhere
+        than this raw view does (the panel is cropped or rotated)."""
+        if self.inset_geometry is None or not self.background or not self.background.annotations:
+            return []
+        out = []
+        for a in self.background.annotations:
+            if isinstance(a, Image2D) and getattr(a, 'placement', None) is not None:
+                try:
+                    corners = self.inset_geometry(a)
+                except Exception:
+                    corners = None
+                if corners:
+                    out.append((a, corners))
+        return out
+
+    def _draw_inset_at(self, painter, inset, corners):
+        tl, tr = corners[0], corners[1]
+        width = math.hypot(tr.x() - tl.x(), tr.y() - tl.y())
+        if width <= 0:
+            return
+        angle = math.degrees(math.atan2(tr.y() - tl.y(), tr.x() - tl.x()))
+        try:
+            inset._sync_display_from_parent(self.background)
+        except Exception:
+            pass
+        # drawn with its parent (for the border), which sizes it as a fraction of the
+        # parent's width: the fraction giving the figure's width here
+        fraction = inset.fraction_of_parent_image_width_if_image_is_inset
+        inset.fraction_of_parent_image_width_if_image_is_inset = width / max(1e-6, self.background.width(all=True))
+        inset.set_to_scale(1)
+        inset.set_to_scale(inset.width(all=True) / width)
+        inset.setTopLeft(0, 0)
+        painter.save()
+        painter.translate(tl)
+        painter.rotate(angle)
+        try:
+            inset.draw(painter=painter, parent=self.background)
+        finally:
+            painter.restore()
+            inset.fraction_of_parent_image_width_if_image_is_inset = fraction
+            inset.setTopLeft(tl.x(), tl.y())      # selecting / dragging it uses its rect
 
     def _single_selected_line(self):
         if self.selected_shape and len(self.selected_shape) == 1 and isinstance(self.selected_shape[0], Line2D):
@@ -423,7 +467,20 @@ class VectorialDrawPane2(QWidget):
 
         if self.background is not None:
             self.background.draw_bg(painter, parent=None, restore_painter_in_the_end=False)
-            self.background.draw_annotations(painter, parent=None, restore_painter_in_the_end=True)
+            moved = self._insets_at_figure_position()
+            if moved:
+                # a cropped / rotated panel: its insets sit in the crop window (and stay
+                # upright) in the figure; drawn there, lines to them meet them here too
+                annotations = self.background.annotations
+                self.background.annotations = [a for a in annotations if not any(a is m for m, _c in moved)]
+                try:
+                    self.background.draw_annotations(painter, parent=None, restore_painter_in_the_end=True)
+                finally:
+                    self.background.annotations = annotations
+                for inset, corners in moved:
+                    self._draw_inset_at(painter, inset, corners)
+            else:
+                self.background.draw_annotations(painter, parent=None, restore_painter_in_the_end=True)
         else:
             pass
 
@@ -2507,6 +2564,43 @@ class MainWindow(QWidget):
         w, h, angle = self._crop_params()
         return EI.crop_hit(point, w, h, angle, self.current_crops(), scale)
 
+    def figure_inset_corners(self, inset):
+        """The inset's corners (tl, tr, br, bl) in image pixels as the FIGURE
+        draws it: the panel with this editor's crop and rotation. None when
+        the panel is neither cropped nor rotated (this view is then exact)."""
+        from pyfigures.zoom_geometry import measured_inset_corners
+        bg = self.qt_viewer.background
+        if bg is None:
+            return None
+        crops = self.current_crops()
+        angle = self.rotate_image_spinbox.value()
+        if not any(crops) and not angle:
+            return None
+        key = (id(inset), crops, angle, inset.fraction_of_parent_image_width_if_image_is_inset,
+               str(inset.placement), tuple(getattr(inset, c, 0) for c in ('crop_left', 'crop_right', 'crop_top', 'crop_bottom')))
+        cache = getattr(self, '_inset_corner_cache', None)
+        if cache is None:
+            cache = self._inset_corner_cache = {}
+        if key not in cache:
+            saved = (bg.crop_left, bg.crop_right, bg.crop_top, bg.crop_bottom, bg.theta, bg.topLeft(), bg.scale)
+            saved_inset = (inset.topLeft(), inset.scale)
+            try:
+                bg.crop(*crops)
+                bg.theta = angle
+                bg.setTopLeft(0, 0)
+                bg.set_to_scale(1)
+                cache[key] = measured_inset_corners(bg, inset)
+            finally:
+                bg.crop(*saved[:4])
+                bg.theta = saved[4]
+                bg.setTopLeft(saved[5])
+                bg.set_to_scale(saved[6])
+                inset.setTopLeft(saved_inset[0])
+                inset.set_to_scale(saved_inset[1])
+            if len(cache) > 64:
+                cache.pop(next(iter(cache)))
+        return cache[key]
+
     def crop_handles(self):
         if self.qt_viewer.background is None:
             return []
@@ -3111,7 +3205,7 @@ class MainWindow(QWidget):
         """'Connect ROI <-> inset': leader lines from the rectangle ROI to the
         inset, ending on the corners where the inset is drawn in the figure.
         The selected ROI / inset, else the only one on the image."""
-        from pyfigures.zoom_geometry import inset_rect, leader_lines
+        from pyfigures.zoom_geometry import inset_rect, leader_lines, leader_lines_to_corners
         bg = self.qt_viewer.background
         if bg is None:
             return False
@@ -3130,10 +3224,19 @@ class MainWindow(QWidget):
         parent_crops = (self.crop_left_spinbox.value(), self.crop_right_spinbox.value(),
                         self.crop_top_spinbox.value(), self.crop_bottom_spinbox.value())
         inset_crops = tuple(getattr(inset, c, 0) or 0 for c in ('crop_left', 'crop_right', 'crop_top', 'crop_bottom'))
-        where = inset_rect((raw_w, raw_h), parent_crops, (in_w, in_h), inset_crops,
-                           inset.fraction_of_parent_image_width_if_image_is_inset, inset.placement)
         r = roi.getRect()
         box = (r.x(), r.y(), r.width(), r.height())
+        measured = self.figure_inset_corners(inset)
+        if measured:
+            # cropped / rotated panel: where the figure really draws it
+            pts = [(q.x(), q.y()) for q in measured]
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            where = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+            lines = leader_lines_to_corners(box, pts, connectors)
+        else:
+            where = inset_rect((raw_w, raw_h), parent_crops, (in_w, in_h), inset_crops,
+                               inset.fraction_of_parent_image_width_if_image_is_inset, inset.placement)
+            lines = leader_lines(box, where, connectors)
         self.qt_viewer.push_undo()
 
         def on_rect(p, rect, tol=2.0):
@@ -3144,7 +3247,7 @@ class MainWindow(QWidget):
         keep = [a for a in self.qt_viewer.shapes if not (isinstance(a, Line2D) and (
             (on_rect(a.p1(), box) and on_rect(a.p2(), where)) or (on_rect(a.p2(), box) and on_rect(a.p1(), where))))]
         pos = keep.index(inset)
-        for k, ((x1, y1), (x2, y2)) in enumerate(leader_lines(box, where, connectors)):
+        for k, ((x1, y1), (x2, y2)) in enumerate(lines):
             keep.insert(pos + k, Line2D(x1, y1, x2, y2, color=roi.color, stroke=roi.stroke or 0.65))
         self.update_annotations_list(lst=keep, update=True, repopulate_list=True, repopulate_texts=True)
         self.qt_viewer.update_size()
@@ -3467,6 +3570,7 @@ class MainWindow(QWidget):
                 rect, angle, crop_left, crop_right, crop_top, crop_bottom, return_AR=True)
             self.qt_viewer.rotate_n_crop_lines = self._crop_border_lines(
                 rect, angle, crop_left, crop_right, crop_top, crop_bottom)
+            self.qt_viewer.inset_geometry = self.figure_inset_corners
             self.AR_display.setText(f'current AR (w/h): {AR}')
             self.qt_viewer.update()
 
