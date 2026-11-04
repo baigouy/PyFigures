@@ -3269,7 +3269,7 @@ def chat_steps() -> list[TutorialStep]:
                 '• or a <b>cloud API</b> (OpenAI, Anthropic, OpenRouter) in the chat\'s connection '
                 'settings, with your own key; the figure descriptions and previews are then sent '
                 'to that provider.<br><br>'
-                'The chat is the optional package <code>qtpy-ai-sidecar</code>. Click <b>Next</b>.'
+                'Click <b>Next</b>.'
             ),
             auto_advance=False,
         ),

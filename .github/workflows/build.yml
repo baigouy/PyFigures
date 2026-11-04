@@ -29,10 +29,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      # 3.12, not 3.10: zarr 3 (newer OME-Zarr files) needs 3.11+, and PyMuPDF,
+      # which the apps download on request, only has wheels for 3.11+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install build tools
         run: |
@@ -40,7 +42,9 @@ jobs:
           pip install pyinstaller pyinstaller-hooks-contrib
 
       - name: Install pyfigures and its dependencies
-        # no [pdf] extra: PyMuPDF is AGPL; the apps read PDFs with pypdfium2
+        # the chat sidebar (qtpy-ai-sidecar) comes with pyfigures itself, and the
+        # self-test below fails the build without it; no [pdf] extra: PyMuPDF is
+        # AGPL, the apps read PDFs with pypdfium2
         run: pip install ".[video,zarr]"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is

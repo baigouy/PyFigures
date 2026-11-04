@@ -63,11 +63,48 @@ def _check_video():
 
 def _check_zarr():
     import zarr
+    if getattr(sys, "frozen", False):
+        # zarr 2 (all a Python 3.10 build gets) cannot read newer OME-Zarr files
+        assert int(zarr.__version__.split(".")[0]) >= 3, f"zarr {zarr.__version__} < 3"
     return f"ok (zarr {zarr.__version__})"
 
 
+def _check_chat(tmp):
+    """The chat sidebar is a core part of the apps: its package, a real key
+    store for API keys, and the live MCP server it starts (PyFigures
+    --live-mcp in the apps), which must answer with its tools."""
+    import qtpy_ai_sidecar  # noqa: F401
+    from qtpy_ai_sidecar import widgets  # noqa: F401  (the dock)
+    from qtpy_ai_sidecar.adapters import pyfigures as adapter  # noqa: F401
+    import keyring
+    backend = keyring.get_keyring()
+    name = type(backend).__module__ + "." + type(backend).__name__
+    assert "fail" not in name.lower() and "null" not in name.lower(), f"no key store: {name}"
+    from pyfigures.assistant.launch import mcp_server_command
+    command, args = mcp_server_command()
+    import anyio
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    env = dict(os.environ, PYFIGURES_MCP_SURFACE="categories", PYFIGURES_LIVE_RUNTIME=tmp,
+               QT_QPA_PLATFORM="offscreen")
+
+    async def tools():
+        params = StdioServerParameters(command=command, args=args, env=env)
+        with anyio.fail_after(240):
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return (await session.list_tools()).tools
+
+    listed = anyio.run(tools)
+    assert len(listed) >= 5, f"MCP server listed {len(listed)} tools"
+    import importlib.metadata
+    return f"ok (qtpy-ai-sidecar {importlib.metadata.version('qtpy-ai-sidecar')}, {name.rsplit('.', 2)[-2]}, {len(listed)} MCP tools)"
+
+
 CHECKS = {"qt_svg": _check_qt_svg, "pdf_panels": _check_pdf_panels,
-          "video": _check_video, "zarr": _check_zarr}
+          "video": _check_video, "zarr": _check_zarr, "chat": _check_chat}
 
 
 def run(report_path):
@@ -77,7 +114,7 @@ def run(report_path):
     with tempfile.TemporaryDirectory() as tmp:
         for name, check in CHECKS.items():
             try:
-                results[name] = check(tmp) if name == "pdf_panels" else check()
+                results[name] = check(tmp) if name in ("pdf_panels", "chat") else check()
             except Exception:
                 results[name] = "FAILED: " + traceback.format_exc(limit=3)
     ok = all(v.startswith("ok") for v in results.values())

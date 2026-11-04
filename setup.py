@@ -72,10 +72,14 @@ setuptools.setup(
         "mathml2omml",     # (MIT)
         "pylatexenc",      # $…$ label maths -> Unicode text for Illustrator (MIT)
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
+        # the chat sidebar (Tools > Chat sidebar, a core part of PyFigures): a
+        # local or API model edits the open figure through the MCP tools (BSD-2)
+        "qtpy-ai-sidecar>=0.1.0",
+        "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
     ],
     extras_require={
         'ai': [
-            "mcp>=1.0,<2",   # MCP server (Claude Code integration); mcp 2 renamed FastMCP
+            "mcp>=1.12,<2",  # installed by default since 0.2.1; kept for older instructions
         ],
         'video': [
             "av",            # PyAV: reads videos and writes H.264 (bundles ffmpeg; Windows/macOS/Linux)
@@ -97,18 +101,15 @@ setuptools.setup(
         'omero': [
             "omero-py",
         ],
-        # Tools > Chat sidebar: the separate qtpy-ai-sidecar package (local or
-        # API model) docked beside the figure. NB: until qtpy-ai-sidecar is on
-        # PyPI, `pip install pyfigures[chat]` / `[all]` needs it installed first
-        # (pip install -e path/to/qtpy_ai_sidecar).
+        # the chat sidebar is installed by default since 0.2.1; kept so that
+        # `pip install pyfigures[chat]` from older instructions still works
         'chat': [
-            "mcp>=1.0,<2",
-            "qtpy-ai-sidecar",
+            "mcp>=1.12,<2",
+            "qtpy-ai-sidecar>=0.1.0",
         ],
-        # no qtpy-ai-sidecar here until it is on PyPI: pip would refuse the
-        # whole [all] install for one missing package
         'all': [
-            "mcp>=1.0,<2",
+            "mcp>=1.12,<2",
+            "qtpy-ai-sidecar>=0.1.0",
             "av",
             "opencv-python-headless",
             "pyimagej",

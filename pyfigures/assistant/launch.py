@@ -128,9 +128,25 @@ def stop_live_session(window):
     return True
 
 
+def mcp_server_command() -> tuple[str, list]:
+    """How to start the live MCP server. In a standalone app sys.executable is
+    PyFigures itself (``-m`` would open a second window): it runs with
+    ``--live-mcp``; on Windows through the console twin "PyFigures MCP.exe"
+    built beside it, since a windowed exe has no usable stdio."""
+    if getattr(sys, 'frozen', False):
+        exe = sys.executable
+        if sys.platform == 'win32':
+            twin = os.path.join(os.path.dirname(exe), 'PyFigures MCP.exe')
+            if os.path.isfile(twin):
+                exe = twin
+        return exe, ['--live-mcp']
+    return sys.executable, ['-m', 'pyfigures.assistant.live_mcp']
+
+
 def mcp_server_entry() -> dict:
     """The MCP client configuration for the live figure (stdio)."""
-    return {'command': sys.executable, 'args': ['-m', 'pyfigures.assistant.live_mcp'],
+    command, args = mcp_server_command()
+    return {'command': command, 'args': args,
             'env': {'PYFIGURES_MCP_SURFACE': 'categories', 'PYFIGURES_LIVE_RUNTIME': str(runtime_dir())}}
 
 

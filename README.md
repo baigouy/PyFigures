@@ -4,7 +4,7 @@ Effortless creation of high-quality scientific figures in Python.
 
 ![PyFigures main window with the chat sidebar](https://raw.githubusercontent.com/baigouy/PyFigures/main/images/PyFigures.png)
 
-*A figure built from a recipe, with the optional chat sidebar docked on the right: asked in plain words, a language model (here Mistral Large 4) has just added the scale bar to panel D, one undo step. Sample images from scikit-image (public domain, CC0).*
+*A figure built from a recipe, with the chat sidebar docked on the right: asked in plain words, a language model (here Mistral Large 4) has just added the scale bar to panel D, one undo step. Sample images from scikit-image (public domain, CC0).*
 
 A [demo video](https://youtu.be/sq7d1Aon4cQ) and the complete [demo playlist](https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7) show the interface at work (recorded with an earlier version; most images in them are public domain, from the [Cell Image Library](http://www.cellimagelibrary.org/)).
 
@@ -113,7 +113,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[fiji]
     ```
     
-    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video, OME-Zarr, vector PDF panels and the MCP server), use `pip install -U pyfigures[all]` instead. The chat sidebar is not in `[all]`: its package, qtpy-ai-sidecar, is not on PyPI yet, so install it first from its folder with `pip install -e`, then `pip install -U pyfigures[chat]`.
+    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video, OME-Zarr and vector PDF panels), use `pip install -U pyfigures[all]` instead. The chat sidebar ([qtpy-ai-sidecar](https://pypi.org/project/qtpy-ai-sidecar/)) and the MCP server are installed by default.
     
 
 7. **Optional: Install video support (reading movies, exporting H.264 videos):**
@@ -225,6 +225,7 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **Qt** (PyQt6-Qt6)      | The Qt libraries under PyQt6                                | https://www.qt.io/                            | LGPL v3            |
 | **staplot**             | Data-plot panels and statistics (same author)               | https://pypi.org/project/staplot/             | BSD                |
 | **batoolset**           | Image I/O and tools (same author)                           | https://pypi.org/project/batoolset/           | BSD                |
+| **qtpy-ai-sidecar** (with keyring, httpx, platformdirs) | Chat sidebar (same author)          | https://pypi.org/project/qtpy-ai-sidecar/     | BSD 2-Clause (keyring MIT, httpx BSD, platformdirs MIT) |
 | **batoolset-gui**       | Qt drawing layer of batoolset (same author)                 | https://pypi.org/project/batoolset-gui/       | BSD                |
 | **elasticdeform**       | Image deformation (via batoolset, Python < 3.13)            | https://pypi.org/project/elasticdeform/       | BSD                |
 | **imagecodecs**         | Image compression codecs (TIFF, ...)                        | https://pypi.org/project/imagecodecs/         | BSD 3-Clause       |
@@ -245,7 +246,7 @@ Optional (installed only if you ask for them):
 |-------------------------|-------------------------------------------------------------|-----------------------------------------------|--------------------|
 | **PyAV** (`av`, `pyfigures[video]`) | Reads videos, writes H.264 / VP9 videos         | https://pypi.org/project/av/                  | BSD 3-Clause       |
 | **FFmpeg** (inside PyAV) | Video codecs; this build includes **x264 and x265** (GPL v2+) and LGPL/BSD codec libraries | https://ffmpeg.org/ | **GPL v3** as built |
-| **mcp** (`pyfigures[ai]`) | MCP server                                                | https://pypi.org/project/mcp/                 | MIT                |
+| **mcp**                 | MCP server, and the chat sidebar's MCP client                 | https://pypi.org/project/mcp/                 | MIT                |
 | **zarr** (`pyfigures[zarr]`) | OME-Zarr images (with numcodecs)                       | https://pypi.org/project/zarr/                | MIT                |
 | **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not bundled; the GUI offers to install it) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
 | **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |

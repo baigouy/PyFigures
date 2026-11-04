@@ -173,6 +173,54 @@ def test_failed_install_says_how_to_do_it(offer, monkeypatch):
     assert "no network" in shown[-1] and "pip install pymupdf" in shown[-1]
 
 
+def test_failed_install_in_a_standalone_app_does_not_say_pip(offer, monkeypatch):
+    # the apps have no pip: point at the connection instead
+    P, answer, shown = offer
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(P, "install_pymupdf", lambda: (False, "no network"))
+    answer("Install PyMuPDF")
+    assert P.offer_pymupdf(None, "add") is False
+    assert "no network" in shown[-1] and "pip" not in shown[-1] and "internet" in shown[-1]
+
+
+def test_downloads_use_certifi_not_the_windows_store(monkeypatch):
+    # one malformed certificate in the Windows store made Python's default
+    # context fail ("[ASN1: NOT_ENOUGH_DATA]"): the in-app install died before
+    # downloading anything, while pip (own bundle) worked
+    import ssl
+    certifi = pytest.importorskip("certifi")
+    seen = {}
+
+    def no_windows_store(self, *a, **k):
+        raise ssl.SSLError("[ASN1: NOT_ENOUGH_DATA] not enough data")
+
+    monkeypatch.setattr(ssl.SSLContext, "load_default_certs", no_windows_store)
+    real = ssl.create_default_context
+
+    def spy(*a, **k):
+        seen.update(k)
+        return real(*a, **k)
+
+    monkeypatch.setattr(ssl, "create_default_context", spy)
+    ctx = X.ssl_context()
+    assert isinstance(ctx, ssl.SSLContext) and seen.get("cafile") == certifi.where()
+
+    opened = {}
+
+    class R(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen",
+                        lambda url, timeout=None, context=None: opened.update(context=context) or R(b"{}"))
+    assert X._fetch("https://pypi.org/pypi/pymupdf/json", 5) == b"{}"
+    assert isinstance(opened["context"], ssl.SSLContext)
+
+
 def test_nobody_is_asked_offscreen(monkeypatch, qapp):
     from pyfigures.gui import pdf_support as P
     monkeypatch.setattr(P, "has_pymupdf", lambda: False)

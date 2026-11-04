@@ -18,6 +18,12 @@ datas += collect_data_files('skimage')
 datas += collect_data_files('sklearn')
 datas += collect_data_files('pptx')               # default.pptx template + XML parts
 datas += collect_data_files('latex2mathml')       # unimathsymbols.txt ($…$ -> PowerPoint equations)
+# the chat sidebar (qtpy-ai-sidecar, a core part of the app): its icons and
+# templates, the MCP client/server, and keyring's per-OS key stores (imported
+# by entry point, invisible to the analysis)
+datas += collect_data_files('qtpy_ai_sidecar')
+datas += collect_data_files('mcp')
+datas += collect_data_files('keyring')
 # Licence texts + where the corresponding source is (GPLv3: the bundle includes
 # PyQt6, Qt and FFmpeg/x264); made by packaging/collect_licenses.py, shown by
 # Help > About
@@ -52,6 +58,11 @@ hiddenimports += collect_submodules('pypdfium2')
 hiddenimports += collect_submodules('pylatexenc')     # imported lazily (Illustrator maths)
 hiddenimports += ['latex2mathml.converter', 'mathml2omml']
 hiddenimports += collect_submodules('pypdfium2_raw')
+hiddenimports += collect_submodules('qtpy_ai_sidecar')
+hiddenimports += collect_submodules('mcp')
+hiddenimports += collect_submodules('keyring')        # keyring.backends.Windows / macOS
+hiddenimports += collect_submodules('httpx')
+hiddenimports += collect_submodules('platformdirs')
 datas += collect_data_files('pypdfium2_raw')         # version.json
 binaries = collect_dynamic_libs('pypdfium2_raw')
 hiddenimports += [
@@ -95,6 +106,10 @@ hiddenimports += [
 # ---------------------------------------------------------------------------
 # Icons (drawn by packaging/make_icons.py): .ico on Windows, .icns on macOS
 # ---------------------------------------------------------------------------
+sys.path.insert(0, os.path.abspath('.'))
+from pyfigures.version import __VERSION__ as _version      # was a stale literal
+
+
 def _icon(name):
     ext = {'win32': '.ico', 'darwin': '.icns'}.get(sys.platform)
     return os.path.join('images', 'icons', name + ext) if ext else None
@@ -175,6 +190,27 @@ for _launcher in ('PyFigures Album', 'PyFigures Poster'):
         entitlements_file=None,
         icon=_icon(_launcher.lower().replace(' ', '_')),   # pyfigures_album / pyfigures_poster
     ))
+if sys.platform == 'win32':
+    # the chat sidebar's MCP server (PyFigures --live-mcp) talks over stdio, which
+    # a windowed exe does not have: a console twin, started hidden by the MCP client
+    extra_exes.append(EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name='PyFigures MCP',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=True,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon=_icon('pyfigures'),
+    ))
 
 # ---------------------------------------------------------------------------
 # Collect (one-directory bundle)
@@ -202,7 +238,7 @@ if sys.platform == 'darwin':
         info_plist={
             'NSHighResolutionCapable': True,
             'NSRequiresAquaSystemAppearance': False,  # allow dark mode
-            'CFBundleShortVersionString': '0.1.11',
+            'CFBundleShortVersionString': _version,
             'LSBackgroundOnly': False,
         },
     )

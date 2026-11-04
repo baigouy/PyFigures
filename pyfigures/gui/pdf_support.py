@@ -103,9 +103,15 @@ def offer_pymupdf(parent, reason='add', panels=None, force=False) -> bool:
     finally:
         QApplication.restoreOverrideCursor()
     if not ok:
+        import sys
+        if getattr(sys, 'frozen', False):
+            # the standalone apps have no pip: a pip command is no help there
+            hint = ('\n\nCheck the internet connection (or a proxy or firewall blocking '
+                    'pypi.org), then try again from Tools → Vector PDF panels.')
+        else:
+            hint = '\n\nYou can install it yourself with:  pip install pymupdf'
         QMessageBox.warning(parent, 'Vector PDF panels',
-                            'PyMuPDF could not be installed:\n' + msg
-                            + '\n\nYou can install it yourself with:  pip install pymupdf')
+                            'PyMuPDF could not be installed:\n' + msg + hint)
         return False
     redone = revectorise(panels or [])
     QMessageBox.information(parent, 'Vector PDF panels',

@@ -133,9 +133,23 @@ def _pick_wheel(files: list[dict], tags: list[str]) -> dict | None:
     return best[1] if best else None
 
 
+def ssl_context():
+    """HTTPS context with certifi's CA bundle (shipped with requests, and in
+    the standalone apps). Python's default context reads the Windows
+    certificate store, and one malformed certificate there makes every
+    download fail ("[ASN1: NOT_ENOUGH_DATA]") — pip has its own bundle, so
+    it kept working while the in-app install did not."""
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
 def _fetch(url: str, timeout) -> bytes:
     from urllib.request import urlopen
-    with urlopen(url, timeout=timeout) as r:
+    with urlopen(url, timeout=timeout, context=ssl_context()) as r:
         return r.read()
 
 

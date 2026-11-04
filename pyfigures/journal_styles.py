@@ -368,7 +368,8 @@ def extract_with_endpoint(text, journal, model, stage="unspecified", source_url=
         headers["Authorization"] = "Bearer " + os.environ["JOURNAL_STYLE_API_KEY"]
     req = urllib.request.Request(base_url.rstrip("/") + "/chat/completions",
                                  data=json.dumps(payload).encode("utf-8"), headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    from pyfigures.extras import ssl_context      # certifi: a bad Windows certificate breaks the default
+    with urllib.request.urlopen(req, timeout=timeout, context=ssl_context()) as resp:
         reply = json.load(resp)
     choice = reply["choices"][0]
     if choice.get("finish_reason") == "length":

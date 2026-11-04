@@ -319,14 +319,20 @@ def open_annotation_properties(panel_ref: str, annotation_index: int, token: str
     return call_live('open_annotation_properties', dict(panel_ref=panel_ref,annotation_index=annotation_index,token=token))
 
 
-if __name__ == '__main__':
+def main():
+    """Serve the live figure over stdio: ``python -m pyfigures.assistant.live_mcp``,
+    or ``PyFigures --live-mcp`` in the standalone apps (no python to run -m)."""
     from pyfigures.mcp_server import run_stdio
     if os.environ.get('PYFIGURES_MCP_SURFACE', 'categories') == 'all':
         active_server = mcp
     else:
-        from .categorized_mcp import build_server
+        from pyfigures.assistant.categorized_mcp import build_server
         active_server = build_server(mcp, request)
     run_stdio(active_server)
+
+
+if __name__ == '__main__':
+    main()
 
 
 

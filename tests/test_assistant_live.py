@@ -388,7 +388,8 @@ def test_chat_sidebar_without_the_package_says_how_to_install(qapp, gui, runtime
     monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: said.append(a[2]))
     g = gui()
     assert g.open_chat_sidebar() is None
-    assert "qtpy-ai-sidecar" in said[0] and "pip install -e" in said[0]   # not on PyPI yet
+    assert "qtpy-ai-sidecar" in said[0] and "pip install -U qtpy-ai-sidecar" in said[0]
+    assert "pip install -e" not in said[0] and "not on PyPI" not in said[0]   # on PyPI since 2026-11-04
     assert not g.share_figure_action.isChecked()
 
 

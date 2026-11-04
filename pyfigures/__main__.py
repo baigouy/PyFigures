@@ -324,6 +324,13 @@ def requested_tool(argv, executable):
 
 
 if __name__ == '__main__':
+    if '--live-mcp' in sys.argv:
+        # the chat sidebar's MCP server in the standalone apps, where
+        # `python -m pyfigures.assistant.live_mcp` has no python to run
+        from pyfigures.assistant.live_mcp import main as run_live_mcp
+        run_live_mcp()
+        sys.stdout.flush()
+        os._exit(0)
     if '--self-test' in sys.argv:
         # build check: PyFigures --self-test report.json (see pyfigures/self_test.py)
         from pyfigures.self_test import run as run_self_test
