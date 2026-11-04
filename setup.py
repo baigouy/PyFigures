@@ -28,7 +28,9 @@ setuptools.setup(
                   'pyfigures': ['icons/*.png', 'gui/fonts/*.md', 'gui/fonts/*.ttf', 'gui/fonts/*.otf']},
     license='BSD',
     include_package_data=True,
-    packages=setuptools.find_packages(),
+    # only pyfigures: the repo's images/ folder has an __init__.py and was
+    # installed as a top-level "images" package into site-packages
+    packages=setuptools.find_packages(include=['pyfigures', 'pyfigures.*']),
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: BSD License',

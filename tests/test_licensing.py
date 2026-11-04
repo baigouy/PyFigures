@@ -161,6 +161,34 @@ def test_readme_lists_every_dependency_with_its_licence():
     assert "corresponding source" in table and "GNU GPL v3" in table
 
 
+def test_the_wheel_installs_only_the_pyfigures_package():
+    # find_packages() without include also picked up the repo's images/ folder
+    # and installed a top-level "images" package into site-packages
+    with open(os.path.join(ROOT, "setup.py"), encoding="utf-8") as f:
+        setup = f.read()
+    call = re.search(r"packages=setuptools\.find_packages\(include=(\[[^\]]*\])\)", setup)
+    assert call, "packages= must use find_packages(include=[...])"
+    import ast
+    import fnmatch
+    include = ast.literal_eval(call.group(1))
+    # what find_packages(include=...) picks (no setuptools in the CI venv):
+    # folders with an __init__.py under importable parents, matching a pattern
+    found = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        rel = os.path.relpath(dirpath, ROOT)
+        if rel == ".":
+            continue
+        if "__init__.py" not in filenames:
+            dirnames[:] = []     # not a package: nothing below it is importable
+            continue
+        name = rel.replace(os.sep, ".")
+        if any(fnmatch.fnmatchcase(name, pat) for pat in include):
+            found.append(name)
+    assert "images" not in found
+    assert "pyfigures" in found and "pyfigures.gui" in found
+    assert all(p == "pyfigures" or p.startswith("pyfigures.") for p in found), found
+
+
 def test_every_extra_named_in_the_docs_exists():
     with open(os.path.join(ROOT, "setup.py"), encoding="utf-8") as f:
         setup = f.read()
