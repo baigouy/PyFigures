@@ -237,7 +237,8 @@ def build():
             pyf = os.path.join(folder, "figure.pyf")
             res = json.loads(export_figure(pyf, os.path.join(folder, "figure.png"), dpi=200))
             json.loads(export_figure(pyf, os.path.join(folder, "figure.pdf"), dpi=300))
-            image, extra = os.path.basename(res["output"]), ["figure.pyf", "figure.pdf"]
+            # figure.pyf is not committed (it holds the builder's absolute paths): rebuild from the recipe
+            image, extra = os.path.basename(res["output"]), ["figure.pdf"]
         with open(os.path.join(HERE, f"{ex['name']}.md"), "w", encoding="utf-8") as f:
             f.write(_page(ex, image, extra))
         about = ex["about"].replace("`", "")

@@ -20,3 +20,6 @@ CLAUDE*.md
 claude*.md
 .claude/
 TODO.txt
+DOCS_ONLINE.md
+# example figures hold the builder's absolute paths; rebuilt from their recipe.yaml
+docs/examples/*/*.pyf

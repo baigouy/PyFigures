@@ -24,7 +24,7 @@ rows:
 - **PyFigures window:** *File → Build figure from recipe…*
 - **MCP server:** `build_figure_from_recipe("recipe.yaml")`
 
-Files: [`recipe.yaml`](channels/recipe.yaml), [`figure.pyf`](channels/figure.pyf), [`figure.pdf`](channels/figure.pdf). The data are in [`docs/examples/data/`](https://github.com/baigouy/PyFigures/tree/main/docs/examples/data); paths in the recipe are relative to the recipe.
+Files: [`recipe.yaml`](channels/recipe.yaml), [`figure.pdf`](channels/figure.pdf). The data are in [`docs/examples/data/`](https://github.com/baigouy/PyFigures/tree/main/docs/examples/data); paths in the recipe are relative to the recipe.
 
 The result is an ordinary figure: open it in PyFigures to keep editing it by hand.
 
