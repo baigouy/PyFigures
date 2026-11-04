@@ -59,6 +59,7 @@ setuptools.setup(
         "Requests",
         "batoolset>=0.2.0",          # 0.2.0: the split, the Qt layer moved to batoolset-gui
         "batoolset-gui>=0.2.0",      # batoolset.drawings / figure / luts / pyqts (Qt layer); inverted LUTs
+        "staplot>=0.1.0",            # data-plot panels and stats brackets (staplot.api)
         "pyautogui",
         "imagecodecs",
         "psutil",
@@ -114,5 +115,5 @@ setuptools.setup(
             "pytest-timeout",
         ],
     },
-    python_requires='>=3.9'  # PyQt6 dropped 3.7/3.8; tested up to 3.12
+    python_requires='>=3.10'  # staplot needs 3.10+; batoolset 0.2.0 caps at <3.12
 )
