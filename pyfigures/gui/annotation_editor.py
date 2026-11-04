@@ -8,6 +8,7 @@ from batoolset.strings.tools import reload_string_list, find_letter_before_h
 # import pzfconfig # this is to store the path to be used for the consolidated files
 from pyfigures.gui.scalebareditor import ScaleBarEditor
 from pyfigures.gui.zoom_links import zoom_links, follow_zoom_links
+from pyfigures.gui import editor_interaction as EI
 from pyfigures.arrowheads import ARROWHEAD_ONLY, make_head_only
 from pyfigures.gui.widget_for_inset import InsetWidget
 import traceback
@@ -28,7 +29,7 @@ from functools import partial
 from qtpy.QtGui import QPalette, QPainter, QColor, QIcon, QPen,QKeySequence, QMouseEvent,QImage,QTransform
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QMenu, QApplication, QMainWindow, QPushButton, QWidget, QLabel,QCheckBox, QScrollArea,QWidget, \
-    QAction, QProgressBar, QDockWidget, QSpinBox, QComboBox, QGridLayout, QDialog, QGroupBox, QDoubleSpinBox, QColorDialog, QVBoxLayout,QFormLayout,QHBoxLayout,QToolButton,QTabWidget,QTextEdit,QShortcut,QLineEdit, QSizePolicy, QMessageBox, QSlider, QListWidget, QRadioButton, QButtonGroup
+    QAction, QProgressBar, QDockWidget, QSpinBox, QComboBox, QGridLayout, QDialog, QGroupBox, QDoubleSpinBox, QColorDialog, QVBoxLayout,QFormLayout,QHBoxLayout,QToolButton,QFrame,QTabWidget,QTextEdit,QShortcut,QLineEdit, QSizePolicy, QMessageBox, QSlider, QListWidget, QRadioButton, QButtonGroup
 from batoolset.drawings.shapes.Position import Position
 from pyfigures.gui.textEditWatcher import TextEditWatcher
 from batoolset.drawings.shapes.group import Group, set_to_size
@@ -63,6 +64,7 @@ class VectorialDrawPane2(QWidget):
     shapeAdded = Signal() # add a signal that emits when shapes are added
     selectionChanged = Signal() # add a signal that emits when there is a new selection
     shapeChanged = Signal()
+    scaleChanged = Signal(float)   # the zoom label of the editor follows it
     # TODO change parameters
     def __init__(self, parent=None, demo=False, background=None):
         super(QWidget, self).__init__(parent)
@@ -96,9 +98,18 @@ class VectorialDrawPane2(QWidget):
 
         # default scaling parameters # maybe allow users to set them
         self.scale = 1.0
-        self.min_scaling_factor = 0.1
+        # a whole 8192 px image must fit a window (it needs ~0.06): 0.1 did not
+        self.min_scaling_factor = 0.01
         self.max_scaling_factor = 20
         self.zoom_increment = 0.05
+        self.zoom_factor = 1.25        # each zoom step multiplies: +0.05 did nothing visible on big images
+
+        # Ctrl+Z: snapshots of the annotations (list + geometry) before each edit
+        self._undo = []
+        self._press_snapshot = None
+        self._drag_endpoint = None     # 1 / 2 while an end of the selected line is dragged
+        self._crop_grab = None         # a crop side / corner / 'move' being dragged
+        self.crop_controller = None    # MainWindow while the Rotate + Crop tab is shown
 
         # line style parameters
         self.line_style = None
@@ -133,6 +144,7 @@ class VectorialDrawPane2(QWidget):
             self.scale = scale
         self.update_size()
         self.update()
+        self.scaleChanged.emit(self.scale)
 
 
     def updateBoudingRect(self):
@@ -156,6 +168,7 @@ class VectorialDrawPane2(QWidget):
 
     def duplicate(self):
         if self.selected_shape is not None:
+            self.push_undo()
             copy = clone_object(self.selected_shape)
 
             if isinstance(copy, list):
@@ -173,10 +186,67 @@ class VectorialDrawPane2(QWidget):
         self.set_scale(1)
 
     def zoom_in(self):
-        self.set_scale(self.scale + self.zoom_increment)
+        self.set_scale(self.scale * self.zoom_factor)
 
     def zoom_out(self):
-        self.set_scale(self.scale - self.zoom_increment)
+        self.set_scale(self.scale / self.zoom_factor)
+
+    def wheelEvent(self, event):
+        """Ctrl + wheel zooms; the plain wheel still scrolls."""
+        if event.modifiers() & getCtrlModifier():
+            if event.angleDelta().y() > 0:
+                self.zoom_in()
+            elif event.angleDelta().y() < 0:
+                self.zoom_out()
+            event.accept()
+            return
+        event.ignore()
+
+    # -- undo ----------------------------------------------------------------
+    def _current_snapshot(self):
+        crops = None
+        if self.crop_controller is not None:
+            try:
+                crops = self.crop_controller.current_crops()
+            except Exception:
+                crops = None
+        return (EI.snapshot(self.shapes), crops)
+
+    def push_undo(self, snap=None):
+        """Remember the annotations as they are now (or *snap*, taken before
+        the edit) so Ctrl+Z can put them back."""
+        self._undo.append(snap if snap is not None else self._current_snapshot())
+        del self._undo[:-EI.UNDO_DEPTH]
+
+    def _same(self, a, b):
+        return a[1] == b[1] and EI.same_snapshot(a[0], b[0])
+
+    def undo(self):
+        """Undo the last move / drawing / deletion / crop drag. True if
+        something was undone."""
+        while self._undo:
+            snap = self._undo.pop()
+            if self._same(snap, self._current_snapshot()):
+                continue                       # nothing changed since that one
+            shapes_snap, crops = snap
+            EI.apply_snapshot(self.shapes, shapes_snap)
+            if self.background is not None and self.background.annotations is not self.shapes:
+                self.background.annotations[:] = self.shapes
+            if crops is not None and self.crop_controller is not None:
+                self.crop_controller.restore_crops(crops)
+            self.selected_shape = [s for s in (self.selected_shape or []) if any(s is t for t in self.shapes)]
+            self.currently_drawn_shape = None
+            self.selectionChanged.emit()
+            self.shapeChanged.emit()
+            self.update_size()
+            self.update()
+            return True
+        return False
+
+    def _single_selected_line(self):
+        if self.selected_shape and len(self.selected_shape) == 1 and isinstance(self.selected_shape[0], Line2D):
+            return self.selected_shape[0]
+        return None
 
     def color_picker(self, method_to_set_color):
         try:
@@ -278,6 +348,7 @@ class VectorialDrawPane2(QWidget):
         if math.hypot(p2.x() - p1.x(), p2.y() - p1.y()) < 3:
             return  # ignore an accidental click
         poly = self._make_bracket_polyline(p1, p2)
+        self.push_undo()
         self.shapes.append(poly)
 
         from qtpy.QtWidgets import QInputDialog
@@ -395,6 +466,26 @@ class VectorialDrawPane2(QWidget):
 
         # draw a selection on top of everything else
         self.draw_sel(sel,painter)
+        if self.crop_controller is not None:
+            # Rotate + Crop tab: the crop rectangle can be grabbed at these squares (or inside)
+            painter.save()
+            painter.setOpacity(1)
+            painter.setPen(QPen(QColor(0, 0, 0), 1 / max(self.scale, 1e-6)))
+            painter.setBrush(QColor(255, 255, 255))
+            h = EI.HANDLE_PX * 0.8 / max(self.scale, 1e-6)
+            for p in self.crop_controller.crop_handles():
+                painter.drawRect(QRectF(p.x() - h, p.y() - h, 2 * h, 2 * h))
+            painter.restore()
+        line = self._single_selected_line()
+        if line is not None:
+            # end handles: drag one to move that end (the rest of the line moves the whole line)
+            painter.save()
+            painter.setOpacity(1)
+            painter.setPen(QPen(QColor(0xFF0000), 1.5 / max(self.scale, 1e-6)))
+            painter.setBrush(QColor(255, 255, 255))
+            for r in EI.handle_rects(line, self.scale):
+                painter.drawRect(r)
+            painter.restore()
 
         painter.restore()
         painter.end()
@@ -587,6 +678,7 @@ class VectorialDrawPane2(QWidget):
     def remove_selection(self):
         # print('called remove sel', self.selected_shape, self.currently_drawn_shape)
         if self.selected_shape:
+            self.push_undo()
             self.shapes = [e for e in self.shapes if e not in self.selected_shape]
             del self.selected_shape
             self.selected_shape = []
@@ -602,6 +694,19 @@ class VectorialDrawPane2(QWidget):
             self.drawing = True
             self.lastPoint = event.position() / self.scale
             self.firstPoint = event.position() / self.scale
+            self._press_snapshot = self._current_snapshot()
+
+            if self.crop_controller is not None and not self._bracket_mode:
+                # Rotate + Crop tab: drag a side, a corner or the inside of the crop rectangle
+                self._crop_grab = self.crop_controller.crop_grab(self.lastPoint, self.scale)
+                if self._crop_grab:
+                    return
+
+            line = self._single_selected_line()
+            if line is not None and self.currently_drawn_shape is None:
+                self._drag_endpoint = EI.line_handle_at(line, self.lastPoint, self.scale)
+                if self._drag_endpoint:
+                    return
 
             if self._bracket_mode:
                 # begin a bracket drag; skip the normal selection/creation logic
@@ -736,6 +841,21 @@ class VectorialDrawPane2(QWidget):
 
     def mouseMoveEvent(self, event):
         self.dragged = True
+        point = event.position() / self.scale
+        if self._crop_grab:
+            self.crop_controller.crop_drag_to(point)
+            self.lastPoint = point
+            return
+        if self._drag_endpoint:
+            line = self._single_selected_line()
+            if line is not None:
+                (line.setP1 if self._drag_endpoint == 1 else line.setP2)(QPointF(point))
+                self.update_size()
+                self.update()
+            self.lastPoint = point
+            return
+        if not event.buttons():
+            self._hover_cursor(point)
         if self._bracket_mode and self._bracket_dragging:
             self.lastPoint = event.position() / self.scale
             self.update()
@@ -761,11 +881,53 @@ class VectorialDrawPane2(QWidget):
 
         self.lastPoint = event.position() / self.scale
 
+    def _hover_cursor(self, point):
+        """Resize / move cursors over the crop rectangle and line ends."""
+        grab = None
+        line = self._single_selected_line()
+        if self.crop_controller is not None:
+            grab = self.crop_controller.crop_hit(point, self.scale)
+        elif line is not None and EI.line_handle_at(line, point, self.scale):
+            grab = ('end',)
+        if not grab:
+            self.unsetCursor()
+            return
+        if grab == ('move',):
+            shape = Qt.CursorShape.SizeAllCursor
+        elif grab == ('end',):
+            shape = Qt.CursorShape.CrossCursor
+        elif len(grab) == 2:
+            diag = set(grab) in ({'left', 'top'}, {'right', 'bottom'})
+            shape = Qt.CursorShape.SizeFDiagCursor if diag else Qt.CursorShape.SizeBDiagCursor
+        elif grab[0] in ('left', 'right'):
+            shape = Qt.CursorShape.SizeHorCursor
+        else:
+            shape = Qt.CursorShape.SizeVerCursor
+        self.setCursor(shape)
+
+    def _record_press_edit(self):
+        """After a mouse edit: one undo step if the press changed anything."""
+        snap, self._press_snapshot = self._press_snapshot, None
+        if snap is not None and not self._same(snap, self._current_snapshot()):
+            self.push_undo(snap)
+
     def mouseReleaseEvent(self, event):
         self.dragged=False
 
+        if event.button() == Qt.LeftButton and (self._crop_grab or self._drag_endpoint):
+            ended_line = bool(self._drag_endpoint)
+            self._crop_grab = None
+            self._drag_endpoint = None
+            self.drawing = False
+            self._record_press_edit()
+            if ended_line:
+                self.shapeChanged.emit()
+            self.update()
+            return
+
         # I probably do not need that anymore
         if event.button() == Qt.LeftButton:
+            self._record_press_edit_later()
             self.drawing = False
             if self._bracket_mode and self._bracket_dragging:
                 self._bracket_dragging = False
@@ -812,6 +974,19 @@ class VectorialDrawPane2(QWidget):
                 self.update()
 
 
+
+    def _record_press_edit_later(self):
+        # after the release has added / moved the shape (and before the next press)
+        snap = self._press_snapshot
+        if snap is None:
+            return
+
+        def record():
+            if self._press_snapshot is snap:
+                self._record_press_edit()
+            elif not self._same(snap, self._current_snapshot()):
+                self.push_undo(snap)
+        QTimer.singleShot(0, record)
 
     def check_shape_size_before_adding_it(self):
         if self.filter_out_unwanted_shapes_based_on_distance:  # TODO maybe allow arrowheads to be drawn and stay small, allow lines only if they are in arrwohed only mode (if so do not allow the body of the li,ne to be drawn)
@@ -957,6 +1132,7 @@ class VectorialDrawPane2(QWidget):
 
             size_ok = self.check_shape_size_before_adding_it()
             if size_ok:
+                self.push_undo()
                 self.shapes.append(self.currently_drawn_shape)
                 self.shapeAdded.emit()
                 self.selected_shape = [self.currently_drawn_shape]  # do select drawn shape
@@ -1048,6 +1224,15 @@ class MainWindow(QWidget):
             # Create actions
             self.zoomInAct = QAction("Zoom &In (25%)", self, shortcut="" + self.ctrl_key + "++",
                                      enabled=True, triggered=self.qt_viewer.zoom_in)
+            self.zoomInAct2 = QAction("Zoom In", self, shortcut="" + self.ctrl_key + "+=",
+                                      enabled=True, triggered=self.qt_viewer.zoom_in)   # + without Shift
+            self.fitWholeAct = QAction("Fit the whole image", self, shortcut="" + self.ctrl_key + "+0",
+                                       enabled=True, triggered=self.fit_whole)
+            self.undoAct = QAction("Undo", self, shortcut=QKeySequence(QKeySequence.StandardKey.Undo),
+                                   enabled=True, triggered=self.undo)
+            for act in (self.zoomInAct2, self.fitWholeAct, self.undoAct):
+                act.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+                self.addAction(act)
             self.zoomOutAct = QAction("Zoom &Out (25%)", self, shortcut="" + self.ctrl_key + "+-",
                                       enabled=True, triggered=self.qt_viewer.zoom_out)
             self.normalSizeAct = QAction("&Normal Size", self, shortcut="" + self.ctrl_key + "+N",
@@ -1615,8 +1800,12 @@ class MainWindow(QWidget):
             self.tab_widget = tab_widget        # open_tab(): Draw ROIs… starts on the drawing tools
 
             mainLayout = QHBoxLayout(self)
-            mainLayout.addWidget(self.scrollArea)
+            mainLayout.addWidget(self._image_column())
             mainLayout.addWidget(tab_widget)
+            # the Rotate + Crop tab lets the mouse drag the crop rectangle
+            tab_widget.currentChanged.connect(self._on_tab_changed)
+            # the drawing tools first (a double click on a panel opened 'File Infos')
+            self.open_tab('Annotations')
 
             self.shapes_toolbox = QGroupBox('Shapes',objectName='shapes_toolbox')
             self.shapes_toolbox.setEnabled(True)
@@ -1648,7 +1837,7 @@ class MainWindow(QWidget):
             significance_bracket.setToolTip(
                 "Significance bracket — drag horizontally over two bars, then type a label (*, n.s., p<0.001…)")
             significance_bracket.clicked.connect(self.qt_viewer.change_shape)
-            shapes_toolbox_layout.addWidget(significance_bracket, 4, 0, 1, 3)
+            shapes_toolbox_layout.addWidget(significance_bracket, 4, 1, 1, 2)   # (4, 0) is 'arrowhead only'
             text = QPushButton()
             text.setFocusPolicy(Qt.NoFocus)
             text.setIcon(get_icon("ri.text"))
@@ -1784,6 +1973,14 @@ class MainWindow(QWidget):
             self.toCrop.setFocusPolicy(Qt.NoFocus)
             self.toCrop.clicked.connect(self.ROI_to_crop_or_inset)
             shapes_toolbox_layout.addWidget(self.toCrop, 10, 1, 1, 2)
+            # leader lines from the ROI to its inset, ending exactly on the inset's corners
+            self.connectInset = QPushButton('Connect ROI \u2194 inset')
+            self.connectInset.setFocusPolicy(Qt.NoFocus)
+            self.connectInset.setToolTip('Two lines from the rectangle ROI to its inset (the magnified view), '
+                                         'so one sees they are the same region. Select the ROI first when '
+                                         'the image has several.')
+            self.connectInset.clicked.connect(self.connect_roi_to_inset)
+            shapes_toolbox_layout.addWidget(self.connectInset, 11, 0, 1, 3)
 
             self.shapes_toolbox.setLayout(shapes_toolbox_layout)
             content_layout.addWidget(self.shapes_toolbox)
@@ -2213,11 +2410,121 @@ class MainWindow(QWidget):
         tabs = getattr(self, 'tab_widget', None)
         if tabs is None:
             return False
+        import re
+
+        def norm(t):
+            return re.sub(r'[^a-z0-9]', '', str(t).lower())
         for i in range(tabs.count()):
-            if tabs.tabText(i) == name:
+            if norm(tabs.tabText(i)) == norm(name):
                 tabs.setCurrentIndex(i)
                 return True
         return False
+
+    # -- zoom bar, undo, crop rectangle -----------------------------------------
+    def _image_column(self):
+        """The image with a zoom bar above it (- / + / Fit / 100 %)."""
+        column = QFrame()
+        layout = QVBoxLayout(column)
+        layout.setContentsMargins(0, 0, 0, 0)
+        bar = QHBoxLayout()
+        for text, tip, slot in (('\u2212', 'Zoom out (' + self.ctrl_key + ' -, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_out),
+                                ('+', 'Zoom in (' + self.ctrl_key + ' +, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_in),
+                                ('Fit', 'Fit the whole image in the window (' + self.ctrl_key + ' 0)', self.fit_whole),
+                                ('100 %', 'Actual size, 1 image pixel = 1 screen pixel', self.qt_viewer.reset_scale)):
+            b = QToolButton()
+            b.setText(text)
+            b.setToolTip(tip)
+            b.setFocusPolicy(Qt.NoFocus)
+            b.clicked.connect(slot)
+            bar.addWidget(b)
+        self.zoom_label = QLabel()
+        bar.addWidget(self.zoom_label)
+        bar.addStretch(1)
+        layout.addLayout(bar)
+        layout.addWidget(self.scrollArea)
+        self.qt_viewer.scaleChanged.connect(self._show_zoom)
+        self._show_zoom(self.qt_viewer.scale)
+        # a big image opens whole, not as its top-left corner at 100 %
+        QTimer.singleShot(0, self._fit_if_too_big)
+        return column
+
+    def _show_zoom(self, scale):
+        self.zoom_label.setText(f'{scale * 100:.0f} %')
+
+    def _fit_if_too_big(self):
+        try:
+            bounds = self.qt_viewer.updateBoudingRect()
+            view = self.scrollArea.viewport().size()
+            if bounds and (bounds.width() > view.width() or bounds.height() > view.height()):
+                self.fit_whole()
+        except RuntimeError:
+            pass                      # dialog already closed
+
+    def fit_whole(self):
+        """Zoom so the whole image (and its annotations) fits the window."""
+        bounds = self.qt_viewer.updateBoudingRect()
+        if not bounds or bounds.width() <= 0 or bounds.height() <= 0:
+            return
+        view = self.scrollArea.viewport().size()
+        w = bounds.width() + max(0, bounds.x())
+        h = bounds.height() + max(0, bounds.y())
+        self.qt_viewer.set_scale(max(self.qt_viewer.min_scaling_factor,
+                                     min((view.width() - 4) / w, (view.height() - 4) / h)))
+
+    def undo(self):
+        """Ctrl+Z in the editor: the last move, drawing, deletion or crop drag."""
+        if self.qt_viewer.undo():
+            self.update_annotations_list(lst=self.qt_viewer.shapes, update=True,
+                                         repopulate_list=True, repopulate_texts=True)
+            return True
+        return False
+
+    def _on_tab_changed(self, _index=None):
+        crop_tab = self.tab_widget.currentWidget() is self.scroll_area3
+        self.qt_viewer.crop_controller = self if crop_tab and self.qt_viewer.background is not None else None
+        self.qt_viewer.unsetCursor()
+        self.qt_viewer.update()
+
+    def _crop_params(self):
+        rect = self.qt_viewer.background.getRect(raw=True)
+        return rect.width(), rect.height(), self.rotate_image_spinbox.value()
+
+    def current_crops(self):
+        return (self.crop_left_spinbox.value(), self.crop_right_spinbox.value(),
+                self.crop_top_spinbox.value(), self.crop_bottom_spinbox.value())
+
+    def restore_crops(self, crops):
+        boxes = (self.crop_left_spinbox, self.crop_right_spinbox, self.crop_top_spinbox, self.crop_bottom_spinbox)
+        for box, value in zip(boxes, crops):
+            box.blockSignals(True)
+            box.setValue(int(value))
+            box.blockSignals(False)
+        self.compute_rotation_n_crop_polygon()
+
+    def crop_hit(self, point, scale):
+        if self.qt_viewer.background is None:
+            return None
+        w, h, angle = self._crop_params()
+        return EI.crop_hit(point, w, h, angle, self.current_crops(), scale)
+
+    def crop_handles(self):
+        if self.qt_viewer.background is None:
+            return []
+        w, h, angle = self._crop_params()
+        return EI.crop_handle_points(w, h, angle, self.current_crops())
+
+    def crop_grab(self, point, scale):
+        """A press on the crop rectangle: remember what is dragged."""
+        grab = self.crop_hit(point, scale)
+        self._crop_drag = (grab, self.current_crops(), QPointF(point)) if grab else None
+        return grab
+
+    def crop_drag_to(self, point):
+        if not getattr(self, '_crop_drag', None):
+            return
+        grab, start, start_point = self._crop_drag
+        w, h, angle = self._crop_params()
+        self.restore_crops(EI.drag_crops(grab, start, start_point, point, w, h, angle))
 
     def update_dimension_sliders(self):
         self.dimsliders = []
@@ -2799,6 +3106,50 @@ class MainWindow(QWidget):
         msg_box.setWindowTitle("Warning")
         msg_box.setText(message)
         msg_box.exec_()
+
+    def connect_roi_to_inset(self, connectors=2):
+        """'Connect ROI <-> inset': leader lines from the rectangle ROI to the
+        inset, ending on the corners where the inset is drawn in the figure.
+        The selected ROI / inset, else the only one on the image."""
+        from pyfigures.zoom_geometry import inset_rect, leader_lines
+        bg = self.qt_viewer.background
+        if bg is None:
+            return False
+        shapes = list(self.qt_viewer.shapes)
+        selected = list(self.qt_viewer.selected_shape or [])
+        rois = [a for a in shapes if type(a) is Rectangle2D]
+        insets = [a for a in shapes if isinstance(a, Image2D)]
+        roi = next((a for a in selected if a in rois), rois[0] if len(rois) == 1 else None)
+        inset = next((a for a in selected if a in insets), insets[0] if len(insets) == 1 else None)
+        if roi is None or inset is None:
+            self.show_warning('Needs one rectangle ROI and one inset on this image: select the ROI '
+                              '(and the inset) when there are several. Rect ROI --> Inset makes an inset from an ROI.')
+            return False
+        raw_w, raw_h = bg.get_raw_size()
+        in_w, in_h = inset.get_raw_size()
+        parent_crops = (self.crop_left_spinbox.value(), self.crop_right_spinbox.value(),
+                        self.crop_top_spinbox.value(), self.crop_bottom_spinbox.value())
+        inset_crops = tuple(getattr(inset, c, 0) or 0 for c in ('crop_left', 'crop_right', 'crop_top', 'crop_bottom'))
+        where = inset_rect((raw_w, raw_h), parent_crops, (in_w, in_h), inset_crops,
+                           inset.fraction_of_parent_image_width_if_image_is_inset, inset.placement)
+        r = roi.getRect()
+        box = (r.x(), r.y(), r.width(), r.height())
+        self.qt_viewer.push_undo()
+
+        def on_rect(p, rect, tol=2.0):
+            x, y, w, h = rect
+            inside = x - tol <= p.x() <= x + w + tol and y - tol <= p.y() <= y + h + tol
+            return inside and min(abs(p.x() - x), abs(p.x() - x - w), abs(p.y() - y), abs(p.y() - y - h)) <= tol
+        # leaders already joining them are replaced, not doubled
+        keep = [a for a in self.qt_viewer.shapes if not (isinstance(a, Line2D) and (
+            (on_rect(a.p1(), box) and on_rect(a.p2(), where)) or (on_rect(a.p2(), box) and on_rect(a.p1(), where))))]
+        pos = keep.index(inset)
+        for k, ((x1, y1), (x2, y2)) in enumerate(leader_lines(box, where, connectors)):
+            keep.insert(pos + k, Line2D(x1, y1, x2, y2, color=roi.color, stroke=roi.stroke or 0.65))
+        self.update_annotations_list(lst=keep, update=True, repopulate_list=True, repopulate_texts=True)
+        self.qt_viewer.update_size()
+        self.qt_viewer.update()
+        return True
 
     def ROI_to_crop_or_inset(self):
 

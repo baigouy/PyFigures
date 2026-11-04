@@ -280,6 +280,10 @@ def build_server(full_server, send):
                 score += 350
             if name == 'explain_live_interaction' and any(w in ('arrow', 'arrows', 'keyboard', 'shortcut', 'shortcuts', 'drag', 'drop', 'dnd', 'split', 'channel', 'channels') for w in words):
                 score += 300
+            link_words = any(w in ('connect', 'connecting', 'connected', 'connector', 'connectors', 'link', 'join',
+                                   'leader', 'leaders', 'lines', 'line', 'funnel') for w in words)
+            if name == 'connect_roi_to_inset' and link_words and any(w in ('roi', 'inset', 'box', 'zoom', 'callout', 'magnified') for w in words):
+                score += 500      # "connect the ROI to the inset with 2 lines": computed ends (a model looped until out of steps)
             if name == 'roi_to_inset' and ('inset' in words or 'magnify' in words) and any(
                     w in ('roi', 'convert', 'rectangle', 'click', 'clicked', 'magnify', 'region') for w in words):
                 score += 350

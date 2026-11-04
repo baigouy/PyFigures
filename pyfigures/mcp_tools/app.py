@@ -32,7 +32,7 @@ mcp = FastMCP(
         "remove_image, set_image_filename, fill_template, batch_fill_templates, "
         "clone_image, move_image, set_size, layout_canvas, remap_paths. "
         "Scale bar tools: get_scale_bar, set_scale_bar, remove_scale_bar, set_scale_bar_all. "
-        "Inset / picture-in-picture tools: add_inset, add_zoom_callout (magnified-detail "
+        "Inset / picture-in-picture tools: add_inset, connect_roi_to_inset (leader lines ROI → inset), add_zoom_callout (magnified-detail "
         "box + inset + leader lines), list_insets, remove_inset, set_inset_property. "
         "Row/column label tools: add_label_row, add_side_label, list_label_rows, remove_label_row. "
         "Figure-level settings: get_figure_properties, set_figure_properties; "

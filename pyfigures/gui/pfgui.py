@@ -951,39 +951,42 @@ class EZFIG_GUI(QMainWindow):
         self.pbar.hide()
         statusBar.addPermanentWidget(self.pbar)
 
+        # NB: window shortcuts, not application ones: in the image editor (its
+        # own dialog) Ctrl+Z / Delete / Ctrl +/- reached the figure, or clashed
+        # with the editor's own keys and neither ran ('ambiguous shortcut')
         # the esc key removes the selection --> can be useful when the selection takes the whole screen
         escShortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
         escShortcut.activated.connect(self.paint.EZFIG_panel.remove_sel)
-        escShortcut.setContext(Qt.ApplicationShortcut)  # make sure the shorctut always remain active
+        escShortcut.setContext(Qt.WindowShortcut)  # make sure the shorctut always remain active
 
         delShortcut = QShortcut(QKeySequence(Qt.Key_Delete), self)
         delShortcut.activated.connect(self.paint.EZFIG_panel.delete_selection)
-        delShortcut.setContext(Qt.ApplicationShortcut)  # make sure the shorctut always remain active
+        delShortcut.setContext(Qt.WindowShortcut)  # make sure the shorctut always remain active
 
         del2Shortcut = QShortcut(QKeySequence(Qt.Key_Backspace),
                                  self)  # maybe use that to move left and the space bar to move right so that the arrows can be kept for moving elements verys slowly ???
         del2Shortcut.activated.connect(self.paint.EZFIG_panel.delete_selection)
-        del2Shortcut.setContext(Qt.ApplicationShortcut)  # make sure the shorctut always remain active
+        del2Shortcut.setContext(Qt.WindowShortcut)  # make sure the shorctut always remain active
 
         # spaceBarShortcut = QShortcut(QKeySequence(Qt.Key_Space), self) # use it or remove it TODO
         # spaceBarShortcut.activated.connect(self.paint.EZFIG_panel.space_bar_pressed)
-        # spaceBarShortcut.setContext(Qt.ApplicationShortcut)
+        # spaceBarShortcut.setContext(Qt.WindowShortcut)
 
         self._up_shortcut = QShortcut(QKeySequence(Qt.Key_Up), self)  # use it or remove it TODO
         self._up_shortcut.activated.connect(self.paint.EZFIG_panel.up_pressed)
-        self._up_shortcut.setContext(Qt.ApplicationShortcut)
+        self._up_shortcut.setContext(Qt.WindowShortcut)
 
         self._down_shortcut = QShortcut(QKeySequence(Qt.Key_Down), self)  # use it or remove it TODO
         self._down_shortcut.activated.connect(self.paint.EZFIG_panel.down_pressed)
-        self._down_shortcut.setContext(Qt.ApplicationShortcut)
+        self._down_shortcut.setContext(Qt.WindowShortcut)
 
         self._left_shortcut = QShortcut(QKeySequence(Qt.Key_Left), self)  # use it or remove it TODO
         self._left_shortcut.activated.connect(self.paint.EZFIG_panel.left_pressed)
-        self._left_shortcut.setContext(Qt.ApplicationShortcut)
+        self._left_shortcut.setContext(Qt.WindowShortcut)
 
         self._right_shortcut = QShortcut(QKeySequence(Qt.Key_Right), self)  # use it or remove it TODO
         self._right_shortcut.activated.connect(self.paint.EZFIG_panel.right_pressed)
-        self._right_shortcut.setContext(Qt.ApplicationShortcut)
+        self._right_shortcut.setContext(Qt.WindowShortcut)
 
         # print('QKeySequence.Copy',QKeySequence.Copy)
         # duplicate_shortcut = QKeySequence.Copy  # Start with the Copy shortcut (Ctrl+C or Command+C)
@@ -993,36 +996,36 @@ class EZFIG_GUI(QMainWindow):
         # Platform-specific key sequence
         ctrl_D_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+D"), self)
         ctrl_D_shortcut.activated.connect(self.paint.EZFIG_panel.duplicate_sel)
-        ctrl_D_shortcut.setContext(Qt.ApplicationShortcut)
+        ctrl_D_shortcut.setContext(Qt.WindowShortcut)
 
         ctrl_V_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+V"), self)
         ctrl_V_shortcut.activated.connect(self.paint.EZFIG_panel.duplicate_sel)
-        ctrl_V_shortcut.setContext(Qt.ApplicationShortcut)
+        ctrl_V_shortcut.setContext(Qt.WindowShortcut)
 
         # Create a shortcut for Ctrl+S and connect it to the save_pzf method
         save_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+S"), self)
         save_shortcut.activated.connect(self.save_pyfigures)
-        save_shortcut.setContext(Qt.ApplicationShortcut)
+        save_shortcut.setContext(Qt.WindowShortcut)
 
         tmp_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+T"), self) # Ctrl+T
         tmp_shortcut.activated.connect(self.tst_function)
-        tmp_shortcut.setContext(Qt.ApplicationShortcut)
+        tmp_shortcut.setContext(Qt.WindowShortcut)
 
         undo_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+Z"), self)
         undo_shortcut.activated.connect(self.undo)
-        undo_shortcut.setContext(Qt.ApplicationShortcut)
+        undo_shortcut.setContext(Qt.WindowShortcut)
 
         redo_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+Shift+Z"), self)
         redo_shortcut.activated.connect(self.redo)
-        redo_shortcut.setContext(Qt.ApplicationShortcut)
+        redo_shortcut.setContext(Qt.WindowShortcut)
 
         redo_shortcut2 = QShortcut(QKeySequence(f"{self.ctrl_key}+Y"), self)
         redo_shortcut2.activated.connect(self.redo)
-        redo_shortcut2.setContext(Qt.ApplicationShortcut)
+        redo_shortcut2.setContext(Qt.WindowShortcut)
 
         select_all_shortcut = QShortcut(QKeySequence(f"{self.ctrl_key}+A"), self)
         select_all_shortcut.activated.connect(self.select_all)
-        select_all_shortcut.setContext(Qt.ApplicationShortcut)
+        select_all_shortcut.setContext(Qt.WindowShortcut)
 
         self.blinker = Blinker()
         self.to_blink_after_worker_execution = None

@@ -1,4 +1,6 @@
 """Prototype UI actions using native selection and annotation editor."""
+import re
+
 from qtpy.QtCore import QTimer
 from batoolset.drawings.shapes.group import Group
 from .partner_gui import panels, letters, selection_state
@@ -67,10 +69,10 @@ def editor_tab(tab):
     key = str(tab).strip().lower()
     titles = set(EDITOR_TABS.values())
     for title in titles:
-        if key == title.lower():
+        if re.sub(r'[^a-z0-9]', '', key) == re.sub(r'[^a-z0-9]', '', title.lower()):
             return title
     for word, title in EDITOR_TABS.items():
-        if word in key.replace('+', ' ').split() or key == word:
+        if word in re.split(r'[^a-z0-9]+', key) or key == word:   # 'rotate_crop', 'Rotate + Crop'
             return title
     raise ValueError('Unknown editor tab ' + repr(tab) + '; use one of: ' + ', '.join(sorted(titles)))
 

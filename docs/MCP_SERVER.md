@@ -480,6 +480,7 @@ Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent)
 |------|-------------|
 | `add_inset(pyf_path, group_path, image_index, inset_filename, ...)` | Overlay a second image on a panel |
 | `add_zoom_callout(pyf_path, group_path, image_index, source_x, source_y, source_w, source_h, ...)` | Zoom/magnified-detail callout: ROI box + magnified inset + leader lines (inset flush in its corner, leaders on its corners). GUI: Annotations → Add zoom callout to selected panel… |
+| `connect_roi_to_inset(pyf_path, group_path, image_index, roi_index=None, inset_index=None, connectors=2, ...)` | Leader lines from a rectangle ROI to an inset of the same panel, ending on the corners where the inset is drawn (replaces earlier ones between them). GUI: image editor → Annotations → Connect ROI ↔ inset |
 | `list_insets(pyf_path, group_path, image_index)` | List all insets on a panel |
 | `remove_inset(pyf_path, group_path, image_index, inset_index)` | Remove an inset |
 | `set_inset_property(pyf_path, group_path, image_index, inset_index, property_name, value)` | Edit any inset field |

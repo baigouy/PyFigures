@@ -263,6 +263,7 @@ def test_luts_set_and_reset(fig, ui):
 def test_projection_and_z_range(fig, ui, proj):
     def do(ed):
         assert ed.dimsliders, "z-stack should offer a slider"
+        ed.open_tab("File Infos + Scale")       # (the editor opens on Annotations)
         ed.projection_combo_box.setCurrentIndex(ed.projection_combo_box.findData(proj))
         assert ed.proj_z_range_widget.isVisibleTo(ed)
         ed.proj_z_start_spin.setValue(1)

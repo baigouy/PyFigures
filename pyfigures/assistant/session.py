@@ -600,6 +600,7 @@ class Session:
                     if widths:
                         with QSignalBlocker(w.size_spinbox):
                             w.size_spinbox.setValue(int(round(max(widths))))
+                        w.update_size_in_unit()      # the mm / cm label beside it kept the old width
                 if name == 'set_figure_properties':
                     translated = {new: supplied[old] for old, new in [
                         ('font_family', 'font_family'), ('font_size', 'font_size'),

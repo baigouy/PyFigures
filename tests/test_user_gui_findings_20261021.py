@@ -366,6 +366,7 @@ def test_editor_offers_projection_only_for_stacks(qapp, tmp_path, kind, projecta
     path = _plain(tmp_path / "p.tif") if kind == "plain" else _stack(tmp_path / "z.tif", "ZYX", (4, 30, 40))
     main = MainWindow(qt_viewer=VectorialDrawPane2(background=Image2D(path)))
     main.update_dimension_sliders()
+    main.open_tab("File Infos + Scale")         # (the editor opens on Annotations)
     assert main.image_projection_box.isVisibleTo(main) is projectable
     assert main.image_dimension_browser_toolbox.isVisibleTo(main) is projectable
     if projectable:

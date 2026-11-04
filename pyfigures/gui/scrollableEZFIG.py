@@ -138,63 +138,63 @@ class scrollable_EZFIG(QWidget):
         #     return
         zoomPlus = QShortcut("Ctrl+Shift+=", self)
         zoomPlus.activated.connect(self.zoomIn)
-        zoomPlus.setContext(Qt.ApplicationShortcut)
+        zoomPlus.setContext(Qt.WindowShortcut)
 
         # that works and disconnects all
         # zoomPlus.disconnect()
 
         zoomPlus2 = QShortcut("Ctrl++", self)
         zoomPlus2.activated.connect(self.zoomIn)
-        zoomPlus2.setContext(Qt.ApplicationShortcut)
+        zoomPlus2.setContext(Qt.WindowShortcut)
 
         zoomMinus = QShortcut("Ctrl+Shift+-", self)
         zoomMinus.activated.connect(self.zoomOut)
-        zoomMinus.setContext(Qt.ApplicationShortcut)
+        zoomMinus.setContext(Qt.WindowShortcut)
 
         zoomMinus2 = QShortcut("Ctrl+-", self)
         zoomMinus2.activated.connect(self.zoomOut)
-        zoomMinus2.setContext(Qt.ApplicationShortcut)
+        zoomMinus2.setContext(Qt.WindowShortcut)
 
         ctrl0 = QShortcut("Ctrl+0", self)
         ctrl0.activated.connect(self.zoom_reset)
-        ctrl0.setContext(Qt.ApplicationShortcut)
+        ctrl0.setContext(Qt.WindowShortcut)
 
         if False:
             self.ctrlS = QShortcut("Ctrl+S", self)
             # self.ctrlS.activated.connect(self.EZFIG_panel.save)
-            self.ctrlS.setContext(Qt.ApplicationShortcut)
+            self.ctrlS.setContext(Qt.WindowShortcut)
 
             self.ctrlM = QShortcut("Ctrl+M", self)
             # self.ctrlM.activated.connect(self.EZFIG_panel.ctrl_m_apply)
-            self.ctrlM.setContext(Qt.ApplicationShortcut)
+            self.ctrlM.setContext(Qt.WindowShortcut)
 
             self.shrtM = QShortcut("M", self)
             # self.shrtM.activated.connect(self.EZFIG_panel.m_apply)
-            self.shrtM.setContext(Qt.ApplicationShortcut)
+            self.shrtM.setContext(Qt.WindowShortcut)
 
             # I can connect to progeny --> makes sense and really easy --> cool
             self.enterShortcut = QShortcut(QKeySequence(Qt.Key_Return), self)
             # self.enterShortcut.activated.connect(self.EZFIG_panel.apply)
-            self.enterShortcut.setContext(Qt.ApplicationShortcut)
+            self.enterShortcut.setContext(Qt.WindowShortcut)
 
             self.enterShortcut2 = QShortcut(QKeySequence(Qt.Key_Enter), self)
             # self.enterShortcut2.activated.connect(self.EZFIG_panel.apply)
-            self.enterShortcut2.setContext(Qt.ApplicationShortcut)
+            self.enterShortcut2.setContext(Qt.WindowShortcut)
 
             # en fait je peux aussi connecter des trucs au descendant --> pas bete et tres facile à faire!!!
 
             # pkoi ça ne marche pas !!!
             self.shiftEnterShortcut = QShortcut("Shift+Enter", self)
             # self.shiftEnterShortcut.activated.connect(self.EZFIG_panel.shift_apply)
-            self.shiftEnterShortcut.setContext(Qt.ApplicationShortcut)
+            self.shiftEnterShortcut.setContext(Qt.WindowShortcut)
             #
             self.shiftEnterShortcut2 = QShortcut("Shift+Return", self)
             # self.shiftEnterShortcut2.activated.connect(self.EZFIG_panel.shift_apply)
-            self.shiftEnterShortcut2.setContext(Qt.ApplicationShortcut)
+            self.shiftEnterShortcut2.setContext(Qt.WindowShortcut)
 
             self.ctrl_shift_S_grab_screen_shot = QShortcut('Ctrl+Shift+S', self)
             # self.ctrl_shift_S_grab_screen_shot.activated.connect(self.EZFIG_panel.grab_screen_shot)
-            self.ctrl_shift_S_grab_screen_shot.setContext(Qt.ApplicationShortcut)
+            self.ctrl_shift_S_grab_screen_shot.setContext(Qt.WindowShortcut)
 
             # peut etre faire un fullscreen shortcut --> can be useful
 

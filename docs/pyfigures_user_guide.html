@@ -1143,8 +1143,20 @@
       <div class="ctx-card"><h4>Scale bar</h4><p>Right-click an image → Add scale bar. Requires pixel-to-unit conversion factor. See <a href="#scalebar">Scale bars</a>.</p></div>
       <div class="ctx-card"><h4>Text</h4><p>Rich-text labels with full font control. Placed above, below, or overlaid on images.</p></div>
       <div class="ctx-card"><h4>ROI shapes</h4><p>Circle, Ellipse, Rectangle, Square, Line, Polyline, Polygon, Freehand, Point — drawn directly on images.</p></div>
-      <div class="ctx-card"><h4>Insets</h4><p>Images embedded inside other images as magnified detail panels.</p></div>
+      <div class="ctx-card"><h4>Insets</h4><p>Images embedded inside other images as magnified detail panels. In the image editor, <strong>Rect ROI --&gt; Inset</strong> magnifies a drawn rectangle; <strong>Connect ROI ↔ inset</strong> then draws two lines from the rectangle to the inset's corners (the chat: <em>connect_roi_to_inset</em>).</p></div>
     </div>
+    <h3 id="image-editor">Image editor (double-click a panel)</h3>
+    <p>
+      It opens on the <strong>Annotations</strong> tab, where the drawing tools are; a big image
+      opens whole. Above the image: <strong>−</strong> / <strong>+</strong> zoom (also Ctrl&nbsp;−,
+      Ctrl&nbsp;+, or Ctrl + mouse wheel), <strong>Fit</strong> (Ctrl&nbsp;0) shows the whole image and
+      <strong>100&nbsp;%</strong> its actual pixels. Click a line or arrow to select it: squares mark its
+      two ends — drag an end to move only that end, drag anywhere else on the line to move the whole
+      line. <strong>Ctrl+Z</strong> undoes the last move, drawing, deletion or crop change in the editor
+      (Cancel still discards everything). In the <strong>Rotate + Crop</strong> tab, drag a side or a
+      corner of the crop rectangle on the image, or drag inside it to move it; the spin boxes follow.
+      <strong>Signif. bracket</strong>: drag horizontally over two bars, then type the label.
+    </p>
     <p>
       Bulk removal is available via the <strong>Annotations</strong> menu or via the group
       right-click menu (removes only within that group).

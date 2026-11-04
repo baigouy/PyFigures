@@ -71,9 +71,11 @@ def test_selecting_an_arrow_from_the_menu_does_not_break_the_editor(qapp, tmp_pa
 def test_editor_opens_on_the_drawing_tools(qapp, tmp_path):
     from pyfigures.gui.annotation_editor import VectorialDrawPane2, MainWindow
     main = MainWindow(qt_viewer=VectorialDrawPane2(background=_figure_with_arrow(tmp_path)))
-    assert main.tab_widget.tabText(main.tab_widget.currentIndex()) != "Annotations"
-    assert main.open_tab("Annotations")
+    # 2026-11-04: a double click opens on the drawing tools too (the guides said
+    # so; it opened on File Infos and the user looked for the line tool)
     assert main.tab_widget.tabText(main.tab_widget.currentIndex()) == "Annotations"
+    assert main.open_tab("File Infos + Scale")
+    assert main.tab_widget.tabText(main.tab_widget.currentIndex()) == "File Infos + Scale"
     assert not main.open_tab("No such tab")
     main.close()
 

@@ -694,19 +694,10 @@ def add_zoom_callout(
     ix2, iy2 = ix + iw, iy + ih
 
     # 3) leader lines from the box side facing the inset to the inset side facing the box
-    if connectors:
-        bx1, by1, bx2, by2 = source_x, source_y, source_x + source_w, source_y + source_h
-        box_c = {"tl": (bx1, by1), "tr": (bx2, by1), "bl": (bx1, by2), "br": (bx2, by2)}
-        ins_c = {"tl": (ix, iy), "tr": (ix2, iy), "bl": (ix, iy2), "br": (ix2, iy2)}
-        bcx, bcy = (bx1 + bx2) / 2, (by1 + by2) / 2
-        icx, icy = (ix + ix2) / 2, (iy + iy2) / 2
-        if abs(icx - bcx) >= abs(icy - bcy):
-            (bp, ip) = (("tr", "br"), ("tl", "bl")) if icx > bcx else (("tl", "bl"), ("tr", "br"))
-        else:
-            (bp, ip) = (("bl", "br"), ("tl", "tr")) if icy > bcy else (("tl", "tr"), ("bl", "br"))
-        for bk, ik in list(zip(bp, ip))[:connectors]:
-            (lx1, ly1), (lx2, ly2) = box_c[bk], ins_c[ik]
-            annots.append(_new_roi_line(lx1, ly1, lx2, ly2, lc, stroke, 1.0, False, False))
+    from ..zoom_geometry import leader_lines
+    for (lx1, ly1), (lx2, ly2) in leader_lines((source_x, source_y, source_w, source_h),
+                                               (ix, iy, iw, ih), connectors):
+        annots.append(_new_roi_line(lx1, ly1, lx2, ly2, lc, stroke, 1.0, False, False))
 
     # 4) magnified inset (drawn last = on top of the leaders), corner-placed
     src_file = inset_filename or _decode(parent_img.findtext("filename")) or ""
@@ -770,6 +761,125 @@ def _zoom_overlap_warning(sx, sy, sw, sh, parent_w, parent_h, fraction, corner) 
         hint += f", or inset_corner='{best}' (up to {best_limit:.2f})"
     return (f"\nWARNING: the inset ({fraction:.2f} of the width) covers the zoomed region, so "
             f"the box and its leader lines are hidden — {hint}; or enlarge the whole panel instead.")
+
+
+def _xml_crops(el) -> tuple[float, float, float, float]:
+    def num(tag):
+        try:
+            return float(_decode(el.findtext(tag)) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return tuple(num(t) for t in ("crop_left", "crop_right", "crop_top", "crop_bottom"))
+
+
+def _xml_raw_size(el) -> tuple[float, float] | None:
+    from .core import _raw_size_from_file
+    size = _raw_size_from_file(_decode(el.findtext("filename")) or None)
+    if size:
+        return size
+    try:
+        return float(_decode(el.findtext("width"))), float(_decode(el.findtext("height")))
+    except (TypeError, ValueError):
+        return None
+
+
+@mcp.tool()
+def connect_roi_to_inset(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    roi_index: int | None = None,
+    inset_index: int | None = None,
+    connectors: int = 2,
+    line_color: str | int | None = None,
+    stroke: float | None = None,
+) -> str:
+    """Join a rectangular ROI and an inset of the same panel with leader lines
+    ("connect the ROI to the inset with 2 lines", "show they are the same
+    region"). The lines go from the ROI corners facing the inset to the inset
+    corners facing the ROI, computed from where the inset is really drawn —
+    never compute the endpoints yourself and never draw them with add_roi_line.
+
+    *roi_index*: annotation_index of the rectangle (get_annotations); omit when
+    the panel has one rectangle. *inset_index*: index among the panel's insets
+    (list_insets); omit when it has one. *connectors*: 1 or 2 lines.
+    *line_color* / *stroke*: default to the ROI's own colour and line width.
+    Leader lines already joining these two are replaced, not doubled.
+    GUI: image editor → Annotations → Connect ROI ↔ inset.
+    """
+    from ..zoom_geometry import inset_rect, leader_lines
+    if connectors not in (1, 2):
+        return "ERROR: connectors must be 1 or 2."
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    parent = imgs[image_index]
+    annots = parent.find("annotations")
+    items = list(annots) if annots is not None else []
+    rects = [(i, a) for i, a in enumerate(items) if a.tag == "Rectangle2D"]
+    insets = [a for a in items if a.tag == "Image2D"]
+    if roi_index is not None:
+        rects = [(i, a) for i, a in rects if i == roi_index]
+        if not rects:
+            return f"ERROR: annotation {roi_index} is not a rectangle ROI (see get_annotations)."
+    if len(rects) != 1:
+        return ("ERROR: " + ("this panel has no rectangle ROI." if not rects else
+                f"the panel has {len(rects)} rectangle ROIs: give roi_index "
+                f"(one of {[i for i, _ in rects]})."))
+    if inset_index is not None:
+        if not 0 <= inset_index < len(insets):
+            return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
+        insets = [insets[inset_index]]
+    if len(insets) != 1:
+        return "ERROR: " + ("this panel has no inset." if not insets else
+                            f"the panel has {len(insets)} insets: give inset_index (list_insets).")
+    roi_i, roi = rects[0]
+    inset = insets[0]
+
+    def num(el, tag, default=0.0):
+        try:
+            return float(_decode(el.findtext(tag)))
+        except (TypeError, ValueError):
+            return default
+    box = tuple(num(roi, t) for t in ("x", "y", "width", "height"))
+    parent_size = _xml_raw_size(parent)
+    inset_size = _xml_raw_size(inset)
+    if not parent_size or not inset_size:
+        return "ERROR: the image size is unknown (missing file?): the inset position cannot be computed."
+    fraction = num(inset, "fraction_of_parent_image_width_if_image_is_inset", 0.25)
+    where = inset_rect(parent_size, _xml_crops(parent), inset_size, _xml_crops(inset),
+                       fraction, inset.findtext("placement") or "top right")
+    lines = leader_lines(box, where, connectors)
+    color = _color_to_int(line_color) if line_color is not None else int(num(roi, "color", 0xFFFF00))
+    width = float(stroke) if stroke is not None else num(roi, "stroke", 1.5) or 1.5
+
+    # earlier leaders between these two (one end on the ROI, the other on the inset) go
+    def on_rect(x, y, r, tol=2.0):
+        rx, ry, rw, rh = r
+        inside = rx - tol <= x <= rx + rw + tol and ry - tol <= y <= ry + rh + tol
+        return inside and min(abs(x - rx), abs(x - rx - rw), abs(y - ry), abs(y - ry - rh)) <= tol
+    removed = 0
+    for a in list(items):
+        if a.tag != "Line2D":
+            continue
+        p1 = (num(a, "x1"), num(a, "y1"))
+        p2 = (num(a, "x2"), num(a, "y2"))
+        if (on_rect(*p1, box) and on_rect(*p2, where)) or (on_rect(*p2, box) and on_rect(*p1, where)):
+            annots.remove(a)
+            removed += 1
+    # before the inset, so the inset is drawn over their ends
+    pos = list(annots).index(inset)
+    for k, ((x1, y1), (x2, y2)) in enumerate(lines):
+        annots.insert(pos + k, _new_roi_line(x1, y1, x2, y2, color, width, 1.0, False, False))
+    _save(tree, pyf_path)
+    ends = "; ".join(f"({x1:.0f},{y1:.0f})→({x2:.0f},{y2:.0f})" for (x1, y1), (x2, y2) in lines)
+    return (f"{len(lines)} leader line(s) join ROI {roi_i} and the inset (drawn at x={where[0]:.0f}, "
+            f"y={where[1]:.0f}, {where[2]:.0f}×{where[3]:.0f} px): {ends}."
+            + (f" Replaced {removed} earlier line(s) between them." if removed else ""))
 
 
 @mcp.tool()
