@@ -14,3 +14,9 @@ corresponding-source/
 # made by make-test, which have no screenshots)
 /recordings/
 shots/
+# private: LLM validation runs, assistant notes and settings, personal to-do
+chatGPT_validation/
+CLAUDE*.md
+claude*.md
+.claude/
+TODO.txt
