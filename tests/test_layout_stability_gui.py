@@ -135,8 +135,8 @@ def test_split_by_a_dimension_uses_the_panel_it_was_asked_for(gui, qapp, tmp_pat
         p.run_split()
         p.selected_shape = None                  # the selection changes meanwhile
         t0 = time.time()
-        while time.time() - t0 < 1.0:
-            qapp.processEvents()
+        while time.time() - t0 < 1.0 or (p.pending_edits and time.time() - t0 < 30):
+            qapp.processEvents()             # (1 s was not always enough on a slow CI runner)
             time.sleep(0.01)
     finally:
         sys.excepthook = old_hook

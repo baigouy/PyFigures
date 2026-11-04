@@ -208,6 +208,14 @@ def right_click(gui, cap, shape=None, pos=None, select=True, pick=None):
     from qtpy.QtWidgets import QApplication
     for _ in range(5):
         QApplication.processEvents()
+    # edits deferred by 100 ms (Split by a dimension) run now, while this
+    # test's dialog answers are in place: run later, during teardown, they
+    # opened a real modal dialog and the run hung (Windows CI timeout)
+    t0 = time.time()
+    while getattr(panel, "pending_edits", 0) and time.time() - t0 < 30:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert not getattr(panel, "pending_edits", 0), "a deferred edit never ran"
     assert len(cap.trees) == n + 1, "no menu popped up"
     return cap.last
 
