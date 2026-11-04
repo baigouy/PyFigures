@@ -2,11 +2,11 @@
 
 Effortless creation of high-quality scientific figures in Python. 
 
-[![Watch the video](./images/PyFigures.png)](https://youtu.be/sq7d1Aon4cQ)
+![PyFigures main window with the chat sidebar](https://raw.githubusercontent.com/baigouy/PyFigures/main/images/PyFigures.png)
 
-Since a video is better than a thousand (click on the image above to view the demo). Or click here to access the complete [demo playlist](https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7).
+*A figure built from a recipe, with the optional chat sidebar docked on the right: asked in plain words, a language model (here Mistral Large 4) has just added the scale bar to panel D, one undo step. Sample images from scikit-image (public domain, CC0).*
 
-**Note**: Most demo images are public domain and sourced from the [Cell Image Library](http://www.cellimagelibrary.org/).
+A [demo video](https://youtu.be/sq7d1Aon4cQ) and the complete [demo playlist](https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7) show the interface at work (recorded with an earlier version; most images in them are public domain, from the [Cell Image Library](http://www.cellimagelibrary.org/)).
 
 # AI / MCP Integration
 
