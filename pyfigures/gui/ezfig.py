@@ -3581,6 +3581,8 @@ class MyWidget(QWidget):
 
             max_channels = 0
             for elm in tmp:
+                if getattr(elm, 'img', None) is None and hasattr(elm, 'load_img'):
+                    elm.load_img()      # pixels not read yet (lazily loaded figure): 0 channels otherwise
                 cur_nb_channels = elm.get_nb_channels()
                 max_channels = max(max_channels, cur_nb_channels)
                 # print('channels', cur_nb_channels, max_channels)

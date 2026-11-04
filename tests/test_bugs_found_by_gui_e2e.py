@@ -167,6 +167,23 @@ def test_set_lut_on_a_template_slot_says_why_and_reset_clears_it(qapp, two_rows,
     assert slot.LUTs is None
 
 
+def test_set_lut_on_an_image_not_loaded_yet_opens_the_dialog(qapp, two_rows, monkeypatch):
+    """A lazily loaded figure has no pixels until painted: Set LUT(s) counted
+    0 channels and said 'No LUT to set' instead of opening the LUT dialog
+    (CI failures of the right-click Set LUT(s) tests, Linux and macOS)."""
+    g, H, menus, d = two_rows
+    p = H.panel(g)
+    img = H.by_name(g, "a")
+    img.img = None
+    titles = _answer_custom(monkeypatch)
+    said = []
+    p.informative_message_required.connect(said.append)
+    p.set_current_selection(img)
+    p.set_luts()
+    assert titles == ["Edit Look Up Tables (LUTs)"], said
+    assert img.img is not None
+
+
 def test_editing_an_equation_can_be_undone(qapp, two_rows, monkeypatch):
     """Right-click > Edit equation… recorded no undo step."""
     g, H, menus, d = two_rows
@@ -429,7 +446,9 @@ def test_headless_render_gives_qmessagebox_warning_back(qapp, tmp_path):
     from pyfigures.gui.render_headless import render_pyf
     getattr(QMessageBox, "warning")
     real = QMessageBox.__dict__["warning"]
-    assert not inspect.isfunction(getattr(real, "__func__", real))
+    func = getattr(real, "__func__", real)
+    # Qt's C++ wrapper, or the suite's own title-keeping version (conftest)
+    assert not inspect.isfunction(func) or getattr(func, "_suite_dialog_patch", False)
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf)
     M.add_image(pyf, [], _tif(tmp_path / "a.tif", 120))

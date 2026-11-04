@@ -20,7 +20,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "pyqt6")
 
-zarr = pytest.importorskip("zarr")
+zarr = pytest.importorskip("zarr", minversion="3")   # zarr 2 (all Python 3.10 gets) reads no OME-Zarr here
 
 from batoolset import ome_zarr as Z  # noqa: E402
 from batoolset.remote_download import download, local_name  # noqa: E402
