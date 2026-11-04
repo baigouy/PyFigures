@@ -191,13 +191,13 @@ def _page(ex, image_name, extra_files):
             - **PyFigures window:** *File → Build figure from recipe…*
             - **MCP server:** `build_figure_from_recipe("recipe.yaml")`
             """).strip()
-    files = ", ".join(f"[`{f}`]({ex['name']}/{f})" for f in extra_files)
+    files = ", ".join(f"[`{f}`]({ex['name']}/{f})" for f in ["recipe.yaml", *extra_files])
     return "\n".join([
         f"# {ex['title']}", "", ex["about"], "",
         f"![{ex['title']}]({ex['name']}/{image_name})", "",
         "## Recipe", "", "```yaml", recipe, "```", "",
         "## Run it", "", run, "",
-        f"Files: [`recipe.yaml`]({ex['name']}/recipe.yaml), {files}. The data are in "
+        f"Files: {files}. The data are in "
         f"[`docs/examples/data/`]({REPO}/tree/main/docs/examples/data); paths in the recipe are "
         "relative to the recipe.", "",
         "The result is an ordinary figure: open it in PyFigures to keep editing it by hand.", "",
@@ -231,7 +231,7 @@ def build():
             res = build_poster_from_recipe(recipe_path)
             if str(res).startswith("ERROR"):
                 raise RuntimeError(f"{ex['name']}: {res}")
-            image, extra = "poster.png", ["poster.pyfposter"]
+            image, extra = "poster.png", []  # poster.pyfposter not committed either
         else:
             build_figure_from_recipe(recipe_path)
             pyf = os.path.join(folder, "figure.pyf")

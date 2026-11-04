@@ -26,7 +26,7 @@ text:
 - **Poster designer:** *Build from recipe…* on the toolbar
 - **MCP server:** `build_poster_from_recipe("recipe.yaml")`
 
-Files: [`recipe.yaml`](poster/recipe.yaml), [`poster.pyfposter`](poster/poster.pyfposter). The data are in [`docs/examples/data/`](https://github.com/baigouy/PyFigures/tree/main/docs/examples/data); paths in the recipe are relative to the recipe.
+Files: [`recipe.yaml`](poster/recipe.yaml). The data are in [`docs/examples/data/`](https://github.com/baigouy/PyFigures/tree/main/docs/examples/data); paths in the recipe are relative to the recipe.
 
 The result is an ordinary figure: open it in PyFigures to keep editing it by hand.
 
