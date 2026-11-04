@@ -26,13 +26,23 @@ def test_self_test_passes_without_pymupdf(qapp, tmp_path, monkeypatch):
     assert "pypdfium2" in report["checks"]["pdf_panels"]
 
 
-def test_self_test_fails_if_pymupdf_is_bundled(qapp, tmp_path):
+def test_self_test_fails_if_pymupdf_is_bundled(qapp, tmp_path, monkeypatch):
     pytest.importorskip("fitz")
     from pyfigures import self_test
+    monkeypatch.setattr(sys, "frozen", True, raising=False)   # a standalone app
     out = tmp_path / "r.json"
     assert self_test.run(str(out)) == 1
     report = json.loads(out.read_text(encoding="utf-8"))
     assert "PyMuPDF (AGPL) is bundled" in report["checks"]["pdf_panels"]
+
+
+def test_pymupdf_is_fine_in_a_pip_install(qapp, tmp_path, monkeypatch):
+    # pip install pyfigures[all] brings PyMuPDF on purpose: no false failure
+    pytest.importorskip("fitz")
+    pytest.importorskip("pypdfium2")
+    from pyfigures import self_test
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    assert self_test._check_pdf_panels(str(tmp_path)) == "ok (PyMuPDF vector panels)"
 
 
 def test_command_line_flag(tmp_path):

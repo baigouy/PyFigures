@@ -27,7 +27,10 @@ def _check_pdf_panels(tmp):
     import importlib.util
     from qtpy.QtCore import QSizeF
     from qtpy.QtGui import QPainter, QPdfWriter, QPageSize, QColor
-    assert importlib.util.find_spec("fitz") is None, "PyMuPDF (AGPL) is bundled"
+    # only the standalone apps must not contain it: pip install pyfigures[pdf]
+    # (and [all]) installs PyMuPDF on purpose
+    if getattr(sys, "frozen", False):
+        assert importlib.util.find_spec("fitz") is None, "PyMuPDF (AGPL) is bundled"
     path = os.path.join(tmp, "page.pdf")
     writer = QPdfWriter(path)
     writer.setPageSize(QPageSize(QSizeF(200, 100), QPageSize.Unit.Point))
@@ -38,6 +41,10 @@ def _check_pdf_panels(tmp):
     from batoolset.drawings.shapes.image2d import pdf_to_svg_bytes
     assert pdf_page_count(path) == 1
     svg = pdf_to_svg_bytes(path)
+    if importlib.util.find_spec("fitz") is not None:
+        # a pip install with the [pdf] extra: PyMuPDF gives vector panels
+        assert svg.lstrip().startswith(b"<svg") and b"<path" in svg
+        return "ok (PyMuPDF vector panels)"
     assert b"<image" in svg and b"data:image/png;base64," in svg
     import pypdfium2  # noqa: F401  (the renderer used above)
     try:
