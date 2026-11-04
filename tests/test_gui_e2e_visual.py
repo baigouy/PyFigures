@@ -28,6 +28,10 @@ pytestmark = pytest.mark.gui_e2e
 GOLDEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden_gui")
 UPDATE = bool(os.environ.get("PYF_E2E_UPDATE_GOLDEN"))
 MAX_CHANGED = 0.005
+# the equation panel is typeset by matplotlib's mathtext, whose glyph sizes
+# change between matplotlib versions: the row reflows by a pixel or two and
+# shifts every border after it (0.9 % with matplotlib 3.11 vs 3.10)
+MAX_CHANGED_FOR = {"labels_and_equation": 0.015}
 
 
 def _base(qapp, g, d, files):
@@ -154,4 +158,4 @@ def test_render_matches_golden(qapp, e2e_gui, e2e_files, tmp_path, watch, name):
     sa, sb, frac = _changed_fraction(golden, render, overlay)
     assert abs(sa[0] - sb[0]) <= max(2, 0.02 * sa[0]) and abs(sa[1] - sb[1]) <= max(2, 0.02 * sa[1]), \
         f"{name}: size {sb} != golden {sa} (render {render}, diff {overlay})"
-    assert frac <= MAX_CHANGED, f"{name}: {frac:.2%} of pixels differ (render {render}, diff {overlay})"
+    assert frac <= MAX_CHANGED_FOR.get(name, MAX_CHANGED), f"{name}: {frac:.2%} of pixels differ (render {render}, diff {overlay})"

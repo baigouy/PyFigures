@@ -467,12 +467,13 @@ class scrollable_EZFIG(QWidget):
 
     def scroll_to_y_position(self, y_pos: float):
         """
-        Scrolls the view vertically to the given y position.
+        Scrolls the view vertically so the given y position (canvas pixels,
+        i.e. already multiplied by the zoom scale) is centred.
         """
-        # Calculate the position of the viewport that allows you to see the y position
+        # y_pos is already scaled by the caller: scaling it again scrolled past
+        # the item at any zoom other than 1
         viewport_height = self.scrollArea.viewport().height()
-        scroll_bar_value = y_pos * self.EZFIG_panel.scale - viewport_height / 2
-        # scroll_bar_value = y_pos
+        scroll_bar_value = y_pos - viewport_height / 2
 
         # Set the position of the vertical scroll bar
         vertical_scroll_bar = self.scrollArea.verticalScrollBar()

@@ -273,7 +273,9 @@ def index_folder(folder: str, describe: str = "auto", time_budget: float | None 
     pool = ThreadPoolExecutor(PARALLEL) if vision else None
     try:
         for at in range(0, len(todo), CHUNK):
-            if time_budget is not None and done and time.monotonic() - start > time_budget:
+            # >=: Windows' monotonic clock ticks every ~15 ms, so a budget of 0
+            # read 0 elapsed and '>' never stopped
+            if time_budget is not None and done and time.monotonic() - start >= time_budget:
                 stopped = True
                 break
             chunk = todo[at:at + CHUNK]

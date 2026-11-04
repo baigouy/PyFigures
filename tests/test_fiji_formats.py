@@ -77,6 +77,8 @@ def test_a_zero_resolution_tag_is_ignored(tmp_path):
     ("HEART.SEQ", (30, 512, 512), "dhw"),
 ])
 def test_fiji_samples_load_as_fiji_shows_them(name, shape, dims):
+    if name == "HEART.SEQ":   # only Fiji (pyimagej) reads it as a stack
+        pytest.importorskip("scyjava")
     # In a child process: some of these formats are read by Fiji, and a Java VM
     # started inside the test process (it raises access violations on purpose,
     # and stays loaded) made later Qt tests crash at random places.

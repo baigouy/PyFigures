@@ -419,9 +419,10 @@ def test_distribute_even_centres(tmp_path, photos):
     imgs = ok(M.distribute_poster_shapes(p, "x"))["images"]
     centres = sorted(i["x_mm"] + 5 for i in imgs)          # were 15, 30, 65, 155
     assert centres == pytest.approx([15, 15 + 140 / 3, 15 + 280 / 3, 155])
-    before = [(i["x_mm"], i["y_mm"]) for i in imgs]
+    # flat lists: pytest >= 9 refuses nested data in approx()
+    before = [v for i in imgs for v in (i["x_mm"], i["y_mm"])]
     imgs = ok(M.distribute_poster_shapes(p, "y", indices="0,1,2"))["images"]
-    assert [(i["x_mm"], i["y_mm"]) for i in imgs] == pytest.approx(before)   # same y: nothing to spread
+    assert [v for i in imgs for v in (i["x_mm"], i["y_mm"])] == pytest.approx(before)   # same y: nothing to spread
 
 
 # ---------------------------------------------------------------------------

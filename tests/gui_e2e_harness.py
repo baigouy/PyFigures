@@ -308,6 +308,11 @@ _BENIGN_QT = (
     "QWindowsWindow::setGeometry",
     "Retrying to obtain clipboard",
     "QBasicTimer::start: Timers cannot be started from another thread",
+    # Qt >= 6.5 on matplotlib's empty space glyph (<path/> without d) in plot
+    # SVGs; batoolset-gui > 0.2.1 fills it (fill_empty_svg_paths). Drop these
+    # two once CI installs that version.
+    "Invalid path data; path truncated.",
+    "-3 is undefined!",
 )
 
 

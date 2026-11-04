@@ -351,6 +351,9 @@ def test_tools_menu_share_toggle(qapp, gui, runtime, monkeypatch):
     from qtpy.QtWidgets import QMessageBox
     shown = []
     monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.detailedText()) or 0)
+    # without qtpy_ai_sidecar (CI) the chat entry says how to install it: a modal box
+    # that would wait forever on a headless runner
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: QMessageBox.StandardButton.Ok)
     g = gui()
     # a plain window asks before handing its figure over; Cancel changes nothing
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Cancel)

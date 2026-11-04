@@ -105,10 +105,10 @@ Perform the following steps **only once** to set up your environment:
    **Note:** this step needs to be done **only once**, if you already did it you can skip this step.
 
    
-6. **Optional: Install additional dependencies for bioformats support:**
+6. **Optional: Install Fiji support (Bio-Formats microscopy formats):**
     
     ```sh
-    pip install -U pyfigures[bioformats]
+    pip install -U pyfigures[fiji]
     ```
     
     This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video, the MCP server and the chat sidebar), use `pip install -U pyfigures[all]` instead (the chat sidebar's package, qtpy-ai-sidecar, is not on PyPI yet: install it first from its folder with `pip install -e`).
@@ -120,7 +120,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures[video]
     ```
     
-    This installs [PyAV](https://pyav.org) (`av`), which ships its own copy of ffmpeg for Windows, macOS and Linux — there is nothing else to install, no system ffmpeg is needed.
+    This installs [PyAV](https://pyav.org) (`av`), which ships its own copy of ffmpeg for Windows, macOS and Linux — there is nothing else to install, no system ffmpeg is needed — and OpenCV (`opencv-python-headless`), which reads `.mp4` / `.avi` / `.mkv` files as image stacks.
     
     Video support is optional, so a plain `pip install pyfigures` does not include it:
     - **Without PyAV**, PyFigures reads movies only if OpenCV (`opencv-python`) happens to be installed, and exports videos with OpenCV's old MPEG-4 codec, which **QuickTime, Safari and PowerPoint on a Mac cannot play** (a warning says so).
@@ -245,8 +245,8 @@ Optional (installed only if you ask for them):
 | **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not bundled; the GUI offers to install it) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
 | **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
-| **opencv-python**       | Alternative video reader                                    | https://pypi.org/project/opencv-python/       | Apache 2.0         |
-| **pyimagej / scyjava / JPype** (`pyfigures[bioformats]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
+| **opencv-python(-headless)** (`pyfigures[video]`) | Video files as image stacks, alternative video reader | https://pypi.org/project/opencv-python-headless/ | Apache 2.0 |
+| **pyimagej / scyjava / JPype** (`pyfigures[fiji]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
 
 ### Licence of PyFigures and of the standalone executables
 

@@ -166,7 +166,7 @@ def test_every_extra_named_in_the_docs_exists():
         setup = f.read()
     block = setup[setup.index("extras_require"):]
     extras = set(re.findall(r"^\s*'(\w+)':\s*\[", block, re.M))
-    assert {"ai", "video", "bioformats", "all"} <= extras
+    assert {"ai", "video", "fiji", "all"} <= extras
     docs = [os.path.join(ROOT, "README.md")]
     for name in os.listdir(os.path.join(ROOT, "docs")):
         if name.endswith((".md", ".html")):

@@ -22,7 +22,10 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url=__URL__,
-    package_data={'': ['*.md','*.json'], 'pyfigures': ['icons/*.png']},   # window icons
+    # window icons; gui/fonts is no package: without these patterns the wheel has
+    # no fonts folder (fonts_dir missing, fonts dropped in it never shipped)
+    package_data={'': ['*.md','*.json'],
+                  'pyfigures': ['icons/*.png', 'gui/fonts/*.md', 'gui/fonts/*.ttf', 'gui/fonts/*.otf']},
     license='BSD',
     include_package_data=True,
     packages=setuptools.find_packages(),
@@ -69,12 +72,13 @@ setuptools.setup(
     ],
     extras_require={
         'ai': [
-            "mcp>=1.0",      # MCP server (Claude Code integration)
+            "mcp>=1.0,<2",   # MCP server (Claude Code integration); mcp 2 renamed FastMCP
         ],
         'video': [
             "av",            # PyAV: reads videos and writes H.264 (bundles ffmpeg; Windows/macOS/Linux)
+            "opencv-python-headless",   # batoolset's mp4/avi/mkv stacks (cv2)
         ],
-        'bioformats': [
+        'fiji': [
             "pyimagej",      # Fiji / Bio-Formats reader for .lif, .czi, .nd2, ... (needs Java)
         ],
         'zarr': [
@@ -94,13 +98,14 @@ setuptools.setup(
         # PyPI, `pip install pyfigures[chat]` / `[all]` needs it installed first
         # (pip install -e path/to/qtpy_ai_sidecar).
         'chat': [
-            "mcp>=1.0",
+            "mcp>=1.0,<2",
             "qtpy-ai-sidecar",
         ],
         'all': [
-            "mcp>=1.0",
+            "mcp>=1.0,<2",
             "qtpy-ai-sidecar",
             "av",
+            "opencv-python-headless",
             "pyimagej",
             "zarr",
             "pymupdf",

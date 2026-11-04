@@ -42,7 +42,7 @@ def test_metadata_of_a_2d_series():
 
 
 def test_bioformats_refuses_a_series_that_does_not_exist():
-    from batoolset.IJ import ij_reader
+    ij_reader = pytest.importorskip("batoolset.IJ.ij_reader", exc_type=ImportError)   # the pyimagej reader (scyjava comes with pyimagej)
     with pytest.raises(IndexError, match="21 series"):
         ij_reader._open_from_opts(None, 21, 21)
     with pytest.raises(IndexError):

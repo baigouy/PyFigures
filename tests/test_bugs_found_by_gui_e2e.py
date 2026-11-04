@@ -345,7 +345,7 @@ def test_series_of_a_template_slot_or_missing_file_never_starts_bioformats(monke
     """Opening the image editor on an empty template slot asked Bio-Formats
     for the series of '@template@': the Fiji JVM started (seconds, and an
     access-violation trace on Windows)."""
-    import batoolset.IJ.ij_reader as R
+    R = pytest.importorskip("batoolset.IJ.ij_reader", exc_type=ImportError)   # the pyimagej reader (scyjava comes with pyimagej)
     from batoolset.img import get_series_info
     called = []
     monkeypatch.setattr(R, "count_series", lambda f, *a, **k: called.append(f) or 3)
