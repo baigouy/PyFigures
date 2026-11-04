@@ -1,7 +1,7 @@
 """Licence notices and corresponding source for the standalone PyFigures apps.
 
 PyFigures' own code is BSD-2-Clause, but the standalone executables bundle
-copyleft code: PyQt6, read-lif and pyqt6-plugins (GPLv3), Qt (LGPLv3),
+copyleft code: PyQt6 and read-lif (GPLv3), Qt (LGPLv3),
 and PyAV's FFmpeg, built with --enable-version3 and x264/x265 (GPLv3 as a
 whole). PyMuPDF (AGPLv3) is not bundled; AGPL components would be listed
 separately if one ever were.

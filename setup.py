@@ -47,10 +47,8 @@ setuptools.setup(
         "numexpr",
         "urllib3",
         "qtawesome",
-        "pyqt6-plugins",   # Qt image format plugins (qtiff, etc.)
         "pandas",
         # "numba",
-        "elasticdeform",
         "roifile",
         "prettytable",
         "pyperclip",
@@ -115,5 +113,5 @@ setuptools.setup(
             "pytest-timeout",
         ],
     },
-    python_requires='>=3.10'  # staplot needs 3.10+; batoolset 0.2.0 caps at <3.12
+    python_requires='>=3.10'  # staplot needs 3.10+; no upper cap
 )

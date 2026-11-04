@@ -218,10 +218,10 @@ Below is a list of the 3<sup>rd</sup> party libraries used by PyFigures.<br><br>
 | **pandas**              | Data analysis toolkit                                       | https://pypi.org/project/pandas/              | BSD (BSD-3-Clause) |
 | **roifile**               | A library to read ImageJ ROIs                               | https://pypi.org/project/roifile/               | BSD 3-Clause                |
 | **Qt** (PyQt6-Qt6)      | The Qt libraries under PyQt6                                | https://www.qt.io/                            | LGPL v3            |
-| **pyqt6-plugins**       | Qt image-format plugins (TIFF, ...)                         | https://pypi.org/project/pyqt6-plugins/       | GPL v3             |
+| **staplot**             | Data-plot panels and statistics (same author)               | https://pypi.org/project/staplot/             | BSD                |
 | **batoolset**           | Image I/O and tools (same author)                           | https://pypi.org/project/batoolset/           | BSD                |
 | **batoolset-gui**       | Qt drawing layer of batoolset (same author)                 | https://pypi.org/project/batoolset-gui/       | BSD                |
-| **elasticdeform**       | Image deformation                                           | https://pypi.org/project/elasticdeform/       | BSD                |
+| **elasticdeform**       | Image deformation (via batoolset, Python < 3.13)            | https://pypi.org/project/elasticdeform/       | BSD                |
 | **imagecodecs**         | Image compression codecs (TIFF, ...)                        | https://pypi.org/project/imagecodecs/         | BSD 3-Clause       |
 | **prettytable**         | Text tables                                                 | https://pypi.org/project/prettytable/         | BSD 3-Clause       |
 | **pyperclip**           | Clipboard                                                   | https://pypi.org/project/pyperclip/           | BSD                |
@@ -250,7 +250,7 @@ Optional (installed only if you ask for them):
 
 ### Licence of PyFigures and of the standalone executables
 
-- **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6, read-lif and pyqt6-plugins are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
+- **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6 and read-lif are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
 - **The standalone executables (Windows / macOS) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. They read PDFs with pypdfium2 (Apache/BSD); PyMuPDF (AGPL) is not included. Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows executable), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built. [docs/LICENSING.md](docs/LICENSING.md) explains the reasoning.
 
 # Other Figure-Making Software

@@ -10,7 +10,7 @@ licences, not legal advice.
 |---|---|---|
 | PyFigures' own source code (GitHub, PyPI) | **BSD 2-Clause** | It is your code; you choose its licence. |
 | `pip install pyfigures` | **BSD 2-Clause** | You distribute only your code. pip installs the dependencies (PyQt6, pypdfium2, optionally PyMuPDF, ...) on the user's machine, each under its own licence. |
-| The standalone apps (Windows / macOS executables) | **GNU GPL v3** as a whole | They *contain* GPL code (PyQt6, read-lif, pyqt6-plugins, FFmpeg built with x264/x265). Distributing a combined work that includes GPL code means distributing the whole under the GPL. |
+| The standalone apps (Windows / macOS executables) | **GNU GPL v3** as a whole | They *contain* GPL code (PyQt6, read-lif, FFmpeg built with x264/x265). Distributing a combined work that includes GPL code means distributing the whole under the GPL. |
 | PyMuPDF | not in the apps | AGPL v3; optional extra (`pyfigures[pdf]`), offered for installation from PyPI on the user's request (apps included, into a per-user folder). Without it PDFs are read with pypdfium2 (Apache/BSD). |
 | LaTeX (TinyTeX / TeX Live) | not in the apps | Downloaded on request (*Help → Install LaTeX for PyFigures…*, the MCP tool `install_latex`) from TinyTeX's own releases into the user's folder; the user receives it from TinyTeX/TeX Live under their licences (GPL, LPPL and others), so PyFigures distributes none of it and has no source to provide for it. Bundling it would add ~400 MB and TeX Live's source to every release. |
 

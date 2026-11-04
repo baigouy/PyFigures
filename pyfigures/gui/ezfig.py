@@ -890,7 +890,7 @@ class MyWidget(QWidget):
                 dots_per_meter = int(round(dpi / 0.0254))
                 image.setDotsPerMeterX(dots_per_meter)
                 image.setDotsPerMeterY(dots_per_meter)
-                # Try Qt-native save first (requires pyqt6-plugins for TIF support).
+                # Try Qt-native save first (TIF needs Qt's qtiff plugin, shipped in the PyQt6-Qt6 wheel).
                 # Fall back to tifffile for TIF/TIFF if the Qt plugin is unavailable.
                 if not image.save(path) and filetype.lower() in {'.tif', '.tiff'}:
                     try:
