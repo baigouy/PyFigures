@@ -2484,16 +2484,25 @@ class MainWindow(QWidget):
         layout = QVBoxLayout(column)
         layout.setContentsMargins(0, 0, 0, 0)
         bar = QHBoxLayout()
-        for text, tip, slot in (('\u2212', 'Zoom out (' + self.ctrl_key + ' -, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_out),
-                                ('+', 'Zoom in (' + self.ctrl_key + ' +, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_in),
-                                ('Fit', 'Fit the whole image in the window (' + self.ctrl_key + ' 0)', self.fit_whole),
-                                ('100 %', 'Actual size, 1 image pixel = 1 screen pixel', self.qt_viewer.reset_scale)):
+        # the same icons as the figure window's zoom toolbar
+        self.zoom_buttons = {}
+        for name, icon, text, tip, slot in (
+                ('in', 'ei.zoom-in', 'Zoom in', 'Zoom in (' + self.ctrl_key + ' +, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_in),
+                ('out', 'ei.zoom-out', 'Zoom out', 'Zoom out (' + self.ctrl_key + ' -, or ' + self.ctrl_key + ' + wheel)', self.qt_viewer.zoom_out),
+                ('fit', 'mdi.fit-to-page-outline', 'Fit', 'Fit the whole image in the window (' + self.ctrl_key + ' 0)', self.fit_whole),
+                ('100', 'ei.resize-full', '100 %', 'Actual size, 1 image pixel = 1 screen pixel', self.qt_viewer.reset_scale)):
             b = QToolButton()
             b.setText(text)
+            try:
+                b.setIcon(get_icon(icon))
+                b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            except Exception:
+                pass                  # no icon font: the text alone
             b.setToolTip(tip)
             b.setFocusPolicy(Qt.NoFocus)
-            b.clicked.connect(slot)
+            b.clicked.connect(lambda _checked=False, slot=slot: slot())
             bar.addWidget(b)
+            self.zoom_buttons[name] = b
         self.zoom_label = QLabel()
         bar.addWidget(self.zoom_label)
         bar.addStretch(1)

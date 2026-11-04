@@ -145,6 +145,26 @@ def test_zoom_steps_multiply_and_fit_shows_the_whole_image(fig, ui):
     edit(fig, ui, "gray", do, accept=False)
 
 
+def test_zoom_buttons_above_the_image(fig, ui):
+    def do(ed):
+        v = ed.qt_viewer
+        assert set(ed.zoom_buttons) == {'in', 'out', 'fit', '100'}
+        assert not ed.zoom_buttons['in'].icon().isNull()
+        v.set_scale(1.0)
+        ed.zoom_buttons['in'].click()
+        assert v.scale == pytest.approx(1.25)
+        ed.zoom_buttons['out'].click()
+        ed.zoom_buttons['out'].click()
+        assert v.scale == pytest.approx(0.8)
+        ed.zoom_buttons['100'].click()
+        assert v.scale == pytest.approx(1.0)
+        assert ed.zoom_label.text() == '100 %'
+        ed.scrollArea.viewport().resize(160, 120)
+        ed.zoom_buttons['fit'].click()
+        assert v.scale < 0.6
+    edit(fig, ui, "gray", do, accept=False)
+
+
 def test_bracket_button_does_not_cover_the_arrowhead_button(fig, ui):
     def do(ed):
         buttons = ed.findChildren(QPushButton)
