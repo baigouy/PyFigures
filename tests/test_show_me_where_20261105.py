@@ -176,7 +176,7 @@ def test_open_it_for_me_opens_the_editor_on_its_tab_with_buttons_outlined(qapp, 
     session = launch.start_live_session(g)
     opened = []
     monkeypatch.setattr(g.paint.EZFIG_panel, "update_image_annotations",
-                        lambda image2d=None, tab=None: opened.append(tab))
+                        lambda image2d=None, tab=None, draw_tool=True: opened.append((tab, draw_tool)))
     s = session.snapshot()
     out = session.execute(dict(operation="show_me_where", arguments=dict(where="editor", panel_ref="0/1", editor_tab="scale",
                                                                           controls=["Reset all LUTs"], open_menus=True),
@@ -187,7 +187,7 @@ def test_open_it_for_me_opens_the_editor_on_its_tab_with_buttons_outlined(qapp, 
     end = time.time() + 2
     while not opened and time.time() < end:
         qapp.processEvents()
-    assert opened == ["File Infos + Scale"]
+    assert opened == [("File Infos + Scale", False)]      # opened by the chat: no drawing tool on
     session.click_guide.stop()
 
 

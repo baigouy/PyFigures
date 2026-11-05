@@ -4480,9 +4480,11 @@ class MyWidget(QWidget):
             # scroll in shape until I get the corresponding image -−> TODO
         # super().mouseDoubleClickEvent(event)
 
-    def update_image_annotations(self, image2d=None, tab=None):
+    def update_image_annotations(self, image2d=None, tab=None, draw_tool=True):
         """The image editor of *image2d* (double-click). *tab*: the tab it
-        opens on, e.g. 'Annotations' for the drawing tools."""
+        opens on, e.g. 'Annotations' for the drawing tools. draw_tool=False
+        opens it with no drawing tool (the chat opens it to move things: a
+        click then only selects, a drag only moves, user request 2026-11-05)."""
 
         # print('I AM INSIDE update_image_annotations')
 
@@ -4531,6 +4533,8 @@ class MyWidget(QWidget):
             rotation_before = image2d.theta
             # I do not even need to select the image I can directly edit it
             vdp = VectorialDrawPane2(background=clone)
+            if not draw_tool:
+                vdp.shape_to_draw = None   # a tool button turns drawing on again
 
             # def reload_background_parameters(self):
 

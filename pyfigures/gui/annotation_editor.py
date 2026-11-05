@@ -92,6 +92,9 @@ class VectorialDrawPane2(QWidget):
         self.background = background # this will code for the bg image over which we will always draw over --> TODO
         self.rotate_n_crop_polygon = None
         self.rotate_n_crop_lines = None  # {side: (QPointF, QPointF)} for color-coded borders
+        # where image pixel (0, 0) is drawn: moved right/down when a rotated crop
+        # frame reaches past the image's top / left edge, so it is all visible
+        self.view_origin = QPointF(0, 0)
         self.crops = [] # this will contain all the crops the user generated so that they can be exported easily!!!
         self.add_text_button = None
         self.filter_out_unwanted_shapes_based_on_distance = True # if set to True the tool will attempt to filter accidental drawings by the user (based on distance between draw points)
@@ -147,6 +150,19 @@ class VectorialDrawPane2(QWidget):
         self.update()
         self.scaleChanged.emit(self.scale)
 
+
+    def _image_point(self, event):
+        """The mouse position in image pixels."""
+        return event.position() / self.scale - self.view_origin
+
+    def frame_extent(self):
+        """(origin, bottom-right) for the rotated crop frame, in image pixels:
+        the origin keeps its top / left part on screen (user report 2026-11-05)."""
+        if not self.rotate_n_crop_lines:
+            return QPointF(0, 0), None
+        pts = [p for pair in self.rotate_n_crop_lines.values() for p in pair]
+        origin = QPointF(max(0.0, -min(p.x() for p in pts)), max(0.0, -min(p.y() for p in pts)))
+        return origin, QPointF(max(p.x() for p in pts), max(p.y() for p in pts))
 
     def updateBoudingRect(self):
         objects = []
@@ -464,6 +480,8 @@ class VectorialDrawPane2(QWidget):
         painter.save()
         if self.scale != 1.0:
             painter.scale(self.scale, self.scale)
+        if self.view_origin.x() or self.view_origin.y():
+            painter.translate(self.view_origin)
 
         if self.background is not None:
             self.background.draw_bg(painter, parent=None, restore_painter_in_the_end=False)
@@ -484,7 +502,8 @@ class VectorialDrawPane2(QWidget):
         else:
             pass
 
-        if self.rotate_n_crop_polygon:
+        if self.rotate_n_crop_polygon and not self.rotate_n_crop_lines:
+            # (the coloured frame below is the rotated outline; this cyan one stayed upright)
             painter.save()
             pen = QPen(Qt.cyan, 2)
             painter.setPen(pen)
@@ -749,8 +768,8 @@ class VectorialDrawPane2(QWidget):
         # self.can_go_deeper = False
         if event.button() == Qt.LeftButton:
             self.drawing = True
-            self.lastPoint = event.position() / self.scale
-            self.firstPoint = event.position() / self.scale
+            self.lastPoint = self._image_point(event)
+            self.firstPoint = self._image_point(event)
             self._press_snapshot = self._current_snapshot()
 
             if self.crop_controller is not None and not self._bracket_mode:
@@ -898,7 +917,7 @@ class VectorialDrawPane2(QWidget):
 
     def mouseMoveEvent(self, event):
         self.dragged = True
-        point = event.position() / self.scale
+        point = self._image_point(event)
         if self._crop_grab:
             self.crop_controller.crop_drag_to(point)
             self.lastPoint = point
@@ -914,13 +933,13 @@ class VectorialDrawPane2(QWidget):
         if not event.buttons():
             self._hover_cursor(point)
         if self._bracket_mode and self._bracket_dragging:
-            self.lastPoint = event.position() / self.scale
+            self.lastPoint = self._image_point(event)
             self.update()
             return
         if event.buttons() and Qt.LeftButton:
             if self.selected_shape and self.currently_drawn_shape is None:
                 logger.debug('moving' + str(self.selected_shape))
-                delta = event.position() / self.scale - self.lastPoint
+                delta = self._image_point(event) - self.lastPoint
                 for shape in self.selected_shape:
                     # a zoom callout's leader lines (and the inset's crop when
                     # the box moves) follow: they stayed behind
@@ -936,7 +955,7 @@ class VectorialDrawPane2(QWidget):
             self.update_size()
             self.update()
 
-        self.lastPoint = event.position() / self.scale
+        self.lastPoint = self._image_point(event)
 
     def _hover_cursor(self, point):
         """Resize / move cursors over the crop rectangle and line ends."""
@@ -995,7 +1014,7 @@ class VectorialDrawPane2(QWidget):
             if self.drawing_mode and self.currently_drawn_shape is not None:
                 # the shape ends where the mouse was released (it ended at the
                 # last move event)
-                self.lastPoint = event.position() / self.scale
+                self.lastPoint = self._image_point(event)
                 if not isinstance(self.currently_drawn_shape, (TAText2D, ScaleBar)):
                     self.currently_drawn_shape.add(self.firstPoint, self.lastPoint)
                 # see how to do that
@@ -1074,10 +1093,13 @@ class VectorialDrawPane2(QWidget):
         # print('just checking',self.background.get_raw_size(), self.background.boundingRect(), self.background.width(),self.background.height(),bounds)
 
 
+        origin, corner = self.frame_extent()
         if bounds:
-            # print('bds3', bounds)
-            self.setMinimumSize(int((bounds.width() + bounds.x()) * self.scale),
-                                int((bounds.height() + bounds.y()) * self.scale))  # marche
+            right, bottom = bounds.width() + bounds.x(), bounds.height() + bounds.y()
+            if corner is not None:
+                right, bottom = max(right, corner.x()), max(bottom, corner.y())
+            self.setMinimumSize(int((right + origin.x()) * self.scale),
+                                int((bottom + origin.y()) * self.scale))  # marche
         else:
             self.setMinimumSize(512,512)  # marche
 
@@ -3542,7 +3564,9 @@ class MainWindow(QWidget):
     def _crop_border_lines(rect, angle, crop_left, crop_right, crop_top, crop_bottom):
         """Return {side: (QPointF, QPointF)} for the 4 crop borders in image-space coords,
         or None when neither rotation nor crop is active."""
-        if not crop_left and not crop_right and not crop_top and not crop_bottom:
+        if not angle and not crop_left and not crop_right and not crop_top and not crop_bottom:
+            # (user report 2026-11-05: a rotation alone drew no frame, only the
+            # handles turned while the outline stayed on the upright image)
             return None
         r = QRectF(0, 0, rect.width(), rect.height())
         center = r.center()
@@ -3580,6 +3604,8 @@ class MainWindow(QWidget):
             self.qt_viewer.rotate_n_crop_lines = self._crop_border_lines(
                 rect, angle, crop_left, crop_right, crop_top, crop_bottom)
             self.qt_viewer.inset_geometry = self.figure_inset_corners
+            self.qt_viewer.view_origin = self.qt_viewer.frame_extent()[0]
+            self.qt_viewer.update_size()
             self.AR_display.setText(f'current AR (w/h): {AR}')
             self.qt_viewer.update()
 

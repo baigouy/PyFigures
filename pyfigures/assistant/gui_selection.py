@@ -102,7 +102,7 @@ def open_editor(session, panel_ref=None, tab=None):
             if not any(p is panel for _, _, p in panels(canvas.shapes_to_draw)):
                 raise ValueError('Panel changed before editor opened')
             session._annotation_editor_status = 'open'
-            canvas.update_image_annotations(image2d=panel, tab=title)
+            canvas.update_image_annotations(image2d=panel, tab=title, draw_tool=False)
             current = resolve_panel(window, panel_id)
             if current is not panel and policy is not None and not getattr(current, POLICY, None):
                 # Native clone drops prototype-only extension metadata.
