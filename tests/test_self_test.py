@@ -12,6 +12,16 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "pyqt6")
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _child_env(**extra):
+    # subprocesses must run this checkout's pyfigures, not an installed copy
+    # (a relative PYTHONPATH breaks once an earlier test changed directory)
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_API="pyqt6", **extra)
+    env["PYTHONPATH"] = os.pathsep.join([ROOT] + [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p])
+    return env
+
 
 def test_self_test_passes_without_pymupdf(qapp, tmp_path, monkeypatch):
     pytest.importorskip("pypdfium2")
@@ -47,12 +57,11 @@ def test_pymupdf_is_fine_in_a_pip_install(qapp, tmp_path, monkeypatch):
 
 def test_command_line_flag(tmp_path):
     out = tmp_path / "r.json"
-    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_API="pyqt6")
     p = subprocess.run([sys.executable, "-m", "pyfigures", "--self-test", str(out)],
-                       env=env, capture_output=True, text=True, timeout=300)
+                       env=_child_env(), cwd=ROOT, capture_output=True, text=True, timeout=300)
     report = json.loads(out.read_text(encoding="utf-8"))
-    assert p.returncode == (0 if report["ok"] else 1)
-    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat"}
+    assert p.returncode == (0 if report["ok"] else 1), (p.returncode, report, p.stderr[-3000:])
+    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat"}, report
 
 
 def test_live_mcp_flag_serves_the_tools(tmp_path):
@@ -62,11 +71,11 @@ def test_live_mcp_flag_serves_the_tools(tmp_path):
     import anyio
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_API="pyqt6",
-               PYFIGURES_MCP_SURFACE="categories", PYFIGURES_LIVE_RUNTIME=str(tmp_path))
+    env = _child_env(PYFIGURES_MCP_SURFACE="categories", PYFIGURES_LIVE_RUNTIME=str(tmp_path))
 
     async def tools():
-        params = StdioServerParameters(command=sys.executable, args=["-m", "pyfigures", "--live-mcp"], env=env)
+        params = StdioServerParameters(command=sys.executable, args=["-m", "pyfigures", "--live-mcp"],
+                                       env=env, cwd=ROOT)
         with anyio.fail_after(240):
             async with stdio_client(params) as (read, write):
                 async with ClientSession(read, write) as session:
@@ -97,7 +106,7 @@ def test_frozen_apps_start_the_mcp_server_with_the_flag(tmp_path, monkeypatch):
 
 
 def test_the_spec_bundles_the_chat_sidebar():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = ROOT
     with open(os.path.join(root, "pyfigures.spec"), encoding="utf-8") as f:
         spec = f.read()
     for needed in ("collect_submodules('qtpy_ai_sidecar')", "collect_data_files('qtpy_ai_sidecar')",
