@@ -65,8 +65,12 @@ def test_no_key_store_fails_only_the_apps(tmp_path, monkeypatch):
     from pyfigures import self_test
     monkeypatch.setattr(keyring, "get_keyring", lambda: fail.Keyring())
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    with pytest.raises(AssertionError, match="no key store"):
-        self_test._check_chat(str(tmp_path))
+    real_platform = sys.platform
+    for platform in ("win32", "darwin"):        # Linux apps only need the backend bundled (next test)
+        monkeypatch.setattr(sys, "platform", platform)
+        with pytest.raises(AssertionError, match="no key store"):
+            self_test._check_chat(str(tmp_path))
+    monkeypatch.setattr(sys, "platform", real_platform)
     monkeypatch.delattr(sys, "frozen")
     assert self_test._check_chat(str(tmp_path)).startswith("ok (qtpy-ai-sidecar")
 
