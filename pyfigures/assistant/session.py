@@ -89,7 +89,10 @@ class Session:
                        # answers "is c calibrated?", "any scale bars?", "which colours?" without another tool
                        'pixel_size': getattr(p, 'px_to_unit_conversion_factor', None) or None,   # 0 = not set
                        'scale_bars': sum(type(a).__name__ == 'ScaleBar' for a in (p.annotations or [])),
-                       'luts': [str(l) if l is not None else None for l in (getattr(p, 'LUTs', None) or [])] or None}
+                       'luts': [str(l) if l is not None else None for l in (getattr(p, 'LUTs', None) or [])] or None,
+                       # what each channel really shows (its LUT, else the file's own colour):
+                       # "swap channels 1 and 2" permutes these (user chat 2026-11-05)
+                       'channel_colours': channel_colours(p)}
                       for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)]
         from .advanced_annotations import describe, text_inspection_record
         annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,
@@ -730,6 +733,50 @@ class Session:
 
 _SOURCE_KEYS = ('path', 'paths', 'file', 'files', 'filename', 'filenames', 'csv')
 _OUTPUT_WORDS = ('out', 'save', 'export', 'dest')
+
+
+_PLAIN_COLOURS = {'RED': (1, 0, 0), 'GREEN': (0, 1, 0), 'BLUE': (0, 0, 1), 'GRAY': (1, 1, 1),
+                  'MAGENTA': (1, 0, 1), 'CYAN': (0, 1, 1), 'YELLOW': (1, 1, 0)}
+
+
+def lut_colour_name(lut):
+    """The plain LUT name a file's own colour table matches (its brightest
+    colour: an LSM 'green' channel -> GREEN), or 'custom'."""
+    import numpy as np
+    try:
+        a = np.asarray(lut, dtype=float)
+        end = a[:, -1] if a.shape[0] == 3 else a[-1, :3]
+        top = end.max()
+        if top <= 0:
+            return 'custom'
+        end = end / top
+        name, dist = min(((n, float(np.abs(end - c).sum())) for n, c in _PLAIN_COLOURS.items()), key=lambda x: x[1])
+        return name if dist < 0.6 else 'custom'
+    except Exception:
+        return 'custom'
+
+
+def channel_colours(panel):
+    """Per channel, the colour it is shown in: its LUT when set, else the
+    image file's own LUT (named by lut_colour_name). None when unknown
+    (image not loaded or single channel without a LUT)."""
+    set_luts = list(getattr(panel, 'LUTs', None) or [])
+    img = getattr(panel, 'img', None)
+    meta = getattr(img, 'metadata', None) or {}
+    file_luts = list(meta.get('LUTs') or []) if isinstance(meta, dict) else []
+    n = max(len(set_luts), len(file_luts))
+    if n < 1:
+        return None
+    out = []
+    for i in range(n):
+        mine = set_luts[i] if i < len(set_luts) else None
+        if isinstance(mine, str) and mine.strip():
+            out.append(mine.upper())
+        elif i < len(file_luts) and file_luts[i] is not None:
+            out.append(file_luts[i].upper() if isinstance(file_luts[i], str) else lut_colour_name(file_luts[i]))
+        else:
+            out.append(None)
+    return out if any(out) else None
 
 
 def _contains(group, target):
