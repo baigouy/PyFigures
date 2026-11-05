@@ -104,12 +104,14 @@ class Session:
               for index,a in enumerate(p.annotations or [])
               if type(a).__name__ in ('Rectangle2D','Rect2D','Ellipse2D','Circle2D','Square2D','Line2D','Polygon2D','PolyLine2D','Freehand2D')]
         objects = self.window.paint.EZFIG_panel.shapes_to_draw
-        return {'figure_summary': figure_summary(objects, references, missing | unreadable),
+        letter_state = lettering_state(self.window)
+        return {'figure_summary': figure_summary(objects, references, missing | unreadable,
+                                                 row_letters=[r['text'] for r in letter_state.get('row_letters') or []]),
                 'session_id': self.id, 'revision': self.revision,
                 'text_annotations': annotations,
                 'roi_annotations': rois,
                 'selection': selection_state(self.window),
-                'verified_letter_specification': specification(lettering_state(self.window)),
+                'verified_letter_specification': specification(letter_state),
                 'panel_references': references,
                 **({'missing_source_files': {
                     'not_found': sorted(missing), 'could_not_be_read': sorted(unreadable),
@@ -842,14 +844,17 @@ ADD_CONTENT = ('Ask for images to be added (tool add_image with each file\'s ful
                'or File > Open a saved .pyf figure.')
 
 
-def figure_summary(objects, references, missing=()):
+def figure_summary(objects, references, missing=(), row_letters=()):
     if not objects:
         return {'empty': True,
                 'answer': 'The figure is empty: no images, plots or text yet. Nothing to preview or describe.',
                 'how_to_add_content': ADD_CONTENT}
     letters = [l for r in references for l in r['letters'] if l]
     text = f"{len(references)} image panel(s) in {len(objects)} top-level object(s)"
-    if letters:
+    if row_letters:
+        # one letter per row, drawn outside the rows: the panels carry none
+        text += ', one letter per row (outside, on the left): ' + ', '.join(row_letters)
+    elif letters:
         text += ', letters ' + ', '.join(letters)
     if missing:
         text += f'; {len(missing)} image file(s) missing (see missing_source_files)'

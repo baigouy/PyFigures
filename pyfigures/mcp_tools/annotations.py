@@ -1591,7 +1591,8 @@ def restyle_texts(
     texts at once, keeping each text's words (Panel letters only had such
     controls).
 
-    *target*: "letters" (the panel letters A, B, C…), "texts" (texts on the
+    *target*: "letters" (the panel letters A, B, C…, also the letters drawn
+      one per row outside the rows: set_panel_letter_layout), "texts" (texts on the
       panels that are not letters: labels, channel names, time stamps, arrow
       labels), "label_rows" (rows / columns of labels beside the panels),
       "scale_bars" (scale-bar legends) or "all".
@@ -1631,9 +1632,11 @@ def restyle_texts(
             if sb.find("legend") is not None and (_decode(sb.findtext("legend")) or "").strip():
                 found["scale_bars"].append((sb, "legend"))
     chosen = [p for t in (_TEXT_TARGETS[:-1] if target == "all" else (target,)) for p in found[t]]
-    if not chosen:
+    # one letter per row: drawn from the figure letter font, nothing to rewrite
+    n_row = len(row_letters_of(root)) if target in ("letters", "all") else 0
+    if not chosen and not n_row:
         return f"No {target.replace('_', ' ')} in this figure: nothing changed."
-    new = _restyle_html_batch([_decode(el.findtext(field)) or "" for el, field in chosen], **attrs)
+    new = _restyle_html_batch([_decode(el.findtext(field)) or "" for el, field in chosen], **attrs) if chosen else []
     if isinstance(new, str):
         return f"ERROR: {new}"
     for (el, field), html in zip(chosen, new):
@@ -1649,13 +1652,17 @@ def restyle_texts(
             _set_child_text(font_el, "size", str(int(round(float(font_size)))))
         if italic is not None:
             _set_child_text(font_el, "italic", str(bool(italic)))
+        if bold is not None:
+            _set_child_text(font_el, "style", "700" if bold else "400")
         if "color" in attrs:
             _set_child_text(font_el, "foreground", str(_color_to_int(color)))
     _save(tree, pyf_path)
     what = {"letters": "panel letter(s)", "label_rows": "label-row text(s)",
             "scale_bars": "scale-bar legend(s)"}.get(target, "text(s)")
-    return (f"Restyled {len(chosen)} {what}: "
-            + ", ".join(f"{k}={v}" for k, v in attrs.items()) + ".")
+    msg = f"Restyled {len(chosen) + n_row} {what}"
+    if n_row:
+        msg += f" ({n_row} row letter(s), drawn with the figure letter font)"
+    return msg + ": " + ", ".join(f"{k}={v}" for k, v in attrs.items()) + "."
 
 
 # ---------------------------------------------------------------------------

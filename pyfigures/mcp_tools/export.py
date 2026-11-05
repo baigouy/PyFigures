@@ -525,11 +525,12 @@ def _extract_figure_meta(pyf_path: str):
     except Exception:
         return None
     panels = []
+    row_map = _row_letter_map(root)
     for img in _iter_panel_elements(root):
         fn = _decode(img.findtext("filename"))
         base = (os.path.basename(str(fn))
                 if fn and fn not in ("None", "@template@") else None)
-        panels.append({"file": base, "label": _panel_letter_label(img),
+        panels.append({"file": base, "label": _panel_letter_label(img) or row_map.get(img),
                        "labels": _panel_labels_texts(img)})
     title, caption = _read_caption(pyf_path)
     return {
@@ -1417,12 +1418,13 @@ def export_source_data(pyf_path: str, out_dir: str, dpi: int = 300,
     panels_info = []
     used_names: set[str] = set()
     idx = 0
+    row_map = _row_letter_map(root)
     for img in root.iter("Image2D"):
         fn = _decode(img.findtext("filename"))
         script = _decode(img.findtext("custom_loading_script"))
         if (not fn or fn in ("None", "@template@")) and not script:
             continue
-        label = _panel_letter_label(img) or f"{idx}"
+        label = _panel_letter_label(img) or row_map.get(img) or f"{idx}"
         tag = "panel" + re.sub(r"[^A-Za-z0-9]", "", str(label)) or f"panel{idx}"
         srcs = _panel_source_files(fn, script)
         copied = []
@@ -1946,6 +1948,18 @@ def _panel_letter_label(img: ET.Element):
     return None
 
 
+def _row_letter_map(root: ET.Element) -> dict:
+    """{Image2D element: row letter} for a figure lettered per row (one letter
+    per row, outside it): every image of a row, insets included, belongs to
+    that row's letter. {} for a figure lettered per panel."""
+    from .annotations import row_letters_of
+    out = {}
+    for letter, row in row_letters_of(root):
+        for img in ([row] if row.tag == "Image2D" else []) + list(row.iter("Image2D")):
+            out.setdefault(img, letter)
+    return out
+
+
 def _channel_flags(raw):
     """The stored channel selection ('""[True, False, False]""') as a list of
     bools, or None when no selection is stored."""
@@ -1987,6 +2001,22 @@ def _ledger_names(root: ET.Element) -> dict:
         return None
 
     names = {}
+    row_map = _row_letter_map(root)
+    if row_map:                           # one letter per row: 'Panel A (file)'
+        by_row = {}
+        for img, letter in row_map.items():
+            if owner_image(img) is None and img.findtext("isText", "False") != "True":
+                by_row.setdefault(letter, []).append(img)
+        for letter, imgs in by_row.items():
+            for img in imgs:
+                what = None
+                if len(imgs) > 1:
+                    what = own_label(img) or os.path.basename(_decode(img.findtext("filename")) or "") or None
+                names[img] = f"Panel {letter}" + (f" ({what})" if what else "")
+        for img, letter in row_map.items():
+            if img not in names and owner_image(img) is not None:
+                names[img] = f"Panel {letter}, inset"
+        return names
     for img in root.iter("Image2D"):
         letter = _panel_letter_label(img)
         if letter:
@@ -2210,6 +2240,7 @@ def export_adjustment_ledger(pyf_path: str) -> str:
     idx = 0
     lut_to_ranges: dict[str, set] = {}
     names = _ledger_names(root)
+    row_map = _row_letter_map(root)
     for img in root.iter("Image2D"):
         fn = _decode(img.findtext("filename"))
         script = _decode(img.findtext("custom_loading_script"))
@@ -2223,7 +2254,7 @@ def export_adjustment_ledger(pyf_path: str) -> str:
             if not has_script or "from staplot import api" in script:
                 continue
         adj, nonlinear = _panel_adjustments(img)
-        label = _panel_letter_label(img)
+        label = _panel_letter_label(img) or row_map.get(img)
         if fn and fn != "None":
             name = os.path.basename(fn)
         elif merge is not None:

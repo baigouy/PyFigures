@@ -266,9 +266,27 @@ def _place(shapes, gap):
         y += r.height() + gap
 
 
-def sketch(shapes, moved, target, dpr=1.0):
+def row_letter_names(canvas):
+    """{id(panel): its row letter} when the figure has one letter per row
+    (outside the rows: the panels carry none), {} otherwise. The sketch then
+    names each panel by its row's letter, as it names lettered panels."""
+    if getattr(canvas, "letter_layout", "panel") != "row":
+        return {}
+    try:
+        names = {}
+        for row, text in canvas._row_letter_texts():
+            letter = text.getPlainText().strip()
+            for leaf in _leaves(row):
+                names[id(leaf)] = letter
+        return names
+    except Exception:
+        return {}
+
+
+def sketch(shapes, moved, target, dpr=1.0, letters=None):
     """QIcon of *shapes* (sandbox result): grey boxes, *moved* panels blue,
-    *target* panels orange, letters inside."""
+    *target* panels orange, letters inside (*letters* {id(panel): letter}
+    for panels whose letter is not on them: one letter per row)."""
     # getRect(all=True): the size drawn on the canvas (getRect() ignores the fit to width)
     _place(shapes, gap=max(s.getRect(all=True).height() for s in shapes) * 0.08 if shapes else 0)
     leaves = [x for s in shapes for x in _leaves(s)]
@@ -296,7 +314,7 @@ def sketch(shapes, moved, target, dpr=1.0):
         p.setPen(QPen(colour.darker(140), 1))
         p.setBrush(colour)
         p.drawRect(box)
-        letter = letter_of(src)
+        letter = letter_of(src) or (letters or {}).get(id(src), "")
         if letter and box.width() >= 7 and box.height() >= 9:
             p.setPen(Qt.GlobalColor.white)
             p.drawText(box, Qt.AlignmentFlag.AlignCenter, letter[:2])
@@ -383,6 +401,7 @@ def finish_drag_menu(canvas, menu, entries):
     except Exception:
         pass
     seen = {}
+    row_names = row_letter_names(canvas)
     # an entry that would leave the layout as it is does nothing: not offered
     first = entries[0]
     now = simulate(canvas, None, (), [x for x in (first[4], first[5]) if x is not None])
@@ -406,7 +425,7 @@ def finish_drag_menu(canvas, menu, entries):
             seen[k] = act
         moved_ids = {id(x) for x in _leaves(moved)} if moved is not None else set()
         target_ids = {id(x) for x in _leaves(target)} if target is not None else set()
-        icon = sketch(result, moved_ids, target_ids, dpr)
+        icon = sketch(result, moved_ids, target_ids, dpr, letters=row_names)
         if icon is not None:
             act.setIcon(icon)
     _drop_empty_separators(menu)

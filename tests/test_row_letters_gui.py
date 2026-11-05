@@ -134,9 +134,70 @@ def test_qc_counts_row_letters(tmp_path):
     assert "[ok]" in line and "row letter" in line
 
 
+def test_ledger_and_library_name_panels_by_row_letter(tmp_path):
+    """The Methods ledger, the source-data tags and the library index name a
+    panel of a row-lettered figure by its row letter (they read the letters
+    on the panels, and there are none)."""
+    from pyfigures.mcp_tools.export import export_adjustment_ledger, _extract_figure_meta
+    out, _ = _recipe_figure(tmp_path)
+    ledger = json.loads(export_adjustment_ledger(out))
+    panels = ledger["panels"]
+    assert [p["label"] for p in panels] == ["A", "A", "B", "B", "B"]
+    assert [p["name"] for p in panels] == ["Panel A (a.png)"] * 2 + ["Panel B (b.png)"] * 3
+    assert [p["label"] for p in _extract_figure_meta(out)["panels"]] == ["A", "A", "B", "B", "B"]
+
+
+def test_restyle_texts_letters_restyles_row_letters(tmp_path):
+    from pyfigures.mcp_server import restyle_texts
+    out, _ = _recipe_figure(tmp_path)
+    msg = restyle_texts(out, target="letters", font_size=14, bold=True, italic=True)
+    assert not msg.startswith(("ERROR", "No ")), msg
+    assert "2 row letter(s)" in msg
+    font = ET.parse(out).getroot().find("SerializableQFont")
+    assert font.findtext("size") == "14"
+    assert font.findtext("style") == "700" and font.findtext("italic") == "True"
+    # a figure with no letters at all still says so
+    from pyfigures.mcp_server import set_panel_letter_layout
+    set_panel_letter_layout(out, "panel")
+    assert restyle_texts(out, target="scale_bars", bold=True).startswith("No ")
+
+
+def test_restyled_row_letters_drawn_bold_and_bigger(gui, qapp, tmp_path):
+    from pyfigures.mcp_server import restyle_texts
+    out, _ = _recipe_figure(tmp_path)
+    canvas = _open(gui, qapp, out)
+    before = canvas.row_letter_items()[0].getRect(all=True).height()
+    restyle_texts(out, target="letters", font_size=24, bold=True)
+    canvas = _open(gui, qapp, out)
+    assert gui.serializable_font.pointSize() == 24 and gui.serializable_font.bold()
+    assert canvas.row_letter_items()[0].getRect(all=True).height() > before * 1.3
+
+
+def test_chat_figure_summary_names_row_letters():
+    from pyfigures.assistant.session import figure_summary
+    refs = [{"letters": []}, {"letters": []}]
+    answer = figure_summary([object(), object()], refs, row_letters=["A", "B"])["answer"]
+    assert "one letter per row" in answer and "A, B" in answer
+    assert "letters" not in figure_summary([object()], refs)["answer"]
+
+
 # ---------------------------------------------------------------------------
 # GUI: layout, margin, save/reopen, undo, row order
 # ---------------------------------------------------------------------------
+
+def test_drag_sketch_names_panels_by_row_letter(gui, qapp, tmp_path):
+    from pyfigures.gui.drag_sketch import row_letter_names, sketch, simulate
+    out, _ = _recipe_figure(tmp_path)
+    canvas = _open(gui, qapp, out)
+    names = row_letter_names(canvas)
+    rows = _image_rows(canvas)
+    assert [names[id(p)] for p in rows[0].content] == ["A", "A"]
+    assert [names[id(p)] for p in rows[1].content] == ["B", "B", "B"]
+    result = simulate(canvas, None, (), [rows[0].content[0]])
+    assert sketch(result, set(), set(), letters=names) is not None
+    canvas.letter_layout = "panel"
+    assert row_letter_names(canvas) == {}
+
 
 def test_gui_draws_one_letter_per_row_outside(gui, qapp, tmp_path):
     out, _ = _recipe_figure(tmp_path)
