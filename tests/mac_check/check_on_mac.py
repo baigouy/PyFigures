@@ -85,7 +85,11 @@ def check(name, exp):
     size = track.naturalSize()
     if "width" in exp and (round(size.width), round(size.height)) != (exp["width"], exp["height"]):
         problems.append(f"size {size.width}x{size.height}, expected {exp['width']}x{exp['height']}")
-    fps = track.nominalFrameRate()
+    # nominalFrameRate is frames / media duration; with B-frames that duration
+    # includes the reorder lead the edit list trims (4 frames at 25 fps read as
+    # 20), so take the rate from the frame spacing
+    step = CoreMedia.CMTimeGetSeconds(track.minFrameDuration())
+    fps = 1.0 / step if step > 0 else track.nominalFrameRate()
     if abs(fps - exp["fps"]) > 0.05:
         problems.append(f"fps {fps}, expected {exp['fps']}")
     n, err = _decode_all(asset, track)
