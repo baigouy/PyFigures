@@ -79,7 +79,13 @@ def _check_chat(tmp):
     import keyring
     backend = keyring.get_keyring()
     name = type(backend).__module__ + "." + type(backend).__name__
-    if getattr(sys, "frozen", False):
+    if getattr(sys, "frozen", False) and sys.platform.startswith("linux"):
+        # Linux apps: the Secret Service backend must be bundled; whether a key
+        # store answers depends on the desktop (none on a headless build machine)
+        from keyring.backends import SecretService  # noqa: F401
+        import secretstorage  # noqa: F401
+        import jeepney  # noqa: F401
+    elif getattr(sys, "frozen", False):
         # the apps must bundle the OS key store backends (Windows Credential
         # Manager, macOS Keychain); a pip install on a headless Linux server has
         # none, which only means API keys cannot be saved there
@@ -104,7 +110,10 @@ def _check_chat(tmp):
     listed = anyio.run(tools)
     assert len(listed) >= 5, f"MCP server listed {len(listed)} tools"
     import importlib.metadata
-    return f"ok (qtpy-ai-sidecar {importlib.metadata.version('qtpy-ai-sidecar')}, {name.rsplit('.', 2)[-2]}, {len(listed)} MCP tools)"
+    store = name.rsplit('.', 2)[-2]
+    if store == "fail" and sys.platform.startswith("linux"):
+        store = "Secret Service bundled, no key store running"
+    return f"ok (qtpy-ai-sidecar {importlib.metadata.version('qtpy-ai-sidecar')}, {store}, {len(listed)} MCP tools)"
 
 
 CHECKS = {"qt_svg": _check_qt_svg, "pdf_panels": _check_pdf_panels,

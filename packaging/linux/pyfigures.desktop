@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=PyFigures
+GenericName=Scientific figure editor
+Comment=Assemble publication-ready scientific figures
+Exec=PyFigures
+Icon=pyfigures
+Terminal=false
+Categories=Graphics;Science;
+Actions=Album;Poster;
+
+[Desktop Action Album]
+Name=Photo album designer
+Exec=PyFigures --album
+
+[Desktop Action Poster]
+Name=Poster designer
+Exec=PyFigures --poster

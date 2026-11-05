@@ -1,0 +1,5 @@
+#!/bin/sh
+# Entry point of the PyFigures AppImage: runs the bundled PyInstaller app.
+# --album / --poster open the photo album / poster designers.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/lib/PyFigures/PyFigures" "$@"

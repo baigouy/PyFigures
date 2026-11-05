@@ -105,6 +105,31 @@ def test_sources_are_packed_per_group_and_deduplicated(tmp_path):
         assert t.extractfile("ffmpeg/x264.tar.bz2").read() == b"x264.tar.bz2" * 10
 
 
+def test_source_downloads_survive_connection_resets(tmp_path, monkeypatch):
+    # ffmpeg.org reset the connection during v0.2.1's release: 4 resets in a
+    # row must not fail it
+    C = _collect()
+    monkeypatch.setattr(C.time, "sleep", lambda s: None)
+    calls = []
+
+    def flaky_urlopen(url, timeout=None, context=None):
+        calls.append(url)
+        if len(calls) <= 4:
+            raise ConnectionResetError(104, "Connection reset by peer")
+        import io
+        return io.BytesIO(b"ffmpeg source")
+
+    monkeypatch.setattr(C.urllib.request, "urlopen", flaky_urlopen)
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps([{"name": "ffmpeg", "version": "", "license": "GPL",
+                              "source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+                              "group": "ffmpeg"}]), encoding="utf-8")
+    C.sources(str(tmp_path / "out"), [str(m)])
+    assert len(calls) == 5
+    with tarfile.open(tmp_path / "out" / "corresponding-source-ffmpeg.tar") as t:
+        assert t.extractfile("ffmpeg/ffmpeg-9.0.2.tar.xz").read() == b"ffmpeg source"
+
+
 def test_a_missing_source_fails_the_release(tmp_path, monkeypatch):
     C = _collect()
     monkeypatch.setattr(C.time, "sleep", lambda s: None)       # no back-off between retries

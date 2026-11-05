@@ -62,6 +62,10 @@ hiddenimports += collect_submodules('qtpy_ai_sidecar')
 # not mcp.cli: the `mcp` command line tool, it exits when typer is missing
 hiddenimports += collect_submodules('mcp', filter=lambda name: not name.startswith('mcp.cli'))
 hiddenimports += collect_submodules('keyring')        # keyring.backends.Windows / macOS
+if sys.platform.startswith('linux'):
+    # Linux key store: the desktop's Secret Service (GNOME Keyring, KWallet) over D-Bus
+    hiddenimports += collect_submodules('secretstorage')
+    hiddenimports += collect_submodules('jeepney')
 hiddenimports += collect_submodules('httpx')
 hiddenimports += collect_submodules('platformdirs')
 datas += collect_data_files('pypdfium2_raw')         # version.json
@@ -105,7 +109,8 @@ hiddenimports += [
 ]
 
 # ---------------------------------------------------------------------------
-# Icons (drawn by packaging/make_icons.py): .ico on Windows, .icns on macOS
+# Icons (drawn by packaging/make_icons.py): .ico on Windows, .icns on macOS;
+# on Linux the AppImage carries pyfigures/icons/pyfigures.png
 # ---------------------------------------------------------------------------
 sys.path.insert(0, os.path.abspath('.'))
 from pyfigures.version import __VERSION__ as _version      # was a stale literal

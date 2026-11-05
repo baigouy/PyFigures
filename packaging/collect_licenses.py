@@ -335,7 +335,9 @@ def sources(out_dir, manifests):
                     fname = f"pyav-ffmpeg-{c['version']}.tar.gz"
                 path = os.path.join(work, fname)
                 try:
-                    data = _get(c["source"])
+                    # 5 tries: ffmpeg.org resets connections now and then
+                    # (v0.2.1's release failed on one)
+                    data = _get(c["source"], tries=5)
                 except Exception as e:
                     failed.append(f"{c['name']}: {c['source']} ({e})")
                     continue

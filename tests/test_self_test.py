@@ -71,6 +71,51 @@ def test_no_key_store_fails_only_the_apps(tmp_path, monkeypatch):
     assert self_test._check_chat(str(tmp_path)).startswith("ok (qtpy-ai-sidecar")
 
 
+def test_linux_apps_need_the_secret_service_backend_not_a_running_store(tmp_path, monkeypatch):
+    # the Linux build machine is headless: the key store check is that the
+    # backend is bundled; on a desktop it then finds GNOME Keyring / KWallet
+    pytest.importorskip("qtpy_ai_sidecar")
+    import keyring
+    from keyring.backends import fail
+    from pyfigures import self_test
+    monkeypatch.setattr(keyring, "get_keyring", lambda: fail.Keyring())
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
+    real_import = __import__
+
+    def no_secretstorage(name, *args, **kwargs):
+        if name == "secretstorage":
+            raise ImportError("not bundled")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", no_secretstorage)
+    with pytest.raises(ImportError, match="not bundled"):
+        self_test._check_chat(str(tmp_path))
+
+
+def test_linux_packages():
+    with open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8") as f:
+        wf = f.read()
+    assert "os: ubuntu-22.04" in wf and "PyFigures-Linux-x86_64.*" in wf
+    assert "appimagetool/releases/download/1.9.1/" in wf                # pinned, not "continuous"
+    assert "bash packaging/make_linux_packages.sh dist ./appimagetool" in wf
+    assert "PyFigures-Linux-x86_64.AppImage --self-test" in wf          # the AppImage itself is tested
+    with open(os.path.join(ROOT, "packaging", "make_linux_packages.sh"), encoding="utf-8") as f:
+        script = f.read()
+    with open(os.path.join(ROOT, "packaging", "linux", "AppRun"), encoding="utf-8") as f:
+        apprun = f.read()
+    assert '"$APPDIR/usr/lib/PyFigures"' in script and '"$HERE/usr/lib/PyFigures/PyFigures"' in apprun
+    for text in (script, apprun):
+        assert "\r" not in text                                         # LF only: run by sh/bash
+    with open(os.path.join(ROOT, "packaging", "linux", "pyfigures.desktop"), encoding="utf-8") as f:
+        desktop = f.read()
+    assert "Icon=pyfigures\n" in desktop and os.path.isfile(os.path.join(ROOT, "pyfigures", "icons", "pyfigures.png"))
+    assert "Exec=PyFigures --album" in desktop and "Exec=PyFigures --poster" in desktop
+    with open(os.path.join(ROOT, "pyfigures.spec"), encoding="utf-8") as f:
+        spec = f.read()
+    assert "collect_submodules('secretstorage')" in spec and "collect_submodules('jeepney')" in spec
+
+
 def test_command_line_flag(tmp_path):
     out = tmp_path / "r.json"
     p = subprocess.run([sys.executable, "-m", "pyfigures", "--self-test", str(out)],
