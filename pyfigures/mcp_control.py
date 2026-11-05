@@ -44,6 +44,11 @@ import time
 SERVER_NAME = "pyfigures"
 # shown under the chat and in the MCP server dialog: a model once replaced the
 # user's 1.24 µm/px by 0.1 and shrank the asked-for 100 µm bars to 5 µm
+# added under the chat only when the model is online (never for a local model):
+# {provider} and {host} are filled in by the chat
+REMOTE_MODEL_WARNING = ("Online model ({provider}, {host}): your messages, the figure's description "
+                        "(panels, file names, text) and figure previews (images) are sent outside "
+                        "this computer, to that provider.")
 MODEL_WARNING = ("Language models make mistakes. Check every panel, crop, colour, "
                  "pixel size and scale bar before you use the figure.")
 DEFAULT_PORT = 8765

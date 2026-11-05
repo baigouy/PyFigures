@@ -1496,6 +1496,11 @@ class EZFIG_GUI(QMainWindow):
         duplicate_selection = QAction("Duplicate Selection", self)
         edit_menu.addAction(duplicate_selection)
         duplicate_selection.triggered.connect(self.paint.EZFIG_panel.duplicate)
+        arrange_rows = QAction("Arrange all images in rows…", self)
+        arrange_rows.setToolTip("Regroup every image into rows, in reading order (letters keep their order): "
+                                "the same number per row (3) or one number per row (3-2-2-2)")
+        edit_menu.addAction(arrange_rows)
+        arrange_rows.triggered.connect(lambda: self.arrange_images_in_rows())
 
         # ── Insert: everything that adds a panel ─────────────────────────
         insert_menu = self.menuBar.addMenu("Insert")
@@ -4287,7 +4292,14 @@ class EZFIG_GUI(QMainWindow):
         missing = self._missing_image_files()
         unreadable = self._missing_image_files(unreadable=True)
         key = frozenset(missing + unreadable)
-        if not key or key == getattr(self, '_missing_warned_for', None):
+        warned = getattr(self, '_missing_warned_for', None) or frozenset()
+        # fewer missing files than already reported = the user (or the chat) is
+        # relinking them: no dialog after each one (9 replacements gave 9 dialogs,
+        # 2026-11-05); the status bar still says what is left. Opening a figure resets it.
+        if not key or key <= warned:
+            if key:
+                self.statusBar().showMessage(f'{len(key)} image file(s) still missing or unreadable'
+                                             + (' (QC → Remap image paths…)' if missing else ''), 15000)
             return missing
         self._missing_warned_for = key
         n = len(missing)
@@ -4460,6 +4472,36 @@ class EZFIG_GUI(QMainWindow):
         self.save_state(show_popup=False)
         if not was_dirty:
             self._mark_clean()
+
+    def arrange_images_in_rows(self, per_row=None):
+        """Edit > Arrange all images in rows…: every image regrouped into rows in
+        reading order, `3` per row or `3-2-2-2` (one number per row), one undo
+        step. Same code as the MCP tool arrange_live_images (columns/row_counts)."""
+        import tempfile
+        from qtpy.QtWidgets import QInputDialog, QMessageBox
+        from pyfigures.assistant.existing_tools import arrange_rows, parse_row_counts
+        if per_row is None:
+            per_row, ok = QInputDialog.getText(
+                self, "Arrange all images in rows",
+                "Images per row: one number for equal rows (e.g. 3),\n"
+                "or one number per row (e.g. 3-2-2-2 for 9 images in 4 rows):", text="3")
+            if not ok or not str(per_row).strip():
+                return None
+        try:
+            columns, row_counts = parse_row_counts(per_row)
+            with tempfile.TemporaryDirectory(prefix="arrange_rows_") as directory:
+                path = os.path.join(directory, "snapshot.pyf")
+                self._save_state_to_file(path)
+                result = arrange_rows(path, columns, int(self.size_spinbox.value()), 3, row_counts)
+                self.save_state(show_popup=False)      # checkpoint: Undo returns here
+                self.reload_state(path, append=False, skip_add_to_stack=True)
+            self.paint.EZFIG_panel.update()
+            self.save_state(show_popup=False)          # one undo step
+            self._mark_dirty()
+            return result
+        except Exception as exc:
+            QMessageBox.warning(self, "Arrange all images in rows", str(exc))
+            return None
 
     def arrange_text_rows(self):
         # one implementation with the canvas repack (label_rows.py): this one

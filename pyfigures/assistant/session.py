@@ -264,7 +264,7 @@ class Session:
                         elif op == 'arrange_rows':
                             response = arrange_rows(path, args.get('columns', 4),
                                 args.get('row_width_px') or int(w.size_spinbox.value()),
-                                args.get('spacing_px', 3))
+                                args.get('spacing_px', 3), args.get('row_counts') or None)
                         else:
                             response = run(path, args['calls'])
                         # Original tools only touched a temporary snapshot so far.

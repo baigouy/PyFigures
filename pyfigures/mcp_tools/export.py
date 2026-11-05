@@ -263,6 +263,34 @@ def _panel_label_texts(img_elem):
 
 
 @mcp.tool()
+def shared_channel_luts(img) -> dict | None:
+    """{'lut': name, 'channels': [1-based]} when two or more SHOWN channels of
+    this image have the same LUT (e.g. GRAY on every channel of a merge): they
+    are summed in one colour and cannot be told apart. None otherwise."""
+    import ast
+    from .core import _child_text
+    try:
+        luts = ast.literal_eval(_child_text(img, "LUTs") or "None")
+    except (ValueError, SyntaxError):
+        return None
+    if not isinstance(luts, (list, tuple)) or len(luts) < 2:
+        return None
+    try:
+        shown = ast.literal_eval(_child_text(img, "channels") or "None")
+    except (ValueError, SyntaxError):
+        shown = None
+    if not isinstance(shown, (list, tuple)) or not any(shown):
+        shown = [True] * len(luts)                     # nothing chosen = all shown
+    by_lut = {}
+    for i, lut in enumerate(luts):
+        if isinstance(lut, str) and lut.strip() and (i >= len(shown) or shown[i]):
+            by_lut.setdefault(lut.strip().upper(), []).append(i + 1)
+    for lut, channels in by_lut.items():
+        if len(channels) > 1:
+            return {"lut": lut, "channels": channels}
+    return None
+
+
 def audit_figure(pyf_path: str) -> str:
     """Inventory every panel and flag what's missing — a quick QC pass.
 
@@ -281,6 +309,9 @@ def audit_figure(pyf_path: str) -> str:
     'metadata', 'figure' or 'none'.
     ``panels_constant`` lists panels showing a single value everywhere (all
     black / white, an empty channel): usually a mistake to remove.
+    ``panels_channels_share_a_lut`` lists images whose shown channels have the
+    same LUT (e.g. GRAY on every channel of a merge): the channels add up in
+    one colour and cannot be told apart.
     ``panels_with_burned_in_text`` lists sources with text burned into their
     pixels near an edge (an information line) and the crop that removes it —
     a suggestion: the user decides whether that text belongs to the data.
@@ -372,6 +403,13 @@ def audit_figure(pyf_path: str) -> str:
         v = constant_panel_value(fn, _channels_shown(el), cache)
         if v is not None:
             constant.append(dict(_where(p), value=v))
+    # several shown channels of one image with the same LUT ("try GRAY" set GRAY on
+    # all 3 channels, 2026-11-05): they add up and can no longer be told apart
+    same_lut = []
+    for p, el in zip(panels, elems):
+        dup = shared_channel_luts(el)
+        if dup:
+            same_lut.append(dict(_where(p), **dup))
     return json.dumps({
         "n_panels": len(panels),
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
@@ -385,6 +423,7 @@ def audit_figure(pyf_path: str) -> str:
                                           if p.get("pixel_size_source") == "figure"],
         "panels_missing_label": missing_label,
         "panels_constant": constant,
+        "panels_channels_share_a_lut": same_lut,
         "panels_with_burned_in_text": burned,
         "panels": panels,
     }, ensure_ascii=False, indent=2)

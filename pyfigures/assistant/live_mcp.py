@@ -101,10 +101,12 @@ def preview_live_figure(session_id: str, expected_revision: int) -> Image:
 
 @mcp.tool()
 def arrange_live_images(session_id: str, expected_revision: int, request_id: str,
-                        columns: int = 4, row_width_px: int = 0, spacing_px: int = 3) -> dict:
-    """Regroup ALL image panels into horizontal rows of columns images, in current traversal order. Final row may be shorter. Preserve panel annotations/crops/insets; replace previous group structure. Standalone labels follow rows; nested text rows are rejected. Uses existing PyFigures XML/layout tools on a temporary snapshot. One undo step; no save. row_width_px=0 keeps GUI width."""
+                        columns: int = 4, row_width_px: int = 0, spacing_px: int = 3,
+                        row_counts: list[int] | None = None) -> dict:
+    """Regroup ALL image panels into horizontal rows, in current reading order (letters keep their order): columns images per row (final row may be shorter), OR row_counts = images in each row for uneven rows, e.g. [3, 2, 2, 2] for 9 images in 4 rows (must add up to the image count). Preserve panel annotations/crops/insets; replace previous group structure. Standalone labels follow rows; nested text rows are rejected. Uses existing PyFigures XML/layout tools on a temporary snapshot. One undo step; no save. row_width_px=0 keeps GUI width."""
     return request('arrange_rows', session_id, expected_revision,
-                   dict(columns=columns, row_width_px=row_width_px, spacing_px=spacing_px), request_id)
+                   dict(columns=columns, row_width_px=row_width_px, spacing_px=spacing_px,
+                        row_counts=row_counts), request_id)
 
 
 @mcp.tool()
@@ -236,7 +238,7 @@ def select_live_objects(panel_refs: list[str] | None = None, group_paths: list[l
 
 @mcp.tool()
 def open_annotation_editor(panel_ref: str | None = None, tab: str | None = None) -> dict:
-    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click, FOR THE USER to work in. tab: the tab it opens on, matching what the user wants to do there: 'crop' or 'rotate' (Rotate + Crop), 'text' (Texts), 'scale' (File Infos + Scale, pixel size), 'script', 'export' (Export style), 'layers'; default 'annotations' (drawing ROIs, arrows). Only when the user asks for the editor: it blocks every other tool until the user presses OK/Cancel, and no tool can close it. Never open it to make an edit yourself (inset where the user clicked: roi_to_inset; ROIs, arrows, text: their tools). Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
+    """Select a named panel and open its NATIVE annotation editor, just like GUI double-click, FOR THE USER to work in. tab: the tab it opens on, matching what the user wants to do there: 'crop' or 'rotate' (Rotate + Crop), 'text' (Texts), 'scale' (File Infos + Scale: pixel size, channels and their colours / LUTs, Reset all LUTs), 'script', 'export' (Export style), 'layers'; default 'annotations' (drawing ROIs, arrows). Only when the user asks for the editor: it blocks every other tool until the user presses OK/Cancel, and no tool can close it. Never open it to make an edit yourself (inset where the user clicked: roi_to_inset; ROIs, arrows, text: their tools). Omit panel_ref only when one panel is already selected. Does not invent/add annotations; human uses native OK/Cancel. Result scheduled means opening requested, not annotation completed. For a vague annotate-panel request first ask what annotation to add or offer this editor. Never add placeholder text like Panel o."""
     return call_live('open_annotation_editor', dict(panel_ref=panel_ref, tab=tab))
 
 

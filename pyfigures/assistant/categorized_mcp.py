@@ -129,8 +129,9 @@ def build_server(full_server, send):
         'A successful tool call is not task success. Report verified after-state; if counts show zero letters, '
         'say letters are absent, never claim a lettering swap succeeded. '
         'When the human supplies annotation content, such as write a text note on a named panel, create the ordinary annotation with add_annotation. Merely opening an editor does not fulfill a request to write the supplied content. Offer/open the editor for unspecified content or an explicit editor request. '
+        'Whenever you list choices for a change (and always for a HELP request such as "help me change the channel colours of e"), add one more choice: doing it in the GUI, which you set up for them. Either offer to open the panel\'s editor on the tab where they can do it themselves (open_annotation_editor: channel colours / LUTs and pixel size tab="scale", crop or rotation "crop", text "text", drawing "annotations"), or offer to select the right object and open its right-click menu (select_live_objects, then open_native_menu). Say what the yellow selection outline must surround for that menu (one image, its whole row, or the figure): the menu offers different entries at each level. Open nothing until they choose it. '
         'When no dedicated operation covers a GUI feature, discover native_gui: inspect actual native menu/dialog controls, invoke their exact IDs, complete or cancel the dialog, then verify jobs and document state. Queued is not success. Never substitute code for a normal manual how-to request. '
-        'For rearranging EXISTING images into regular rows/columns, prefer arrange_live_images once. Derive columns from current image count when a row count is requested; ask if equal rows are impossible. Do not rebuild existing rows with per-image move loops. '
+        'For rearranging EXISTING images into regular rows/columns, prefer arrange_live_images once. Derive columns from current image count when a row count is requested; when equal rows are impossible, ask which split the human wants, then pass it as row_counts (e.g. 9 images in 4 rows: row_counts=[3, 2, 2, 2]) in that ONE call. Reading order and letters are kept. Do not rebuild existing rows with per-image move loops. '
         'To construct NEW rows/columns, call add_group and use its returned path before adding images/plots. Requested row numbers are not existing group paths. On a missing-container error inspect/create the intended container; never fall back into an unrelated existing row. '
         'Discover relevant operations with find_pyfigures_tools; its results include exact '
         'argument schemas. Execute the selected operation with use_pyfigures_tool. '
@@ -218,8 +219,12 @@ def build_server(full_server, send):
         """Find operations and retrieve their exact arguments before executing. Search natural words (e.g. spacing, panel letter position, scale bar), optionally within a category. Default at most six schemas; use offset for more. No GUI edits. Leave compact unset: the client sets it when its context is filling."""
         if category and category not in CATEGORIES:
             raise ValueError('Unknown category. Use list_pyfigures_categories.')
-        if not 1 <= limit <= 12 or offset < 0:
-            raise ValueError('limit must be 1-12 and offset nonnegative')
+        # a model asked for limit=20 and lost a step to the error: clamp instead
+        limit = min(max(int(limit or 6), 1), 12)
+        offset = max(int(offset or 0), 0)
+        # operations named exactly ('move_image schema') come first, with no how-to guides:
+        # a model searched move_image ~20 times and got scale-bar guides each time
+        named = {n for n in available if re.search(r'(?<![a-z0-9_])' + re.escape(n.lower()) + r'(?![a-z0-9_])', query.lower())}
         words = re.findall(r'[a-z0-9]+', query.lower())
         aliases = {'gaps': 'spacing', 'gap': 'spacing', 'letters': 'letter',
                    'labels': 'label', 'rows': 'row', 'images': 'image', 'fonts': 'font',
@@ -233,7 +238,7 @@ def build_server(full_server, send):
             title = name.replace('_', ' ')
             help_text = tool.description.lower()
             score = sum(5 * (w in title) + (w in help_text) for w in words)
-            if query.strip().lower()==name.lower():score+=1000
+            if query.strip().lower()==name.lower() or name in named:score+=1000
             # Concrete output/metadata intent must outrank generic figure inspection.
             if name=='export_figure' and any(w in ('export','png','svg','pdf','tiff','jpeg') for w in words):score+=320
             if name in ('set_figure_caption','get_figure_caption') and 'caption' in words:
@@ -334,7 +339,7 @@ def build_server(full_server, send):
         mode = os.environ.get('PYFIGURES_COMPACT_DISCOVERY', 'auto')
         compact = mode == '1' or (mode != '0' and bool(compact))
         for rank, (_, n, t, c) in enumerate(ranked[offset:offset + limit]):
-            if compact and rank >= FULL_SCHEMAS and query.strip().lower() != n.lower():
+            if compact and rank >= FULL_SCHEMAS and query.strip().lower() != n.lower() and n not in named:
                 summary = re.split(r'(?<=[.!?])\s', t.description.strip(), maxsplit=1)[0][:160]
                 found.append({'name': n, 'category': c, 'summary': summary,
                               'schema': 'not included: call find_pyfigures_tools(query="' + n + '") for it, or call the operation; a wrong argument returns its exact schema'})
@@ -347,7 +352,7 @@ def build_server(full_server, send):
             found.append({'name': n, 'callable_directly': n in server._tool_manager._tools, 'dispatcher': 'use_pyfigures_tool', 'category': c, 'description': t.description,
                           'arguments_schema': schema})
         manual_guides=None
-        if query:
+        if query and not named:
             from .manual_help import explain
             candidate=explain(query)
             if candidate.get('status') in ('explained','source_reviewed'):
@@ -359,7 +364,7 @@ def build_server(full_server, send):
                 manual_guides={'status':'ambiguous','operation_executed':False,
                                'guides':[g for g in close if g.get('status')=='explained'],
                                'answer_style':'Pick the guide matching the question; human GUI steps, no tool commands.'}
-        if manual_guides is None and any(w in ('keyboard','shortcut','shortcuts','drag','drop','dnd','split','channel','channels') for w in words):
+        if manual_guides is None and not named and any(w in ('keyboard','shortcut','shortcuts','drag','drop','dnd','split','channel','channels') for w in words):
             from .manual_help import explain
             topic='split' if any(w in ('split','channel','channels') for w in words) else ('drag_and_drop' if any(w in ('drag','drop','dnd') for w in words) else 'shortcuts')
             manual_guides=explain(topic)

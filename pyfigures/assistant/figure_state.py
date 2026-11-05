@@ -1,5 +1,6 @@
 """Small verified figure memory and strict property-preservation checks."""
 FIELDS = ('text', 'placement', 'font_family', 'font_size', 'color', 'background', 'opacity', 'bold', 'italic', 'underline')
+MOVE_HINT = 'To regroup images into rows (equal or uneven, e.g. 3-2-2-2) use arrange_live_images with columns or row_counts in ONE call; it keeps reading order and letters. To move single images, move them so the reading order stays the same.'
 REQUEST_FIELDS = {'placement': 'placement', 'font_family': 'font_family', 'font_size': 'font_size',
                   'color_value': 'color', 'background': 'background'}
 
@@ -44,7 +45,7 @@ def movement_changes(before, after):
             texts = [a['text'] for a in panel['letters']]
             candidates = [p for p in candidates if [a['text'] for a in p['letters']] == texts]
         if len(candidates) != 1:
-            raise ValueError('MOVE_VERIFICATION_FAILED: Cannot uniquely match image identity; edit rolled back. Use atomic ungroup_all_images for all images.')
+            raise ValueError('MOVE_VERIFICATION_FAILED: Cannot uniquely match image identity; edit rolled back. ' + MOVE_HINT)
         matched = candidates[0]
         known[panel['filename']].remove(matched)
         aligned.append({**matched, 'panel_id': panel['panel_id']})
@@ -52,7 +53,7 @@ def movement_changes(before, after):
         raise ValueError('MOVE_VERIFICATION_FAILED: Image count changed; edit rolled back.')
     deltas = changes({**before, 'panels': aligned}, after)
     if deltas:
-        raise ValueError('MOVE_VERIFICATION_FAILED: Actual image lettering changed; edit rolled back. Use atomic ungroup_all_images for all images.')
+        raise ValueError('MOVE_VERIFICATION_FAILED: this move changes the panel letters (their reading order); edit rolled back. ' + MOVE_HINT)
     return deltas
 
 

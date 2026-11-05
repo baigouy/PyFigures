@@ -103,6 +103,13 @@ def audit_report(raw):
         lines += [f"✗ {len(constant)} panel{'s show' if len(constant) > 1 else ' shows'} a single value "
                   f"everywhere (nothing to see, e.g. an empty channel): {who(constant)}",
                   "   Remove it (select it, Delete) unless the empty image is the point.", ""]
+    for s in d.get("panels_channels_share_a_lut") or []:
+        place = names.get((tuple(s["group_path"]), s["image_index"]), os.path.basename(str(s.get("filename"))))
+        chans = ", ".join(str(c) for c in s.get("channels", []))
+        lines += [f"✗ {place}: channels {chans} all use the {s.get('lut')} LUT, so they add up in one colour "
+                  f"and cannot be told apart.",
+                  "   Give each channel its own LUT, show only one channel (double-click the panel), "
+                  "or split the channels (Insert → Stack views → Channel split).", ""]
     for b in d.get("panels_with_burned_in_text") or []:
         place = names.get((tuple(b["group_path"]), b["image_index"]), os.path.basename(str(b.get("filename"))))
         lines += [f"! {place}: {b.get('warning')}", ""]

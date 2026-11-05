@@ -695,6 +695,9 @@ def _lut_alias(name, by_lower):
     return None
 
 
+_LUT_CLEAR = {"none", "default", "no lut", "nolut", "original", "reset", "acquisition"}
+
+
 def _canonical_lut_names(luts):
     """Map requested LUT names to the exact keys PyFigures knows (case-
     insensitive, with the aliases of _lut_alias). Returns
@@ -814,7 +817,10 @@ def set_lut(
             Single-channel images: ``["GREEN"]``.
             Three-channel RGB: ``["RED", "GREEN", "BLUE"]``.
             Mixed (ch0 red, ch1 unchanged): ``["RED", null]``.
-            ``"DEFAULT"`` resets a channel to its acquisition colour.
+            ``"NONE"`` (also ``"DEFAULT"``) removes the LUT: the channel is drawn
+            with the LUT stored in the image file (e.g. the channel colours of an
+            LSM / CZI), or in gray when the file has none, as before any LUT was set.
+            This is what "remove / reset / clear the LUT(s)" means.
 
     Available LUT names (case-insensitive; list_luts lists them all and
     checks whether a name exists):
@@ -870,6 +876,10 @@ def set_lut(
     if isinstance(luts, str):
         # one LUT for a one-channel image, as models often send it ("GREEN")
         luts = [luts]
+    # "NONE" / "DEFAULT" remove the LUT (the image's own colours). DEFAULT used to
+    # be stored as a palette name and drew the DNA rainbow (2026-11-05)
+    cleared = {i for i, l in enumerate(luts) if isinstance(l, str) and l.strip().lower() in _LUT_CLEAR}
+    luts = [None if i in cleared else l for i, l in enumerate(luts)]
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:
@@ -902,7 +912,7 @@ def set_lut(
         current = ast.literal_eval(_child_text(img, "LUTs") or "None") or []
     except (ValueError, SyntaxError):
         current = []
-    luts_encoded = [current[i] if new is None and i < len(current) else new
+    luts_encoded = [None if i in cleared else current[i] if new is None and i < len(current) else new
                     for i, new in enumerate(luts_encoded)]
     kept = []
     if n_file and 1 < len(luts_encoded) < n_file:
@@ -912,21 +922,33 @@ def set_lut(
         for i in range(len(luts_encoded), n_file):
             luts_encoded.append(current[i] if i < len(current) else None)
             kept.append(f"channel {i + 1} ({current[i] if i < len(current) and current[i] else 'its default'})")
+    if not any(luts_encoded):
+        luts_encoded = None                      # no LUT left: the image's own colours
     _set_child_text(img, "LUTs", repr(luts_encoded))
-    changed.append(f"LUTs={luts_encoded}")
+    changed.append(f"LUTs={luts_encoded}" if luts_encoded else "LUTs removed (the image's own colours)")
     from .stacks import _sync_split_colours
-    synced = _sync_split_colours(container, img, luts_encoded)
+    synced = _sync_split_colours(container, img, luts_encoded or [])
     if synced:
         changed.append("channel split matched: " + ", ".join(synced))
     warning = ""
     n_channels = _channel_count_from_file(_first_filename(img))
-    if n_channels and n_channels > 1 and len(luts) == 1:
+    if n_channels and n_channels > 1 and len(luts) == 1 and not cleared:
         # 'lut: red' on an RGB image changed nothing visible (a local model
         # expected it to show one channel)
         warning = (f"\nWARNING: the image has {n_channels} channels and one LUT colours "
                    f"only the first (RED on an RGB image changes nothing); to show the "
                    f"channels separately use "
-                   f"add_channel_split (recipe: split:), or give one LUT per channel.")
+                   f"add_channel_split (recipe: split:), or give each channel its own LUT. "
+                   f"Never give the SAME LUT to several channels (e.g. GRAY on all): they add up "
+                   f"in one colour and can no longer be told apart; ask the user first.")
+    dup = None
+    if luts_encoded:
+        from .export import shared_channel_luts
+        dup = shared_channel_luts(img)
+    if dup:
+        warning += (f"\nWARNING: channels {', '.join(map(str, dup['channels']))} now all use "
+                    f"{dup['lut']}: they add up in one colour and cannot be told apart. "
+                    f"Tell the user; undo unless they asked for exactly this.")
     if kept:
         shown = [True] * len(luts) + [False] * (n_channels - len(luts))
         warning += (f"\nNOTE: {len(luts)} LUTs for {n_channels} channels: "

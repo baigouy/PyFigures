@@ -522,6 +522,10 @@ ACTIONS = {
     "menu: Edit > Select all": spec(chk_selection(2), sel=None, inv=False),
     "menu: Edit > Reset Selection": spec(chk_selection(None), inv=False),
     "menu: Edit > Duplicate Selection": spec(panels_added(1, name="gray8")),
+    # uneven rows, reading order kept (the chat's 'yep 3-2-2-2', 2026-11-05)
+    "menu: Edit > Arrange all images in rows…": spec(
+        rows_are(["row 1: gray8.tif | cells.png | rgb.tif", "row 2: zstack.tif"]),
+        [("QInputDialog", text_input("3-1"))]),
     # ── Insert ──
     "menu: Insert > Images from files > To a new row…": spec(rows_are(BASE + ["row 3: cells2.png | gray16.tif"]),
                                                              files={"open_many": ["png2", "tif16"]}),

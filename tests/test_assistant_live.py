@@ -451,8 +451,25 @@ def test_chat_sidebar_docks_the_sidecar(qapp, gui, runtime, monkeypatch):
     assert config.adapter["descriptor"] == str(runtime / "connection.json")
     assert g.open_chat_sidebar() is dock                      # a second click shows the same dock
     # always under the chat: PyFigures words the sidecar's notice for figures
-    from pyfigures.mcp_control import MODEL_WARNING
-    assert config.notice == MODEL_WARNING and dock.notice.text().endswith(MODEL_WARNING)
+    from pyfigures.mcp_control import MODEL_WARNING, REMOTE_MODEL_WARNING
+    assert config.notice == MODEL_WARNING and dock.notice.text().splitlines()[0].endswith(MODEL_WARNING)
+    # an online provider adds, explicitly, that text AND images leave the computer;
+    # a local model never shows it
+    assert config.remote_notice == REMOTE_MODEL_WARNING
+    sidebar = dock.widget() if hasattr(dock.widget(), "notice") else dock
+    import dataclasses
+    local = dataclasses.replace(sidebar.engine.config, provider="compatible", model="m",
+                                base_url="http://127.0.0.1:1234/v1")
+    sidebar.replace_engine(local)
+    assert local.online_host() is None and "outside" not in sidebar.notice.text()
+    assert sidebar.notice.text().endswith(MODEL_WARNING)
+    sidebar.replace_engine(dataclasses.replace(local, provider="openrouter", model="openrouter/free",
+                                               base_url="https://openrouter.ai/api/v1"))
+    online = sidebar.notice.text().splitlines()
+    assert online[0].endswith(MODEL_WARNING) and len(online) == 2
+    assert "openrouter.ai" in online[1] and "previews (images)" in online[1] and "outside this computer" in online[1]
+    sidebar.replace_engine(local)
+    assert "outside" not in sidebar.notice.text()
 
 
 def test_launch_flags(qapp, gui, runtime):

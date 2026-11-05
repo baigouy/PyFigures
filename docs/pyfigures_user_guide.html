@@ -497,6 +497,7 @@
         <tr><td><strong>Undo / Redo / Select all</strong></td><td>Undo or redo the last changes; select every panel.</td><td><kbd>Ctrl Z</kbd> / <kbd>Ctrl Y</kbd> / <kbd>Ctrl A</kbd></td></tr>
         <tr><td><strong>Reset Selection</strong></td><td>Deselects everything on the canvas (the toolbar's width then applies to the whole figure).</td><td><kbd>Esc</kbd></td></tr>
         <tr><td><strong>Duplicate Selection</strong></td><td>Creates a copy of the currently selected element(s).</td><td><kbd>Ctrl D</kbd></td></tr>
+        <tr><td><strong>Arrange all images in rows…</strong></td><td>Regroups every image of the figure into rows, in reading order, so the letters keep their order: type one number for equal rows (<code>3</code>: rows of 3, the last one may be shorter) or one number per row for uneven rows (<code>3-2-2-2</code>: 9 images in 4 rows). One undo step. The same as the MCP tool <code>arrange_live_images</code> (<code>columns</code> or <code>row_counts</code>), and the recipe's <code>rows:</code> list; ask the chat for "4 rows, 3-2-2-2" and it uses this too.</td><td></td></tr>
       </table>
     </div>
 
@@ -542,7 +543,7 @@
     <div class="table-wrap">
       <table>
         <tr><th>Entry</th><th>Description</th></tr>
-        <tr><td><strong>Audit figure</strong></td><td>Lists panels missing a scale bar or a letter.</td></tr>
+        <tr><td><strong>Audit figure</strong></td><td>Lists panels missing a scale bar or a letter, and images whose channels all use the same LUT (for example GRAY on every channel of a merge: the channels add up in one colour and can no longer be told apart). To remove a LUT, use <em>Reset all LUTs</em> in the panel editor (<em>File Infos + Scale</em> tab), or ask the chat to "remove the LUTs": the channels go back to the colours stored in the image file. The MCP tool <code>set_lut</code> does the same with <code>"NONE"</code>.</td></tr>
         <tr><td><strong>Check journal compliance… / Apply journal guidelines…</strong></td><td>Checks (or applies) a journal's width, fonts, minimum font size and resolution.</td></tr>
         <tr><td><strong>Journal styles (from a journal's guidelines)…</strong></td><td>For a journal that is not in the list: paste its figure guidelines from its web page, a language model extracts the rules (column widths, fonts, minimum size, resolution), you check them and save them as a journal style that the checks above then offer.</td></tr>
         <tr><td><strong>Check print resolution… / Enforce minimum font size…</strong></td><td>Effective dpi of every panel at the printed size; raises every text to a minimum size.</td></tr>
@@ -1030,6 +1031,15 @@
     <p>
       The chat is the package <code>qtpy-ai-sidecar</code>, installed with PyFigures and included in the
       standalone apps. <strong>Help → Chat &amp; MCP Tutorial</strong> walks through all of this.
+    </p>
+    <p>
+      <strong>Bold</strong> words in the chat's answers (for example the choices it offers, such as
+      <strong>3-2-2-2</strong>) can be clicked: they go into the message box, ready to send or edit.
+      Under the message box, a warning reminds you that language models make mistakes. With an
+      <strong>online</strong> provider (OpenRouter, Mistral, OpenAI, Claude…), a second line says that your
+      messages, the figure's description (panels, file names, text) and the figure previews (images) are
+      sent outside your computer, to that provider. It is not shown with a model on your computer
+      (LM Studio, the chat's own local models).
     </p>
     <p>
       If the chat does something wrong, its <strong>export</strong> button (top of the sidebar) saves the

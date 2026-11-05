@@ -101,3 +101,32 @@ def test_no_warning_when_every_image_is_there(gui, tmp_path):
     M.add_image(pyf, [0], str(img))
     gui.reload_state(pyf, append=False)
     assert gui._missing_image_files() == []
+
+
+def test_relinking_missing_images_one_by_one_asks_only_once(gui, qapp, tmp_path, monkeypatch):
+    """2026-11-05: the chat replaced 9 missing images one by one and the user had
+    to close 'Images not found' after each one: fewer missing files than already
+    reported means they are being fixed, so only the status bar says what is left."""
+    import pyfigures.gui.pfgui as P
+    from qtpy.QtWidgets import QMessageBox
+    monkeypatch.setattr(P, "_nobody_to_ask", lambda: False)
+    shown = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: shown.append(box.text()))
+    monkeypatch.setattr(QMessageBox, "clickedButton", lambda box: None)
+    missing = [f"C:/gone/{c}.tif" for c in "abc"]
+    monkeypatch.setattr(type(gui), "_missing_image_files",
+                        lambda self, unreadable=False: [] if unreadable else list(missing))
+    gui._missing_warned_for = None                       # as after opening a figure
+    gui._warn_missing_images()
+    assert len(shown) == 1 and "3 image file(s)" in shown[0]
+    for _ in range(2):                                   # relinked one at a time
+        missing.pop(0)
+        gui._warn_missing_images()
+        assert len(shown) == 1
+        assert f"{len(missing)} image file(s) still missing" in gui.statusBar().currentMessage()
+    missing.append("C:/gone/new.tif")                    # a file not reported before: say it
+    gui._warn_missing_images()
+    assert len(shown) == 2 and "new.tif" in shown[1]
+    missing.clear()
+    gui._warn_missing_images()
+    assert len(shown) == 2
