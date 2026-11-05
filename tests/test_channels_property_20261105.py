@@ -22,6 +22,8 @@ def test_a_channel_order_is_refused_with_the_lut_route(tmp_path):
     for value in ("[3, 1, 2]", [3, 1, 2], "3,1,2"):
         out = set_image_property(pyf, [0], 0, "channels", value)
         assert out.startswith("ERROR") and "set_lut" in out and "not a channel order" in out
+        # what CAN be done: each colour on its own, from the chat and from the GUI
+        assert "make channel 1 blue" in out and "Appearance > Set LUT(s)" in out and "Set LUTs" in out
     assert get_image_property(pyf, [0], 0, "channels") == before
 
 

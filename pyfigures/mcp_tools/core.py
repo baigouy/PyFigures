@@ -297,8 +297,11 @@ def _check_property_value(tag: str, raw: str) -> str | None:
         if not (isinstance(value, (list, tuple)) and value and all(isinstance(v, bool) for v in value)):
             return ("ERROR: channels is one True/False per channel (which channels are shown, e.g. "
                     "[False, True, False]), not a channel order; nothing was changed. PyFigures does not "
-                    "reorder channels: to swap their colours give the LUTs in the new order with set_lut "
-                    "(e.g. luts=['BLUE', 'RED', 'GREEN']).")
+                    "reorder channels, but each channel's colour can be set on its own, which gives the "
+                    "same picture: set_lut with the LUTs in the new order (e.g. luts=['BLUE', 'RED', 'GREEN']; "
+                    "the user can say 'make channel 1 blue, channel 2 red'). In the GUI: right-click the "
+                    "image > Appearance > Set LUT(s), or double-click it > File Infos + Scale tab > Set LUTs; "
+                    "Annotations > Figure colours… sets them for every image.")
     if tag == "border_size" and raw != "None":
         try:
             v = float(raw)
