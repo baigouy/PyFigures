@@ -315,9 +315,20 @@ class Session:
                                            if top is target or _contains(top, target)), target)
                         panel.set_current_selection(target)
                         panel.update()
-                    result = self.click_guide.start(args.get('routes') or [], where=args.get('where') or 'menu',
-                                                    controls=args.get('controls'), editor_tab=args.get('editor_tab'),
-                                                    note=args.get('note'), open_menus=bool(args.get('open_menus', False)))
+                    where = args.get('where') or 'menu'
+                    open_menus = bool(args.get('open_menus', False))
+                    tab = args.get('editor_tab')
+                    if where == 'editor' and tab:
+                        from .gui_selection import editor_tab
+                        tab = editor_tab(tab)   # 'scale' -> 'File Infos + Scale', the title to outline
+                    result = self.click_guide.start(args.get('routes') or [], where=where,
+                                                    controls=args.get('controls'), editor_tab=tab,
+                                                    note=args.get('note'), open_menus=open_menus)
+                    if where == 'editor' and open_menus and result.get('status') == 'guidance_shown':
+                        # "open it for me": the editor opens on its tab, the buttons stay outlined
+                        from .gui_selection import open_editor
+                        opened = open_editor(self, panel_ref=ref, tab=tab)
+                        result = {**result, 'editor': opened['status'], 'tab': opened['tab']}
             elif op == 'show_me_where_status':
                 guide = getattr(self, 'click_guide', None)
                 result = guide.status() if guide is not None else {'status': 'idle', 'operation_executed': False}

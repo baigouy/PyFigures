@@ -284,6 +284,21 @@ def _check_property_value(tag: str, raw: str) -> str | None:
         bad = _normalization_error(_decode(raw) if raw.startswith('""') else raw)
         if bad:
             return f"ERROR: {bad}"
+    if tag == "channels" and raw not in ("None", ""):
+        # user chat 2026-11-05: channels=[3, 1, 2] was stored, read back and
+        # reported as a channel swap; it is a show/hide list, so all stayed on
+        import ast
+        try:
+            value = ast.literal_eval(_decode(raw) if raw.startswith('""') else raw)
+            if isinstance(value, str):
+                value = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            value = None
+        if not (isinstance(value, (list, tuple)) and value and all(isinstance(v, bool) for v in value)):
+            return ("ERROR: channels is one True/False per channel (which channels are shown, e.g. "
+                    "[False, True, False]), not a channel order; nothing was changed. PyFigures does not "
+                    "reorder channels: to swap their colours give the LUTs in the new order with set_lut "
+                    "(e.g. luts=['BLUE', 'RED', 'GREEN']).")
     if tag == "border_size" and raw != "None":
         try:
             v = float(raw)

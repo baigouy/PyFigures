@@ -168,6 +168,29 @@ def test_the_chat_tool_selects_the_row_and_guides(qapp, gui, runtime, tmp_path):
     assert bad["status"] == "route_not_found"
 
 
+def test_open_it_for_me_opens_the_editor_on_its_tab_with_buttons_outlined(qapp, gui, runtime, tmp_path, monkeypatch):
+    # "Should I highlight where to click, or open it for me?" -> "open it for me"
+    from pyfigures.assistant import launch
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+    opened = []
+    monkeypatch.setattr(g.paint.EZFIG_panel, "update_image_annotations",
+                        lambda image2d=None, tab=None: opened.append(tab))
+    s = session.snapshot()
+    out = session.execute(dict(operation="show_me_where", arguments=dict(where="editor", panel_ref="0/1", editor_tab="scale",
+                                                                          controls=["Reset all LUTs"], open_menus=True),
+                               request_id=str(uuid.uuid4()), session_id=s["session_id"], expected_revision=s["revision"]))
+    assert out["status"] == "guidance_shown" and out["editor"] == "scheduled"
+    assert session.click_guide.editor_tab == "File Infos + Scale"          # the title that gets outlined
+    import time
+    end = time.time() + 2
+    while not opened and time.time() < end:
+        qapp.processEvents()
+    assert opened == ["File Infos + Scale"]
+    session.click_guide.stop()
+
+
 def test_the_chat_tool_is_offered_and_documented():
     from pyfigures.assistant import live_mcp
     from pyfigures.assistant.categorized_mcp import build_server, category_for
