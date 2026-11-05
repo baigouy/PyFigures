@@ -59,7 +59,8 @@ hiddenimports += collect_submodules('pylatexenc')     # imported lazily (Illustr
 hiddenimports += ['latex2mathml.converter', 'mathml2omml']
 hiddenimports += collect_submodules('pypdfium2_raw')
 hiddenimports += collect_submodules('qtpy_ai_sidecar')
-hiddenimports += collect_submodules('mcp')
+# not mcp.cli: the `mcp` command line tool, it exits when typer is missing
+hiddenimports += collect_submodules('mcp', filter=lambda name: not name.startswith('mcp.cli'))
 hiddenimports += collect_submodules('keyring')        # keyring.backends.Windows / macOS
 hiddenimports += collect_submodules('httpx')
 hiddenimports += collect_submodules('platformdirs')

@@ -110,7 +110,8 @@ def test_the_spec_bundles_the_chat_sidebar():
     with open(os.path.join(root, "pyfigures.spec"), encoding="utf-8") as f:
         spec = f.read()
     for needed in ("collect_submodules('qtpy_ai_sidecar')", "collect_data_files('qtpy_ai_sidecar')",
-                   "collect_submodules('keyring')", "collect_submodules('mcp')",
+                   "collect_submodules('keyring')", "collect_submodules('mcp', filter=",
+                   "not name.startswith('mcp.cli')",          # mcp.cli exits without typer
                    "name='PyFigures MCP'", "console=True"):
         assert needed in spec, needed
     assert "'0.1.11'" not in spec            # the macOS version comes from version.py
