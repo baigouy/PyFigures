@@ -295,6 +295,32 @@ class Session:
                 if not panel.grab().save(str(output)):
                     raise RuntimeError('Could not capture canvas')
                 result = {'path': str(output), 'revision': self.revision}
+            elif op == 'show_me_where':
+                # teach, never click: highlight every route, clear on success
+                from ..gui.show_me_where import ClickGuide
+                if getattr(self, 'click_guide', None) is None:
+                    self.click_guide = ClickGuide(w)
+                if args.get('stop'):
+                    self.click_guide.stop()
+                    result = self.click_guide.status()
+                else:
+                    ref, level = args.get('panel_ref'), args.get('level') or 'image'
+                    if level not in ('image', 'row'):
+                        raise ValueError("level must be 'image' or 'row'")
+                    if ref:
+                        from .gui_selection import resolve_panel
+                        target = resolve_panel(w, ref)
+                        if level == 'row':
+                            target = next((top for top in panel.shapes_to_draw
+                                           if top is target or _contains(top, target)), target)
+                        panel.set_current_selection(target)
+                        panel.update()
+                    result = self.click_guide.start(args.get('routes') or [], where=args.get('where') or 'menu',
+                                                    controls=args.get('controls'), editor_tab=args.get('editor_tab'),
+                                                    note=args.get('note'), open_menus=bool(args.get('open_menus', False)))
+            elif op == 'show_me_where_status':
+                guide = getattr(self, 'click_guide', None)
+                result = guide.status() if guide is not None else {'status': 'idle', 'operation_executed': False}
             elif op == 'panel_source':
                 # one panel's whole source with pixel rulers, to choose crop values
                 from .gui_selection import resolve_panel
@@ -693,6 +719,14 @@ class Session:
 
 _SOURCE_KEYS = ('path', 'paths', 'file', 'files', 'filename', 'filenames', 'csv')
 _OUTPUT_WORDS = ('out', 'save', 'export', 'dest')
+
+
+def _contains(group, target):
+    """True when *target* is somewhere inside *group* (a row, column or panel)."""
+    for child in getattr(group, 'content', None) or []:
+        if child is target or _contains(child, target):
+            return True
+    return False
 
 
 def resolve_relative_sources(window, arguments, skip=None):

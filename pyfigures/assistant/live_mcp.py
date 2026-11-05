@@ -243,6 +243,18 @@ def open_annotation_editor(panel_ref: str | None = None, tab: str | None = None)
 
 
 @mcp.tool()
+def show_me_where(routes: list[list[str]] | None = None, where: str = 'menu', panel_ref: str | None = None,
+                  level: str = 'image', editor_tab: str | None = None, controls: list[str] | None = None,
+                  note: str | None = None, open_menus: bool = False, stop: bool = False) -> dict:
+    """TEACH the user where to click instead of doing it: outlines in orange EVERY entry on the given routes at once, so the user can follow whichever route they like and try things; every highlight disappears as soon as the figure changes (it worked). Nothing is clicked or edited and the mouse pointer never moves.
+    routes: one list of entry titles per possible route, e.g. [["Edit", "Arrange all images in rows…"]] (where='menu', the menu bar, checked against the real menus: a wrong title returns what that level offers), or [["Crop & size", "Reset crop only"], ["Crop & size", "Reset crop and rotation"]] (where='context', the right-click menu of the object panel_ref selects at *level*: 'image' or its whole 'row'; the yellow outline shows it). where='editor': the panel editor's editor_tab (e.g. 'File Infos + Scale') and controls (button titles, e.g. ['Reset all LUTs']) are outlined when the user opens the editor (double-click the panel).
+    open_menus=True opens the menus for the user down to where the routes split: ONLY when the user explicitly asks to be shown ("show me the right-click menu"). stop=True removes the highlights. Offer this as a choice whenever you list options for a change; the user learns the GUI."""
+    return call_live('show_me_where', dict(routes=routes or [], where=where, panel_ref=panel_ref, level=level,
+                                           editor_tab=editor_tab, controls=controls, note=note,
+                                           open_menus=open_menus, stop=stop))
+
+
+@mcp.tool()
 def preview_panel(panel_ref: str, brighten: bool = True) -> list:
     """See ONE panel's whole source image, uncropped, with pixel rulers and its current crop as a dashed yellow box. Use it BEFORE transform_image crops ("crop to the nuclei", "zoom on the cells"): read the region's pixel coordinates off the rulers, then crop once (crop_left=x0, crop_top=y0, crop_right=width-x1, crop_bottom=height-y1). Never remove a crop just to look at the whole image: this shows it. brighten stretches the contrast of this preview only (dim fluorescence); the figure is unchanged. Read-only."""
     from mcp.server.fastmcp import Image

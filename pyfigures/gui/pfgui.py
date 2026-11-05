@@ -1869,6 +1869,11 @@ class EZFIG_GUI(QMainWindow):
         debug_menu.addAction(open_records)
 
         help_menu.addSeparator()
+        find_in_menus = QAction('Find in menus…', self)
+        find_in_menus.setToolTip('Type a word (e.g. LUT, scale bar): every menu entry with it is outlined '
+                                 'in orange; the outlines go once you used one')
+        find_in_menus.triggered.connect(lambda: self.find_in_menus())
+        help_menu.addAction(find_in_menus)
         from pyfigures.guides import GUIDES
         how_menu = help_menu.addMenu('Show me how…')
         how_menu.setToolTip('Short guides that highlight the menus to use; you do the clicks')
@@ -4472,6 +4477,46 @@ class EZFIG_GUI(QMainWindow):
         self.save_state(show_popup=False)
         if not was_dirty:
             self._mark_clean()
+
+    def menu_routes_matching(self, query, limit=20):
+        """Menu-bar routes (lists of titles) whose entry contains *query*."""
+        import re
+        from pyfigures.gui.show_me_where import action_title, clean
+        want = clean(query)
+        routes = []
+
+        def walk(container, prefix):
+            for action in container.actions():
+                text = action_title(action.text())
+                if action.isSeparator() or not text.strip():
+                    continue
+                if action.menu() is not None:
+                    walk(action.menu(), prefix + [text])
+                # from the start of a word: "LUT" is not in "resolution"
+                elif want and re.search(r'(?<![\w])' + re.escape(want), clean(text)) and len(routes) < limit:
+                    routes.append(prefix + [text])
+        walk(self.menuBar, [])
+        return routes
+
+    def find_in_menus(self, query=None):
+        """Help > Find in menus…: outline every menu entry containing a word,
+        all at once (the same guide as the chat's show_me_where)."""
+        from qtpy.QtWidgets import QInputDialog
+        from pyfigures.gui.show_me_where import ClickGuide
+        if query is None:
+            query, ok = QInputDialog.getText(self, 'Find in menus',
+                                             'Word to find in the menus (e.g. LUT, scale bar, export):')
+            if not ok:
+                return None
+        routes = self.menu_routes_matching(query)
+        if not routes:
+            self.statusBar().showMessage(f'No menu entry contains "{query}".', 6000)
+            return {'status': 'route_not_found', 'routes': []}
+        if getattr(self, '_click_guide', None) is None:
+            self._click_guide = ClickGuide(self)
+        return self._click_guide.start(routes, where='menu',
+                                       note=f'{len(routes)} menu entr{"y" if len(routes) == 1 else "ies"} with '
+                                            f'"{query}" are outlined in orange: open the outlined menus.')
 
     def arrange_images_in_rows(self, per_row=None):
         """Edit > Arrange all images in rows…: every image regrouped into rows in

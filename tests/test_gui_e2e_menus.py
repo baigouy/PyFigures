@@ -624,6 +624,10 @@ ACTIONS = {
                                    before=H.real_show_tips),
     "menu: Help > List shortcuts": spec(unchanged, [("hortcut", ok)], inv=False),
     "menu: Help > User Guide": spec(unchanged, inv=False),
+    # outlines every menu entry with the word, all at once; edits nothing
+    "menu: Help > Find in menus…": spec(both(unchanged, lambda g, b, a, run: (
+        g._click_guide.state == "guidance_shown" and g._click_guide.routes) or pytest.fail("no guidance")),
+        [("QInputDialog", text_input("LUT"))], inv=False),
     # ── toolbar ──
     "toolbar: Open": spec(rows_are(["row 1: gray8.tif | cells2.png"]), files={"open": "pyf"}, inv=False),
     "toolbar: New figure": spec(chk_new, inv=False),

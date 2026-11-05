@@ -51,7 +51,7 @@ def category_for(name):
         return 'images'
     if name in ('open_annotation_editor', 'roi_to_inset'):
         return 'annotations'
-    if name in ('list_how_to_guides', 'explain_how', 'show_me_how', 'guidance_status', 'close_guidance'):
+    if name in ('list_how_to_guides', 'explain_how', 'show_me_how', 'show_me_where', 'guidance_status', 'close_guidance'):
         return 'help'
     if 'scale_bar' in name:
         return 'scale_bars'
@@ -90,7 +90,7 @@ def build_server(full_server, send):
     from .original_registry import registry
     originals = set(registry())
     names = originals | {'arrange_live_images', 'set_panel_letter_position', 'edit_live_label',
-        'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'roi_to_inset', 'preview_panel', 'explain_live_interaction', 'save_live_figure',
+        'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'show_me_where', 'roi_to_inset', 'preview_panel', 'explain_live_interaction', 'save_live_figure',
         'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row'}
     names.discard('preview_panel_source')   # the live preview_panel shows the open figure's panel
     names.update({'open_annotation_properties','inspect_annotation_objects','edit_annotation_properties','review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
@@ -129,7 +129,7 @@ def build_server(full_server, send):
         'A successful tool call is not task success. Report verified after-state; if counts show zero letters, '
         'say letters are absent, never claim a lettering swap succeeded. '
         'When the human supplies annotation content, such as write a text note on a named panel, create the ordinary annotation with add_annotation. Merely opening an editor does not fulfill a request to write the supplied content. Offer/open the editor for unspecified content or an explicit editor request. '
-        'Whenever you list choices for a change (and always for a HELP request such as "help me change the channel colours of e"), add one more choice: doing it in the GUI, which you set up for them. Either offer to open the panel\'s editor on the tab where they can do it themselves (open_annotation_editor: channel colours / LUTs and pixel size tab="scale", crop or rotation "crop", text "text", drawing "annotations"), or offer to select the right object and open its right-click menu (select_live_objects, then open_native_menu). Say what the yellow selection outline must surround for that menu (one image, its whole row, or the figure): the menu offers different entries at each level. Open nothing until they choose it. '
+        'Whenever you list choices for a change (and always for a HELP request such as "help me change the channel colours of e"), add one more choice: "show me where to click", which teaches the GUI. On that choice call show_me_where with EVERY route that does it (menu bar, right-click menu of the object at the right level: image or whole row, or the panel editor tab + buttons): all are outlined at once and cleared when it worked. Say what the yellow selection outline surrounds and what to click first. Open menus for the user (open_menus=true) only when they explicitly ask to be shown the menu; never click for them in that mode. '
         'When no dedicated operation covers a GUI feature, discover native_gui: inspect actual native menu/dialog controls, invoke their exact IDs, complete or cancel the dialog, then verify jobs and document state. Queued is not success. Never substitute code for a normal manual how-to request. '
         'For rearranging EXISTING images into regular rows/columns, prefer arrange_live_images once. Derive columns from current image count when a row count is requested; when equal rows are impossible, ask which split the human wants, then pass it as row_counts (e.g. 9 images in 4 rows: row_counts=[3, 2, 2, 2]) in that ONE call. Reading order and letters are kept. Do not rebuild existing rows with per-image move loops. '
         'To construct NEW rows/columns, call add_group and use its returned path before adding images/plots. Requested row numbers are not existing group paths. On a missing-container error inspect/create the intended container; never fall back into an unrelated existing row. '
