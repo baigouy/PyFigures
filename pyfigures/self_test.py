@@ -79,7 +79,11 @@ def _check_chat(tmp):
     import keyring
     backend = keyring.get_keyring()
     name = type(backend).__module__ + "." + type(backend).__name__
-    assert "fail" not in name.lower() and "null" not in name.lower(), f"no key store: {name}"
+    if getattr(sys, "frozen", False):
+        # the apps must bundle the OS key store backends (Windows Credential
+        # Manager, macOS Keychain); a pip install on a headless Linux server has
+        # none, which only means API keys cannot be saved there
+        assert "fail" not in name.lower() and "null" not in name.lower(), f"no key store: {name}"
     from pyfigures.assistant.launch import mcp_server_command
     command, args = mcp_server_command()
     import anyio

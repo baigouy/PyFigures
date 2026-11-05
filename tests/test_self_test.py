@@ -30,8 +30,9 @@ def test_self_test_passes_without_pymupdf(qapp, tmp_path, monkeypatch):
     from pyfigures import self_test
     monkeypatch.setitem(sys.modules, "fitz", None)          # as in the apps
     out = tmp_path / "r.json"
-    assert self_test.run(str(out)) == 0
+    status = self_test.run(str(out))
     report = json.loads(out.read_text(encoding="utf-8"))
+    assert status == 0, report
     assert report["ok"] and set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat"}
     assert "pypdfium2" in report["checks"]["pdf_panels"]
 
@@ -53,6 +54,21 @@ def test_pymupdf_is_fine_in_a_pip_install(qapp, tmp_path, monkeypatch):
     from pyfigures import self_test
     monkeypatch.delattr(sys, "frozen", raising=False)
     assert self_test._check_pdf_panels(str(tmp_path)) == "ok (PyMuPDF vector panels)"
+
+
+def test_no_key_store_fails_only_the_apps(tmp_path, monkeypatch):
+    # headless Linux (CI, servers) has no key store: fine for a pip install,
+    # a build error for the apps (which must bundle the OS backends)
+    pytest.importorskip("qtpy_ai_sidecar")
+    import keyring
+    from keyring.backends import fail
+    from pyfigures import self_test
+    monkeypatch.setattr(keyring, "get_keyring", lambda: fail.Keyring())
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    with pytest.raises(AssertionError, match="no key store"):
+        self_test._check_chat(str(tmp_path))
+    monkeypatch.delattr(sys, "frozen")
+    assert self_test._check_chat(str(tmp_path)).startswith("ok (qtpy-ai-sidecar")
 
 
 def test_command_line_flag(tmp_path):

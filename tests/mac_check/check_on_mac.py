@@ -50,7 +50,10 @@ def _frame_mean(asset, fps, i):
     gen.setRequestedTimeToleranceBefore_(CoreMedia.kCMTimeZero)
     gen.setRequestedTimeToleranceAfter_(CoreMedia.kCMTimeZero)
     t = CoreMedia.CMTimeMakeWithSeconds((i + 0.5) / fps, 600)
-    img, _actual, err = gen.copyCGImageAtTime_actualTime_error_(t, None, None)
+    # PyObjC returns (image, actualTime, error) or, in newer versions,
+    # (image, error): the image is first and the error last in both
+    res = gen.copyCGImageAtTime_actualTime_error_(t, None, None)
+    img, err = (res[0], res[-1]) if isinstance(res, tuple) else (res, None)
     if img is None:
         raise RuntimeError(f"no image for frame {i}: {err}")
     w = Quartz.CGImageGetWidth(img)
