@@ -131,6 +131,10 @@ class Session:
                                 'recovery_error': self.recovery.error},
                 'lettering': {'automatic': self.window.auto_lettering_checkbox.isChecked(),
                               'default_position': str(self.window.serializable_font.placement),
+                              # 'row': one letter per row, outside the rows on the left
+                              'layout': getattr(self.window.paint.EZFIG_panel, 'letter_layout', 'panel'),
+                              'row_letter_align': getattr(self.window.paint.EZFIG_panel, 'row_letter_align', 'top'),
+                              'layout_operation': 'set_panel_letter_layout',
                               'bulk_operation': 'edit_panel_letters'},
                 'objects': [{'id': str(i), 'type': type(obj).__name__,
                              'image_count': count_images(obj),
@@ -587,7 +591,10 @@ class Session:
                 if annotation.findtext('is_letter') == 'True':
                     annotation.find('is_letter').text = 'False'
             settings = root.find('SerializableGUIparameters')
-            if settings is not None:
+            # row letters (one per row, outside) are drawn from the figure
+            # settings, never from panel annotations: lettering stays on
+            per_row = settings is not None and (settings.findtext('letter_layout') or '').strip().strip('"') == 'row'
+            if settings is not None and not per_row:
                 field = settings.find('auto_lettering')
                 if field is None:
                     field = ET.SubElement(settings, 'auto_lettering')

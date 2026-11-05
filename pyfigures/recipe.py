@@ -12,6 +12,7 @@ Example (``fig1.yaml``)::
     journal: nature                    # optional -> resize_figure
     column: double
     letter_panels: true                # default true -> A, B, C...
+    letter_layout: row                 # optional: ONE letter per row, outside it on the left
     caption: "WT vs KO gut, 63x."      # optional; omitted -> auto stub
     background: white                  # optional: colour of the gaps between panels
     label_background: black            # optional: box behind letters / labels
@@ -97,7 +98,8 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              # sizing, typography and finishing
              "width_mm", "width_cm", "width_in", "width_px", "dpi", "font", "min_font_pt",
              "fit_height", "max_height_mm", "colors", "text_style",
-             "tidy_text", "letter_placement", "auto_configure", "alt_text",
+             "tidy_text", "letter_placement", "letter_layout", "row_letter_align",
+             "auto_configure", "alt_text",
              "copy_style_from", "copy_style_aspects", "exports", "allow_scripts",
              # checks, bundling, templates
              "checks", "consolidate", "download_remote", "template", "fill",
@@ -964,6 +966,11 @@ def _check_top(recipe, base):
     letter = recipe.get("letter_placement", "top left")
     if letter not in ("top left", "top right", "bottom left", "bottom right"):
         raise RecipeError("'letter_placement' must be a corner such as 'top left'")
+    from pyfigures.gui.row_letters import layout_error, align_error
+    if "letter_layout" in recipe and layout_error(recipe["letter_layout"]):
+        raise RecipeError(layout_error(recipe["letter_layout"]).replace("letter_layout", "'letter_layout'", 1))
+    if "row_letter_align" in recipe and align_error(recipe["row_letter_align"]):
+        raise RecipeError(align_error(recipe["row_letter_align"]).replace("row_letter_align", "'row_letter_align'", 1))
 
 
 _TEXT_STYLE_KEYS = {"target", "font", "size", "color", "bold", "italic"}
@@ -1204,6 +1211,8 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
         "max_height_mm": recipe.get("max_height_mm"),
         "letter_panels": letter_panels,
         "letter_placement": recipe.get("letter_placement", "top left"),
+        "letter_layout": recipe.get("letter_layout", "panel"),
+        "row_letter_align": recipe.get("row_letter_align"),
         "caption": recipe.get("caption"),
         "title": recipe.get("title", "Figure"),
         "spacing": spacing,
@@ -2086,6 +2095,16 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                 out, [r], labels, position=row_opts.get("labels_position", "above"),
                 text_orientation=row_opts.get("labels_orientation", "horizontal")),
                 f"row {r + 1} labels")
+
+    from pyfigures.gui.row_letters import normalise_layout
+    if plan["letter_panels"] and normalise_layout(plan["letter_layout"]) == "row":
+        # one letter per row, outside the rows on the left (GUI: Annotations →
+        # Panel letters; MCP: set_panel_letter_layout)
+        warnings += _check(M.set_panel_letter_layout(out, "row", plan["row_letter_align"]),
+                           "letter_layout")
+        from pyfigures.mcp_tools.annotations import row_letters_of
+        import xml.etree.ElementTree as _ET_rows
+        lettered = len(row_letters_of(_ET_rows.parse(out).getroot()))
 
     if plan["colors"]:
         # after every per-panel LUT: the whole figure in these colours

@@ -27,6 +27,8 @@ from batoolset.xmls.tools import _replace_filename_tags, _update_filename_of_con
 from pyfigures.gui.user_extra_translation import ExtraTranslationWidget
 from batoolset.strings.tools import increment_letter
 from pyfigures.gui.autolettering_widget import AutoLetteringOptions
+from pyfigures.gui import row_letters as _row_letters
+_row_letters.install_gui_params_fields()   # letter_layout survives reopen / undo
 from batoolset.drawings.shapes.Position import Position
 from batoolset.drawings.shapes.serializablefont import SerializableQFont
 from batoolset.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
@@ -4912,11 +4914,18 @@ class EZFIG_GUI(QMainWindow):
             ensure()             # save what the canvas shows, not the geometry before its repack
         neo_list = list(self.paint.EZFIG_panel.shapes_to_draw)
         neo_list.append(self.serializable_font)
-        neo_list.append(SerializableGUIparameters(
+        gui_params = SerializableGUIparameters(
             space=self.main_space_spinner.value(),
             background=self.paint.EZFIG_panel.page_background,
             first_letter=self.letter_line_edit.text() or None,
-            auto_lettering=self.auto_lettering_checkbox.isChecked()))  # add GUI parameters
+            auto_lettering=self.auto_lettering_checkbox.isChecked())  # add GUI parameters
+        canvas = self.paint.EZFIG_panel
+        if _row_letters.normalise_layout(getattr(canvas, 'letter_layout', None)) == 'row':
+            # (only then: figures lettered per panel are saved as before)
+            gui_params.letter_layout = 'row'
+            gui_params.row_letter_align = _row_letters.normalise_align(
+                getattr(canvas, 'row_letter_align', None))
+        neo_list.append(gui_params)
         xml_string = object_to_xml(neo_list, is_list=True)
         # atomic: an interrupted save leaves the previous .pyf intact
         from pyfigures.atomic_io import write_atomic
@@ -6765,6 +6774,12 @@ class EZFIG_GUI(QMainWindow):
         or the MCP server) it is read from the letters the panels carry."""
         first = getattr(gui_params, 'first_letter', None) if gui_params is not None else None
         auto = getattr(gui_params, 'auto_lettering', None) if gui_params is not None else None
+        # one letter per row outside the rows, or one per panel (row_letters.py)
+        canvas = self.paint.EZFIG_panel
+        canvas.letter_layout = _row_letters.normalise_layout(getattr(gui_params, 'letter_layout', None))
+        canvas.row_letter_align = _row_letters.normalise_align(getattr(gui_params, 'row_letter_align', None))
+        if canvas.letter_layout == 'row' and auto is None:
+            auto = True                  # (the panels carry no letter to read it from)
         if first is None or auto is None:
             try:
                 _, images = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(
@@ -6794,6 +6809,14 @@ class EZFIG_GUI(QMainWindow):
     def update_letters(self):
         letter = self.letter_line_edit.text()
         shall_add_letter = self.auto_lettering_checkbox.isChecked() and letter
+        # one letter per row, outside on the left (row_letters.py): drawn by
+        # the canvas, the panels carry none
+        canvas = self.paint.EZFIG_panel
+        per_row = _row_letters.normalise_layout(getattr(canvas, 'letter_layout', None)) == 'row'
+        canvas.row_letters = {'font': self.serializable_font, 'first': letter} \
+            if (shall_add_letter and per_row) else None
+        if per_row:
+            shall_add_letter = False
         # TODO prevent dupes and see why it does not get the virtual ones
         _, all_images = self.paint.EZFIG_panel.get_full_list_ofimages2D_for_consolidation(
             exclude_images_without_filename=False, include_insets=False)
@@ -7021,7 +7044,10 @@ class EZFIG_GUI(QMainWindow):
     def change_lettering_parameters(self):
         # start from the current lettering (it used to always open on the
         # defaults, so Ok silently reset colours/font/position)
-        main = AutoLetteringOptions(font=getattr(self, 'serializable_font', None))
+        canvas = self.paint.EZFIG_panel
+        main = AutoLetteringOptions(font=getattr(self, 'serializable_font', None),
+                                    letter_layout=getattr(canvas, 'letter_layout', 'panel'),
+                                    row_letter_align=getattr(canvas, 'row_letter_align', 'top'))
 
         custom_dialog = CustomDialog(title="Auto lettering",
                                      message=None,
@@ -7029,8 +7055,25 @@ class EZFIG_GUI(QMainWindow):
 
         if custom_dialog.exec_() == QDialog.Accepted:
             self.serializable_font = main.get_serializable_font()
+            self.set_letter_layout(main.get_letter_layout(), main.get_row_letter_align(), checkpoint=False)
             self.paint.EZFIG_panel.update()
             self.save_state(show_popup=True)
+
+    def set_letter_layout(self, letter_layout='panel', row_letter_align=None, checkpoint=True):
+        """'panel': a letter in each panel; 'row': one letter per row, outside
+        the row on the left (row_letters.py; recipe/MCP: letter_layout)."""
+        canvas = self.paint.EZFIG_panel
+        canvas.letter_layout = _row_letters.normalise_layout(letter_layout)
+        if row_letter_align is not None:
+            canvas.row_letter_align = _row_letters.normalise_align(row_letter_align)
+        if canvas.letter_layout == 'row' and not self.auto_lettering_checkbox.isChecked():
+            # asking for row letters means letters: they were silently off
+            self.auto_lettering_checkbox.blockSignals(True)
+            self.auto_lettering_checkbox.setChecked(True)
+            self.auto_lettering_checkbox.blockSignals(False)
+        canvas.update()
+        if checkpoint:
+            self.save_state(show_popup=False)
 
     def export_source_data_action(self):
         """Export a journal-style Source Data bundle for the figure

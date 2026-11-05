@@ -530,7 +530,7 @@
         <tr><td><strong>Add arrow pointing at a feature…</strong></td><td>An arrow whose tip stays on the chosen pixel whatever the figure size.</td></tr>
         <tr><td><strong>Draw ROIs, text, crop or rotate (double-click a panel)…</strong></td><td>Opens the image editor of the selected panel, as double-clicking it does.</td></tr>
         <tr><td><strong>Figure colours…</strong></td><td>Recolours the whole figure at once (e.g. magenta / green): every multi-channel image, merge, channel split and plot; single-channel images become gray, colour photographs are kept.</td></tr>
-        <tr><td><strong>Panel letters (A, B, C…)…</strong></td><td>Starting letter, case, font, size and colour of the automatic panel letters. See <a href="#lettering">Auto-lettering</a>.</td></tr>
+        <tr><td><strong>Panel letters (A, B, C…)…</strong></td><td>Starting letter, case, font, size and colour of the automatic panel letters, and whether there is one letter in each panel or <a href="#row-letters">one per row, outside the row on the left</a>. See <a href="#lettering">Auto-lettering</a>.</td></tr>
         <tr><td><strong>Text style (letters, labels, scale bars…)…</strong></td><td>Font, size, colour, bold and italic of a whole family of texts at once: the panel letters, the labels on panels, the label rows or the scale-bar legends.</td></tr>
         <tr><td><strong>Tidy text typography</strong></td><td>Safe typography fixes on every label: 2*3→2×3, 37 degrees C→37 °C, 10µm→10 µm, 10-20→10–20, -5→−5.</td></tr>
         <tr><td><strong>Remove ▸</strong></td><td><em>Remove all annotations</em>, or only one kind: <em>Remove all scale bars</em>, <em>Remove all texts</em>, <em>Remove all ROIs</em>, <em>Remove all insets</em> — of the selected panel, or of every panel when nothing is selected.</td></tr>
@@ -861,6 +861,26 @@
       <li>Configure font, size, color, and case via <strong>Annotations → Panel letters (A, B, C…)</strong>.</li>
       <li>Letters are rendered live and update as you add or remove panels.</li>
       <li>Individual letter text elements are locked — edit them only through the Parameters dialog.</li>
+    </ul>
+    <h3 id="row-letters">One letter per row, outside the row</h3>
+    <p>
+      Many journals letter a figure by <em>row</em>: a single letter (A, B, C…) in the margin
+      left of each row, not one inside every panel. In <strong>Annotations → Panel letters (A, B, C…)</strong>
+      choose <strong>Letters: One per row, outside on the left</strong>, then where the letter sits
+      next to its row: <strong>Top of the row</strong> (default, level with the top of the row and of
+      its column titles) or <strong>Middle of the row</strong>.
+    </p>
+    <ul style="margin: .6em 0 1em 1.4em;">
+      <li>The rows are narrowed to make room for the letters: the figure keeps its width, and the
+        letters are never cut — on the canvas and in every export (PNG, TIFF, JPG, SVG, PDF,
+        PDF + LaTeX, editable PowerPoint / Illustrator).</li>
+      <li>The letters use the figure's letter font, size and colour (a light letter colour chosen for
+        dark micrographs becomes black on a white page, so it stays visible).</li>
+      <li>They follow the row order: swap or move rows and the letters stay A, B, C… from the top.</li>
+      <li>The setting is saved with the figure and undoable. Back to <strong>One in each panel</strong>
+        puts a letter in a corner of each panel again.</li>
+      <li>Recipes: <code>letter_layout: row</code> (and <code>row_letter_align: center</code>);
+        MCP: <code>set_panel_letter_layout</code>.</li>
     </ul>
   </section>
 

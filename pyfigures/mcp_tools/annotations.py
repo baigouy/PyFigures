@@ -1352,6 +1352,132 @@ def set_figure_properties(
     return "Updated: " + ", ".join(changed) + "."
 
 
+def _panel_letters_of(root: ET.Element) -> list:
+    """The A, B, C… letters the panels carry (is_letter texts)."""
+    out = []
+    for img in _iter_panel_elements(root):
+        annots = img.find("annotations")
+        if annots is None:
+            continue
+        out += [ta for ta in annots.findall("TAText2D")
+                if (ta.findtext("is_letter") or "") in ("True", "b'True'")]
+    return out
+
+
+def _strip_panel_letters(root: ET.Element) -> int:
+    """Remove the A, B, C… letters the panels carry (is_letter texts)."""
+    parent = {c: p for p in root.iter() for c in p}
+    letters = _panel_letters_of(root)
+    for ta in letters:
+        parent[ta].remove(ta)
+    return len(letters)
+
+
+def _lettered_row_elements(root: ET.Element) -> list:
+    """The top-level rows that get a row letter (label rows excluded), in order
+    (as the canvas: row_letters.lettered_rows)."""
+    return [el for el in root if el.tag in ("Group", "Image2D")
+            and _decode(el.findtext("isText")) in (None, False, "", "False")]
+
+
+def row_letters_of(root: ET.Element) -> list:
+    """[(letter, row element)] of a figure lettered per row, [] otherwise."""
+    from batoolset.strings.tools import increment_letter
+    if letter_layout_of(root)["letter_layout"] != "row":
+        return []
+    gui_el = root.find("SerializableGUIparameters")
+    if gui_el is not None and _decode(gui_el.findtext("auto_lettering")) is False:
+        return []
+    letter = (_decode(gui_el.findtext("first_letter")) if gui_el is not None else None) or "A"
+    letter = str(letter)[:1]
+    out = []
+    for el in _lettered_row_elements(root):
+        out.append((letter, el))
+        letter = increment_letter(letter)
+    return out
+
+
+def letter_layout_of(root: ET.Element) -> dict:
+    """{'letter_layout': 'panel'|'row', 'row_letter_align': 'top'|'center'}
+    as saved in <SerializableGUIparameters> ('panel' when not saved)."""
+    from pyfigures.gui.row_letters import normalise_layout, normalise_align
+    gui_el = root.find("SerializableGUIparameters")
+    layout = _decode(gui_el.findtext("letter_layout")) if gui_el is not None else None
+    align = _decode(gui_el.findtext("row_letter_align")) if gui_el is not None else None
+    return {"letter_layout": normalise_layout(layout), "row_letter_align": normalise_align(align)}
+
+
+@mcp.tool()
+def set_panel_letter_layout(
+    pyf_path: str,
+    letter_layout: str = "row",
+    row_letter_align: str | None = None,
+) -> str:
+    """Letter the figure per ROW or per PANEL.
+
+    *letter_layout*:
+      - ``"row"``: ONE letter per row of the figure (A for the first row, B
+        for the second…), drawn OUTSIDE the row in a margin on its left, as in
+        many journal figures. The rows are narrowed by that margin so the
+        figure keeps its width; the panels carry no letter. The letters follow
+        the row order (swapping rows re-letters them) and use the figure's
+        letter font, size and colour (set_figure_properties).
+      - ``"panel"`` (default of every figure): a letter in a corner of each
+        panel (the corner: letter_placement / set_figure_properties).
+    *row_letter_align*: ``"top"`` (default: level with the top of the row and
+      of its column titles) or ``"center"`` (the middle of the row).
+
+    Saved in the figure (``<SerializableGUIparameters>``): the GUI, the
+    headless renders and every export show it. Turns lettering on.
+    """
+    from pyfigures.gui.row_letters import layout_error, align_error, normalise_layout, normalise_align
+    bad = layout_error(letter_layout) or (align_error(row_letter_align) if row_letter_align is not None else None)
+    if bad:
+        return f"ERROR: {bad}."
+    layout = normalise_layout(letter_layout)
+    tree, root = _load(pyf_path)
+    gui_el = root.find("SerializableGUIparameters")
+    if gui_el is None:
+        gui_el = ET.SubElement(root, "SerializableGUIparameters")
+    if gui_el.find("space") is None:
+        _set_child_text(gui_el, "space", "3")
+    before = letter_layout_of(root)
+    align = normalise_align(row_letter_align) if row_letter_align is not None else before["row_letter_align"]
+    _set_child_text(gui_el, "auto_lettering", "True")
+    if layout == "row":
+        if not _decode(gui_el.findtext("first_letter")):
+            # the first letter (and its case) is read from the panels' letters
+            # when a figure is opened: they are about to go, so it is saved
+            firsts = [_strip_tags(_decode(ta.findtext("text")) or "").strip() for ta in _panel_letters_of(root)]
+            firsts = [f for f in firsts if len(f) == 1 and f.isalpha()]
+            _set_child_text(gui_el, "first_letter", _encode_str(min(firsts) if firsts else "A"))
+        _set_child_text(gui_el, "letter_layout", _encode_str("row"))
+        _set_child_text(gui_el, "row_letter_align", _encode_str(align))
+        removed = _strip_panel_letters(root)
+        _save(tree, pyf_path)
+        n_rows = len(_lettered_row_elements(root))
+        return (f"Letters: one per row, outside the rows on the left, aligned to the "
+                f"{'middle' if align == 'center' else 'top'} of each row"
+                + (f" ({n_rows} row(s))" if n_rows else "")
+                + (f"; {removed} letter(s) removed from the panels" if removed else "") + ".")
+    for tag in ("letter_layout", "row_letter_align"):
+        el = gui_el.find(tag)
+        if el is not None:
+            gui_el.remove(el)
+    _save(tree, pyf_path)
+    added = 0
+    if before["letter_layout"] == "row":
+        # the panels get their letters back (in the figure's corner and font)
+        from pyfigures.mcp_tools.workflow import _finalize_draft
+        font_el = root.find("SerializableQFont")
+        corner = _decode(font_el.findtext("placement")) if font_el is not None else None
+        corner = (corner or "top left").replace("-", " ").lower()
+        if corner not in ("top left", "top right", "bottom left", "bottom right"):
+            corner = "top left"
+        added, _ = _finalize_draft(pyf_path, True, corner, None, None, "")
+    return "Letters: one in each panel" + (f" ({added} panel(s) lettered)" if added else "") + "."
+
+
 @mcp.tool()
 def set_label_background(
     pyf_path: str,

@@ -757,10 +757,16 @@ def check_journal_compliance(
 
     # ── panel labels ───────────────────────────────────────────────────────────
     if require_panel_labels:
-        n_labels = sum(1 for ta in root.iter("TAText2D")
-                       if _child_text(ta, "is_letter") is True)
-        results.append(("panel labels", n_labels >= len(groups) and n_labels > 0,
-                        f"{n_labels} panel label(s) for {len(groups)} group(s)"))
+        from .annotations import row_letters_of
+        row_letters = row_letters_of(root)         # one per row, outside (set_panel_letter_layout)
+        if row_letters:
+            results.append(("panel labels", True,
+                            f"{len(row_letters)} row letter(s), one per row outside the rows"))
+        else:
+            n_labels = sum(1 for ta in root.iter("TAText2D")
+                           if _child_text(ta, "is_letter") is True)
+            results.append(("panel labels", n_labels >= len(groups) and n_labels > 0,
+                            f"{n_labels} panel label(s) for {len(groups)} group(s)"))
 
     n_fail = sum(1 for _, ok, _ in results if not ok)
     header = ("COMPLIANT" if n_fail == 0
@@ -871,7 +877,12 @@ def apply_journal_guidelines(
         # a lettered figure (draft_figure, recipes, the GUI) got a second set:
         # 'A' and 'a' in the same corner
         n_have = sum(1 for ta in root.iter("TAText2D") if _child_text(ta, "is_letter") is True)
-        if n_have:
+        from .annotations import row_letters_of
+        n_rows = len(row_letters_of(root))
+        if n_rows:
+            steps.append(f"panel labels: the figure has {n_rows} row letter(s) (one per row, "
+                         f"outside the rows) — none added")
+        elif n_have:
             steps.append(f"panel labels: the figure already has {n_have} panel letter(s) — none added")
         else:
             letter = panel_label_start

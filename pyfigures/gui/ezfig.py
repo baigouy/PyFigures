@@ -123,6 +123,8 @@ from batoolset.pyqts.tools import distance
 from pyfigures.gui.ctrl_key import getCtrlModifier
 from pyfigures.gui.group_builder_GUI import PanelOrRow
 from pyfigures.gui.label_rows import fit_label_rows
+from pyfigures.gui import row_letters as _row_letters
+from batoolset.strings.tools import increment_letter as _increment_letter
 from pyfigures.gui.emptyimagedialog import EmptyImageParametersWidget
 from pyfigures.gui.simple_text_editor import TextEditor
 from batoolset.serializations.tools import deserialize_to_dict
@@ -239,6 +241,14 @@ class MyWidget(QWidget):
         # figure-wide background (0xRRGGBB) behind the panels and the gaps
         # between them; None = transparent (PNG/TIFF) or white (JPG)
         self.page_background = None
+        # panel letters: 'panel' (one inside each panel) or 'row' (one per row,
+        # outside it in a left margin, drawn by this canvas: row_letters.py);
+        # row_letters is what to draw then ({'font', 'first'}), set by the
+        # window's update_letters, None when no row letters are shown
+        self.letter_layout = _row_letters.DEFAULT_LAYOUT
+        self.row_letter_align = _row_letters.DEFAULT_ALIGN
+        self.row_letters = None
+        self._row_letter_cache = {}
         self.contextMenu = QMenu(self)
         self._EXTRA_PADDING = 50 # extra padding to place a ruler or alike
         # self.freeze = False # somehow I failed at freezing shape changes --> no clue why
@@ -361,6 +371,9 @@ class MyWidget(QWidget):
             return kept
         self.shapes_to_draw = _prune(self.shapes_to_draw)
         if self.shapes_to_draw:
+            # row letters (one per row, outside on the left): the rows give up
+            # the margin they need, so the figure keeps its width
+            margin = self.row_letter_margin()
             # each image row laid out as opening the figure lays it out
             # (Group.__init__): an action that left a row otherwise (a drag
             # 'Take H into the dragged row') came back different after undo +
@@ -368,18 +381,124 @@ class MyWidget(QWidget):
             for s in self.shapes_to_draw:
                 if isinstance(s, Group) and not getattr(s, 'isText', False) and s.content \
                         and getattr(s, 'size', None):
+                    target = s.size
+                    width = target - margin if margin and target - margin > 1 else target
                     try:
-                        s.set_to_size(s.size)
-                        set_to_width(s, s.size)
+                        s.set_to_size(width)
+                        set_to_width(s, width)
                     except (ArithmeticError, ValueError):
                         pass                 # squeezed to nothing: kept as it is (as on load)
-            self.shapes_to_draw[0].setTopLeft(self._EXTRA_PADDING, self._EXTRA_PADDING)
+                    s.size = target          # the width asked for, letters included
+            self.shapes_to_draw[0].setTopLeft(self._EXTRA_PADDING + margin, self._EXTRA_PADDING)
             align2(align_positions[2], *self.shapes_to_draw)
             pack2(self.space, 'Y', False, *self.shapes_to_draw)
             # Align label rows with the row they label — done here so positions are always final
             # (the same code as arrange_text_rows, run on open and undo)
             fit_label_rows(self.shapes_to_draw)
         self.update_size()
+
+    # ---- row letters (row_letters.py) -----------------------------------
+    def _row_letter_texts(self):
+        """[(row, TAText2D)] in row order, not placed yet; [] when the figure
+        has no row letters."""
+        # (getattr: the drag-menu sketch runs these methods on a stand-in canvas)
+        cfg = getattr(self, 'row_letters', None)
+        if not cfg or not self.shapes_to_draw:
+            return []
+        font = cfg.get('font')
+        letter = cfg.get('first') or 'A'
+        if font is None:
+            return []
+        colour = _row_letters.letter_colour(font, self.page_background)
+        style = (font.toString(), getattr(font, 'background', None), colour)
+        if len(self._row_letter_cache) > 500:
+            self._row_letter_cache.clear()
+        out = []
+        for row in _row_letters.lettered_rows(self.shapes_to_draw):
+            key = (letter,) + style
+            text = self._row_letter_cache.get(key)
+            if text is None:
+                text = _row_letters.make_letter(font, letter, colour)
+                self._row_letter_cache[key] = text
+            out.append((row, text))
+            letter = _increment_letter(letter)
+        return out
+
+    def row_letter_margin(self):
+        """Width kept free left of the rows for their letters (0 without)."""
+        texts = self._row_letter_texts()
+        if not texts:
+            return 0.
+        widest = max(t.getRect(all=True).width() for _, t in texts)
+        return _row_letters.edge_pad(widest) + widest + _row_letters.gap(widest)
+
+    def row_letter_extent(self, text):
+        """What a placed row letter takes on the page: its box without the
+        empty line space above a top-aligned letter (so the figure does not
+        start with a blank band), with a little room on its left (its ink
+        starts at the box edge: anti-aliasing was cut at the figure edge)."""
+        r = text.getRect(all=True)
+        shift = getattr(text, '_row_top_shift', 0.)
+        pad = _row_letters.edge_pad(r.width())
+        return QRectF(r.left() - pad, r.top() + shift, r.width() + pad, r.height() - shift)
+
+    def row_letter_items(self):
+        """The row letters placed next to their rows (TAText2D, drawn by
+        paint): in the margin left of the rows, level with the top of each
+        row (and of the label rows above it) or with its middle."""
+        texts = self._row_letter_texts()
+        if not texts:
+            return []
+        try:
+            left = min(r.getRect(all=True).left() for r, _ in texts)
+        except Exception:
+            return []
+        widest = max(t.getRect(all=True).width() for _, t in texts)
+        x = left - self.row_letter_margin() + _row_letters.edge_pad(widest)
+        centre = _row_letters.normalise_align(self.row_letter_align) == 'center'
+        items = []
+        for row, text in texts:
+            rect = text.getRect(all=True)
+            row_rect = row.getRect(all=True)
+            if centre:
+                y = row_rect.center().y() - rect.height() / 2.
+                text._row_top_shift = 0.
+            else:
+                shift = self._row_letter_ink_shift(text)
+                y = _row_letters.block_top(self.shapes_to_draw, row) - shift
+                text._row_top_shift = shift
+            text.setTopLeft(x, y)
+            items.append(text)
+        return items
+
+    @staticmethod
+    def _row_letter_ink_shift(text):
+        """How far above the row top the letter box starts, so that the ink
+        of the letter (not the line box above it) is level with the row top,
+        as for letters in a panel corner (TAText2D._letter_ink_shift)."""
+        shift = getattr(text, '_row_ink_shift', None)
+        if shift is None:
+            from batoolset.drawings.shapes.Position import Position
+            text.placement = Position('top-left')
+            try:
+                shift = float(text._letter_ink_shift())
+            except Exception:
+                shift = 0.
+            finally:
+                text.placement = None
+            text._row_ink_shift = shift
+        return shift
+
+    def _draw_row_letters(self, painter):
+        for text in self.row_letter_items():
+            text.draw(painter)
+
+    def prepare_export(self):
+        """Exports first lay the figure out as the canvas shows it when its
+        letters are drawn by the canvas (row letters): a figure opened
+        without a window (headless render, MCP export) was never painted."""
+        if _row_letters.normalise_layout(getattr(self, 'letter_layout', None)) == 'row':
+            self.ensure_layout()
 
     def _compute_help_arrow_x(self):
         """Compute and cache the x position of the Help menu button in this widget's coords.
@@ -468,6 +587,7 @@ class MyWidget(QWidget):
                 except Exception:
                     pass
             shape.draw(painter) # BUG SOMEHOW THIS SETS A CLIP RECT THAT IS NOT RESET AND SO SELECTION AND STUFF ALIKE CANNOT BE PAINTED !!! --> BIG PB --> NEED CLEAN THE CODE --> BUG FIXED IT WAS DUE TO too late painter.save IN IMAGE2D !!!
+        self._draw_row_letters(painter)
 
         # painter.setClipRect(QRect()) # I need reset the clip rect
         # painter.setClipRect(None) # I need reset the clip rect
@@ -720,6 +840,7 @@ class MyWidget(QWidget):
             logger.error('please provide a valide path to save the image "' + str(path) + '"')
             return
         self.wait_for_pending_images()
+        self.prepare_export()
         if filetype is None:
             if path.lower().endswith('.svg'):
                 filetype = 'svg'
@@ -987,6 +1108,7 @@ class MyWidget(QWidget):
         Static (non-video) panels are drawn identically in every frame.
         """
         self.wait_for_pending_images()
+        self.prepare_export()
         from batoolset.img import write_video
         import numpy as np
 
@@ -1070,6 +1192,8 @@ class MyWidget(QWidget):
                 rect = rect.united(shape.getRect(all=True))
             except Exception:
                 traceback.print_exc()
+        for text in self.row_letter_items():       # the letter margin too
+            rect = rect.united(self.row_letter_extent(text))
         if not rect.isEmpty():
             painter.fillRect(rect, QColor(int(bg) & 0xFFFFFF))
 
@@ -1078,6 +1202,7 @@ class MyWidget(QWidget):
         self._paint_page_background(painter)
         for shape in self.shapes_to_draw:
             shape.draw(painter)
+        self._draw_row_letters(painter)
         painter.restore()
 
     # ------------------------------------------------------------------
@@ -1114,6 +1239,7 @@ class MyWidget(QWidget):
 
         for s in self.shapes_to_draw:
             rec(s)
+        out.extend(self.row_letter_items())      # row letters, drawn by the canvas
         return out
 
     @staticmethod
@@ -1246,6 +1372,7 @@ class MyWidget(QWidget):
         """
         import os as _os
         self.wait_for_pending_images()
+        self.prepare_export()
         stem = _os.path.splitext(path)[0]
         image_format = image_format.lower().lstrip('.')
         img_path = f"{stem}.{image_format}"
@@ -1367,7 +1494,13 @@ class MyWidget(QWidget):
     # in fact upon
     # do not override this because it's needed actually
     def updateBounds(self):
-        return get_master_bounds2(self.shapes_to_draw)
+        bounds = get_master_bounds2(self.shapes_to_draw)
+        items = self.row_letter_items() if getattr(self, 'row_letters', None) else []
+        if items:
+            # the row letters sit left of the rows: exported, never cut
+            for text in items:
+                bounds = QRectF(bounds).united(self.row_letter_extent(text))
+        return bounds
         # # loop over shape to get bounds to be able to draw an image
         # bounds = QRectF()
         # max_width = 0

@@ -67,6 +67,8 @@ def capture_scene(panel, movies=False) -> dict:
 
     if hasattr(panel, "wait_for_pending_images"):
         panel.wait_for_pending_images()
+    if hasattr(panel, "prepare_export"):
+        panel.prepare_export()                     # row letters laid out (headless)
     bounds = panel.updateBounds()
     width = float(bounds.width())
     height = float(bounds.height())

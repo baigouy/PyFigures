@@ -519,6 +519,9 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
     panel that lacks one. Returns (n_lettered, n_scale_bars)."""
     import string
     tree, root = _load(pyf_path)
+    from .annotations import letter_layout_of
+    if letter_layout_of(root)["letter_layout"] == "row":
+        letter_panels = False        # lettered per row, outside the rows: the panels carry none
     letters = string.ascii_uppercase
     lettered = bars = i = 0
     new_letters = []                        # (annots, letter, brightness under it)

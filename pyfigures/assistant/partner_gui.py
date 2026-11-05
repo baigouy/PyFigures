@@ -164,10 +164,20 @@ def state(window):
         for annotation in entry['letters']:
             references.setdefault(annotation['text'].casefold(),[]).append(entry['panel_id'])
     duplicates={text:ids for text,ids in references.items() if len(ids)>1}
-    return {'duplicate_letter_references':duplicates,'visible_letter_count': sum(len(p['letters']) for p in entries),
-            'unlettered_panel_ids': [p['panel_id'] for p in entries if not p['letters']],
+    canvas = window.paint.EZFIG_panel
+    from pyfigures.gui.row_letters import normalise_layout, normalise_align
+    layout = normalise_layout(getattr(canvas, 'letter_layout', None))
+    # one letter per row, outside the rows (drawn by the canvas, not on a panel)
+    row_letters = [{'row': k, 'text': t.getPlainText()}
+                   for k, t in enumerate(canvas.row_letter_items())] if layout == 'row' else []
+    return {'duplicate_letter_references':duplicates,
+            'visible_letter_count': sum(len(p['letters']) for p in entries) + len(row_letters),
+            'unlettered_panel_ids': [p['panel_id'] for p in entries if not p['letters']] if layout != 'row' else [],
             'auto_lettering': window.auto_lettering_checkbox.isChecked(),
             'first_letter': window.letter_line_edit.text(),
+            'letter_layout': layout,
+            'row_letter_align': normalise_align(getattr(canvas, 'row_letter_align', None)),
+            'row_letters': row_letters,
             'default_position': str(window.serializable_font.placement), 'panels': entries}
 
 
@@ -413,6 +423,24 @@ class PartnerGUI(BaseGUI):
             raise ValueError('CLARIFICATION_REQUIRED: This canvas is not a flat list of horizontal rows')
         if validate_only:
             return
+        from pyfigures.gui.row_letters import normalise_layout
+        if normalise_layout(getattr(canvas, 'letter_layout', None)) == 'row':
+            # one letter per row, outside the rows: the letters follow the row
+            # order by themselves and the panels carry none (recording "no
+            # letter" policies on them hid their letters for good once the
+            # figure went back to a letter in each panel)
+            a, b = first_row - 1, second_row - 1
+            roots[a], roots[b] = roots[b], roots[a]
+            canvas.update()
+            canvas.repack_all()
+            canvas.update_letters_required.emit()
+            canvas.update_text_rows.emit()
+            canvas.update_size()
+            canvas.repaint()
+            return dict(action='swap_rows', changed=int(a != b), matched_panel_ids=[], changed_panel_ids=[],
+                        first_row=first_row, second_row=second_row, completion_verified=True,
+                        lettering_mode='row_letters',
+                        row_letters=[t.getPlainText() for t in canvas.row_letter_items()])
         automatic = self.auto_lettering_checkbox.isChecked() and bool(self.letter_line_edit.text())
         before = state(self)
         original = [p for _, _, p in panels(roots)]

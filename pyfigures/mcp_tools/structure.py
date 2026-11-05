@@ -97,6 +97,15 @@ def describe_figure(pyf_path: str) -> str:
                      "split or montage):")
         lines.extend("  " + r for r in rows)
         lines.append("")
+    from .annotations import row_letters_of
+    row_letters = row_letters_of(root)
+    if row_letters:
+        from .annotations import letter_layout_of
+        align = letter_layout_of(root)["row_letter_align"]
+        lines.append(f"Panel letters: one per row, outside the rows on the left ({align}): "
+                     + ", ".join(letter for letter, _ in row_letters)
+                     + " (set_panel_letter_layout; the panels carry none)")
+        lines.append("")
 
     if canvas_imgs:
         lines.append(f"\nFree-canvas mode - {len(canvas_imgs)} image(s) (use group_path=[] to address them):")

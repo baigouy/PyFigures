@@ -11,10 +11,22 @@ def specification(state):
     for field in FIELDS[1:]:
         values = [a.get(field) for a in letters]
         uniform[field] = values[0] if values and all(v == values[0] for v in values) else 'mixed' if values else None
-    return {'image_panels': len(state['panels']), 'visible_letters': len(letters),
+    spec = {'image_panels': len(state['panels']), 'visible_letters': len(letters),
             'duplicate_letter_references':state.get('duplicate_letter_references',{}),
             'uniform_letter_style': uniform, 'unlettered_panel_ids': state['unlettered_panel_ids'],
+            'letter_layout': state.get('letter_layout', 'panel'),
             'source': 'Actual GUI readback; preserve unspecified properties on follow-up edits.'}
+    if spec['letter_layout'] == 'row':
+        # one letter per ROW, outside the rows on the left (drawn by the canvas):
+        # the panels carry none on purpose
+        row_letters = state.get('row_letters') or []
+        spec.update(visible_letters=len(row_letters),
+                    row_letters=[r['text'] for r in row_letters],
+                    row_letter_align=state.get('row_letter_align', 'top'),
+                    letter_layout_note='One letter per row, outside the rows on the left; change it '
+                                       'with set_panel_letter_layout (letter_layout="panel" puts a '
+                                       'letter back in each panel).')
+    return spec
 
 
 def changes(before, after):

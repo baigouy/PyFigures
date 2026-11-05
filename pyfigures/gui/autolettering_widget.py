@@ -10,7 +10,7 @@ from qtpy.QtGui import QColor, QFont
 from qtpy.QtCore import Qt
 
 class AutoLetteringOptions(QWidget):
-    def __init__(self, font=None,parent=None):
+    def __init__(self, font=None,parent=None, letter_layout='panel', row_letter_align='top'):
         super().__init__(parent)
 
         # Create a vertical box layout to hold the widgets
@@ -93,6 +93,28 @@ class AutoLetteringOptions(QWidget):
 
         vbox.addLayout(hbox2)
 
+        # one letter in each panel (at the position above), or one letter per
+        # row drawn outside the row, in a margin on its left (row_letters.py)
+        layout_label = QLabel("Letters:")
+        self.layout_combo = QComboBox()
+        self.layout_combo.addItem("One in each panel", 'panel')
+        self.layout_combo.addItem("One per row, outside on the left", 'row')
+        self.layout_combo.setToolTip('"One per row": a single letter for each row of the figure, '
+                                     'in a margin left of the row (the rows are narrowed so the '
+                                     'figure keeps its width). The panels then carry no letter.')
+        self.row_align_combo = QComboBox()
+        self.row_align_combo.addItem("Top of the row", 'top')
+        self.row_align_combo.addItem("Middle of the row", 'center')
+        self.row_align_combo.setToolTip('Where the row letter sits next to its row: level with the '
+                                        'top of the row (and of its column titles), or its middle.')
+        hbox3 = QHBoxLayout()
+        hbox3.addWidget(layout_label)
+        hbox3.addWidget(self.layout_combo)
+        hbox3.addWidget(self.row_align_combo)
+        vbox.addLayout(hbox3)
+        self.set_letter_layout(letter_layout, row_letter_align)
+        self.layout_combo.currentIndexChanged.connect(self._layout_changed)
+
         # Set initial values for the options
 
         # self.font_family = 'Arial'
@@ -148,6 +170,25 @@ class AutoLetteringOptions(QWidget):
             # For font style, 'Normal' corresponds to QFont.Normal weight which is equivalent to QFont.Weight.Normal
             # self.font.setWeight(QFont.Normal)
 
+
+    def set_letter_layout(self, letter_layout='panel', row_letter_align='top'):
+        from pyfigures.gui.row_letters import normalise_layout, normalise_align
+        self.layout_combo.setCurrentIndex(max(0, self.layout_combo.findData(normalise_layout(letter_layout))))
+        self.row_align_combo.setCurrentIndex(max(0, self.row_align_combo.findData(normalise_align(row_letter_align))))
+        self._layout_changed()
+
+    def _layout_changed(self, *args):
+        # the corner is for letters in the panels, the alignment for row letters
+        per_row = self.get_letter_layout() == 'row'
+        self.row_align_combo.setEnabled(per_row)
+        self.vertical_combo.setEnabled(not per_row)
+        self.horizontal_combo.setEnabled(not per_row)
+
+    def get_letter_layout(self):
+        return self.layout_combo.currentData() or 'panel'
+
+    def get_row_letter_align(self):
+        return self.row_align_combo.currentData() or 'top'
 
     def choose_bg_color(self):
         """

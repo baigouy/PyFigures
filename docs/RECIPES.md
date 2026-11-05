@@ -168,6 +168,8 @@ created as needed. Forward slashes work on every OS.
 | `width_mm` / `width_cm` / `width_in` / `width_px` | none | An explicit figure width instead of a `journal` (give one, never with `journal`). §20. |
 | `dpi` | `300` | Resolution used for the size in physical units. |
 | `letter_placement` | `top left` | Corner of the panel letters. |
+| `letter_layout` | `panel` | `panel`: a letter in each panel. `row`: ONE letter per row (A for the first row, B for the second…), outside the row in a margin on its left, as in many journals; the rows are narrowed by the margin so the figure keeps its width, and the panels carry no letter. |
+| `row_letter_align` | `top` | With `letter_layout: row`: `top` (level with the top of the row and its column titles) or `center` (the middle of the row). |
 | `font` | none | Figure font: a family name, or a mapping with `family`, `size`, `italic`. §20. |
 | `min_font_pt` | none | Raise every smaller text to this size (journal minimum). |
 | `colors` | none | Recolour the whole figure: channel *i* of every multi-channel image, merge and channel split takes colour *i* — `colors: [magenta, green]` turns a red/green/blue figure magenta/green/blue. Single-channel panels outside a split become gray; RGB colour photographs (bright background) are left alone. A plot with exactly as many groups as colours takes them; other plots take the colour-blind-safe Okabe–Ito palette. `colors: [colorblind]` = magenta/green channels + Okabe–Ito for every plot. MCP `set_figure_colors`; GUI Annotations → Figure colours…. |
@@ -1415,6 +1417,7 @@ server, and edited afterwards in either.
 | row `labels`, `side_label` | right-click → Add labels ▶ | `add_label_row`, `add_side_label` |
 | `width_*`, `dpi` | Figure width box in the toolbar | `resize_figure` |
 | `font`, `letter_placement` | Annotations → Panel letters (A, B, C…) | `set_figure_properties`, `style_annotation` |
+| `letter_layout`, `row_letter_align` | Annotations → Panel letters (A, B, C…) → Letters: One per row, outside on the left | `set_panel_letter_layout` |
 | `min_font_pt`, `tidy_text` | QC → Enforce minimum font size…; Annotations → Tidy text typography… | `enforce_min_font_size`, `tidy_text` |
 | `auto_configure` | — | `auto_configure_images` |
 | `alt_text` | File → Alt text (accessibility)… | `generate_alt_text`, `set_alt_text` |
