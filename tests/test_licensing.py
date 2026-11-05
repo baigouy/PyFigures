@@ -51,6 +51,30 @@ def test_gnu_texts_fall_back_to_spdx_when_gnu_org_times_out(monkeypatch):
     assert set(C.GNU_SPDX_IDS) == set(C.GNU_TEXTS)
 
 
+def test_ffmpeg_build_found_in_ffmpeg_latest_json(monkeypatch):
+    # PyAV 19 wheels use FFmpeg 9.0, described only in scripts/ffmpeg-latest.json
+    import types
+    import urllib.error
+    C = _collect()
+    monkeypatch.setitem(sys.modules, "av", types.SimpleNamespace(__version__="19.0.2", ffmpeg_version_info="9.0.2"))
+    asked = []
+
+    def fake_get(url, tries=3, timeout=120):
+        asked.append(url)
+        if url.endswith("ffmpeg-9.0.json"):
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        if url.endswith("ffmpeg-latest.json"):
+            return b'{"url": "https://github.com/PyAV-Org/pyav-ffmpeg/releases/download/9.0.2-1/ffmpeg-{platform}.tar.gz"}'
+        assert url == C.PYAV_FFMPEG_PKG.format(tag="9.0.2-1"), url
+        return b'name="x264", source_url="https://example.org/x264.tar.bz2"'
+
+    monkeypatch.setattr(C, "_get", fake_get)
+    comps = C._ffmpeg_components()
+    assert comps[0]["version"] == "9.0.2-1"
+    assert [c["name"] for c in comps[1:]] == ["x264"]
+    assert asked[0].endswith("/v19.0.2/scripts/ffmpeg-9.0.json")
+
+
 def test_sources_are_packed_per_group_and_deduplicated(tmp_path):
     C = _collect()
     src = tmp_path / "src"

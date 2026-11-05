@@ -32,6 +32,7 @@ import ssl
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 
 PYPI_JSON = "https://pypi.org/pypi/{name}/{version}/json"
@@ -198,8 +199,21 @@ def _ffmpeg_components():
         return []
     ff = av.ffmpeg_version_info
     mm = ".".join(ff.split(".")[:2])
-    cfg = json.loads(_get(PYAV_FFMPEG_JSON.format(av=av.__version__, mm=mm)))
-    tag = cfg["url"].split("/releases/download/")[1].split("/")[0]
+    # PyAV keeps ffmpeg-<major.minor>.json for older FFmpegs and records the one
+    # its wheels use in ffmpeg-latest.json (PyAV 19: FFmpeg 9.0, no ffmpeg-9.0.json)
+    tag = None
+    for name in (mm, "latest"):
+        try:
+            cfg = json.loads(_get(PYAV_FFMPEG_JSON.format(av=av.__version__, mm=name)))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                continue
+            raise
+        tag = cfg["url"].split("/releases/download/")[1].split("/")[0]
+        if tag.startswith(ff):
+            break
+    if tag is None:
+        raise SystemExit(f"PyAV {av.__version__}: no FFmpeg build description found")
     if not tag.startswith(ff):
         raise SystemExit(f"PyAV {av.__version__}: FFmpeg {ff} but pyav-ffmpeg tag {tag}")
     pkg = _get(PYAV_FFMPEG_PKG.format(tag=tag)).decode("utf-8")
