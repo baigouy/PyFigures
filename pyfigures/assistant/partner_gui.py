@@ -695,6 +695,11 @@ class PartnerGUI(BaseGUI):
             raise ValueError('group_path is required for group scope')
         if scope == 'panels' and not panel_ids:
             raise ValueError('panel_ids from inspect_panel_letters are required')
+        from pyfigures.gui.row_letters import normalise_layout
+        row_mode = normalise_layout(getattr(self.paint.EZFIG_panel, 'letter_layout', None)) == 'row'
+        if row_mode and action == 'style' and scope != 'all':
+            raise ValueError('The figure has one letter per row (outside the rows): those letters share one '
+                             'style, so style them with scope="all".')
         if placement is not None:
             placement = ' '.join(placement.lower().replace('-', ' ').split())
             placement = placement.replace('upper', 'top').replace('lower', 'bottom')
@@ -744,13 +749,15 @@ class PartnerGUI(BaseGUI):
             return {'matched': len(candidates)}
         changed, skipped = [], []
         before_states = {pid: [letter_info(a) for a in letters(panel)] for pid, panel in candidates}
+        row_style_before = self._row_letter_style() if row_mode else None
         for pid, panel in candidates:
             existing = letters(panel)
             policy = json.loads(getattr(panel, POLICY, '{}'))
             if not policy.get('base') and existing:
                 policy['base'] = letter_info(existing[0])
             if action == 'style' and not existing:
-                skipped.append({'panel_id': pid, 'reason': 'No panel letter; use restore to add it'})
+                if not row_mode:       # lettered per row: no letter in a panel is expected
+                    skipped.append({'panel_id': pid, 'reason': 'No panel letter; use restore to add it'})
                 continue
             local = set(policy.get('local_fields', []))
             if replace_overrides and scope == 'all':
@@ -811,10 +818,26 @@ class PartnerGUI(BaseGUI):
                 self.serializable_font.background = None if fill is None else int(fill[1:], 16)
         self.update_letters()
         changed = [pid for pid, panel in candidates if before_states[pid] != [letter_info(a) for a in letters(panel)]]
-        return {'matched': len(candidates), 'matched_panel_ids': [pid for pid, _ in candidates],
-                'changed': len(changed), 'changed_panel_ids': changed,
-                'skipped': skipped, 'scope': scope, 'action': action,
-                'warnings': ['Explicit colors are honored; white on bright image content may be hard to see.'] if foreground == '#ffffff' and fill is None else []}
+        report = {'matched': len(candidates), 'matched_panel_ids': [pid for pid, _ in candidates],
+                  'changed': len(changed), 'changed_panel_ids': changed,
+                  'skipped': skipped, 'scope': scope, 'action': action,
+                  'warnings': ['Explicit colors are honored; white on bright image content may be hard to see.'] if foreground == '#ffffff' and fill is None else []}
+        if row_mode:
+            # the row letters are drawn from the figure letter font set above:
+            # report them, or "0 changed" sent the chat looking for another
+            # tool for a minute although the edit was done (2026-11-06)
+            restyled = self._row_letter_style() != row_style_before
+            report['letter_layout'] = 'row'
+            report['row_letters_restyled'] = (
+                [t.getPlainText() for _, t in self.paint.EZFIG_panel._row_letter_texts()] if restyled else [])
+            if placement is not None:
+                report['warnings'].append('Row letters always sit outside the rows on the left; placement '
+                                          'only applies to letters inside panels.')
+        return report
+
+    def _row_letter_style(self):
+        f = self.serializable_font
+        return (f.toString(), getattr(f, 'foreground', None), getattr(f, 'background', None))
 
     def swap_panels(self, first, second, target='images', validate_only=False):
         if target not in ('images', 'letters'):

@@ -1552,6 +1552,12 @@ def set_label_background(
     what = "removed from" if value == "None" else f"set to {color} on"
     note = (f" {recoloured} text(s) the colour of the box now {'white' if new_col == '#ffffff' else 'black'}."
             if recoloured else "")
+    # lettered per row, the letters are not in the panels (0 labels above)
+    # but drawn from the figure letter font, which was just set: say so, or
+    # "0 label(s)" reads as a failure (2026-11-06)
+    if include_letters and not group_path and letter_layout_of(root)["letter_layout"] == "row":
+        note += (" The row letters (one per row, outside on the left) "
+                 + ("have no box any more." if value == "None" else f"now have a {color} box."))
     return f"Label background {what} {n} label(s).{note}"
 
 

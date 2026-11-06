@@ -450,7 +450,8 @@ class Session:
             report['visible_letter_count_after'] = verified['visible_letter_count']
             report['unlettered_panel_ids'] = verified['unlettered_panel_ids']
             report['outcome'] = ('LETTERS_REMOVED' if report['action'] == 'remove' else
-                                 'NO_VISIBLE_CHANGE' if not report['changed'] else 'VERIFIED_CHANGE')
+                                 'NO_VISIBLE_CHANGE' if not report['changed'] and not report.get('row_letters_restyled')
+                                 else 'VERIFIED_CHANGE')
             if ungroup:
                 report['outcome'] = ('LAYOUT_REFRESHED' if report.get('layout_changed') else 'ALREADY_UNGROUPED') if report['already_ungrouped'] else 'VERIFIED_STRUCTURE_CHANGE'
             affected = set(report['changed_panel_ids'])
