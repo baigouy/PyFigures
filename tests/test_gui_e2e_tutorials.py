@@ -539,14 +539,15 @@ def _guide_context(c, guide_id):
 
 
 @pytest.mark.parametrize("key", list(GUIDE_KEYS))
-def test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_path, watch, monkeypatch, key):
+def test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_path, watch, monkeypatch, key,
+                           dwell=0.6):
     """The guide starts on a figure, every step highlights a real target,
     and doing what it says (select, menu + dialog, or the right-click /
     double-click route) completes it: the guide sees the result and ends."""
     from pyfigures.guides import GUIDES
     g = win
     # the guide polls every 400 ms: a dialog answered in 15 ms is never seen open
-    monkeypatch.setattr(H, "DIALOG_DWELL", 0.6)
+    monkeypatch.setattr(H, "DIALOG_DWELL", dwell)
     out = tmp_path / "out"
     out.mkdir()
     H.load(qapp, g, H.base_figure(tmp_path, e2e_files))
@@ -577,3 +578,14 @@ def test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_pat
     assert _wait(qapp, lambda: runner.status()["status"] == "completed" and not ctrl._bubble.isVisible(),
                  timeout=5), f"{key}: the guide did not end ({runner.status()})"
     watch.check(key)
+
+
+def test_a_slow_user_keeps_a_two_dialog_guide_open(qapp, win, e2e_files, no_file_dialogs, menus, tmp_path,
+                                                   watch, monkeypatch):
+    """scale_bar_units has two "open it" steps (the panel editor, then Edit
+    ScaleBar in it). The editor alone ticked both off, and the guide ended
+    before it saw the result whenever the dialog stayed open over two polls:
+    a slow user, or the macOS CI (2026-11-05, 2026-11-06)."""
+    key = next(k for k, gid in GUIDE_KEYS.items() if gid == "scale_bar_units")
+    test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_path, watch, monkeypatch, key,
+                           dwell=2.0)

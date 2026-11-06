@@ -183,6 +183,16 @@ class GuideRunner:
             return self._saw_dialog
         return False
 
+    def _new_modal(self):
+        """A dialog opened for THIS step: not the one that completed the step
+        before (two "open it" steps in a row — the panel editor, then Edit
+        ScaleBar inside it — were both ticked off by the editor alone)."""
+        modal = QApplication.activeModalWidget()
+        if modal is None or modal is self._used_modal:
+            return False
+        self._used_modal = modal
+        return True
+
     def _current_version(self, img):
         """The panel now standing for *img*: the image editor (Ok) replaces
         the edited panel by its edited clone, so the guide watching the
@@ -245,6 +255,7 @@ class GuideRunner:
         self.completed = False
         self.cancelled = False
         self._saw_dialog = False
+        self._used_modal = None
         self._target_image = None
         self._image_state0 = None
         self._baseline = self._snapshot()
@@ -282,17 +293,22 @@ class GuideRunner:
             elif "context" in spec:
                 steps.append(TutorialStep("Open it from the image", spec["context"],
                                           get_target=canvas,
-                                          completion_check=lambda w: _modal_open() or done_check(w),
+                                          completion_check=lambda w: self._new_modal() or done_check(w),
                                           auto_advance=True))
             elif "dialog" in spec:
                 steps.append(TutorialStep(
                     "Finish in the dialog", spec["dialog"],
                     get_target=lambda w: QApplication.activeModalWidget() or w.paint.EZFIG_panel,
                     completion_check=done_check, auto_advance=True))
-        for s in steps:
+        for i, s in enumerate(steps):
             s.title = f"{g['title']}: {s.title}"
             own = s.completion_check
-            if own is not done_check:      # the result also completes every step
+            if i == len(steps) - 1 and "select" not in g["steps"][-1]:
+                # the last step waits for the result: a dialog that is merely
+                # open (the panel editor of the step before) ended the guide
+                # before it saw the change (scale_bar_units, 2026-11-06)
+                s.completion_check = done_check
+            elif own is not done_check:    # the result also completes every step
                 s.completion_check = (lambda w, own=own: done_check(w) or bool(own and own(w)))
         self.steps = steps
         bubble = self.controller._bubble

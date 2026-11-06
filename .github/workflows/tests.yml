@@ -55,6 +55,9 @@ jobs:
           bash .github/scripts/pip_install_retry.sh "$BATOOLSET_SPEC" "$BATOOLSET_GUI_SPEC" "$STAPLOT_SPEC"
           bash .github/scripts/pip_install_retry.sh ".[ai,video,zarr,pdf,fiji]" pytest pytest-qt pytest-timeout
 
-      # a test stuck on a modal dialog fails after 5 min instead of stalling the job
+      # a test stuck on a modal dialog fails after 5 min instead of stalling the job.
+      # thread method: the default (signal) never fired when a test hung inside
+      # Qt on Linux (Python 3.10 runs cancelled at 1h30, 2026-11-06); this one
+      # prints every thread's stack, so the log names the stuck test
       - name: Run the test suite
-        run: python -m pytest -q -p no:cacheprovider --timeout=300 -rfE tests
+        run: python -m pytest -q -p no:cacheprovider --timeout=300 --timeout-method=thread -rfE tests

@@ -49,4 +49,4 @@ jobs:
 
       # a test stuck on a modal dialog fails after 5 min instead of stalling the job
       - name: Run the test suite
-        run: python -m pytest -q -p no:cacheprovider --timeout=300 -rfE tests
+        run: python -m pytest -q -p no:cacheprovider --timeout=300 --timeout-method=thread -rfE tests
