@@ -56,8 +56,10 @@ jobs:
       - name: Install pyfigures and its dependencies
         # the chat sidebar (qtpy-ai-sidecar) comes with pyfigures itself, and the
         # self-test below fails the build without it; no [pdf] extra: PyMuPDF is
-        # AGPL, the apps read PDFs with pypdfium2
-        run: pip install ".[video,zarr]"
+        # AGPL, the apps read PDFs with pypdfium2. Retried while a just-released
+        # dependency is not yet on the runners' PyPI mirror.
+        shell: bash
+        run: bash .github/scripts/pip_install_retry.sh ".[video,zarr]"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the
