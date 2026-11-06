@@ -120,7 +120,7 @@ def test_zoom_leaders_follow_the_inset_and_the_box(qapp, tmp_path):
     # moving the box: leader box ends and the inset crop follow
     crop = (inset.crop_left, inset.crop_top)
     links = zoom_links(shapes, box)
-    assert ("crop", inset) in links and len(links) == 3
+    assert ("crop", (inset, box)) in links and len(links) == 3
     d = QPointF(10, -20)
     box.translate(d)
     follow_zoom_links(links, d)

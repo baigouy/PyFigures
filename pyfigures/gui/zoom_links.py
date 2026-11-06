@@ -85,16 +85,37 @@ def zoom_links(shapes, moved, moving=()):
                 for line, end1, end2 in _leaders(shapes, moved, _shown_rect(inset), moving):
                     links.append((line, 1 if end1 == 'box' else 2))
                 if not any(inset is m for m in moving):
-                    links.append(('crop', inset))
+                    links.append(('crop', (inset, moved)))
     return links
 
 
+def _crop_to_box(inset, box):
+    """Set the inset's crop margins so it shows exactly what *box* covers (as
+    roi_to_inset makes it). False when the image size is unknown."""
+    try:
+        w, h = inset.get_raw_size()
+    except Exception:
+        return False
+    if not w or not h:
+        return False
+    x0 = min(max(0, int(round(box.x()))), int(w) - 1)
+    y0 = min(max(0, int(round(box.y()))), int(h) - 1)
+    x1 = min(max(x0 + 1, int(round(box.x() + box.width()))), int(w))
+    y1 = min(max(y0 + 1, int(round(box.y() + box.height()))), int(h))
+    inset.crop(x0, int(w) - x1, y0, int(h) - y1)
+    return True
+
+
 def follow_zoom_links(links, delta):
-    """Move the linked leader ends by *delta*; shift the inset's crop with a
-    moved box (its magnified region follows the box)."""
+    """Move the linked leader ends by *delta*; with a moved box, the inset
+    shows what the box now covers. (Its crop used to be shifted by *delta*: a
+    crop already wrong — margins entered as coordinates, the inset 0 px wide —
+    stayed wrong, 2026-11-06.)"""
     for target, what in links:
         if target == 'crop':
-            inset = what
+            inset, box = what
+            if _crop_to_box(inset, box):
+                continue
             dx, dy = int(round(delta.x())), int(round(delta.y()))
             w = inset.crop_left + inset.crop_right
             h = inset.crop_top + inset.crop_bottom
