@@ -219,7 +219,9 @@ def prepare_inset(obj, changes):
     allowed={'size_fraction',INSET_SIZE,'border_size','border_color'}
     if not changes or set(changes)-allowed:
         raise ValueError('Inset changes: size_fraction (width as a share of the panel width, 0-1; '
-                         '"larger" = a bigger fraction than the current one), border_size, border_color')
+                         '"larger" = a bigger fraction than the current one), border_size, border_color. '
+                         'The region an inset shows comes from its ROI: edit the ROI geometry, then '
+                         'remove_inset and roi_to_inset again (crops are margins per edge, not coordinates).')
     plan={}
     for key,v in changes.items():
         if key in ('size_fraction',INSET_SIZE):

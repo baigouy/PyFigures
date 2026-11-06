@@ -1013,7 +1013,9 @@ def set_inset_property(
     │ border_size                                  │ "5"                      │
     │ border_color                                 │ "16776960"  (yellow)     │
     │ filename                                     │ "/new/path/detail.png"   │
-    │ crop_left / crop_right / crop_top / crop_bottom │ "20"                 │
+    │ crop_left / crop_right / crop_top / crop_bottom │ "20" (px cut away    │
+    │   from that EDGE, not a coordinate: x 275-375 of │  a 650 px image =   │
+    │   a 650 px wide image is left 275, right 275)    │  left 275 right 275) │
     │ opacity                                      │ "0.8"                    │
     │ LUTs                                         │ "['GREEN', None, None]"  │
     │ theta                                        │ "45"                     │
@@ -1075,6 +1077,17 @@ def set_inset_property(
     if err:
         return err
     _set_child_text(insets[inset_index], property_name, raw)
+    if property_name.startswith("crop_"):
+        # crops are margins cut from each side, not coordinates: a model set
+        # crop_right=375 meaning "up to x 375" next to crop_left=275 on a
+        # 650 px image, and the inset became 0 px wide, invisible (2026-11-06).
+        # The same check as set_image_property / transform_image.
+        from .core import _crop_fit_error
+        crop_err = _crop_fit_error(insets[inset_index])
+        if crop_err:
+            return (f"ERROR: {crop_err} For an inset made from an ROI: move/resize the ROI, then "
+                    "remove_inset and roi_to_inset again. "
+                    "Nothing was changed.")
     _save(tree, pyf_path)
     stored = _stored_image_property(pyf_path, group_path, image_index, property_name,
                                     inset_index=inset_index)
