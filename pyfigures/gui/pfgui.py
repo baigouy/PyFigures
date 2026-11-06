@@ -244,6 +244,20 @@ def _has_empty_group(shapes):
     return False
 
 
+def _pixels_pending(img2d, pending):
+    """Mark a panel whose pixels are loading in the background (lazy open):
+    batoolset-gui draws it as "Loading…" rather than a red "Error". The mark
+    lives on the class, never on the panel, so it is not saved with it."""
+    marks = Image2D.__dict__.get('pixels_pending')
+    if marks is None:                    # batoolset-gui < 0.2.4: keeps showing "Error"
+        marks = set()
+        Image2D.pixels_pending = marks
+    if pending:
+        marks.add(id(img2d))
+    else:
+        marks.discard(id(img2d))
+
+
 def _qt_alive(obj):
     """False once the C++ side of a Qt wrapper has been destroyed — a queued
     loader callback arriving after its window was deleted must not touch it
@@ -4073,6 +4087,9 @@ class EZFIG_GUI(QMainWindow):
                     obj = stack.pop()
                     if isinstance(obj, Image2D):
                         if obj.filename is not None and obj.img is None and obj.filename != '@template@':
+                            # drawn as "Loading…", not as a red "Error", until
+                            # its pixels arrive (or fail: _on_img_ready)
+                            _pixels_pending(obj, True)
                             pending.append(obj)
                     if hasattr(obj, 'content') and obj.content:
                         stack.extend(obj.content)
@@ -4149,6 +4166,7 @@ class EZFIG_GUI(QMainWindow):
             if not _qt_alive(self) or getattr(self, '_lazy_generation', 0) != gen:
                 return  # window gone, or loading cancelled (New/replace) — discard
             img = lazy_results.get(path)
+            _pixels_pending(img2d, False)          # loaded, or a real error from now on
             if isinstance(img, _LoadFailed):
                 # the panel stays empty (its img None): set as the image, the
                 # sentinel left the panel without a qimage and every repaint
@@ -4177,6 +4195,7 @@ class EZFIG_GUI(QMainWindow):
             self._schedule_lazy_refresh()
 
         def _on_finished():
+            _pixels_pending(img2d, False)          # even if no result came back
             if not _qt_alive(self):
                 return  # the window was destroyed while this image was loading
             try:
@@ -4362,6 +4381,8 @@ class EZFIG_GUI(QMainWindow):
         finishes and is discarded instead of flooding the UI thread with
         update_qimage()/repaint work for images no longer on the canvas."""
         self._lazy_generation = getattr(self, '_lazy_generation', 0) + 1
+        for img2d in getattr(self, '_lazy_img_queue', None) or []:
+            _pixels_pending(img2d, False)
         self._lazy_img_queue = []
         QApplication.restoreOverrideCursor()
         try:
