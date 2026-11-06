@@ -58,6 +58,19 @@ def test_row_letters_refuse_a_partial_scope(gui, qapp, tmp_path):
         gui.edit_panel_letters(action="style", scope="group", group_path=[0], background="none")
 
 
+def test_placement_outside_points_to_row_letters(gui, qapp, tmp_path):
+    """'put letters outside' (2026-11-06): placement="outside" got "Use a
+    corner"; the chat then undid the row letters it had just set."""
+    pyf, _ = _recipe_figure(tmp_path, name="panels", layout=None)
+    _open(gui, qapp, pyf)
+    with pytest.raises(ValueError, match="set_panel_letter_layout"):
+        gui.edit_panel_letters(action="style", scope="all", placement="outside")
+    pyf2, _ = _recipe_figure(tmp_path, name="rows2")
+    _open(gui, qapp, pyf2)
+    with pytest.raises(ValueError, match="ALREADY_DONE"):
+        gui.edit_panel_letters(action="style", scope="all", placement="outside")
+
+
 def test_set_label_background_names_the_row_letters(tmp_path):
     from pyfigures.mcp_server import set_label_background
     pyf, _ = _recipe_figure(tmp_path)

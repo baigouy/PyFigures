@@ -16,7 +16,8 @@ COMMON_CONTRACTS = ('edit_panel_letters', 'swap_live_panels', 'remove_annotation
 CONTRACT_SCOPE = {
     'swap_rows': 'exchanges WHOLE rows; to reorder panels inside one row use reorder_children',
     'reorder_children': 'reorders the panels WITHIN one row/group, e.g. reversing a row',
-    'set_panel_letter_position': 'GLOBAL default letter placement for every panel, not one selected panel letter',
+    'set_panel_letter_position': 'GLOBAL default letter placement for every panel (a corner INSIDE it), not one '
+                                 'selected panel letter; letters OUTSIDE the panels = set_panel_letter_layout row',
     'delete_last_rows': 'removes WHOLE rows from the end; only on an explicit removal request',
     'swap_live_panels': 'exchanges two panels, keeping their letters in place',
 }

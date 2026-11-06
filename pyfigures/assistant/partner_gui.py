@@ -700,6 +700,16 @@ class PartnerGUI(BaseGUI):
         if row_mode and action == 'style' and scope != 'all':
             raise ValueError('The figure has one letter per row (outside the rows): those letters share one '
                              'style, so style them with scope="all".')
+        if placement is not None and re.search(r'\b(outside|outer|margin|per row|beside)\b', str(placement).lower()):
+            # "put letters outside": a model passed placement="outside", got
+            # "Use a corner", undid the row letters it had just set and searched
+            # until stopped (2026-11-06)
+            if row_mode:
+                raise ValueError('ALREADY_DONE: the letters are already outside the panels (one per row, in a '
+                                 'margin on the left). Nothing to change; report that to the user.')
+            raise ValueError('Letters outside the panels: call set_panel_letter_layout(letter_layout="row") '
+                             '(one letter per row, in a margin left of the row). Letters of single panels '
+                             'always sit in a corner inside the panel; placement takes a corner.')
         if placement is not None:
             placement = ' '.join(placement.lower().replace('-', ' ').split())
             placement = placement.replace('upper', 'top').replace('lower', 'bottom')
