@@ -98,6 +98,12 @@ _INSERT_JS = r"""
 
 _TEXT_JS = "document.body ? document.body.innerText : ''"
 
+WARNING = ('<b>Experimental, not recommended: a last resort.</b> Prefer the chat sidebar (Tools → Chat sidebar, '
+           'with an API key or a local model): it works far better. Use this only if really nothing else is '
+           'possible, and first make sure it respects the <b>terms of service</b> '
+           'of the chat site and your institution\'s rules: PyFigures types into the page and, with Automatic, '
+           'sends messages for you.')
+
 # presets taken out of the list: a saved choice of one is not brought back
 _DROPPED_PRESETS = frozenset({'https://chat.mistral.ai/login?return_to=%2Fcode'})
 
@@ -139,6 +145,12 @@ class WebChatPanel(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
+        self.warning = QLabel(WARNING, self)
+        self.warning.setWordWrap(True)
+        self.warning.setTextFormat(Qt.TextFormat.RichText)
+        self.warning.setStyleSheet('QLabel { background: #fff3cd; color: #664d03; border: 1px solid #e0b100; '
+                                   'border-radius: 3px; padding: 4px; }')
+        layout.addWidget(self.warning)
         top = QHBoxLayout()
         self.address = QComboBox(self)
         self.address.setEditable(True)

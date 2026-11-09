@@ -1797,9 +1797,10 @@ class EZFIG_GUI(QMainWindow):
                                "server (optional package qtpy-ai-sidecar)")
         tools_menu.addAction(chat_action)
         chat_action.triggered.connect(lambda _checked=False: self.open_chat_sidebar())
-        web_chat_action = QAction("Chat in a web page (Le Chat, Emmy, ChatGPT…)…", self)
+        web_chat_action = QAction("Chat in a web page (experimental, not recommended)…", self)
         web_chat_action.setToolTip("Dock an online chat page (your own login, no API key): the model "
-                                   "proposes operations, you click Apply, PyFigures runs them on this figure")
+                                   "proposes operations, you click Apply, PyFigures runs them on this figure. "
+                                   "Check the chat site's terms of service first; the chat sidebar works better")
         tools_menu.addAction(web_chat_action)
         web_chat_action.triggered.connect(lambda _checked=False: self.open_web_chat())
         self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)

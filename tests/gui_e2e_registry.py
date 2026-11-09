@@ -55,7 +55,7 @@ LINKED = {
         "test_assistant_live.py::test_chat_sidebar_docks_the_sidecar",
         "test_assistant_live.py::test_chat_sidebar_without_the_package_says_how_to_install"],
     # docks an online chat page (clipboard mode in tests: no WebEngine offscreen)
-    "menu: Tools > Chat in a web page (Le Chat, Emmy, ChatGPT…)…": [
+    "menu: Tools > Chat in a web page (experimental, not recommended)…": [
         "test_web_chat_20261109.py::test_a_round_with_the_figure",
         "test_web_chat_20261109.py::test_launch_flag_docks_the_web_chat"],
     "menu: Tools > MCP call history / undo…": [

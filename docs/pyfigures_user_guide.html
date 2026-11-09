@@ -567,7 +567,7 @@
         <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register or start the PyFigures MCP server; list every call it made on this figure and undo its last changes.</td></tr>
         <tr><td><strong>Share the open figure with the MCP server</strong></td><td>Lets an MCP client (Claude Desktop, LM Studio…) edit the figure open in this window live, unsaved changes included, one undo step per edit; shows the configuration to paste into the client. Untick to stop. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Chat sidebar (local model)…</strong></td><td>Docks a chat on the right: ask for changes in plain words and a language model makes them on this figure. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
-        <tr><td><strong>Chat in a web page (Le Chat, Emmy, ChatGPT…)…</strong></td><td>Docks an online chat page instead, with your own login and no API key: the model proposes operations, you click Apply. See <a href="#web-chat">Chat in a web page</a>.</td></tr>
+        <tr><td><strong>Chat in a web page (experimental, not recommended)…</strong></td><td>Docks an online chat page instead, with your own login and no API key: the model proposes operations, you click Apply. Experimental and much clumsier than the chat sidebar; check the chat site's terms of service first. See <a href="#web-chat">Chat in a web page</a>.</td></tr>
         <tr><td><strong>Vector PDF panels (PyMuPDF)…</strong></td><td>Says whether PDF files can be kept as vector panels and offers to install PyMuPDF (AGPL, so it is not in the standalone apps); without it, PDF panels are rendered at 600 dpi.</td></tr>
       </table>
     </div>
@@ -1059,7 +1059,14 @@
     </p>
     <h3 id="web-chat">Chat in a web page</h3>
     <p>
-      <strong>Tools → Chat in a web page (Le Chat, Emmy, ChatGPT…)…</strong> (or <code>--web-chat</code>)
+      <strong>Experimental, not recommended: a last resort.</strong> Use the
+      <a href="#chat">chat sidebar</a> (Tools → Chat sidebar, with an API key, a local model or LM
+      Studio) whenever you can: it works far better. Use the web page only if really nothing else is
+      possible, and before using it, make sure it respects the terms of service of the chat site
+      and your institution's rules (PyFigures types into the page and, with Automatic, sends messages for you).
+    </p>
+    <p>
+      <strong>Tools → Chat in a web page (experimental, not recommended)…</strong> (or <code>--web-chat</code>)
       docks an online chat page beside the figure instead of the chat sidebar: no API key, you log in on
       the page as in your browser (the login is kept for next time). Choose Mistral Le Chat, ChatGPT,
       Claude or Gemini in the address list, or type the address of another chat page (your institute's,
