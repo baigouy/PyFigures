@@ -104,13 +104,18 @@ jobs:
         shell: bash
         run: bash .github/scripts/pip_install_retry.sh ".[video,zarr]"
 
-      # the web chat app: Qt WebEngine of the same Qt version as PyQt6
+      # the web chat app: Qt WebEngine of the same Qt version as PyQt6. A new
+      # PyQt6 often comes out before its WebEngine (PyQt6 6.12 had none yet):
+      # then PyQt6 goes back to the newest version that has one.
       - name: Qt WebEngine (web chat app)
         if: matrix.web_chat == '1'
         shell: bash
         run: |
-          MM=$(python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; print('.'.join(v.split('.')[:2]))")
-          pip install "PyQt6-WebEngine==$MM.*"
+          MINOR=$(python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; print(v.split('.')[1])")
+          for m in $(seq "$MINOR" -1 4); do
+            if pip install "PyQt6==6.$m.*" "PyQt6-WebEngine==6.$m.*"; then break; fi
+            echo "no PyQt6-WebEngine 6.$m, trying 6.$((m-1))"
+          done
           python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; import PyQt6.QtWebEngineWidgets; print('PyQt6', v, 'with WebEngine')"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
