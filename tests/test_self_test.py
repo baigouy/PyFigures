@@ -33,7 +33,7 @@ def test_self_test_passes_without_pymupdf(qapp, tmp_path, monkeypatch):
     status = self_test.run(str(out))
     report = json.loads(out.read_text(encoding="utf-8"))
     assert status == 0, report
-    assert report["ok"] and set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat"}
+    assert report["ok"] and set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine"}
     assert "pypdfium2" in report["checks"]["pdf_panels"]
 
 
@@ -126,7 +126,7 @@ def test_command_line_flag(tmp_path):
                        env=_child_env(), cwd=ROOT, capture_output=True, text=True, timeout=300)
     report = json.loads(out.read_text(encoding="utf-8"))
     assert p.returncode == (0 if report["ok"] else 1), (p.returncode, report, p.stderr[-3000:])
-    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat"}, report
+    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine"}, report
 
 
 def test_live_mcp_flag_serves_the_tools(tmp_path):

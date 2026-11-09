@@ -116,12 +116,46 @@ def _check_chat(tmp):
     return f"ok (qtpy-ai-sidecar {importlib.metadata.version('qtpy-ai-sidecar')}, {store}, {len(listed)} MCP tools)"
 
 
+def _check_web_engine():
+    """The 'PyFigures Web Chat' app must bundle Qt WebEngine and its helper
+    process: a page is loaded and its text read back. The other apps leave it
+    out (the web chat then works through the clipboard)."""
+    from pyfigures.assistant.web_chat import is_web_chat_app
+    required = getattr(sys, "frozen", False) and is_web_chat_app(sys.executable)
+    try:
+        from qtpy.QtWebEngineWidgets import QWebEngineView
+    except Exception as e:
+        assert not required, f"Qt WebEngine missing: {e}"
+        return "ok (not bundled: web chat in clipboard mode)"
+    from qtpy.QtCore import QEventLoop, QTimer
+    view = QWebEngineView()
+    loop = QEventLoop()
+    state = {}
+    view.loadFinished.connect(lambda ok: (state.update(loaded=ok), loop.quit()))
+    QTimer.singleShot(120000, loop.quit)
+    view.setHtml("<html><body>pyfigures web engine</body></html>")
+    loop.exec()
+    assert state.get("loaded"), "the page did not load (helper process?)"
+    view.page().runJavaScript("document.body.innerText", 0,
+                              lambda text: (state.update(text=text), loop.quit()))
+    QTimer.singleShot(60000, loop.quit)
+    loop.exec()
+    assert state.get("text") == "pyfigures web engine", f"page text {state.get('text')!r}"
+    view.deleteLater()
+    return "ok (Qt WebEngine loads a page)"
+
+
 CHECKS = {"qt_svg": _check_qt_svg, "pdf_panels": _check_pdf_panels,
-          "video": _check_video, "zarr": _check_zarr, "chat": _check_chat}
+          "video": _check_video, "zarr": _check_zarr, "chat": _check_chat,
+          "web_engine": _check_web_engine}
 
 
 def run(report_path):
+    from qtpy.QtCore import QCoreApplication, Qt
     from qtpy.QtWidgets import QApplication
+    if QApplication.instance() is None:
+        # Qt WebEngine (web_engine check) is imported after the QApplication
+        QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication.instance() or QApplication(["pyfigures-self-test"])
     results = {}
     with tempfile.TemporaryDirectory() as tmp:

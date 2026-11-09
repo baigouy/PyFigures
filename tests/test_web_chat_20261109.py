@@ -278,6 +278,22 @@ def test_automatic_mode_starts_by_itself_once_the_chat_box_is_there(qapp, gui, r
     assert not panel.started and len(typed) == 1
 
 
+def test_the_web_chat_app_is_told_apart_by_its_name():
+    # "PyFigures Web Chat" (pyfigures.spec with PYFIGURES_WEB_CHAT=1) opens with the web chat
+    w = web_chat.is_web_chat_app
+    assert w(r"C:\Apps\PyFigures Web Chat\PyFigures Web Chat.exe")
+    assert w("/Applications/PyFigures Web Chat.app/Contents/MacOS/PyFigures Web Chat")
+    assert not w(r"C:\Apps\PyFigures\PyFigures.exe") and not w("PyFigures Album.exe")
+    assert not w("PyFigures MCP.exe")
+
+
+def test_self_test_reports_the_web_engine(qapp):
+    # optional in pip installs and the plain apps; required (by name) in the web chat app
+    from pyfigures import self_test
+    assert "web_engine" in self_test.CHECKS
+    assert self_test._check_web_engine().startswith("ok")
+
+
 def test_launch_flag_docks_the_web_chat(qapp, gui, runtime, monkeypatch):  # noqa: F811
     from pyfigures.assistant import launch
     import pyfigures.gui.web_chat_panel as wcp

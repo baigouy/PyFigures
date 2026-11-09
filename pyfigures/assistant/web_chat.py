@@ -35,6 +35,15 @@ _BLOCK = re.compile(r'(?<![A-Z-])' + re.escape(BEGIN) + r'\s*(.*?)\s*' + re.esca
 # look-ups: change nothing, so they may run without a click
 READ_ONLY = frozenset({'inspect_figure', 'preview_figure', 'list_pyfigures_categories', 'find_pyfigures_tools'})
 
+def is_web_chat_app(executable):
+    """The 'PyFigures Web Chat' standalone app (pyfigures.spec with
+    PYFIGURES_WEB_CHAT=1: Qt WebEngine bundled, opens with the web chat),
+    told apart from the other apps by its executable's name."""
+    import os
+    name = os.path.basename(executable).lower().replace('_', ' ').replace('-', ' ')
+    return 'web chat' in name or 'webchat' in name
+
+
 # chat pages offered in the panel; any other address can be typed (and is remembered)
 PRESETS = (
     # the login page first: in Qt WebEngine 6.4 (Chrome 102) the terms dialog

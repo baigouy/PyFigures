@@ -16,7 +16,13 @@ PyFigures runs them on the open figure.
 
 ## 1. Install (once)
 
-You need Python 3.10 or newer. In a new environment:
+**Without Python:** download the **PyFigures Web Chat** app from the
+[releases page](https://github.com/baigouy/PyFigures/releases)
+(`PyFigures-WebChat-Windows.zip`, `PyFigures-WebChat-macOS-*.dmg`). It opens
+with the web chat already docked; skip to step 3. (The plain PyFigures apps
+leave the web page out: there the web chat only works through the clipboard.)
+
+**With Python** (3.10 or newer), in a new environment:
 
 ```bash
 pip install -U pyfigures PyQt6-WebEngine

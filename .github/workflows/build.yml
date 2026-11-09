@@ -14,19 +14,44 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            app_name: PyFigures
             artifact_name: PyFigures-Windows
             artifact_path: PyFigures-Windows.zip
           - os: macos-15-intel    # Intel x86_64 (macos-13 runners were retired in 2025)
+            app_name: PyFigures
             artifact_name: PyFigures-macOS-Intel
             artifact_path: PyFigures-macOS-Intel.dmg
           - os: macos-latest      # Apple Silicon (arm64)
+            app_name: PyFigures
             artifact_name: PyFigures-macOS-AppleSilicon
             artifact_path: PyFigures-macOS-AppleSilicon.dmg
           # the oldest supported Ubuntu: the app runs on Linux systems with this
           # glibc (2.35) or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+)
           - os: ubuntu-22.04
+            app_name: PyFigures
             artifact_name: PyFigures-Linux
             artifact_path: PyFigures-Linux-x86_64.*
+          # "PyFigures Web Chat": the same app with Qt WebEngine bundled, opening
+          # with Tools > Chat in a web page (experimental, a last resort)
+          - os: windows-latest
+            web_chat: '1'
+            app_name: PyFigures Web Chat
+            artifact_name: PyFigures-WebChat-Windows
+            artifact_path: PyFigures-WebChat-Windows.zip
+          - os: macos-15-intel
+            web_chat: '1'
+            app_name: PyFigures Web Chat
+            artifact_name: PyFigures-WebChat-macOS-Intel
+            artifact_path: PyFigures-WebChat-macOS-Intel.dmg
+          - os: macos-latest
+            web_chat: '1'
+            app_name: PyFigures Web Chat
+            artifact_name: PyFigures-WebChat-macOS-AppleSilicon
+            artifact_path: PyFigures-WebChat-macOS-AppleSilicon.dmg
+
+    env:
+      PYFIGURES_WEB_CHAT: ${{ matrix.web_chat || '0' }}
+      APP_NAME: ${{ matrix.app_name }}
 
     runs-on: ${{ matrix.os }}
 
@@ -61,6 +86,15 @@ jobs:
         shell: bash
         run: bash .github/scripts/pip_install_retry.sh ".[video,zarr]"
 
+      # the web chat app: Qt WebEngine of the same Qt version as PyQt6
+      - name: Qt WebEngine (web chat app)
+        if: matrix.web_chat == '1'
+        shell: bash
+        run: |
+          MM=$(python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; print('.'.join(v.split('.')[:2]))")
+          pip install "PyQt6-WebEngine==$MM.*"
+          python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; import PyQt6.QtWebEngineWidgets; print('PyQt6', v, 'with WebEngine')"
+
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the
       # corresponding source is attached to the release (see the release job).
@@ -79,9 +113,9 @@ jobs:
         shell: bash
         run: |
           case "$RUNNER_OS" in
-            Windows) APP="dist/PyFigures/PyFigures.exe" ;;
-            macOS) APP="dist/PyFigures.app/Contents/MacOS/PyFigures" ;;
-            *) APP="dist/PyFigures/PyFigures" ;;
+            Windows) APP="dist/$APP_NAME/$APP_NAME.exe" ;;
+            macOS) APP="dist/$APP_NAME.app/Contents/MacOS/$APP_NAME" ;;
+            *) APP="dist/$APP_NAME/$APP_NAME" ;;
           esac
           QT_QPA_PLATFORM=offscreen "$APP" --self-test self_test.json || { cat self_test.json; exit 1; }
           cat self_test.json
@@ -89,7 +123,7 @@ jobs:
       - name: Licence files next to the executable too (Windows, Linux)
         if: runner.os != 'macOS'
         shell: bash
-        run: cp third_party/THIRD_PARTY_LICENSES.txt third_party/SOURCES.md dist/PyFigures/
+        run: cp third_party/THIRD_PARTY_LICENSES.txt third_party/SOURCES.md "dist/$APP_NAME/"
 
       - name: Upload the source manifest
         uses: actions/upload-artifact@v4
@@ -104,7 +138,7 @@ jobs:
       - name: Package (Windows — zip)
         if: runner.os == 'Windows'
         shell: powershell
-        run: Compress-Archive -Path dist\PyFigures -DestinationPath PyFigures-Windows.zip
+        run: Compress-Archive -Path "dist\$env:APP_NAME" -DestinationPath ${{ matrix.artifact_path }}
 
       # -----------------------------------------------------------------------
       # Package — Linux (portable .tar.gz + AppImage)
@@ -134,12 +168,26 @@ jobs:
       # PyFigures.app --album / --poster (on Windows they are "PyFigures Album.exe"
       # and "PyFigures Poster.exe", built by pyfigures.spec)
       - name: Album and poster launchers (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && matrix.web_chat != '1'
         run: |
           bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
 
+      - name: Package (macOS — dmg, web chat app)
+        if: runner.os == 'macOS' && matrix.web_chat == '1'
+        run: |
+          mkdir dmg_src
+          cp -R "dist/$APP_NAME.app" dmg_src/
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-size 600 300 \
+            --icon-size 90 \
+            --icon "$APP_NAME.app" 150 140 \
+            --app-drop-link 450 140 \
+            ${{ matrix.artifact_path }} \
+            dmg_src
+
       - name: Package (macOS — dmg)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && matrix.web_chat != '1'
         run: |
           mkdir dmg_src
           cp -R dist/PyFigures.app "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
@@ -205,4 +253,6 @@ jobs:
             corresponding-source/*.tar
           generate_release_notes: true
           body: |
+            **PyFigures Web Chat** (`PyFigures-WebChat-*`): the same app with Qt WebEngine bundled, opening with the chat web page docked beside the figure (Tools → Chat in a web page). Experimental and not recommended: a last resort when the chat sidebar (API key or local model) cannot be used. Check the chat site's terms of service and your institution's rules first. See docs/WEB_CHAT_TUTORIAL.md.
+
             The executables are distributed under the GNU GPL v3 (they include PyQt6, Qt and FFmpeg with x264/x265); PyFigures' own source code is BSD-2-Clause. Licence texts are inside each app (Help → About → Third-party licences). The complete corresponding source of everything bundled is attached below (`corresponding-source-*.tar`), together with this repository's source code.

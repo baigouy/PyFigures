@@ -176,7 +176,8 @@ def _python_components():
             continue
         seen.add(name.lower())
         version = dist.version
-        if name.lower() == "pyqt6-qt6":
+        # PyQt6-WebEngine-Qt6 (the web chat build): Qt WebEngine, also in qt-everywhere
+        if name.lower() in ("pyqt6-qt6", "pyqt6-webengine-qt6"):
             parts = version.split(".")
             v = ".".join(parts[:3])
             url = QT_SOURCE.format(mm=".".join(parts[:2]), v=v)

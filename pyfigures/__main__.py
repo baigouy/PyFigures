@@ -341,6 +341,10 @@ if __name__ == '__main__':
         code = run_self_test(args[0] if args else 'pyfigures_self_test.json')
         sys.stdout.flush()
         os._exit(code)
+    from pyfigures.assistant.web_chat import is_web_chat_app
+    if (getattr(sys, 'frozen', False) and is_web_chat_app(sys.executable)
+            and '--web-chat' not in sys.argv and not requested_tool(sys.argv[1:], '')):
+        sys.argv.append('--web-chat')     # the "PyFigures Web Chat" app opens with the web chat
     tool = requested_tool(sys.argv[1:], sys.executable if getattr(sys, 'frozen', False) else '')
     if tool is not None:
         from pyfigures.poster.__main__ import run_poster_designer

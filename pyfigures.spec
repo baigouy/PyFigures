@@ -70,6 +70,14 @@ hiddenimports += collect_submodules('httpx')
 hiddenimports += collect_submodules('platformdirs')
 datas += collect_data_files('pypdfium2_raw')         # version.json
 binaries = collect_dynamic_libs('pypdfium2_raw')
+# PYFIGURES_WEB_CHAT=1: the "PyFigures Web Chat" app, the same program with Qt
+# WebEngine bundled (the web chat page docked in the window; about 150-200 MB
+# more). Its name makes it open with the web chat (pyfigures/__main__.py).
+WEB_CHAT = os.environ.get('PYFIGURES_WEB_CHAT') == '1'
+APP_NAME = 'PyFigures Web Chat' if WEB_CHAT else 'PyFigures'
+if WEB_CHAT:
+    hiddenimports += ['PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'PyQt6.QtWebChannel',
+                      'PyQt6.QtNetwork', 'qtpy.QtWebEngineWidgets', 'qtpy.QtWebEngineCore']
 hiddenimports += [
     # PyQt6 / Qt
     'PyQt6',
@@ -153,7 +161,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='PyFigures',
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -176,7 +184,7 @@ exe = EXE(
 # --poster, so the whole app isn't shipped three times.
 extra_exes = []
 for _launcher in ('PyFigures Album', 'PyFigures Poster'):
-    if sys.platform != 'win32':
+    if sys.platform != 'win32' or WEB_CHAT:     # the web chat app is the figure editor only
         break
     extra_exes.append(EXE(
         pyz,
@@ -229,7 +237,7 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='PyFigures',
+    name=APP_NAME,
 )
 
 # ---------------------------------------------------------------------------
@@ -238,9 +246,9 @@ coll = COLLECT(
 if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
-        name='PyFigures.app',
+        name=APP_NAME + '.app',
         icon=_icon('pyfigures'),
-        bundle_identifier='com.aigouy.pyfigures',
+        bundle_identifier='com.aigouy.pyfigures.webchat' if WEB_CHAT else 'com.aigouy.pyfigures',
         info_plist={
             'NSHighResolutionCapable': True,
             'NSRequiresAquaSystemAppearance': False,  # allow dark mode
