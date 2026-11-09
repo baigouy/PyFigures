@@ -150,7 +150,13 @@ def _check_web_engine():
     QTimer.singleShot(60000, loop.quit)
     loop.exec()
     assert state.get("text") == "pyfigures web engine", f"page text {state.get('text')!r}"
+    # the page must be gone before Qt releases the WebEngine profile at exit,
+    # or the app crashes on quitting ("WebEnginePage still not deleted")
+    from qtpy.QtCore import QCoreApplication, QEvent
+    view.close()
     view.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QCoreApplication.processEvents()
     return "ok (Qt WebEngine loads a page)"
 
 
@@ -177,5 +183,7 @@ def run(report_path):
     report = {"ok": ok, "frozen": bool(getattr(sys, "frozen", False)), "checks": results}
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
+    # destroyed here, not left to os._exit: with Qt WebEngine loaded, quitting
+    # with a live QApplication crashes on Windows (fatal 0x80000003)
     del app
     return 0 if ok else 1
