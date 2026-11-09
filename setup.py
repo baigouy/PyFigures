@@ -18,6 +18,11 @@ with open('README.md', 'r') as fh:
 # entries (pyfigures.assistant.ai_features_enabled). The mcp library stays:
 # PyFigures' own operations are written with it.
 NO_AI = os.environ.get('PYFIGURES_NO_AI') == '1'
+# pip building pyfigures-noai from its source archive (no variable set): the
+# archive's PKG-INFO says which distribution it is
+if os.path.isfile('PKG-INFO'):
+    with open('PKG-INFO', encoding='utf-8') as _f:
+        NO_AI = NO_AI or any(line.strip() == 'Name: pyfigures-noai' for line in _f)
 if NO_AI:
     long_description = ('**PyFigures without AI**: the same program as `pyfigures`, without the chat '
                         'sidebar and with no chat or MCP entries. Install either `pyfigures` or '
