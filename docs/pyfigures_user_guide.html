@@ -1082,7 +1082,9 @@
       first request carries the instructions and the figure by itself, no Start needed. With
       <strong>Automatic</strong> ticked, PyFigures then applies every operation the model asks for and
       sends the results itself, round after round, until the model answers without operations (at most 20
-      rounds per request; <strong>Stop</strong> pauses it at once, and Ctrl+Z undoes each change). Off by
+      rounds per request; <strong>Stop</strong> pauses it at once, and Ctrl+Z undoes each change). It also
+      does the Start step by itself: as soon as the chat page shows its message box (once you are signed
+      in), the instructions and the figure are sent, once per conversation. Off by
       default: automatic sending is scripted use of the site, which some institutions' rules or a site's
       terms do not allow. A chat in "agent" or "code" mode (Mistral Vibe's code sessions, for example) has
       tools of its own and tends to use them instead of writing the block; its plain chat mode works

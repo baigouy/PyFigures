@@ -227,6 +227,57 @@ def test_automatic_mode_applies_without_a_click(qapp, gui, runtime, tmp_path, mo
             settings.setValue("automatic", saved)
 
 
+def test_automatic_mode_starts_by_itself_once_the_chat_box_is_there(qapp, gui, runtime, tmp_path,  # noqa: F811
+                                                                     monkeypatch):
+    # with Automatic ticked, the instructions and the figure go to the chat as
+    # soon as the page shows its box (not on a sign-in page), once per conversation
+    from qtpy.QtWidgets import QFrame
+    from pyfigures.gui import web_chat_panel as wcp
+    monkeypatch.setattr(wcp.QDesktopServices, "openUrl", lambda *a: True)
+    typed, page_state = [], {"box": False}
+
+    class FakePage:
+        def runJavaScript(self, js, _world, callback):
+            if js == wcp._HAS_BOX_JS:
+                callback(page_state["box"])
+            elif js.startswith(wcp._INSERT_JS.split("%s")[0]):
+                typed.append(js)
+                callback("textarea")
+            else:
+                callback("clicked")
+
+    class FakeView(QFrame):
+        def page(self):
+            return FakePage()
+
+        def setUrl(self, _url):
+            pass
+
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path, channels=3), append=False)
+    panel = g.open_web_chat(use_web=False).widget()
+    panel.view = FakeView(panel)
+    panel.unchanged_scans = 1                     # the page has settled
+    panel._auto_start()
+    assert not panel.started and not typed        # Automatic off: nothing
+    panel.automatic.setChecked(True)
+    panel._auto_start()
+    assert not panel.started and not typed        # a sign-in page: no chat box yet
+    page_state["box"] = True
+    panel._auto_start()
+    _wait(qapp, lambda: not panel.busy and typed)
+    assert panel.started and "panel_references" in typed[0]
+    assert "sent" in panel.status.text()          # pressed Send by itself
+    panel._auto_start()
+    _wait(qapp, lambda: not panel.busy)
+    assert len(typed) == 1                        # once per conversation
+    # a new page is a new conversation: it starts again, unless stopped
+    panel.go()
+    panel.stop()
+    panel._auto_start()
+    assert not panel.started and len(typed) == 1
+
+
 def test_launch_flag_docks_the_web_chat(qapp, gui, runtime, monkeypatch):  # noqa: F811
     from pyfigures.assistant import launch
     import pyfigures.gui.web_chat_panel as wcp

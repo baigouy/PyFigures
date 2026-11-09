@@ -98,6 +98,14 @@ _INSERT_JS = r"""
 
 _TEXT_JS = "document.body ? document.body.innerText : ''"
 
+# The page has a chat box (not a sign-in page: those use <input>s)
+_HAS_BOX_JS = r"""
+(function(){
+  function visible(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden';}
+  return Array.prototype.slice.call(document.querySelectorAll('textarea,[contenteditable="true"],[contenteditable=""],[contenteditable="plaintext-only"]')).some(visible);
+})()
+"""
+
 
 class _Relay(QObject):
     """Hands a worker thread's result to the Qt thread."""
@@ -339,7 +347,22 @@ class WebChatPanel(QFrame):
             self.read_text(text, baseline)
             if isinstance(text, str):
                 self._idle_check(text)
+                self._auto_start()
         self.view.page().runJavaScript(_TEXT_JS, 0, got)
+
+    def _auto_start(self):
+        """Automatic mode: once the chat page is there (signed in, its box
+        shown, the page settled), Start runs and is sent by itself, once per
+        conversation."""
+        if (self.view is None or self.started or self.busy or self.stopped or not self.automatic.isChecked()
+                or self.unchanged_scans < 1):
+            return
+
+        def has_box(found):
+            if found is True and not (self.started or self.busy or self.stopped) and self.automatic.isChecked():
+                self.log('auto start', self.url())
+                self.start(send=True)
+        self.view.page().runJavaScript(_HAS_BOX_JS, 0, has_box)
 
     def _automatic_toggled(self, on):
         self.settings.setValue('automatic', on)
@@ -422,21 +445,24 @@ class WebChatPanel(QFrame):
     def _automatic(self):
         return self.automatic.isChecked() and self.rounds_left > 0
 
-    def start(self, request=None):
+    def start(self, request=None, send=None):
         """The instructions and the figure into the chat box (sent, with
-        *request* after them, when the request comes from the panel)."""
+        *request* after them, when the request comes from the panel; sent
+        alone with *send*, the automatic start)."""
         if self.busy:
             return
+        send = bool(request) if send is None else send
+        self.started = True          # not twice while the figure is read
         self.say('Reading the figure…')
 
         def done(value):
             self.busy = False
             if isinstance(value, Exception):
+                self.started = False
                 self.say(f'Could not read the figure: {value}')
             else:
-                self.started = True
                 self.write_to_chat(value, 'The instructions and the figure' + (' with your request' if request else ''),
-                                   send=bool(request))
+                                   send=send)
             self._next()
         self._run(self.runner.first_prompt, done, request)
 
