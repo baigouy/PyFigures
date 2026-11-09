@@ -66,9 +66,11 @@ def offer_video_support(parent, need="read"):
     finally:
         QApplication.restoreOverrideCursor()
     if not ok or not _satisfied(need):
-        QMessageBox.warning(parent, "Video support",
-                            "PyAV could not be installed:\n" + msg
-                            + "\n\nYou can install it yourself with:  pip install av")
+        from pyfigures.gui.command_box import show_command
+        show_command(parent, "Video support",
+                     "PyAV could not be installed:\n" + msg
+                     + "\n\nYou can install it yourself with:  pip install av",
+                     "pip install av", warning=True)
         _declined.add(need)
         return False
     return True

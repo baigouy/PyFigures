@@ -167,10 +167,14 @@ def test_offer_once_per_session_and_dont_ask_again(offer, monkeypatch):
 
 def test_failed_install_says_how_to_do_it(offer, monkeypatch):
     P, answer, shown = offer
+    import pyfigures.gui.command_box as C
     monkeypatch.setattr(P, "install_pymupdf", lambda: (False, "no network"))
+    commands = []
+    monkeypatch.setattr(C, "show_command", lambda p, t, text, command, **k: (shown.append(text), commands.append(command)))
     answer("Install PyMuPDF")
     assert P.offer_pymupdf(None, "add") is False
     assert "no network" in shown[-1] and "pip install pymupdf" in shown[-1]
+    assert commands == ["pip install pymupdf"]     # copyable with a button
 
 
 def test_failed_install_in_a_standalone_app_does_not_say_pip(offer, monkeypatch):

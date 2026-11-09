@@ -192,10 +192,12 @@ def test_offer_failed_install_explains(offer, monkeypatch):
     V, state = offer
     monkeypatch.setattr(V, "install_pyav", lambda: (False, "no network"))
     monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.Yes))
+    import pyfigures.gui.command_box as C
     shown = {}
-    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda p, t, m: shown.update(m=m)))
+    monkeypatch.setattr(C, "show_command", lambda p, t, m, command, **k: shown.update(m=m, command=command))
     assert V.offer_video_support(None, "h264") is False
     assert "no network" in shown["m"] and "pip install av" in shown["m"]
+    assert shown["command"] == "pip install av"     # copyable with a button
 
 
 def test_install_pyav_in_a_frozen_app(monkeypatch):

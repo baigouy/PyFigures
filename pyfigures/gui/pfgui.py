@@ -6277,13 +6277,16 @@ class EZFIG_GUI(QMainWindow):
         if not sidecar_available():
             # installed with PyFigures and bundled in the apps: only a broken or
             # hand-trimmed install gets here
-            QMessageBox.information(self, 'Chat sidebar',
-                                    "The chat sidebar's package, qtpy-ai-sidecar, is missing from this "
-                                    "installation. Reinstall it with\n\n"
-                                    "    pip install -U qtpy-ai-sidecar\n\n"
-                                    "(or download the standalone app again), then choose this entry "
-                                    "again. MCP clients (Claude, LM Studio…) work without it: "
-                                    "Tools → Share the open figure with the MCP server.")
+            from pyfigures.gui.command_box import show_command
+            show_command(self, 'Chat sidebar',
+                         "The chat sidebar's package, qtpy-ai-sidecar, is missing from this "
+                         "installation. Reinstall it with\n\n"
+                         "    pip install -U qtpy-ai-sidecar\n\n"
+                         "(\"Copy the command\" puts it on the clipboard; or download the "
+                         "standalone app again), then choose this entry again. MCP clients "
+                         "(Claude, LM Studio…) work without it: "
+                         "Tools → Share the open figure with the MCP server.",
+                         'pip install -U qtpy-ai-sidecar')
             return None
         if not launch.is_sharing(self) and not self._confirm_share_handover():
             return None
