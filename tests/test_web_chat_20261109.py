@@ -54,6 +54,12 @@ def test_the_instructions_contain_no_block_of_their_own():
     assert web_chat.BEGIN in prompt and web_chat.END in prompt and "inspect_figure" in prompt
     # once sent, the prompt is on the page: its example must not become a request
     assert web_chat.parse_blocks(prompt) == []
+    # it says the chat's own tools cannot reach PyFigures (Vibe's code session tried them)
+    assert "do not use any tool" in prompt
+    # nor do the results written back, which remind the model of the block every time
+    call = {"tool": "inspect_figure", "arguments": {}}
+    results = web_chat.results_message([(call, True, '{"panels": 2}')])
+    assert web_chat.parse_blocks(results) == [] and "marker lines" in results
 
 
 def _wait(qapp, condition, timeout=60):
@@ -133,6 +139,53 @@ def test_a_round_with_the_figure(qapp, gui, runtime, tmp_path, monkeypatch):  # 
     assert "-> ERROR" in clip.text() and "Not run" in clip.text()
     assert [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0].LUTs[1] == "YELLOW"
     assert isinstance(g, EZFIG_GUI)
+
+
+def test_automatic_mode_applies_without_a_click(qapp, gui, runtime, tmp_path, monkeypatch):  # noqa: F811
+    from qtpy.QtWidgets import QApplication
+    from qtpy.QtCore import QSettings
+    from pyfigures.gui import web_chat_panel as wcp
+    from pyfigures.assistant.partner_gui import panels
+    monkeypatch.setattr(wcp.QDesktopServices, "openUrl", lambda *a: True)
+    settings = QSettings("PyFigures", "web_chat")
+    saved = settings.value("automatic")
+    try:
+        g = gui(shareable=True)
+        g.reload_state(_figure(tmp_path, channels=3), append=False)
+        panel = g.open_web_chat(use_web=False).widget()
+        panel.automatic.setChecked(True)
+        clip = QApplication.clipboard()
+        # the first request from the panel carries the instructions and the figure
+        panel.ask_edit.setText("make channel 2 yellow in a")
+        panel.ask()
+        _wait(qapp, lambda: not panel.busy)
+        assert panel.started and "My request: make channel 2 yellow in a" in clip.text()
+        assert "panel_references" in clip.text() and panel.rounds_left == wcp.MAX_ROUNDS
+        # an edit is applied with no click
+        panel.read_text(_reply([{"tool": "set_lut", "arguments": {"group_path": [0], "image_index": 0,
+                                                                  "luts": [None, "YELLOW", None]}}]))
+        _wait(qapp, lambda: not panel.busy and web_chat.RESULTS in clip.text())
+        assert [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0].LUTs[1] == "YELLOW"
+        assert panel.rounds_left == wcp.MAX_ROUNDS - 1
+        # the next request goes without the instructions again
+        panel.ask_edit.setText("now undo it")
+        panel.ask()
+        assert clip.text() == "now undo it"
+        # Stop: what comes next waits for a click
+        panel.stop()
+        panel.read_text(_reply([{"tool": "undo_redo", "arguments": {"action": "undo"}}]))
+        assert panel.pending and panel.apply_button.isEnabled()
+        assert [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0].LUTs[1] == "YELLOW"
+        # the round limit pauses it the same way
+        panel.stop()
+        panel.rounds_left = 0
+        panel.read_text(_reply([{"tool": "undo_redo", "arguments": {"action": "redo"}}]))
+        assert panel.pending and "Paused" in panel.status.text()
+    finally:
+        if saved is None:
+            settings.remove("automatic")
+        else:
+            settings.setValue("automatic", saved)
 
 
 def test_launch_flag_docks_the_web_chat(qapp, gui, runtime, monkeypatch):  # noqa: F811

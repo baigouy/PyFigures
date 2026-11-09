@@ -37,7 +37,11 @@ READ_ONLY = frozenset({'inspect_figure', 'preview_figure', 'list_pyfigures_categ
 
 # chat pages offered in the panel; any other address can be typed (and is remembered)
 PRESETS = (
-    ('Mistral Le Chat', 'https://chat.mistral.ai/chat'),
+    # the login page first: in Qt WebEngine 6.4 (Chrome 102) the terms dialog
+    # shown before it never closes ("Accept and continue" does nothing) and
+    # covers the page's own "Sign in"; once logged in it goes on to the chat
+    ('Mistral Vibe / Emmy', 'https://chat.mistral.ai/login?return_to=%2Fcode'),
+    ('Mistral Le Chat', 'https://chat.mistral.ai/login?return_to=%2Fchat'),
     ('ChatGPT', 'https://chatgpt.com/'),
     ('Claude', 'https://claude.ai/new'),
     ('Gemini', 'https://gemini.google.com/app'),
@@ -139,12 +143,16 @@ def parse_blocks(text, tool_names=None):
     return blocks
 
 
-def instructions_prompt(tools, server_instructions, state=None):
+def instructions_prompt(tools, server_instructions, state=None, request=None):
     """The first message: how to ask for operations, the operations, the
     figure as it is now. The user adds their request after it."""
     lines = [
         'You are helping me edit a scientific figure that is open in PyFigures on my computer. '
-        'You cannot call tools directly in this chat. Instead, when you want PyFigures to run operations, '
+        'IMPORTANT: in this conversation do not use any tool, sandbox, code execution, file or web access of '
+        'your own: PyFigures runs on my computer and you cannot reach it. Its only way in is the text block '
+        'described here, which I run for you. "Let me look at the figure" without such a block does nothing: '
+        'to look, put inspect_figure or preview_figure in a block. '
+        'So, when you want PyFigures to run operations, '
         'end your answer with a JSON list of calls between the two marker lines of this example '
         '(each marker alone on its line):',
         '',
@@ -173,7 +181,10 @@ def instructions_prompt(tools, server_instructions, state=None):
         lines.append('  arguments schema: ' + json.dumps(schema, ensure_ascii=False, separators=(',', ':')))
     if state is not None:
         lines += ['', 'The figure now (inspect_figure):', _truncate(json.dumps(state, ensure_ascii=False), 8000)]
-    lines += ['', 'Reply "Ready" and wait for my request.']
+    if request:
+        lines += ['', 'My request: ' + request.strip()]
+    else:
+        lines += ['', 'Reply "Ready" and wait for my request.']
     return '\n'.join(lines)
 
 
@@ -188,7 +199,10 @@ def results_message(outcomes):
     for i, (call, ok, text) in enumerate(outcomes, 1):
         lines.append(f'{i}. {describe_call(call)} -> {"OK" if ok else "ERROR"}')
         lines.append(_truncate(text, MAX_RESULT_CHARS))
-    lines.append('Continue with the next step, or tell me what changed if the request is done.')
+    # a reminder each time: models drift back to their own tools ("Let me look…") after a few turns.
+    # Never both marker words here: the page would show them as a block.
+    lines.append('Continue with the next step (operations only in a block between the two marker lines, as at the '
+                 'start; no tools of your own), or tell me what changed if the request is done.')
     return '\n'.join(lines)
 
 
@@ -246,7 +260,7 @@ class ToolRunner:
             return True, json.dumps(result, ensure_ascii=False), images
         return True, _content_text(result, images), images
 
-    def first_prompt(self):
+    def first_prompt(self, request=None):
         """The instructions message, with the figure as it is now."""
         ok, text, _ = self.call('inspect_figure', {})
         state = None
@@ -255,7 +269,7 @@ class ToolRunner:
                 state = json.loads(text)
             except ValueError:
                 state = text
-        return instructions_prompt(self.tools(), self.instructions(), state)
+        return instructions_prompt(self.tools(), self.instructions(), state, request)
 
     def run_block(self, block):
         """[(call, ok, text)] and the images, calls in order; stops at the

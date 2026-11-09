@@ -6,8 +6,11 @@ The user logs in on the page as in a browser (the login is kept), clicks
 adds a request and presses Send. The model's answers end with a
 PYFIGURES-CALLS block (pyfigures.assistant.web_chat); the panel finds it in
 the page text, shows it with Apply / Dismiss, runs it on the figure and puts
-the results into the chat box for the next Send. Nothing is ever sent by
-PyFigures: the user presses the page's Send button every time.
+the results into the chat box for the next Send. A request typed in the
+panel is sent from there (with the instructions the first time); with
+"Automatic" ticked (off by default) every operation is applied and the
+results are sent too, by a real Enter key press or the page's send button,
+up to MAX_ROUNDS rounds per request.
 
 Without Qt WebEngine (PyQt6-WebEngine not installed, or imported too late)
 the same panel works through the clipboard: the chat opens in the usual
@@ -16,16 +19,36 @@ browser, prompts and results are copied, replies are pasted back.
 from __future__ import annotations
 
 import json
-import os
+import re
 
 from qtpy.QtCore import QObject, QSettings, Qt, QTimer, QUrl, Signal
 from qtpy.QtGui import QDesktopServices, QImage
+from qtpy.QtCore import QEvent
+from qtpy.QtGui import QKeyEvent
 from qtpy.QtWidgets import (QApplication, QCheckBox, QComboBox, QDockWidget, QFrame, QHBoxLayout,
-                            QLabel, QPlainTextEdit, QPushButton, QVBoxLayout)
+                            QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout)
 
 from pyfigures.assistant import web_chat
 
 SCAN_MS = 1500
+MAX_ROUNDS = 20         # automatic apply-and-send rounds per request, then it waits for a click
+
+# The text is still in the chat box after Enter (a site that sends with a
+# button only): click the page's send button, found by its label.
+_SEND_BUTTON_JS = r"""
+(function(start){
+  function visible(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0;}
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('textarea,[contenteditable="true"],[contenteditable=""],[contenteditable="plaintext-only"]')).filter(visible);
+  var full=boxes.filter(function(b){return (b.value||b.innerText||'').indexOf(start)>=0;});
+  if(!full.length) return 'sent';
+  var buttons=Array.prototype.slice.call(document.querySelectorAll('button,[role="button"]')).filter(function(b){
+    var t=((b.getAttribute('aria-label')||'')+' '+(b.title||'')+' '+(b.getAttribute('data-testid')||'')+' '+(b.type||'')).toLowerCase();
+    return visible(b)&&!b.disabled&&/send|envoy|submit|soumettre/.test(t);});
+  if(!buttons.length) return 'no button';
+  buttons[buttons.length-1].click();
+  return 'clicked';
+})(%s)
+"""
 
 
 def web_engine():
@@ -93,6 +116,8 @@ class WebChatPanel(QFrame):
         self.busy = False
         self.last_image = None       # PNG bytes of the last preview
         self.baseline_next_scan = True
+        self.started = False         # the page's conversation has the instructions
+        self.rounds_left = 0         # automatic rounds left for the current request
         self.relay = _Relay(self)
         self.relay.arrived.connect(lambda callback, value: callback(value))
         self.settings = QSettings('PyFigures', 'web_chat')
@@ -149,6 +174,25 @@ class WebChatPanel(QFrame):
         buttons.addWidget(paste)
         layout.addLayout(buttons)
 
+        ask = QHBoxLayout()
+        self.ask_edit = QLineEdit(self)
+        self.ask_edit.setPlaceholderText('Your request, e.g. "make channel 2 yellow in a"')
+        self.ask_edit.setToolTip('Sent to the chat from here; the first one also gives it the instructions and '
+                                 'the figure (no need to click Start)')
+        self.ask_edit.returnPressed.connect(self.ask)
+        ask.addWidget(self.ask_edit, 1)
+        self.ask_button = QPushButton('Send', self)
+        self.ask_button.clicked.connect(lambda _c=False: self.ask())
+        ask.addWidget(self.ask_button)
+        layout.addLayout(ask)
+
+        self.automatic = QCheckBox(f'Automatic: apply every operation and send the results (up to {MAX_ROUNDS} '
+                                   'rounds per request)', self)
+        self.automatic.setToolTip('PyFigures presses Send on the page for you and applies what the model asks '
+                                  'for without asking (Ctrl+Z undoes each change). Stop pauses it.')
+        self.automatic.setChecked(self.settings.value('automatic', False, type=bool))
+        self.automatic.toggled.connect(lambda on: self.settings.setValue('automatic', on))
+        layout.addWidget(self.automatic)
         self.auto_lookups = QCheckBox('Run look-ups without asking (they change nothing)', self)
         self.auto_lookups.setChecked(self.settings.value('auto_lookups', True, type=bool))
         self.auto_lookups.toggled.connect(lambda on: self.settings.setValue('auto_lookups', on))
@@ -170,7 +214,10 @@ class WebChatPanel(QFrame):
         self.preview_button = QPushButton('Copy the last preview', self)
         self.preview_button.setToolTip('Copy the last figure preview to the clipboard, to paste it into the chat')
         self.preview_button.clicked.connect(lambda _c=False: self.copy_preview())
-        for b in (self.apply_button, self.dismiss_button, self.preview_button):
+        self.stop_button = QPushButton('Stop', self)
+        self.stop_button.setToolTip('Stop the automatic rounds and drop the operations waiting here')
+        self.stop_button.clicked.connect(lambda _c=False: self.stop())
+        for b in (self.apply_button, self.dismiss_button, self.stop_button, self.preview_button):
             actions.addWidget(b)
         layout.addLayout(actions)
         self.status = QLabel('', self)
@@ -189,6 +236,8 @@ class WebChatPanel(QFrame):
         # a named profile keeps cookies on disk: the login survives restarts
         self.profile = QWebEngineProfile('pyfigures-web-chat', self)
         self.profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
+        # plain Chrome to the sites: some refuse or change pages for "QtWebEngine/…"
+        self.profile.setHttpUserAgent(re.sub(r'\s*QtWebEngine/\S+', '', self.profile.httpUserAgent()))
         self.popups = []
         panel = self
 
@@ -232,27 +281,47 @@ class WebChatPanel(QFrame):
         urls = [u for u in self._remembered() if u != url]
         if url not in dict(web_chat.PRESETS).values():
             self.settings.setValue('urls', json.dumps([url] + urls[:9]))
+        self.started = False         # a new page: a new conversation
         if self.view is not None:
             self.baseline_next_scan = True
             self.view.setUrl(QUrl(url))
         else:
             QDesktopServices.openUrl(QUrl(url))
 
-    def write_to_chat(self, text, what):
+    def write_to_chat(self, text, what, send=False):
         """Put *text* into the chat box (and on the clipboard, in case the
-        page's box was not found); the user presses Send."""
+        page's box was not found); with *send*, press Send for the user."""
         QApplication.clipboard().setText(text)
         if self.view is None:
             self.say(f'{what} copied: paste it into the chat (Ctrl+V) and press Send.')
             return
 
         def written(how):
-            if how in ('textarea', 'editable'):
-                self.say(f'{what} is in the chat box: press Send on the page.')
-            else:
+            if how not in ('textarea', 'editable'):
                 self.say(f'{what} could not be typed into this page: click in its message box and paste (Ctrl+V); '
                          'it is on the clipboard.')
+            elif send:
+                self.say(f'{what} sent; waiting for the answer…')
+                QTimer.singleShot(250, lambda: self.press_send(text))
+            else:
+                self.say(f'{what} is in the chat box: press Send on the page.')
         self.view.page().runJavaScript(_INSERT_JS % json.dumps(text), 0, written)
+
+    def press_send(self, text):
+        """A real Enter in the page's box (what sends on most chat sites);
+        when the text is still there a moment later, its send button."""
+        self.view.setFocus()
+        target = self.view.focusProxy() or self.view
+        for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            QApplication.postEvent(target, QKeyEvent(kind, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier, '\r'))
+        start = text.strip()[:40]
+
+        def check():
+            def clicked(how):
+                if how == 'no button':
+                    self.say('Could not press Send on this page: press it yourself.')
+            self.view.page().runJavaScript(_SEND_BUTTON_JS % json.dumps(start), 0, clicked)
+        QTimer.singleShot(1500, check)
 
     # ---- reading answers --------------------------------------------------------
     def scan(self):
@@ -289,10 +358,17 @@ class WebChatPanel(QFrame):
             self._refresh()
             return
         block = self.pending[0]
+        if self._automatic():
+            self.rounds_left -= 1
+            self.apply()          # an unreadable block: apply sends the correction
+            return
         if block.error is None and block.read_only and self.auto_lookups.isChecked():
             self.apply()
             return
         self._refresh()
+        if self.automatic.isChecked() and self.rounds_left <= 0:
+            self.say(f'Paused after {MAX_ROUNDS} automatic rounds: Apply to go on, or Stop.')
+            return
         if block.error:
             self.say('The model\'s last request could not be read. Dismiss sends it a correction.')
         else:
@@ -304,21 +380,46 @@ class WebChatPanel(QFrame):
         self._refresh()
         web_chat.run_async(function, lambda value: self.relay.arrived.emit(done, value), *args)
 
-    def start(self):
+    def _automatic(self):
+        return self.automatic.isChecked() and self.rounds_left > 0
+
+    def start(self, request=None):
+        """The instructions and the figure into the chat box (sent, with
+        *request* after them, when the request comes from the panel)."""
         if self.busy:
             return
         self.say('Reading the figure…')
-        if self.view is not None:
-            self.baseline_next_scan = True
 
         def done(value):
             self.busy = False
             if isinstance(value, Exception):
                 self.say(f'Could not read the figure: {value}')
             else:
-                self.write_to_chat(value, 'The instructions and the figure')
+                self.started = True
+                self.write_to_chat(value, 'The instructions and the figure' + (' with your request' if request else ''),
+                                   send=bool(request))
             self._next()
-        self._run(self.runner.first_prompt, done)
+        self._run(self.runner.first_prompt, done, request)
+
+    def ask(self):
+        """The request typed in the panel, sent to the chat (with the
+        instructions the first time); in automatic mode the rounds that
+        follow need no click."""
+        request = self.ask_edit.text().strip()
+        if not request or self.busy:
+            return
+        self.ask_edit.clear()
+        self.rounds_left = MAX_ROUNDS
+        if not self.started:
+            self.start(request)
+        else:
+            self.write_to_chat(request, 'Your request', send=True)
+
+    def stop(self):
+        self.rounds_left = 0
+        self.pending.clear()
+        self._refresh()
+        self.say('Stopped. Nothing more is applied or sent until your next request.')
 
     def apply(self):
         if self.busy or not self.pending:
@@ -338,7 +439,8 @@ class WebChatPanel(QFrame):
                 outcomes, images = value
             if images:
                 self.last_image = images[-1]
-            self.write_to_chat(web_chat.results_message(outcomes), 'The results')
+            # sent by itself in automatic mode (the last round's results wait for the user)
+            self.write_to_chat(web_chat.results_message(outcomes), 'The results', send=self._automatic())
             self._next()
         self._run(self.runner.run_block, done, block)
 
@@ -351,7 +453,7 @@ class WebChatPanel(QFrame):
                     f'marker lines alone on their lines, a JSON list of {{"tool": …, "arguments": {{…}}}} between them.')
         else:
             text = f'{web_chat.RESULTS}: I did not run these operations. Ask me before trying something else.'
-        self.write_to_chat(text, 'The message')
+        self.write_to_chat(text, 'The message', send=bool(block.error) and self._automatic())
         self._next()
 
     def copy_preview(self):
@@ -370,6 +472,8 @@ class WebChatPanel(QFrame):
         self.apply_button.setEnabled(bool(block) and block.error is None and not self.busy)
         self.dismiss_button.setEnabled(bool(block) and not self.busy)
         self.start_button.setEnabled(not self.busy)
+        self.ask_button.setEnabled(not self.busy)
+        self.stop_button.setEnabled(bool(self.pending) or self.rounds_left > 0)
         self.preview_button.setEnabled(self.last_image is not None)
 
 
