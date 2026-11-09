@@ -45,9 +45,9 @@ def save_show_edit_hint(value):
 
 def load_chat_at_start():
     """Open the chat sidebar every time PyFigures starts. Until the user
-    chooses (View → Open the chat at start-up): on in the standalone apps
-    (the sidebar is bundled), except the web chat app, which opens with the
-    web page; off for pip installs."""
+    chooses (View → Open the chat at start-up): on (pip installs and the
+    standalone apps, which bundle the sidebar), except in the web chat app,
+    which opens with the web page."""
     return _s().value('ui/chat_at_start', chat_at_start_default(), type=bool)
 
 
@@ -55,7 +55,7 @@ def chat_at_start_default(frozen=None, executable=None):
     import sys
     frozen = getattr(sys, 'frozen', False) if frozen is None else frozen
     if not frozen:
-        return False
+        return True
     from pyfigures.assistant.web_chat import is_web_chat_app
     return not is_web_chat_app(sys.executable if executable is None else executable)
 

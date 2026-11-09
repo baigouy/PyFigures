@@ -287,13 +287,13 @@ def test_the_web_chat_app_is_told_apart_by_its_name():
     assert not w("PyFigures MCP.exe")
 
 
-def test_the_standalone_apps_open_the_chat_sidebar_by_default():
+def test_pyfigures_opens_the_chat_sidebar_by_default():
     # until the user unticks View > Open the chat at start-up
     from pyfigures.gui.user_prefs import chat_at_start_default as d
     assert d(frozen=True, executable=r"C:\Apps\PyFigures\PyFigures.exe")
     assert d(frozen=True, executable="/Applications/PyFigures.app/Contents/MacOS/PyFigures")
     assert not d(frozen=True, executable=r"C:\Apps\PyFigures Web Chat\PyFigures Web Chat.exe")
-    assert not d(frozen=False)      # pip installs: off
+    assert d(frozen=False)          # pip installs too
 
 
 def test_self_test_reports_the_web_engine(qapp):
