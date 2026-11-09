@@ -112,7 +112,7 @@ class WebChatPanel(QFrame):
         super().__init__(parent)
         self.window = window
         self.runner = web_chat.ToolRunner()
-        self.seen = set()            # blocks already shown, run or dismissed
+        self.seen = {}               # block text -> how many times the page showed it
         self.pending = []            # blocks waiting for Apply / Dismiss
         self.busy = False
         self.last_image = None       # PNG bytes of the last preview
@@ -174,7 +174,7 @@ class WebChatPanel(QFrame):
         buttons.addWidget(self.start_button)
         paste = QPushButton('Read a copied reply', self)
         paste.setToolTip('Look for PyFigures operations in an answer copied to the clipboard (clipboard mode)')
-        paste.clicked.connect(lambda _c=False: self.read_text(QApplication.clipboard().text(), baseline=False))
+        paste.clicked.connect(lambda _c=False: self.read_text(QApplication.clipboard().text(), page=False))
         buttons.addWidget(paste)
         layout.addLayout(buttons)
 
@@ -363,20 +363,27 @@ class WebChatPanel(QFrame):
                 and not self.pending and self.rounds_left < MAX_ROUNDS):
             self.rounds_left = MAX_ROUNDS
 
-    def read_text(self, text, baseline=False):
-        """New PYFIGURES-CALLS blocks in *text*. With *baseline*, the ones
-        already on a page just opened are only remembered (an old
-        conversation is not replayed)."""
+    def read_text(self, text, baseline=False, page=True):
+        """New PYFIGURES-CALLS blocks in *text*. A page is read again and
+        again, so a block is new when it appears MORE times than before (the
+        model may rightly ask for the same operations twice: counting
+        distinct texts skipped the repeat). With *baseline*, the blocks of a
+        page just opened are only counted (an old conversation is not
+        replayed). A copied reply (*page* False) is new as a whole."""
         if not isinstance(text, str):
             return
         found = 0
+        counts = {}
         for block in web_chat.parse_blocks(text):
-            if block.key in self.seen:
+            counts[block.key] = counts.get(block.key, 0) + 1
+            if page and counts[block.key] <= self.seen.get(block.key, 0):
                 continue
-            self.seen.add(block.key)
+            if page:
+                self.seen[block.key] = counts[block.key]
             if baseline:
                 continue
             found += 1
+            self.log('found', block.describe())
             self.pending.append(block)
         if found:
             self._next()
@@ -476,7 +483,9 @@ class WebChatPanel(QFrame):
             if images:
                 self.last_image = images[-1]
             # sent by itself in automatic mode (the last round's results wait for the user)
-            self.write_to_chat(web_chat.results_message(outcomes), 'The results', send=self._automatic())
+            message = web_chat.results_message(outcomes)
+            self.log('results', message)
+            self.write_to_chat(message, 'The results', send=self._automatic())
             self._next()
         self._run(self.runner.run_block, done, block)
 
@@ -499,6 +508,19 @@ class WebChatPanel(QFrame):
 
     def say(self, text):
         self.status.setText(text)
+        self.log('status', text)
+
+    def log(self, kind, text):
+        """What the panel did, in web_chat.log of the live folder (no page
+        text, no credentials: blocks found, statuses, results), to explain a
+        run that went wrong."""
+        try:
+            import time
+            from pyfigures.assistant import runtime_dir
+            with open(runtime_dir() / 'web_chat.log', 'a', encoding='utf-8') as f:
+                f.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")} {kind}: {text[:2000]}\n')
+        except OSError:
+            pass
 
     def _refresh(self):
         block = self.pending[0] if self.pending else None

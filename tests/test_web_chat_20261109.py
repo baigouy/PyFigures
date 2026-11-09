@@ -123,6 +123,13 @@ def test_a_round_with_the_figure(qapp, gui, runtime, tmp_path, monkeypatch):  # 
     # the same answer read again (the page is scanned repeatedly) is not asked twice
     panel.read_text(_reply(edit))
     assert len(panel.pending) == 1
+    # …but the model asking for the very same operations again later is (the
+    # page then shows the block twice): a repeat was skipped before
+    panel.read_text(_reply(edit) + "\nresults…\n" + _reply(edit))
+    assert len(panel.pending) == 2
+    panel.read_text(_reply(edit) + "\nresults…\n" + _reply(edit))
+    assert len(panel.pending) == 2
+    panel.pending.pop()
     clip.setText("")
     panel.apply()
     _wait(qapp, lambda: not panel.busy and clip.text())
