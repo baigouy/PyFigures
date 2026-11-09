@@ -31,7 +31,8 @@ from qtpy.QtWidgets import (QApplication, QCheckBox, QComboBox, QDockWidget, QFr
 from pyfigures.assistant import web_chat
 
 SCAN_MS = 1500
-MAX_ROUNDS = 20         # automatic apply-and-send rounds per request, then it waits for a click
+MAX_ROUNDS = 20         # automatic apply-and-send rounds in a row, then it waits for a click
+IDLE_SCANS = 4          # page unchanged this many scans (~6 s): the automatic run is over
 
 # The text is still in the chat box after Enter (a site that sends with a
 # button only): click the page's send button, found by its label.
@@ -117,7 +118,10 @@ class WebChatPanel(QFrame):
         self.last_image = None       # PNG bytes of the last preview
         self.baseline_next_scan = True
         self.started = False         # the page's conversation has the instructions
-        self.rounds_left = 0         # automatic rounds left for the current request
+        self.rounds_left = 0         # automatic rounds left before a pause (refilled when the chat is idle)
+        self.last_text = None        # the page text at the last scan, and since when it is unchanged
+        self.unchanged_scans = 0
+        self.stopped = False         # Stop clicked: no automatic run until the user resumes it
         self.relay = _Relay(self)
         self.relay.arrived.connect(lambda callback, value: callback(value))
         self.settings = QSettings('PyFigures', 'web_chat')
@@ -191,7 +195,9 @@ class WebChatPanel(QFrame):
         self.automatic.setToolTip('PyFigures presses Send on the page for you and applies what the model asks '
                                   'for without asking (Ctrl+Z undoes each change). Stop pauses it.')
         self.automatic.setChecked(self.settings.value('automatic', False, type=bool))
-        self.automatic.toggled.connect(lambda on: self.settings.setValue('automatic', on))
+        self.automatic.toggled.connect(self._automatic_toggled)
+        if self.automatic.isChecked():
+            self.rounds_left = MAX_ROUNDS
         layout.addWidget(self.automatic)
         self.auto_lookups = QCheckBox('Run look-ups without asking (they change nothing)', self)
         self.auto_lookups.setChecked(self.settings.value('auto_lookups', True, type=bool))
@@ -329,7 +335,33 @@ class WebChatPanel(QFrame):
             return
         baseline = self.baseline_next_scan
         self.baseline_next_scan = False
-        self.view.page().runJavaScript(_TEXT_JS, 0, lambda text: self.read_text(text, baseline))
+        def got(text):
+            self.read_text(text, baseline)
+            if isinstance(text, str):
+                self._idle_check(text)
+        self.view.page().runJavaScript(_TEXT_JS, 0, got)
+
+    def _automatic_toggled(self, on):
+        self.settings.setValue('automatic', on)
+        self.rounds_left = MAX_ROUNDS if on else 0
+        self.stopped = False
+        if on:
+            self._next()        # what waits for Apply now runs
+        else:
+            self._refresh()
+
+    def _idle_check(self, text):
+        """A conversation that stopped changing (the model answered without
+        operations) ends the automatic run: the next message, typed on the
+        page or in the panel, gets MAX_ROUNDS again. Only a model looping
+        on operations hits the limit."""
+        if text == self.last_text:
+            self.unchanged_scans += 1
+        else:
+            self.last_text, self.unchanged_scans = text, 0
+        if (self.automatic.isChecked() and not self.stopped and self.unchanged_scans >= IDLE_SCANS and not self.busy
+                and not self.pending and self.rounds_left < MAX_ROUNDS):
+            self.rounds_left = MAX_ROUNDS
 
     def read_text(self, text, baseline=False):
         """New PYFIGURES-CALLS blocks in *text*. With *baseline*, the ones
@@ -410,16 +442,20 @@ class WebChatPanel(QFrame):
             return
         self.ask_edit.clear()
         self.rounds_left = MAX_ROUNDS
+        self.stopped = False
         if not self.started:
             self.start(request)
         else:
             self.write_to_chat(request, 'Your request', send=True)
 
     def stop(self):
+        # paused until the next request from the panel, or until Automatic is ticked again
         self.rounds_left = 0
+        self.stopped = True
         self.pending.clear()
         self._refresh()
-        self.say('Stopped. Nothing more is applied or sent until your next request.')
+        self.say('Stopped. Nothing more runs by itself until you send a request from the panel or tick '
+                 'Automatic again.')
 
     def apply(self):
         if self.busy or not self.pending:

@@ -21,6 +21,19 @@ from pyfigures.assistant import web_chat
 from test_assistant_live import _figure, gui, runtime  # noqa: E402,F401  (fixtures)
 
 
+@pytest.fixture(autouse=True)
+def own_settings(monkeypatch):
+    """The panel's settings in a test-only store: the user's own choices
+    (Automatic ticked, their chat address) must neither change the tests nor
+    be changed by them."""
+    from qtpy.QtCore import QSettings
+    import pyfigures.gui.web_chat_panel as wcp
+    QSettings("PyFigures-tests", "web_chat").clear()
+    monkeypatch.setattr(wcp, "QSettings", lambda org, app: QSettings(org + "-tests", app))
+    yield
+    QSettings("PyFigures-tests", "web_chat").clear()
+
+
 def _reply(calls, before="Here is what I will do.", noise=""):
     return (f"{before}\n{web_chat.BEGIN}\n{noise}{json.dumps(calls)}\n{web_chat.END}\n")
 
@@ -147,7 +160,7 @@ def test_automatic_mode_applies_without_a_click(qapp, gui, runtime, tmp_path, mo
     from pyfigures.gui import web_chat_panel as wcp
     from pyfigures.assistant.partner_gui import panels
     monkeypatch.setattr(wcp.QDesktopServices, "openUrl", lambda *a: True)
-    settings = QSettings("PyFigures", "web_chat")
+    settings = QSettings("PyFigures-tests", "web_chat")
     saved = settings.value("automatic")
     try:
         g = gui(shareable=True)
@@ -178,9 +191,28 @@ def test_automatic_mode_applies_without_a_click(qapp, gui, runtime, tmp_path, mo
         assert [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)][0].LUTs[1] == "YELLOW"
         # the round limit pauses it the same way
         panel.stop()
+        panel.stopped = False
         panel.rounds_left = 0
         panel.read_text(_reply([{"tool": "undo_redo", "arguments": {"action": "redo"}}]))
         assert panel.pending and "Paused" in panel.status.text()
+        panel.stop()
+        # requests typed on the page itself (not in the panel) run automatically too:
+        # ticking Automatic is enough, and a quiet page starts a new run
+        panel.automatic.setChecked(False)
+        panel.automatic.setChecked(True)
+        assert panel.rounds_left == wcp.MAX_ROUNDS
+        clip.setText("")
+        panel.read_text(_reply([{"tool": "inspect_figure", "arguments": {}}], before="page request 1"))
+        _wait(qapp, lambda: not panel.busy and web_chat.RESULTS in clip.text())
+        panel.rounds_left = 0                     # this run used its rounds…
+        for _ in range(wcp.IDLE_SCANS + 1):
+            panel._idle_check("the same page")    # …and the chat went quiet
+        assert panel.rounds_left == wcp.MAX_ROUNDS
+        # after Stop, a quiet page does not restart it
+        panel.stop()
+        for _ in range(wcp.IDLE_SCANS + 1):
+            panel._idle_check("the same page")
+        assert panel.rounds_left == 0
     finally:
         if saved is None:
             settings.remove("automatic")
@@ -202,7 +234,7 @@ def test_typed_addresses_are_remembered(qapp, gui, runtime, monkeypatch):  # noq
     import pyfigures.gui.web_chat_panel as wcp
     from qtpy.QtCore import QSettings
     monkeypatch.setattr(wcp.QDesktopServices, "openUrl", lambda *a: True)
-    settings = QSettings("PyFigures", "web_chat")
+    settings = QSettings("PyFigures-tests", "web_chat")
     saved = {k: settings.value(k) for k in ("url", "urls")}
     try:
         g = gui(shareable=True)
