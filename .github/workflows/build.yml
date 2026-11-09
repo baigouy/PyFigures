@@ -273,6 +273,8 @@ jobs:
           body: |
             **PyFigures** opens with the chat sidebar (AI, optional: untick View → Open the chat at start-up). **PyFigures NoAI** (`PyFigures-NoAI-*`): the same app without any AI (no chat sidebar, no chat or MCP entries).
 
+            **Mac, first launch:** the apps are not signed by Apple. Use *System Settings → Privacy & Security → Open Anyway* (or right-click → Open). If macOS says the app "is damaged and can't be opened", run `xattr -cr "/Applications/<the app>.app"` in Terminal (e.g. `xattr -cr "/Applications/PyFigures Web Chat.app"`) and open it again.
+
             **PyFigures Web Chat** (`PyFigures-WebChat-*`): the same app with Qt WebEngine bundled, opening with the chat web page docked beside the figure (Tools → Chat in a web page). Experimental and not recommended: a last resort when the chat sidebar (API key or local model) cannot be used. Check the chat site's terms of service and your institution's rules first. See docs/WEB_CHAT_TUTORIAL.md.
 
             The executables are distributed under the GNU GPL v3 (they include PyQt6, Qt and FFmpeg with x264/x265); PyFigures' own source code is BSD-2-Clause. Licence texts are inside each app (Help → About → Third-party licences). The complete corresponding source of everything bundled is attached below (`corresponding-source-*.tar`), together with this repository's source code.

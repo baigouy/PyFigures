@@ -22,6 +22,18 @@ PyFigures runs them on the open figure.
 with the web chat already docked; skip to step 3. (The plain PyFigures apps
 leave the web page out: there the web chat only works through the clipboard.)
 
+On a Mac, the app is not signed by Apple, so the first launch is blocked:
+open *System Settings → Privacy & Security* and click **Open Anyway** (or
+right-click the app → **Open**). If macOS says the app **"is damaged and
+can't be opened"**, it is not damaged: remove the download mark in Terminal,
+then open it again:
+
+```bash
+xattr -cr "/Applications/PyFigures Web Chat.app"
+```
+
+(Use the folder you put the app in, e.g. `~/Applications/…`.)
+
 **With Python** (3.10 or newer), in a new environment:
 
 ```bash
