@@ -1797,6 +1797,11 @@ class EZFIG_GUI(QMainWindow):
                                "server (optional package qtpy-ai-sidecar)")
         tools_menu.addAction(chat_action)
         chat_action.triggered.connect(lambda _checked=False: self.open_chat_sidebar())
+        web_chat_action = QAction("Chat in a web page (Le Chat, Emmy, ChatGPT…)…", self)
+        web_chat_action.setToolTip("Dock an online chat page (your own login, no API key): the model "
+                                   "proposes operations, you click Apply, PyFigures runs them on this figure")
+        tools_menu.addAction(web_chat_action)
+        web_chat_action.triggered.connect(lambda _checked=False: self.open_web_chat())
         self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
         tools_menu.addAction(self.pdf_vector_action)
         self.pdf_vector_action.triggered.connect(lambda *_: (self._offer_vector_pdf('menu'),
@@ -6301,6 +6306,23 @@ class EZFIG_GUI(QMainWindow):
                                     "server.\n\nHelp → Chat & MCP Tutorial walks you through it.")
         return dock
 
+    def open_web_chat(self, use_web=True):
+        """Tools > Chat in a web page (CLI: --web-chat): dock an online chat
+        page that edits this figure through the same operations as the chat
+        sidebar, run only when the user clicks Apply
+        (pyfigures/gui/web_chat_panel.py)."""
+        from pyfigures.assistant import launch
+        if not launch.is_sharing(self) and not self._confirm_share_handover():
+            return None
+        try:
+            window = launch.start_live_session(self).window
+        except Exception as e:
+            QMessageBox.warning(self, 'Chat in a web page', str(e))
+            return None
+        window.share_figure_action.setChecked(True)
+        from pyfigures.gui.web_chat_panel import attach
+        return attach(window, use_web=use_web)
+
     def mcp_history_dialog(self):
         """Show the MCP calls logged for the saved figure, with an 'Undo last
         MCP change' button (pyfigures/history.py — same as the list_history /
@@ -8334,6 +8356,9 @@ if __name__ == '__main__':
         threading.Thread(target=ij_reader.init_ij, daemon=True).start()
     # else: not cached — init will happen lazily on first image open
 
+    # Qt WebEngine (Tools → Chat in a web page) may then be imported later
+    from qtpy.QtCore import QCoreApplication
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     try:
         from pyfigures.gui.portable_fonts import register_portable_fonts

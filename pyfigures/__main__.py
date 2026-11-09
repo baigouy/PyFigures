@@ -26,7 +26,10 @@ def run_pyfigures():
         ij_reader = None
         _use_ij_reader = False
 
-    # Initialize the QApplication
+    # Initialize the QApplication. Shared GL contexts first: Qt WebEngine (Tools →
+    # Chat in a web page) can then be imported later, when the panel opens
+    from qtpy.QtCore import QCoreApplication, Qt as _Qt
+    QCoreApplication.setAttribute(_Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     from pyfigures.icons import set_app_identity
     set_app_identity('pyfigures')
@@ -282,7 +285,7 @@ def run_pyfigures():
     from pyfigures.assistant import sidecar_available
     if load_chat_at_start() and '--chat' not in sys.argv and sidecar_available():
         sys.argv.append('--chat')       # View → Open the chat at start-up
-    share = '--share' in sys.argv or '--chat' in sys.argv
+    share = '--share' in sys.argv or '--chat' in sys.argv or '--web-chat' in sys.argv
     if share:
         # a window that can share its figure with `python -m pyfigures.assistant.live_mcp`
         from pyfigures.assistant.partner_gui import PartnerGUI

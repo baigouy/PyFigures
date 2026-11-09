@@ -346,6 +346,15 @@ model LM Studio serves on this computer (`http://127.0.0.1:1234/v1`); without
 one, it says on opening how to get a model (Model Library, LM Studio or a cloud
 API). **Help → Chat & MCP Tutorial** walks through it.
 
+**Chat in a web page.** **Tools → Chat in a web page (Le Chat, Emmy,
+ChatGPT…)…** (or `--web-chat`) docks an online chat page (Qt WebEngine; the
+clipboard without it) and offers the same operations without an API: the
+model writes a JSON list of calls between a `PYFIGURES-CALLS` line and an
+`END-PYFIGURES-CALLS` line, the panel reads it from the page text (any site),
+runs it on the live figure when the user clicks Apply (look-ups by themselves)
+and puts the results into the page's message box for the user to send
+(`pyfigures/assistant/web_chat.py`, `pyfigures/gui/web_chat_panel.py`).
+
 ---
 
 ## 5. Available tools reference

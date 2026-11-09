@@ -54,6 +54,10 @@ LINKED = {
     "menu: Tools > Chat sidebar (local model)…": [
         "test_assistant_live.py::test_chat_sidebar_docks_the_sidecar",
         "test_assistant_live.py::test_chat_sidebar_without_the_package_says_how_to_install"],
+    # docks an online chat page (clipboard mode in tests: no WebEngine offscreen)
+    "menu: Tools > Chat in a web page (Le Chat, Emmy, ChatGPT…)…": [
+        "test_web_chat_20261109.py::test_a_round_with_the_figure",
+        "test_web_chat_20261109.py::test_launch_flag_docks_the_web_chat"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
     # records the user's own clicks: real events are sent through the application there

@@ -210,7 +210,13 @@ def sidecar_config(descriptor=None):
 
 def apply_launch_flags(window, argv):
     """``--share``: share the figure with the MCP server at start-up;
-    ``--chat``: also dock the chat (qtpy_ai_sidecar)."""
+    ``--chat``: also dock the chat (qtpy_ai_sidecar); ``--web-chat``: dock
+    an online chat page instead (pyfigures.gui.web_chat_panel)."""
+    if '--web-chat' in argv:
+        window = start_live_session(window).window
+        from pyfigures.gui.web_chat_panel import attach
+        attach(window)
+        return window
     if '--chat' in argv:
         return attach_sidecar(window).parent()
     if '--share' in argv:

@@ -567,6 +567,7 @@
         <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register or start the PyFigures MCP server; list every call it made on this figure and undo its last changes.</td></tr>
         <tr><td><strong>Share the open figure with the MCP server</strong></td><td>Lets an MCP client (Claude Desktop, LM Studio…) edit the figure open in this window live, unsaved changes included, one undo step per edit; shows the configuration to paste into the client. Untick to stop. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Chat sidebar (local model)…</strong></td><td>Docks a chat on the right: ask for changes in plain words and a language model makes them on this figure. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
+        <tr><td><strong>Chat in a web page (Le Chat, Emmy, ChatGPT…)…</strong></td><td>Docks an online chat page instead, with your own login and no API key: the model proposes operations, you click Apply. See <a href="#web-chat">Chat in a web page</a>.</td></tr>
         <tr><td><strong>Vector PDF panels (PyMuPDF)…</strong></td><td>Says whether PDF files can be kept as vector panels and offers to install PyMuPDF (AGPL, so it is not in the standalone apps); without it, PDF panels are rendered at 600 dpi.</td></tr>
       </table>
     </div>
@@ -1055,6 +1056,38 @@
     <p>
       The chat is the package <code>qtpy-ai-sidecar</code>, installed with PyFigures and included in the
       standalone apps. <strong>Help → Chat &amp; MCP Tutorial</strong> walks through all of this.
+    </p>
+    <h3 id="web-chat">Chat in a web page</h3>
+    <p>
+      <strong>Tools → Chat in a web page (Le Chat, Emmy, ChatGPT…)…</strong> (or <code>--web-chat</code>)
+      docks an online chat page beside the figure instead of the chat sidebar: no API key, you log in on
+      the page as in your browser (the login is kept for next time). Choose Mistral Le Chat, ChatGPT,
+      Claude or Gemini in the address list, or type the address of another chat page (your institute's,
+      for example) and press Enter; addresses you use are remembered.
+    </p>
+    <ol style="margin: .6em 0 1em 1.4em;">
+      <li>Click <strong>Start: give the chat the figure</strong>. PyFigures writes into the page's message
+        box how to ask it for operations, the operations it can run (the same as the chat sidebar's) and the
+        figure as it is now. Add your request after it ("make channel 2 yellow in a") and press the
+        page's Send button.</li>
+      <li>When the model wants something done, its answer ends with a <code>PYFIGURES-CALLS</code> block.
+        The panel finds it and lists the operations: <strong>Apply</strong> runs them on the figure (one
+        undo step each), <strong>Dismiss</strong> does not. Look-ups that change nothing (finding an
+        operation, reading the figure) run by themselves unless you untick <em>Run look-ups without
+        asking</em>.</li>
+      <li>The results go into the message box; press Send so the model sees them and goes on. PyFigures
+        never presses Send itself: every message is sent by you.</li>
+    </ol>
+    <p>
+      The page is shown inside PyFigures when Qt WebEngine is installed (<code>pip install
+      "PyQt6-WebEngine==6.4.*"</code>, matching your PyQt6 version; the panel gives the exact command).
+      Without it, and in the standalone apps, the panel works through the clipboard: <strong>Open in my
+      browser</strong> opens the chat, Start and the results are copied for you to paste (Ctrl+V), and
+      <strong>Read a copied reply</strong> reads an answer you copied. <strong>Copy the last preview</strong>
+      puts the last figure preview on the clipboard, for pages that accept pasted images. Sign-in with a
+      Google account may refuse a browser inside an application; sign in with e-mail, or use the clipboard
+      mode. The messages, the figure's description and any preview you paste go to the chat's provider,
+      as with any use of that site; follow your institution's rules on which chat you may use.
     </p>
     <p>
       <strong>Bold</strong> words in the chat's answers (for example the choices it offers, such as
