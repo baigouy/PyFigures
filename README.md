@@ -97,6 +97,14 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures
     ```
 
+    This includes the chat sidebar, which opens beside the figure at start-up (untick **View → Open the chat at start-up** to stop that). **Without any AI:** install `pyfigures-noai` instead (not both): the same program without the chat sidebar package and with no chat or MCP entries.
+
+    ```sh
+    pip install -U pyfigures-noai
+    ```
+
+    The standalone apps on the [releases page](https://github.com/baigouy/PyFigures/releases) come in the same two kinds: **PyFigures** (with the chat sidebar) and **PyFigures NoAI**.
+
 5. **Optional: Install openjdk8 if you plan to use bioformats**
     
     ```sh

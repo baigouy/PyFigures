@@ -296,6 +296,35 @@ def test_pyfigures_opens_the_chat_sidebar_by_default():
     assert d(frozen=False)          # pip installs too
 
 
+def test_the_no_ai_install_hides_the_chat_and_mcp(qapp, gui, runtime, monkeypatch):  # noqa: F811
+    # pip install pyfigures-noai (or PYFIGURES_NO_AI=1): no chat, no MCP entries
+    import pyfigures.assistant as A
+    assert A.ai_features_enabled()
+    g = gui()
+    assert g.chat_toolbar_action.isVisible() and g.share_figure_action.isVisible()
+    monkeypatch.setenv("PYFIGURES_NO_AI", "1")
+    assert not A.ai_features_enabled() and not A.sidecar_available()
+    g = gui()
+    texts = [a.text() for m in g.menuBar.actions() if m.menu() for a in m.menu().actions() if a.isVisible()]
+    assert not any("Chat" in t or "MCP" in t for t in texts), texts
+    assert not g.chat_toolbar_action.isVisible() and not g.share_figure_action.isVisible()
+
+
+def test_the_no_ai_app_is_told_apart_by_its_name(monkeypatch):
+    import sys
+    import pyfigures.assistant as A
+    from pyfigures import self_test
+    assert A.is_no_ai_app(r"C:\Apps\PyFigures NoAI\PyFigures NoAI.exe")
+    assert A.is_no_ai_app("/Applications/PyFigures NoAI.app/Contents/MacOS/PyFigures NoAI")
+    assert not A.is_no_ai_app(r"C:\Apps\PyFigures\PyFigures.exe")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", r"C:\Apps\PyFigures NoAI\PyFigures NoAI.exe")
+    assert not A.ai_features_enabled() and not A.sidecar_available()
+    # the build check: the no-AI app must not contain the chat sidebar
+    monkeypatch.setitem(sys.modules, "qtpy_ai_sidecar", None)      # not bundled
+    assert self_test._check_chat("unused").startswith("ok (no AI")
+
+
 def test_self_test_reports_the_web_engine(qapp):
     # optional in pip installs and the plain apps; required (by name) in the web chat app
     from pyfigures import self_test

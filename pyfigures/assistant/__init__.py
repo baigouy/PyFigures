@@ -36,8 +36,33 @@ def descriptor_path() -> Path:
 
 
 def sidecar_available() -> bool:
+    if not ai_features_enabled():
+        return False
     try:
         import qtpy_ai_sidecar  # noqa: F401
     except Exception:
         return False
     return True
+
+
+def is_no_ai_app(executable) -> bool:
+    """The 'PyFigures NoAI' standalone app, told apart by its name."""
+    name = os.path.basename(executable).lower().replace(" ", "").replace("-", "").replace("_", "")
+    return "noai" in name
+
+
+def ai_features_enabled() -> bool:
+    """False in the no-AI install (``pip install pyfigures-noai``: no chat
+    sidebar package, and the chat / MCP entries hidden) or with
+    PYFIGURES_NO_AI=1."""
+    if os.environ.get("PYFIGURES_NO_AI") == "1":
+        return False
+    if getattr(sys, "frozen", False):
+        # the "PyFigures NoAI" app (pyfigures.spec with PYFIGURES_NO_AI=1)
+        return not is_no_ai_app(sys.executable)
+    import importlib.metadata as md
+    try:
+        md.distribution("pyfigures-noai")
+    except md.PackageNotFoundError:
+        return True
+    return False

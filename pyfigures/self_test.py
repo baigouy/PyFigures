@@ -72,7 +72,16 @@ def _check_zarr():
 def _check_chat(tmp):
     """The chat sidebar is a core part of the apps: its package, a real key
     store for API keys, and the live MCP server it starts (PyFigures
-    --live-mcp in the apps), which must answer with its tools."""
+    --live-mcp in the apps), which must answer with its tools. The no-AI
+    app must not contain it."""
+    from pyfigures.assistant import ai_features_enabled
+    if not ai_features_enabled():
+        try:
+            import qtpy_ai_sidecar  # noqa: F401
+        except ImportError:
+            return "ok (no AI: chat sidebar not included)"
+        assert not getattr(sys, "frozen", False), "the no-AI app contains qtpy_ai_sidecar"
+        return "ok (no AI: chat sidebar hidden)"
     import qtpy_ai_sidecar  # noqa: F401
     from qtpy_ai_sidecar import widgets  # noqa: F401  (the dock)
     from qtpy_ai_sidecar.adapters import pyfigures as adapter  # noqa: F401

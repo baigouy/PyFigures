@@ -1964,6 +1964,14 @@ class EZFIG_GUI(QMainWindow):
             if act.menu() is not None:
                 _show_tips(act.menu())
 
+        # pip install pyfigures-noai: no chat, no MCP entries anywhere
+        from pyfigures.assistant import ai_features_enabled
+        if not ai_features_enabled():
+            for act in (self.chat_toolbar_action, mcp_server_action, mcp_history_action,
+                        self.share_figure_action, chat_action, web_chat_action,
+                        self.chat_at_start_action, chat_tuto_action):
+                act.setVisible(False)
+
     # Maps each persistent toolbar QAction to its qtawesome icon name.
     _TOOLBAR_ICON_MAP = [
         ('new_ico',                    'mdi.newspaper-plus'),

@@ -13,8 +13,30 @@ from pyfigures.version import __VERSION__, __EMAIL__, __AUTHOR__, __DESCRIPTION_
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
+# PYFIGURES_NO_AI=1 builds "pyfigures-noai": the same code without the chat
+# sidebar package (qtpy-ai-sidecar); PyFigures then hides its chat and MCP
+# entries (pyfigures.assistant.ai_features_enabled). The mcp library stays:
+# PyFigures' own operations are written with it.
+NO_AI = os.environ.get('PYFIGURES_NO_AI') == '1'
+if NO_AI:
+    long_description = ('**PyFigures without AI**: the same program as `pyfigures`, without the chat '
+                        'sidebar and with no chat or MCP entries. Install either `pyfigures` or '
+                        '`pyfigures-noai`, not both.\n\n' + long_description)
+
+
+def _requirements(names):
+    return [r for r in names if not (NO_AI and r.startswith('qtpy-ai-sidecar'))]
+
+
+def _extras(extras):
+    if NO_AI:
+        extras.pop('chat')
+        extras = {k: _requirements(v) for k, v in extras.items()}
+    return extras
+
+
 setuptools.setup(
-    name='pyfigures',
+    name='pyfigures-noai' if NO_AI else 'pyfigures',
     version=__VERSION__,
     author=__AUTHOR__,
     author_email=__EMAIL__,
@@ -36,7 +58,7 @@ setuptools.setup(
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
     ],
-    install_requires=[
+    install_requires=_requirements([
         "Markdown",
         "PyYAML",          # YAML recipes (on 3.11+ another package happened to bring it)
         "matplotlib>=3.5.2",
@@ -76,8 +98,8 @@ setuptools.setup(
         # local or API model edits the open figure through the MCP tools (BSD-2)
         "qtpy-ai-sidecar>=0.1.4",
         "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
-    ],
-    extras_require={
+    ]),
+    extras_require=_extras({
         'ai': [
             "mcp>=1.12,<2",  # installed by default since 0.2.1; kept for older instructions
         ],
@@ -123,6 +145,6 @@ setuptools.setup(
             "pytest-qt",
             "pytest-timeout",
         ],
-    },
+    }),
     python_requires='>=3.10'  # staplot needs 3.10+; no upper cap
 )

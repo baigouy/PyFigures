@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 from PyInstaller.utils.hooks import (
     collect_data_files,
@@ -21,9 +22,14 @@ datas += collect_data_files('latex2mathml')       # unimathsymbols.txt ($…$ ->
 # the chat sidebar (qtpy-ai-sidecar, a core part of the app): its icons and
 # templates, the MCP client/server, and keyring's per-OS key stores (imported
 # by entry point, invisible to the analysis)
-datas += collect_data_files('qtpy_ai_sidecar')
+# PYFIGURES_NO_AI=1: the "PyFigures NoAI" app, without the chat sidebar (its
+# name hides the chat and MCP entries, pyfigures.assistant.ai_features_enabled);
+# the mcp library stays: PyFigures' own operations are written with it
+NO_AI = os.environ.get('PYFIGURES_NO_AI') == '1'
+if not NO_AI:
+    datas += collect_data_files('qtpy_ai_sidecar')
+    datas += collect_data_files('keyring')
 datas += collect_data_files('mcp')
-datas += collect_data_files('keyring')
 # Licence texts + where the corresponding source is (GPLv3: the bundle includes
 # PyQt6, Qt and FFmpeg/x264); made by packaging/collect_licenses.py, shown by
 # Help > About
@@ -58,11 +64,12 @@ hiddenimports += collect_submodules('pypdfium2')
 hiddenimports += collect_submodules('pylatexenc')     # imported lazily (Illustrator maths)
 hiddenimports += ['latex2mathml.converter', 'mathml2omml']
 hiddenimports += collect_submodules('pypdfium2_raw')
-hiddenimports += collect_submodules('qtpy_ai_sidecar')
+if not NO_AI:
+    hiddenimports += collect_submodules('qtpy_ai_sidecar')
+    hiddenimports += collect_submodules('keyring')        # keyring.backends.Windows / macOS
 # not mcp.cli: the `mcp` command line tool, it exits when typer is missing
 hiddenimports += collect_submodules('mcp', filter=lambda name: not name.startswith('mcp.cli'))
-hiddenimports += collect_submodules('keyring')        # keyring.backends.Windows / macOS
-if sys.platform.startswith('linux'):
+if sys.platform.startswith('linux') and not NO_AI:
     # Linux key store: the desktop's Secret Service (GNOME Keyring, KWallet) over D-Bus
     hiddenimports += collect_submodules('secretstorage')
     hiddenimports += collect_submodules('jeepney')
@@ -74,7 +81,7 @@ binaries = collect_dynamic_libs('pypdfium2_raw')
 # WebEngine bundled (the web chat page docked in the window; about 150-200 MB
 # more). Its name makes it open with the web chat (pyfigures/__main__.py).
 WEB_CHAT = os.environ.get('PYFIGURES_WEB_CHAT') == '1'
-APP_NAME = 'PyFigures Web Chat' if WEB_CHAT else 'PyFigures'
+APP_NAME = 'PyFigures Web Chat' if WEB_CHAT else 'PyFigures NoAI' if NO_AI else 'PyFigures'
 if WEB_CHAT:
     hiddenimports += ['PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'PyQt6.QtWebChannel',
                       'PyQt6.QtNetwork', 'qtpy.QtWebEngineWidgets', 'qtpy.QtWebEngineCore']
@@ -147,7 +154,7 @@ a = Analysis(
         '_tkinter',
         'fitz',         # PyMuPDF: AGPL, never bundled
         'pymupdf',
-    ],
+    ] + (['qtpy_ai_sidecar', 'keyring'] if NO_AI else []),
     noarchive=False,
 )
 
@@ -204,7 +211,7 @@ for _launcher in ('PyFigures Album', 'PyFigures Poster'):
         entitlements_file=None,
         icon=_icon(_launcher.lower().replace(' ', '_')),   # pyfigures_album / pyfigures_poster
     ))
-if sys.platform == 'win32':
+if sys.platform == 'win32' and not NO_AI:
     # the chat sidebar's MCP server (PyFigures --live-mcp) talks over stdio, which
     # a windowed exe does not have: a console twin, started hidden by the MCP client
     extra_exes.append(EXE(
@@ -248,7 +255,8 @@ if sys.platform == 'darwin':
         coll,
         name=APP_NAME + '.app',
         icon=_icon('pyfigures'),
-        bundle_identifier='com.aigouy.pyfigures.webchat' if WEB_CHAT else 'com.aigouy.pyfigures',
+        bundle_identifier=('com.aigouy.pyfigures.webchat' if WEB_CHAT else
+                           'com.aigouy.pyfigures.noai' if NO_AI else 'com.aigouy.pyfigures'),
         info_plist={
             'NSHighResolutionCapable': True,
             'NSRequiresAquaSystemAppearance': False,  # allow dark mode

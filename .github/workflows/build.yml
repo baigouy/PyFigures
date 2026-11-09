@@ -48,9 +48,27 @@ jobs:
             app_name: PyFigures Web Chat
             artifact_name: PyFigures-WebChat-macOS-AppleSilicon
             artifact_path: PyFigures-WebChat-macOS-AppleSilicon.dmg
+          # "PyFigures NoAI": no chat sidebar, no chat or MCP entries (PYFIGURES_NO_AI
+          # also makes pip install the pyfigures-noai distribution, without qtpy-ai-sidecar)
+          - os: windows-latest
+            no_ai: '1'
+            app_name: PyFigures NoAI
+            artifact_name: PyFigures-NoAI-Windows
+            artifact_path: PyFigures-NoAI-Windows.zip
+          - os: macos-15-intel
+            no_ai: '1'
+            app_name: PyFigures NoAI
+            artifact_name: PyFigures-NoAI-macOS-Intel
+            artifact_path: PyFigures-NoAI-macOS-Intel.dmg
+          - os: macos-latest
+            no_ai: '1'
+            app_name: PyFigures NoAI
+            artifact_name: PyFigures-NoAI-macOS-AppleSilicon
+            artifact_path: PyFigures-NoAI-macOS-AppleSilicon.dmg
 
     env:
       PYFIGURES_WEB_CHAT: ${{ matrix.web_chat || '0' }}
+      PYFIGURES_NO_AI: ${{ matrix.no_ai || '0' }}
       APP_NAME: ${{ matrix.app_name }}
 
     runs-on: ${{ matrix.os }}
@@ -168,12 +186,12 @@ jobs:
       # PyFigures.app --album / --poster (on Windows they are "PyFigures Album.exe"
       # and "PyFigures Poster.exe", built by pyfigures.spec)
       - name: Album and poster launchers (macOS)
-        if: runner.os == 'macOS' && matrix.web_chat != '1'
+        if: runner.os == 'macOS' && matrix.web_chat != '1' && matrix.no_ai != '1'
         run: |
           bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
 
-      - name: Package (macOS — dmg, web chat app)
-        if: runner.os == 'macOS' && matrix.web_chat == '1'
+      - name: Package (macOS — dmg, web chat / no-AI app)
+        if: runner.os == 'macOS' && (matrix.web_chat == '1' || matrix.no_ai == '1')
         run: |
           mkdir dmg_src
           cp -R "dist/$APP_NAME.app" dmg_src/
@@ -187,7 +205,7 @@ jobs:
             dmg_src
 
       - name: Package (macOS — dmg)
-        if: runner.os == 'macOS' && matrix.web_chat != '1'
+        if: runner.os == 'macOS' && matrix.web_chat != '1' && matrix.no_ai != '1'
         run: |
           mkdir dmg_src
           cp -R dist/PyFigures.app "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
@@ -253,6 +271,8 @@ jobs:
             corresponding-source/*.tar
           generate_release_notes: true
           body: |
+            **PyFigures** opens with the chat sidebar (AI, optional: untick View → Open the chat at start-up). **PyFigures NoAI** (`PyFigures-NoAI-*`): the same app without any AI (no chat sidebar, no chat or MCP entries).
+
             **PyFigures Web Chat** (`PyFigures-WebChat-*`): the same app with Qt WebEngine bundled, opening with the chat web page docked beside the figure (Tools → Chat in a web page). Experimental and not recommended: a last resort when the chat sidebar (API key or local model) cannot be used. Check the chat site's terms of service and your institution's rules first. See docs/WEB_CHAT_TUTORIAL.md.
 
             The executables are distributed under the GNU GPL v3 (they include PyQt6, Qt and FFmpeg with x264/x265); PyFigures' own source code is BSD-2-Clause. Licence texts are inside each app (Help → About → Third-party licences). The complete corresponding source of everything bundled is attached below (`corresponding-source-*.tar`), together with this repository's source code.
