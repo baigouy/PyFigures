@@ -98,6 +98,9 @@ _INSERT_JS = r"""
 
 _TEXT_JS = "document.body ? document.body.innerText : ''"
 
+# presets taken out of the list: a saved choice of one is not brought back
+_DROPPED_PRESETS = frozenset({'https://chat.mistral.ai/login?return_to=%2Fcode'})
+
 # The page has a chat box (not a sign-in page: those use <input>s)
 _HAS_BOX_JS = r"""
 (function(){
@@ -147,6 +150,8 @@ class WebChatPanel(QFrame):
             if self.address.findData(url) < 0:
                 self.address.addItem(url, url)
         last = self.settings.value('url', web_chat.PRESETS[0][1])
+        if last in _DROPPED_PRESETS:
+            last = web_chat.PRESETS[0][1]
         index = self.address.findData(last)
         if index < 0:
             self.address.addItem(last, last)
@@ -155,10 +160,6 @@ class WebChatPanel(QFrame):
         self.address.activated.connect(lambda _i: self.go())
         self.address.lineEdit().returnPressed.connect(self.go)
         top.addWidget(self.address, 1)
-        external = QPushButton('Open in my browser', self)
-        external.setToolTip('Open the chat page in your usual browser (then use the clipboard buttons)')
-        external.clicked.connect(lambda _c=False: QDesktopServices.openUrl(QUrl(self.url())))
-        top.addWidget(external)
         layout.addLayout(top)
 
         engine = web_engine() if use_web else 'Clipboard mode chosen.'
@@ -168,7 +169,7 @@ class WebChatPanel(QFrame):
             layout.addWidget(self.view, 1)
         else:
             note = QLabel('The chat cannot be shown inside PyFigures here (' + engine + ')\n\n'
-                          'Clipboard mode: open the chat in your browser, click "Start" and paste '
+                          'Clipboard mode: choose the chat page above (it opens in your browser), click "Start" and paste '
                           '(Ctrl+V) into the chat; copy the model\'s answer and click "Read a copied reply".', self)
             note.setWordWrap(True)
             note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

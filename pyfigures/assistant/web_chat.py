@@ -40,7 +40,6 @@ PRESETS = (
     # the login page first: in Qt WebEngine 6.4 (Chrome 102) the terms dialog
     # shown before it never closes ("Accept and continue" does nothing) and
     # covers the page's own "Sign in"; once logged in it goes on to the chat
-    ('Mistral Vibe / Emmy', 'https://chat.mistral.ai/login?return_to=%2Fcode'),
     ('Mistral Le Chat', 'https://chat.mistral.ai/login?return_to=%2Fchat'),
     ('ChatGPT', 'https://chatgpt.com/'),
     ('Claude', 'https://claude.ai/new'),
