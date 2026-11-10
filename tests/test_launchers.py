@@ -44,7 +44,8 @@ def test_spec_builds_the_album_and_poster_executables_on_windows():
     spec = _read("pyfigures.spec")
     block = spec[spec.index("extra_exes = []"):spec.index("coll = COLLECT(")]
     assert "for _launcher in ('PyFigures Album', 'PyFigures Poster'):" in block
-    assert "if sys.platform != 'win32':" in block and "name=_launcher" in block
+    # Windows only, and not in the web chat app (the figure editor only)
+    assert "if sys.platform != 'win32' or WEB_CHAT:" in block and "name=_launcher" in block
     assert "console=False" in block and "exclude_binaries=True" in block
     assert "*extra_exes," in spec[spec.index("coll = COLLECT("):]
     compile(spec, "pyfigures.spec", "exec")
