@@ -285,7 +285,9 @@ def run_pyfigures():
     from pyfigures.assistant import sidecar_available
     if load_chat_at_start() and '--chat' not in sys.argv and sidecar_available():
         sys.argv.append('--chat')       # View → Open the chat at start-up
-    share = '--share' in sys.argv or '--chat' in sys.argv or '--web-chat' in sys.argv
+    from pyfigures.assistant import ai_features_enabled
+    # the no-AI install has no chat and shares nothing, whatever the command line says
+    share = ai_features_enabled() and ('--share' in sys.argv or '--chat' in sys.argv or '--web-chat' in sys.argv)
     if share:
         # a window that can share its figure with `python -m pyfigures.assistant.live_mcp`
         from pyfigures.assistant.partner_gui import PartnerGUI

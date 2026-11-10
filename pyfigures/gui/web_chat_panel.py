@@ -19,37 +19,54 @@ browser, prompts and results are copied, replies are pasted back.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 
 from qtpy.QtCore import QObject, QSettings, Qt, QTimer, QUrl, Signal
 from qtpy.QtGui import QDesktopServices, QImage
 from qtpy.QtCore import QEvent
 from qtpy.QtGui import QKeyEvent
 from qtpy.QtWidgets import (QApplication, QCheckBox, QComboBox, QDockWidget, QFrame, QHBoxLayout,
-                            QLabel, QLineEdit, QPlainTextEdit, QPushButton, QVBoxLayout)
+                            QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout)
 
 from pyfigures.assistant import web_chat
 
 SCAN_MS = 1500
 MAX_ROUNDS = 20         # automatic apply-and-send rounds in a row, then it waits for a click
 IDLE_SCANS = 4          # page unchanged this many scans (~6 s): the automatic run is over
+MAX_UNSETTLED = 8       # scans a new block waits for the page to stop changing (the model still writes)
+SEND_TRIES = 4          # looks for the page's send button (off while a picture uploads or an answer is written)
+MAX_LOG_BYTES = 1_000_000
 
 # The text is still in the chat box after Enter (a site that sends with a
-# button only): click the page's send button, found by its label.
+# button only): click the page's send button. A button named Send (label,
+# tooltip, test id) anywhere, else the submit button of the chat box's own
+# form; never one named Stop/Cancel; the nearest to the box when several.
 _SEND_BUTTON_JS = r"""
 (function(start){
   function visible(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0;}
   var boxes=Array.prototype.slice.call(document.querySelectorAll('textarea,[contenteditable="true"],[contenteditable=""],[contenteditable="plaintext-only"]')).filter(visible);
   var full=boxes.filter(function(b){return (b.value||b.innerText||'').indexOf(start)>=0;});
   if(!full.length) return 'sent';
-  var buttons=Array.prototype.slice.call(document.querySelectorAll('button,[role="button"]')).filter(function(b){
-    var t=((b.getAttribute('aria-label')||'')+' '+(b.title||'')+' '+(b.getAttribute('data-testid')||'')+' '+(b.type||'')).toLowerCase();
-    return visible(b)&&!b.disabled&&/send|envoy|submit|soumettre/.test(t);});
+  var box=full[full.length-1], form=box.closest('form');
+  function label(b){return ((b.getAttribute('aria-label')||'')+' '+(b.title||'')+' '+(b.getAttribute('data-testid')||'')).toLowerCase();}
+  var all=Array.prototype.slice.call(document.querySelectorAll('button,[role="button"]')).filter(function(b){
+    return visible(b)&&!b.disabled&&b.getAttribute('aria-disabled')!=='true'&&!/stop|cancel|annul|arr[eê]t|interr/.test(label(b));});
+  var named=all.filter(function(b){return /send|envoy|submit|soumettre/.test(label(b));});
+  var mine=form?all.filter(function(b){return b.type==='submit'&&form.contains(b);}):[];
+  var buttons=named.length?named:mine;
   if(!buttons.length) return 'no button';
-  buttons[buttons.length-1].click();
+  var r=box.getBoundingClientRect();
+  function far(b){var q=b.getBoundingClientRect();return Math.abs(q.left+q.width/2-r.right)+Math.abs(q.top+q.height/2-r.bottom);}
+  buttons.sort(function(a,b){return far(a)-far(b);});
+  buttons[0].click();
   return 'clicked';
 })(%s)
 """
+
+# Forget my login: what the page itself keeps (cookies and the cache go through the profile)
+_CLEAR_STORAGE_JS = "try{localStorage.clear();sessionStorage.clear();}catch(e){}; true"
 
 
 def web_engine():
@@ -59,14 +76,34 @@ def web_engine():
         from qtpy.QtWebEngineWidgets import QWebEngineView
         from qtpy.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
     except Exception as exc:      # missing, or imported after the QApplication without shared contexts
-        try:
-            from qtpy.QtCore import PYQT_VERSION_STR
-            major_minor = '.'.join(PYQT_VERSION_STR.split('.')[:2])
-            hint = f'pip install "PyQt6-WebEngine=={major_minor}.*"'
-        except Exception:
-            hint = 'pip install PyQt6-WebEngine'
-        return f'{type(exc).__name__}: {exc}. To show the chat inside PyFigures: {hint}, then restart PyFigures.'
+        command = web_engine_command()
+        if command is None:
+            return (f'{type(exc).__name__}: {exc}. This app does not contain Qt WebEngine: download the '
+                    '"PyFigures Web Chat" app (same page as this one) to show the chat inside PyFigures.')
+        older = web_engine_command(older=True)
+        return (f'{type(exc).__name__}: {exc}. To show the chat inside PyFigures: {command}, then restart '
+                'PyFigures.' + (f' If pip finds no such version (Qt WebEngine comes out after PyQt6): {older}.'
+                                if older else ''))
     return QWebEngineView, QWebEnginePage, QWebEngineProfile
+
+
+def web_engine_command(older=False):
+    """The pip command that installs Qt WebEngine for this PyQt6 (with
+    *older*: PyQt6 and its WebEngine one version back, for a PyQt6 whose
+    WebEngine is not out yet). None in a standalone app: nothing can be
+    installed into it."""
+    if getattr(sys, 'frozen', False):
+        return None
+    try:
+        from qtpy.QtCore import PYQT_VERSION_STR
+        major, minor = PYQT_VERSION_STR.split('.')[:2]
+    except Exception:
+        return None if older else 'pip install PyQt6-WebEngine'
+    if older:
+        if int(minor) < 1:
+            return None
+        return f'pip install "PyQt6=={major}.{int(minor) - 1}.*" "PyQt6-WebEngine=={major}.{int(minor) - 1}.*"'
+    return f'pip install "PyQt6-WebEngine=={major}.{minor}.*"'
 
 
 # Writes into the chat box of any site: the focused box, else the lowest
@@ -139,6 +176,9 @@ class WebChatPanel(QFrame):
         self.last_text = None        # the page text at the last scan, and since when it is unchanged
         self.unchanged_scans = 0
         self.stopped = False         # Stop clicked: no automatic run until the user resumes it
+        self.unsettled_scans = 0     # scans a new block has waited for the page to stop changing
+        self.signature_seen = False  # the page showed the instructions of this conversation
+        self.signature_missing = 0   # …and for how many scans it no longer does
         self.relay = _Relay(self)
         self.relay.arrived.connect(lambda callback, value: callback(value))
         self.settings = QSettings('PyFigures', 'web_chat')
@@ -179,6 +219,13 @@ class WebChatPanel(QFrame):
         if isinstance(engine, tuple):
             self._make_view(*engine)
             layout.addWidget(self.view, 1)
+            for label, tip, action in (('←', 'Back to the previous page', self.view.back),
+                                       ('⟳', 'Load the page again', self.view.reload)):
+                button = QPushButton(label, self)
+                button.setToolTip(tip)
+                button.setMaximumWidth(32)
+                button.clicked.connect(lambda _c=False, action=action: action())
+                top.addWidget(button)
         else:
             note = QLabel('The chat cannot be shown inside PyFigures here (' + engine + ')\n\n'
                           'Clipboard mode: choose the chat page above (it opens in your browser), click "Start" and paste '
@@ -186,6 +233,24 @@ class WebChatPanel(QFrame):
             note.setWordWrap(True)
             note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(note, 1)
+            command = web_engine_command() if use_web else None
+            if command:
+                copy = QPushButton('Copy the install command', self)
+                copy.setToolTip(command)
+                copy.clicked.connect(lambda _c=False: (QApplication.clipboard().setText(command),
+                                                       copy.setText('Copied')))
+                layout.addWidget(copy)
+        self.new_button = QPushButton('New conversation', self)
+        self.new_button.setToolTip('Open the chat page again for a fresh conversation: the next request gives it '
+                                   'the instructions and the figure again')
+        self.new_button.clicked.connect(lambda _c=False: self.go())
+        top.addWidget(self.new_button)
+        self.forget_button = QPushButton('Forget my login…', self)
+        self.forget_button.setToolTip('Delete the cookies and cached pages PyFigures keeps for the chat sites: '
+                                      'you will have to sign in again')
+        self.forget_button.clicked.connect(lambda _c=False: self.forget_login())
+        self.forget_button.setVisible(self.view is not None)
+        top.addWidget(self.forget_button)
 
         buttons = QHBoxLayout()
         self.start_button = QPushButton('Start: give the chat the figure', self)
@@ -224,6 +289,14 @@ class WebChatPanel(QFrame):
         self.auto_lookups.setChecked(self.settings.value('auto_lookups', True, type=bool))
         self.auto_lookups.toggled.connect(lambda on: self.settings.setValue('auto_lookups', on))
         layout.addWidget(self.auto_lookups)
+        self.attach_previews = QCheckBox('Paste figure previews into the chat with the results', self)
+        self.attach_previews.setToolTip('When the model asks for a preview of the figure, the picture is pasted '
+                                        'into the chat box after the results (through the clipboard), so that the '
+                                        'model sees it. Needs a chat site and a model that take pictures.')
+        self.attach_previews.setChecked(self.settings.value('attach_previews', True, type=bool))
+        self.attach_previews.toggled.connect(lambda on: self.settings.setValue('attach_previews', on))
+        self.attach_previews.setVisible(self.view is not None)
+        layout.addWidget(self.attach_previews)
 
         self.request_box = QPlainTextEdit(self)
         self.request_box.setReadOnly(True)
@@ -284,6 +357,7 @@ class WebChatPanel(QFrame):
         self.view = QWebEngineView(self)
         self.view.setPage(Page(self.profile, self.view))
         self.view.loadFinished.connect(lambda _ok: setattr(self, 'baseline_next_scan', True))
+        self._paste_action = QWebEnginePage.WebAction.Paste
 
     def url(self):
         text = self.address.currentText().strip()
@@ -304,51 +378,99 @@ class WebChatPanel(QFrame):
         url = self.url()
         if not url:
             return
+        if QUrl(url).scheme() not in ('http', 'https'):
+            # a local file or a script is not a chat page (and what a page shows is run as requests)
+            self.say('Only web addresses (https://…) can be opened here.')
+            return
         self.settings.setValue('url', url)
         urls = [u for u in self._remembered() if u != url]
         if url not in dict(web_chat.PRESETS).values():
             self.settings.setValue('urls', json.dumps([url] + urls[:9]))
         self.started = False         # a new page: a new conversation
+        self.signature_seen, self.signature_missing = False, 0
         if self.view is not None:
             self.baseline_next_scan = True
             self.view.setUrl(QUrl(url))
         else:
             QDesktopServices.openUrl(QUrl(url))
 
-    def write_to_chat(self, text, what, send=False):
-        """Put *text* into the chat box (and on the clipboard, in case the
-        page's box was not found); with *send*, press Send for the user."""
-        QApplication.clipboard().setText(text)
+    def forget_login(self):
+        """Forget my login…: the cookies, cache and visited links of the
+        chat profile, and what the page shown keeps for itself."""
         if self.view is None:
+            return
+        answer = QMessageBox.question(self, 'Forget my login',
+                                      'Delete the cookies and cached pages PyFigures keeps for the chat sites?\n\n'
+                                      'You will have to sign in again. Your conversations stay on the chat site.')
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        def cleared(_result=None):
+            self.profile.cookieStore().deleteAllCookies()
+            self.profile.clearHttpCache()
+            self.profile.clearAllVisitedLinks()
+            self.go()
+            self.say('Login forgotten: sign in again on the page.')
+        self.view.page().runJavaScript(_CLEAR_STORAGE_JS, 0, cleared)
+
+    def write_to_chat(self, text, what, send=False, image=None):
+        """Put *text* into the chat box (on the clipboard instead when there
+        is no page, or its box was not found); with *send*, press Send for
+        the user. *image* (PNG bytes of a preview) is pasted after the text
+        when the user allows it."""
+        if self.view is None:
+            QApplication.clipboard().setText(text)
             self.say(f'{what} copied: paste it into the chat (Ctrl+V) and press Send.')
             return
 
         def written(how):
             if how not in ('textarea', 'editable'):
+                QApplication.clipboard().setText(text)
                 self.say(f'{what} could not be typed into this page: click in its message box and paste (Ctrl+V); '
                          'it is on the clipboard.')
-            elif send:
+                return
+            pasted = image is not None and self.attach_previews.isChecked() and self.paste_image(image)
+            if send:
                 self.say(f'{what} sent; waiting for the answer…')
-                QTimer.singleShot(250, lambda: self.press_send(text))
+                # a pasted picture is uploaded first: Send is off meanwhile
+                QTimer.singleShot(2500 if pasted else 250, lambda: self.press_send(text))
             else:
-                self.say(f'{what} is in the chat box: press Send on the page.')
+                self.say(f'{what} is in the chat box' + (' with the preview' if pasted else '')
+                         + ': press Send on the page.')
         self.view.page().runJavaScript(_INSERT_JS % json.dumps(text), 0, written)
 
-    def press_send(self, text):
+    def paste_image(self, png):
+        """Paste a preview into the page's chat box (focused by the text
+        just written), as Ctrl+V would. True when it was tried."""
+        action = getattr(self, '_paste_action', None)
+        picture = QImage.fromData(png, 'PNG')
+        if action is None or picture.isNull():
+            return False
+        QApplication.clipboard().setImage(picture)
+        self.view.setFocus()
+        self.view.page().triggerAction(action)
+        return True
+
+    def press_send(self, text, tries=SEND_TRIES):
         """A real Enter in the page's box (what sends on most chat sites);
-        when the text is still there a moment later, its send button."""
+        when the text is still there a moment later, its send button (looked
+        for a few times: it is off while a picture uploads)."""
         self.view.setFocus()
         target = self.view.focusProxy() or self.view
         for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
             QApplication.postEvent(target, QKeyEvent(kind, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier, '\r'))
         start = text.strip()[:40]
 
-        def check():
+        def check(left):
             def clicked(how):
-                if how == 'no button':
+                if how != 'no button':
+                    return
+                if left > 1:
+                    QTimer.singleShot(1500, lambda: check(left - 1))
+                else:
                     self.say('Could not press Send on this page: press it yourself.')
             self.view.page().runJavaScript(_SEND_BUTTON_JS % json.dumps(start), 0, clicked)
-        QTimer.singleShot(1500, check)
+        QTimer.singleShot(1500, lambda: check(tries))
 
     # ---- reading answers --------------------------------------------------------
     def scan(self):
@@ -357,11 +479,37 @@ class WebChatPanel(QFrame):
         baseline = self.baseline_next_scan
         self.baseline_next_scan = False
         def got(text):
-            self.read_text(text, baseline)
-            if isinstance(text, str):
-                self._idle_check(text)
-                self._auto_start()
+            if not isinstance(text, str):
+                return
+            self._idle_check(text)
+            new_conversation = self._conversation_check(text)
+            # a block is run once the page stopped changing: the model may still be writing after it,
+            # and the sites refuse a message sent meanwhile
+            settled = self.unchanged_scans >= 1 or self.unsettled_scans >= MAX_UNSETTLED
+            self.read_text(text, baseline or new_conversation, settled=settled)
+            self._auto_start()
         self.view.page().runJavaScript(_TEXT_JS, 0, got)
+
+    def _conversation_check(self, text):
+        """True when a new conversation was started on the page itself (its
+        own "New chat": no page load): the instructions PyFigures sent were
+        on the page and are gone. The next request gives them again, and
+        the blocks now shown are not replayed."""
+        if not self.started or self.busy:
+            self.signature_missing = 0
+            return False
+        if web_chat.SIGNATURE in text:
+            self.signature_seen, self.signature_missing = True, 0
+            return False
+        if not self.signature_seen:
+            return False
+        self.signature_missing += 1
+        if self.signature_missing < 2:
+            return False
+        self.started = False
+        self.signature_seen, self.signature_missing = False, 0
+        self.log('new conversation', 'the instructions are no longer on the page')
+        return True
 
     def _auto_start(self):
         """Automatic mode: once the chat page is there (signed in, its box
@@ -399,31 +547,43 @@ class WebChatPanel(QFrame):
                 and not self.pending and self.rounds_left < MAX_ROUNDS):
             self.rounds_left = MAX_ROUNDS
 
-    def read_text(self, text, baseline=False, page=True):
+    def read_text(self, text, baseline=False, page=True, settled=True):
         """New PYFIGURES-CALLS blocks in *text*. A page is read again and
         again, so a block is new when it appears MORE times than before (the
         model may rightly ask for the same operations twice: counting
         distinct texts skipped the repeat). With *baseline*, the blocks of a
-        page just opened are only counted (an old conversation is not
-        replayed). A copied reply (*page* False) is new as a whole."""
+        page just opened (or of a new conversation) are only counted, from
+        zero: an old conversation is not replayed, and what an earlier one
+        asked for can be asked again. A copied reply (*page* False) is new
+        as a whole. Not *settled* (the page still changes): new blocks wait
+        for the next scan."""
         if not isinstance(text, str):
             return
-        found = 0
-        counts = {}
+        new, counts = [], {}
         for block in web_chat.parse_blocks(text):
             counts[block.key] = counts.get(block.key, 0) + 1
-            if page and counts[block.key] <= self.seen.get(block.key, 0):
+            if page and (baseline or counts[block.key] <= self.seen.get(block.key, 0)):
                 continue
-            if page:
-                self.seen[block.key] = counts[block.key]
-            if baseline:
-                continue
-            found += 1
+            new.append(block)
+        if page and baseline:
+            self.seen = counts
+            self.unsettled_scans = 0
+            return
+        if page and new and not settled:
+            self.unsettled_scans += 1
+            return
+        self.unsettled_scans = 0
+        if page:
+            # never down: a long conversation whose page drops old messages, then shows
+            # them again, must not replay them
+            for key, count in counts.items():
+                self.seen[key] = max(count, self.seen.get(key, 0))
+        for block in new:
             self.log('found', block.describe())
             self.pending.append(block)
-        if found:
+        if new:
             self._next()
-        elif not baseline and self.view is None:
+        elif self.view is None:
             self.say('No PyFigures operations in the copied text.')
 
     def _next(self):
@@ -433,14 +593,20 @@ class WebChatPanel(QFrame):
             self._refresh()
             return
         block = self.pending[0]
-        if self._automatic():
+        # saving, exporting, running a script, naming a file: a click, even in automatic mode
+        # (what the page shows is not always the model's own words)
+        guarded = block.error is None and block.writes_files
+        if self._automatic() and not guarded:
             self.rounds_left -= 1
             self.apply()          # an unreadable block: apply sends the correction
             return
-        if block.error is None and block.read_only and self.auto_lookups.isChecked():
+        if block.error is None and block.read_only and not guarded and self.auto_lookups.isChecked():
             self.apply()
             return
         self._refresh()
+        if guarded and self.automatic.isChecked():
+            self.say('These operations write or read files on your computer: Apply to allow them, or Dismiss.')
+            return
         if self.automatic.isChecked() and self.rounds_left <= 0:
             self.say(f'Paused after {MAX_ROUNDS} automatic rounds: Apply to go on, or Stop.')
             return
@@ -466,6 +632,7 @@ class WebChatPanel(QFrame):
             return
         send = bool(request) if send is None else send
         self.started = True          # not twice while the figure is read
+        self.signature_seen, self.signature_missing = False, 0
         self.say('Reading the figure…')
 
         def done(value):
@@ -514,7 +681,10 @@ class WebChatPanel(QFrame):
 
         def done(value):
             self.busy = False
-            self.pending.pop(0)
+            # Stop may have emptied the list meanwhile: the operations ran all the same,
+            # and the chat is told (popping blindly raised, and the results were lost)
+            if self.pending and self.pending[0] is block:
+                self.pending.pop(0)
             if isinstance(value, Exception):
                 outcomes, images = [(block.calls[0], False, str(value))], []
             else:
@@ -524,7 +694,8 @@ class WebChatPanel(QFrame):
             # sent by itself in automatic mode (the last round's results wait for the user)
             message = web_chat.results_message(outcomes)
             self.log('results', message)
-            self.write_to_chat(message, 'The results', send=self._automatic())
+            self.write_to_chat(message, 'The results', send=self._automatic(),
+                               image=images[-1] if images else None)
             self._next()
         self._run(self.runner.run_block, done, block)
 
@@ -552,11 +723,15 @@ class WebChatPanel(QFrame):
     def log(self, kind, text):
         """What the panel did, in web_chat.log of the live folder (no page
         text, no credentials: blocks found, statuses, results), to explain a
-        run that went wrong."""
+        run that went wrong. Past MAX_LOG_BYTES it starts again, the
+        old one kept as web_chat.log.1."""
         try:
             import time
             from pyfigures.assistant import runtime_dir
-            with open(runtime_dir() / 'web_chat.log', 'a', encoding='utf-8') as f:
+            path = runtime_dir() / 'web_chat.log'
+            if path.exists() and path.stat().st_size > MAX_LOG_BYTES:
+                os.replace(path, path.with_name('web_chat.log.1'))
+            with open(path, 'a', encoding='utf-8') as f:
                 f.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")} {kind}: {text[:2000]}\n')
         except OSError:
             pass

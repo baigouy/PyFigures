@@ -136,16 +136,45 @@ def inspect_panel_letters() -> dict:
     return call_live('letter_state')
 
 
+def _is_colour(background):
+    """A background that paints something ('none', 'transparent' and the like clear it)."""
+    if background is None:
+        return False
+    return str(background).strip().lower() not in ('', 'none', 'transparent', 'no', 'null', 'clear')
+
+
+def _names_letters(request):
+    """The user's own words say the letter / label (not the panel) is meant."""
+    import re
+    return bool(re.search(r'\b(letters?|lettering|labels?|lettre\w*)\b', str(request or '').lower()))
+
+
 @mcp.tool()
 def edit_panel_letters(action: Literal['style','remove','restore','renumber'] = 'style', scope: Literal['auto','all','group','panels','selection'] = 'auto', group_path: list[int] | None = None,
                        panel_ids: list[str] | None = None, placement: str | None = None,
                        font_family: str | None = None, font_size: float | None = None,
                        color: str | int | None = None, background: str | int | None = None,
                        start_letter: str | None = None, replace_overrides: bool = False,
-                       removal_request: str | None = None) -> dict:
-    """Scope rules: use scope=all for all panel letters and omit panel_ids/group_path. scope=panels requires a nonempty panel_ids list; scope=selection uses the current selection. Pass ONLY changed fields, never the full letter_styles readback: opacity/bold/italic/underline are not accepted. For italic/bold/underline, call restyle_texts(target=letters) directly; do not call this operation first. Preferred ONE-CALL bulk operation for panel-letter placement, font family/size, color/background, removal and restoration. For bold/italic/underline use restyle_texts(target=letters); those are not fields of this function. placement accepts center/centre/middle or a corner (inside the panel); letters OUTSIDE the panels = set_panel_letter_layout(letter_layout="row"). action=style preserves existing text; renumber scope=all creates a complete unique sequence for a newly constructed figure when asked to letter the panels; partial restore preserves existing IDs and is not a whole-figure renumber; remove requires removal_request quoting an explicit user request to remove/hide letters (never a swap), and hides panel letters persistently without deleting captions/scale bars; restore without start_letter preserves an existing or hidden panel text and otherwise uses its automatic position; explicit start_letter sets a new sequence; renumber changes sequence. scope=auto infers panels from panel_ids, group from group_path, otherwise all; explicit panels/group/selection/all are supported. Supplying panel_ids can never broaden to all panels. For WHITE Arial 12 with NO background use color="white", font_family="Arial", font_size=12, background="none". Black is a color, NOT transparent. Unspecified appearance is preserved. Per-panel overrides survive whole-figure style changes unless replace_overrides=true. One undo step. Returns actual styles, changed/skipped counts, and recovery status. Do not loop over individual annotations for figure/group requests. With one letter per row (letter_layout row) the row letters share the figure letter style: action=style scope=all restyles them (font, size, color, background; row_letters_restyled lists them, outcome VERIFIED_CHANGE)."""
+                       removal_request: str | None = None, background_request: str | None = None,
+                       color_request: str | None = None) -> dict:
+    """A colour for the letter of named panels (panel_ids) needs color_request quoting the user's words, and those must name the letter/label: "change the colour of a to red" may be the letter, a channel or a border of panel a, so ask. A coloured background needs background_request quoting the user's words, and those must name the letter/label: "black background for g" or "add a black bg to g" means the PANEL g (the area behind the image, seen once it is rotated or transparent: set_image_property fill_color), not its letter; when the words do not say which, ask. Scope rules: use scope=all for all panel letters and omit panel_ids/group_path. scope=panels requires a nonempty panel_ids list; scope=selection uses the current selection. Pass ONLY changed fields, never the full letter_styles readback: opacity/bold/italic/underline are not accepted. For italic/bold/underline, call restyle_texts(target=letters) directly; do not call this operation first. Preferred ONE-CALL bulk operation for panel-letter placement, font family/size, color/background, removal and restoration. For bold/italic/underline use restyle_texts(target=letters); those are not fields of this function. placement accepts center/centre/middle or a corner (inside the panel); letters OUTSIDE the panels = set_panel_letter_layout(letter_layout="row"). action=style preserves existing text; renumber scope=all creates a complete unique sequence for a newly constructed figure when asked to letter the panels; partial restore preserves existing IDs and is not a whole-figure renumber; remove requires removal_request quoting an explicit user request to remove/hide letters (never a swap), and hides panel letters persistently without deleting captions/scale bars; restore without start_letter preserves an existing or hidden panel text and otherwise uses its automatic position; explicit start_letter sets a new sequence; renumber changes sequence. scope=auto infers panels from panel_ids, group from group_path, otherwise all; explicit panels/group/selection/all are supported. Supplying panel_ids can never broaden to all panels. For WHITE Arial 12 with NO background use color="white", font_family="Arial", font_size=12, background="none". Black is a color, NOT transparent. Unspecified appearance is preserved. Per-panel overrides survive whole-figure style changes unless replace_overrides=true. One undo step. Returns actual styles, changed/skipped counts, and recovery status. Do not loop over individual annotations for figure/group requests. With one letter per row (letter_layout row) the row letters share the figure letter style: action=style scope=all restyles them (font, size, color, background; row_letters_restyled lists them, outcome VERIFIED_CHANGE)."""
     if scope == 'panels' and not panel_ids:
         raise ValueError('scope=panels requires a nonempty panel_ids list. For an explicit all-panel lettering request use scope=all and omit panel_ids; otherwise inspect and provide the intended panel IDs. No edit was submitted.')
+    if _is_colour(background) and not _names_letters(background_request):
+        # "add a black bg to g" coloured the letter's box, not the panel (2026-11-10)
+        raise ValueError('CLARIFICATION_REQUIRED: a background colour here is the LETTER\'s box. The user\'s words '
+                         '(quote them in background_request) must name the letter or label for that. '
+                         '"A black background for panel g" is the panel\'s own background, the area behind the '
+                         'image (visible once it is rotated): use_pyfigures_tool set_image_property with '
+                         'property_name="fill_color" and the colour (black is "0", white "16777215"). If the words '
+                         'do not say which one, ask the user: the letter\'s background or the panel\'s. No edit performed.')
+    if color is not None and panel_ids and not _names_letters(color_request):
+        # "change the colour of a to red" recoloured the letter without asking (2026-11-10)
+        raise ValueError('CLARIFICATION_REQUIRED: a colour here is the LETTER\'s colour. The user\'s words (quote them '
+                         'in color_request) must name the letter or label for that. "The colour of a" may also be a '
+                         'channel colour of panel a (set_lut / channel tools), its border (set_image_property '
+                         'border_color) or its background (fill_color). If the words do not say which one, ask the '
+                         'user which they mean. No edit performed.')
     if panel_ids and scope in ('auto', 'all'):
         scope = 'panels'
     elif group_path is not None and scope == 'auto':

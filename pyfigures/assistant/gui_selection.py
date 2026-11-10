@@ -77,6 +77,23 @@ def editor_tab(tab):
     raise ValueError('Unknown editor tab ' + repr(tab) + '; use one of: ' + ', '.join(sorted(titles)))
 
 
+def editor_tab_in(entries):
+    """The editor tab one of *entries* names (route entries, button titles:
+    'Rotate + Crop'), or None: a tab's title first, then EDITOR_TABS' words."""
+    titles = {re.sub(r'[^a-z0-9]', '', t.lower()): t for t in EDITOR_TABS.values()}
+    entries = [str(e) for e in entries if e]
+    for entry in entries:
+        title = titles.get(re.sub(r'[^a-z0-9]', '', entry.lower()))
+        if title and title != 'Annotations':
+            return title
+    for entry in entries:
+        words = re.split(r'[^a-z0-9]+', entry.lower())
+        for word, title in EDITOR_TABS.items():
+            if word in words and title != 'Annotations':
+                return title
+    return None
+
+
 def open_editor(session, panel_ref=None, tab=None):
     window = session.window
     canvas = window.paint.EZFIG_panel

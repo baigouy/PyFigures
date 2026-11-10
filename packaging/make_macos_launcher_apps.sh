@@ -4,12 +4,14 @@
 # PyFigures.app with --album (the photo album designer) or --poster (the
 # poster designer), so the whole app isn't shipped three times. On Windows
 # the same launchers are executables built by pyfigures.spec.
-# Usage: make_macos_launcher_apps.sh <dist_dir> <version>
+# Usage: make_macos_launcher_apps.sh <dist_dir> <version> [<main app name>]
+# The main app is PyFigures, or "PyFigures NoAI" for the no-AI dmg.
 set -euo pipefail
 DIST="${1:-dist}"
 VERSION="${2:-0.0.0}"
+MAIN="${3:-PyFigures}"
 ICONS="$(cd "$(dirname "$0")/.." && pwd)/images/icons"   # drawn by packaging/make_icons.py
-test -d "$DIST/PyFigures.app" || { echo "no $DIST/PyFigures.app: run pyinstaller first" >&2; exit 1; }
+test -d "$DIST/$MAIN.app" || { echo "no $DIST/$MAIN.app: run pyinstaller first" >&2; exit 1; }
 
 make_launcher() {
   local name="$1" flag="$2" id="$3"
@@ -20,12 +22,12 @@ make_launcher() {
 
   printf '%s\n' \
     '#!/bin/bash' \
-    '# PyFigures.app next to this app (same folder: Applications, the dmg), else /Applications' \
+    "# $MAIN.app next to this app (same folder: Applications, the dmg), else /Applications" \
     'here="$(cd "$(dirname "$0")/../../.." && pwd)"' \
-    'main="$here/PyFigures.app"' \
-    'if [ ! -d "$main" ]; then main="/Applications/PyFigures.app"; fi' \
+    "main=\"\$here/$MAIN.app\"" \
+    "if [ ! -d \"\$main\" ]; then main=\"/Applications/$MAIN.app\"; fi" \
     'if [ ! -d "$main" ]; then' \
-    "  osascript -e 'display alert \"PyFigures.app not found\" message \"Keep $name next to PyFigures.app.\"'" \
+    "  osascript -e 'display alert \"$MAIN.app not found\" message \"Keep $name next to $MAIN.app.\"'" \
     '  exit 1' \
     'fi' \
     "exec open -n -a \"\$main\" --args $flag" \

@@ -65,6 +65,11 @@ jobs:
             app_name: PyFigures NoAI
             artifact_name: PyFigures-NoAI-macOS-AppleSilicon
             artifact_path: PyFigures-NoAI-macOS-AppleSilicon.dmg
+          - os: ubuntu-22.04
+            no_ai: '1'
+            app_name: PyFigures NoAI
+            artifact_name: PyFigures-NoAI-Linux
+            artifact_path: PyFigures-NoAI-Linux-x86_64.*
 
     env:
       PYFIGURES_WEB_CHAT: ${{ matrix.web_chat || '0' }}
@@ -116,6 +121,14 @@ jobs:
             if pip install "PyQt6==6.$m.*" "PyQt6-WebEngine==6.$m.*"; then break; fi
             echo "no PyQt6-WebEngine 6.$m, trying 6.$((m-1))"
           done
+          # Qt and Qt WebEngine themselves must be the very same version (6.11.2 and 6.11.2):
+          # pip only keeps them within the same 6.x
+          QT=$(python -c "from importlib.metadata import version as v; print(v('PyQt6-Qt6'))")
+          WE=$(python -c "from importlib.metadata import version as v; print(v('PyQt6-WebEngine-Qt6'))")
+          if [ "$QT" != "$WE" ]; then
+            echo "Qt $QT but Qt WebEngine $WE: installing Qt $WE"
+            pip install "PyQt6-Qt6==$WE"
+          fi
           python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; import PyQt6.QtWebEngineWidgets; print('PyQt6', v, 'with WebEngine')"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
@@ -171,13 +184,14 @@ jobs:
         run: |
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           chmod +x appimagetool
-          bash packaging/make_linux_packages.sh dist ./appimagetool
+          bash packaging/make_linux_packages.sh dist ./appimagetool "$APP_NAME"
 
       # the AppImage itself runs (unpacked: no FUSE on the runner)
       - name: Self-test of the AppImage (Linux)
         if: runner.os == 'Linux'
         run: |
-          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen ./PyFigures-Linux-x86_64.AppImage --self-test appimage_test.json || { cat appimage_test.json; exit 1; }
+          APPIMAGE="./${APP_NAME// /-}-Linux-x86_64.AppImage"      # PyFigures-Linux-x86_64.AppImage --self-test, or PyFigures-NoAI-…
+          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen "$APPIMAGE" --self-test appimage_test.json || { cat appimage_test.json; exit 1; }
           cat appimage_test.json
 
       # -----------------------------------------------------------------------
@@ -190,13 +204,15 @@ jobs:
       # The photo album and poster designers: small launcher apps running
       # PyFigures.app --album / --poster (on Windows they are "PyFigures Album.exe"
       # and "PyFigures Poster.exe", built by pyfigures.spec)
+      # (the no-AI app has them too, opening "PyFigures NoAI.app"; the web chat app
+      # is the figure editor only)
       - name: Album and poster launchers (macOS)
-        if: runner.os == 'macOS' && matrix.web_chat != '1' && matrix.no_ai != '1'
+        if: runner.os == 'macOS' && matrix.web_chat != '1'
         run: |
-          bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')"
+          bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')" "$APP_NAME"
 
-      - name: Package (macOS — dmg, web chat / no-AI app)
-        if: runner.os == 'macOS' && (matrix.web_chat == '1' || matrix.no_ai == '1')
+      - name: Package (macOS — dmg, web chat app)
+        if: runner.os == 'macOS' && matrix.web_chat == '1'
         run: |
           mkdir dmg_src
           cp -R "dist/$APP_NAME.app" dmg_src/
@@ -210,15 +226,15 @@ jobs:
             dmg_src
 
       - name: Package (macOS — dmg)
-        if: runner.os == 'macOS' && matrix.web_chat != '1' && matrix.no_ai != '1'
+        if: runner.os == 'macOS' && matrix.web_chat != '1'
         run: |
           mkdir dmg_src
-          cp -R dist/PyFigures.app "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
+          cp -R "dist/$APP_NAME.app" "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
           create-dmg \
-            --volname "PyFigures" \
+            --volname "$APP_NAME" \
             --window-size 600 460 \
             --icon-size 90 \
-            --icon "PyFigures.app" 150 90 \
+            --icon "$APP_NAME.app" 150 90 \
             --icon "PyFigures Album.app" 150 220 \
             --icon "PyFigures Poster.app" 150 350 \
             --app-drop-link 450 220 \

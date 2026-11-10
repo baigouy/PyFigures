@@ -82,6 +82,12 @@ binaries = collect_dynamic_libs('pypdfium2_raw')
 # more). Its name makes it open with the web chat (pyfigures/__main__.py).
 WEB_CHAT = os.environ.get('PYFIGURES_WEB_CHAT') == '1'
 APP_NAME = 'PyFigures Web Chat' if WEB_CHAT else 'PyFigures NoAI' if NO_AI else 'PyFigures'
+# which of the three apps this is, written into it (pyfigures.assistant.bundled_app_kind):
+# a renamed executable, and the Album / Poster launchers beside it, stay what they are
+os.makedirs(os.path.join(SPECPATH, 'build'), exist_ok=True)
+with open(os.path.join(SPECPATH, 'build', 'app_kind.txt'), 'w', encoding='utf-8') as _f:
+    _f.write('web_chat' if WEB_CHAT else 'no_ai' if NO_AI else 'standard')
+datas += [(os.path.join(SPECPATH, 'build', 'app_kind.txt'), 'pyfigures')]
 if WEB_CHAT:
     hiddenimports += ['PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'PyQt6.QtWebChannel',
                       'PyQt6.QtNetwork', 'qtpy.QtWebEngineWidgets', 'qtpy.QtWebEngineCore']

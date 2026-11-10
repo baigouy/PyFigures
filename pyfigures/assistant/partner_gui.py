@@ -286,6 +286,42 @@ class PartnerGUI(BaseGUI):
         self.update_letters()
         return result
 
+    def _sync_first_letter_box(self):
+        """The toolbar's first-letter box follows the letters the panels were
+        given one by one through the chat / MCP (A, B, C… kept in their
+        policies): it showed "a" above a figure lettered in capitals, and a
+        panel that lost its letter got a lower-case one back (2026-11-10).
+        The sequence's first letter when the letters follow each other from
+        it, else only its case."""
+        from batoolset.strings.tools import increment_letter
+        texts = []
+        for _, _, panel in panels(self.paint.EZFIG_panel.shapes_to_draw):
+            policy = json.loads(getattr(panel, POLICY, '{}'))
+            if policy.get('visible') is False or policy.get('automatic_text', 'text' not in policy):
+                continue
+            text = policy.get('text')
+            if isinstance(text, str) and len(text) == 1 and text.isalpha():
+                texts.append(text)
+        box = self.letter_line_edit.text()
+        if not texts or not box:
+            return
+        expected, sequence = texts[0], True
+        for text in texts:
+            sequence = sequence and text == expected
+            expected = increment_letter(expected)
+        if sequence:
+            wanted = texts[0]
+        elif all(t.isupper() for t in texts):
+            wanted = box.upper()
+        elif all(t.islower() for t in texts):
+            wanted = box.lower()
+        else:
+            return
+        if wanted != box:
+            self.letter_line_edit.blockSignals(True)
+            self.letter_line_edit.setText(wanted)
+            self.letter_line_edit.blockSignals(False)
+
     def update_letters(self):
         if getattr(self, '_live_loading', False):
             return
@@ -294,6 +330,7 @@ class PartnerGUI(BaseGUI):
         for _, _, panel in panels(self.paint.EZFIG_panel.shapes_to_draw):
             if isinstance(panel.annotations, str) and panel.annotations.strip() in ('', '[]', 'None'):
                 panel.annotations = []
+        self._sync_first_letter_box()
         super().update_letters()
         for _, _, panel in panels(self.paint.EZFIG_panel.shapes_to_draw):
             policy = json.loads(getattr(panel, POLICY, '{}'))

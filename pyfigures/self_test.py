@@ -140,23 +140,26 @@ def _check_web_engine():
     view = QWebEngineView()
     loop = QEventLoop()
     state = {}
-    view.loadFinished.connect(lambda ok: (state.update(loaded=ok), loop.quit()))
-    QTimer.singleShot(120000, loop.quit)
-    view.setHtml("<html><body>pyfigures web engine</body></html>")
-    loop.exec()
-    assert state.get("loaded"), "the page did not load (helper process?)"
-    view.page().runJavaScript("document.body.innerText", 0,
-                              lambda text: (state.update(text=text), loop.quit()))
-    QTimer.singleShot(60000, loop.quit)
-    loop.exec()
-    assert state.get("text") == "pyfigures web engine", f"page text {state.get('text')!r}"
-    # the page must be gone before Qt releases the WebEngine profile at exit,
-    # or the app crashes on quitting ("WebEnginePage still not deleted")
-    from qtpy.QtCore import QCoreApplication, QEvent
-    view.close()
-    view.deleteLater()
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    QCoreApplication.processEvents()
+    try:
+        view.loadFinished.connect(lambda ok: (state.update(loaded=ok), loop.quit()))
+        QTimer.singleShot(120000, loop.quit)
+        view.setHtml("<html><body>pyfigures web engine</body></html>")
+        loop.exec()
+        assert state.get("loaded"), "the page did not load (helper process?)"
+        view.page().runJavaScript("document.body.innerText", 0,
+                                  lambda text: (state.update(text=text), loop.quit()))
+        QTimer.singleShot(60000, loop.quit)
+        loop.exec()
+        assert state.get("text") == "pyfigures web engine", f"page text {state.get('text')!r}"
+    finally:
+        # the page must be gone before Qt releases the WebEngine profile at exit,
+        # or the app crashes on quitting ("WebEnginePage still not deleted"):
+        # after a failed check too, which must end with status 1 and its report
+        from qtpy.QtCore import QCoreApplication, QEvent
+        view.close()
+        view.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QCoreApplication.processEvents()
     return "ok (Qt WebEngine loads a page)"
 
 

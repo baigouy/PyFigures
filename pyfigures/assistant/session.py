@@ -330,6 +330,12 @@ class Session:
                     if where == 'editor' and tab:
                         from .gui_selection import editor_tab
                         tab = editor_tab(tab)   # 'scale' -> 'File Infos + Scale', the title to outline
+                    elif where == 'editor':
+                        # the tab named in the routes instead ([["Edit Image"], ["Rotate + Crop"]]):
+                        # without it the editor opened on Annotations (2026-11-10)
+                        from .gui_selection import editor_tab_in
+                        tab = editor_tab_in([entry for route in (args.get('routes') or []) for entry in route]
+                                            + list(args.get('controls') or []))
                     result = self.click_guide.start(args.get('routes') or [], where=where,
                                                     controls=args.get('controls'), editor_tab=tab,
                                                     note=args.get('note'), open_menus=open_menus)

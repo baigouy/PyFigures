@@ -45,8 +45,25 @@ def sidecar_available() -> bool:
     return True
 
 
+def bundled_app_kind():
+    """'standard', 'no_ai' or 'web_chat': what pyfigures.spec wrote into this
+    standalone app (pyfigures/app_kind.txt). None when not an app, or one
+    built before 0.2.8: the executable's name then tells."""
+    if not getattr(sys, "frozen", False):
+        return None
+    try:
+        return (Path(sys._MEIPASS) / "pyfigures" / "app_kind.txt").read_text(encoding="utf-8").strip() or None
+    except (OSError, AttributeError, TypeError):
+        return None
+
+
 def is_no_ai_app(executable) -> bool:
-    """The 'PyFigures NoAI' standalone app, told apart by its name."""
+    """The 'PyFigures NoAI' standalone app: by what the build wrote into
+    it (a renamed executable stays what it is), else by its name."""
+    if executable == sys.executable:
+        kind = bundled_app_kind()
+        if kind:
+            return kind == "no_ai"
     name = os.path.basename(executable).lower().replace(" ", "").replace("-", "").replace("_", "")
     return "noai" in name
 

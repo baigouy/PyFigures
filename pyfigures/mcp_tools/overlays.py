@@ -27,6 +27,7 @@ from .core import (
     _first_filename,
     _pixel_size,
     _scale_bar_length_error,
+    _length_unit_factor,
     _atomic_write_text,
     _caption_sidecar_path,
     _check_property_value,
@@ -54,6 +55,14 @@ from .core import (
     _stored_image_property,
     _top_groups,
 )
+
+def _stored_units_per(unit) -> float:
+    """How many stored pixel-size units (µm) one *unit* is: 1000 for mm, so a
+    "100 mm" bar is 100 mm long (it was 100 µm long with a "100 mm" label: on
+    a CT scan, a label without a bar). 1 for µm, px and units not known as
+    lengths."""
+    return _length_unit_factor(unit) or 1.0
+
 
 def _default_bar_label(units, unit) -> str:
     """'10 µm': the number without a trailing '.0' and a space before the unit
@@ -221,8 +230,11 @@ def set_scale_bar(
     *bar_width_in_units*: numeric width of the bar in physical units (e.g. 10).
     *label*: text shown next to the bar. If omitted, auto-generated as
              "10 µm" (combining bar_width_in_units and unit).
-    *unit*: physical unit appended to the auto-label (default "µm").
-            Ignored if *label* is supplied explicitly.
+    *unit*: the unit of *bar_width_in_units* (and of *px_to_unit*), shown in
+            the auto-label: "µm" (default), "nm", "mm", "cm", "m". Pixel sizes
+            are kept in µm, so a bar in another unit is converted: 100 with
+            unit="mm" is a 100 mm bar (large samples: CT, whole organs). A bar
+            shorter than one pixel is refused, as is one wider than the image.
     *placement*: "bottom right" | "bottom left" | "top right" | "top left"
                  (default "bottom right").
     *bar_color*: color of the bar itself — name ("white", "yellow", …), #rrggbb
@@ -258,19 +270,22 @@ def set_scale_bar(
     imgs = [c for c in container if c.tag == "Image2D"]
     if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
-    too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit)
+    calibrated = px_to_unit is not None or _pixel_size(imgs[image_index])[0] is not None
+    factor = _stored_units_per(unit) if calibrated else 1.0
+    too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit, factor)
     if too_long:
         return f"ERROR: {too_long} Nothing was changed."
 
     uncal = []
-    if px_to_unit is None and _pixel_size(imgs[image_index])[0] is None:
+    if not calibrated:
         # no pixel size anywhere: the bar is a length in pixels and says so
         uncal = [os.path.basename(str(_first_filename(imgs[image_index])))]
         text = _default_bar_label(bar_width_in_units, "px")
         legend_html = _scale_bar_legend_html(text, label_color_int)
+    # the bar is stored in the pixel size's unit (µm): "100 mm" is 100000 of them, labelled 100 mm
     action = _apply_scalebar_to_img(
-        imgs[image_index], bar_width_in_units, legend_html,
-        placement, bar_color_int, px_to_unit,
+        imgs[image_index], bar_width_in_units * factor, legend_html,
+        placement, bar_color_int, None if px_to_unit is None else px_to_unit * factor,
     )
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
@@ -403,7 +418,8 @@ def set_scale_bar_all(
         if px is not None and px_to_unit_scope == "missing" and own is not None:
             px = None                    # a calibrated image keeps its own pixel size
             kept_own += 1
-        err = _scale_bar_length_error(img, bar_width_in_units, px, unit)
+        factor = _stored_units_per(unit) if (px is not None or own is not None) else 1.0
+        err = _scale_bar_length_error(img, bar_width_in_units, px, unit, factor)
         if err:
             too_long.append(f"{os.path.basename(str(_first_filename(img)))}: {err}")
             return
@@ -418,8 +434,8 @@ def set_scale_bar_all(
             used.append(f"{name} {own:g} (its own"
                         + (", kept: NOT the value given)" if px_to_unit is not None else ")"))
         action = _apply_scalebar_to_img(
-            img, bar_width_in_units, legend,
-            placement, bar_color_int, px,
+            img, bar_width_in_units * factor, legend,
+            placement, bar_color_int, None if px is None else px * factor,
         )
         if action == "added":
             added += 1

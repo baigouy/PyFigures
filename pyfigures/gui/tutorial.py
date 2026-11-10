@@ -37,6 +37,13 @@ from qtpy.QtGui import QPainter, QColor, QPen, QBrush, QPixmap, QFont, QPainterP
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
+def _ai() -> bool:
+    """The chat and MCP exist here (not in the no-AI install): the tutorial
+    texts only name them then."""
+    from pyfigures.assistant import ai_features_enabled
+    return ai_features_enabled()
+
+
 def _widget_rect_in(widget, ancestor) -> QRect:
     """Return widget's geometry in ancestor's coordinate space."""
     tl = widget.mapTo(ancestor, QPoint(0, 0))
@@ -2830,9 +2837,10 @@ def sharing_steps() -> list[TutorialStep]:
             message=(
                 'You now know the full collaboration and accessibility toolkit.<br><br>'
                 'Still to explore in the <b>Help</b> menu: the <b>Stacks, Channels &amp; '
-                'Movies</b>, <b>Automate</b>, <b>Chat &amp; MCP</b>, <b>Poster</b> and <b>Photo '
-                'Album</b> tutorials; <b>Chat &amp; MCP</b> shows how a language model can do all '
-                'of this for you in plain language.<br><br>'
+                'Movies</b>, <b>Automate</b>, ' + ('<b>Chat &amp; MCP</b>, ' if _ai() else '')
+                + '<b>Poster</b> and <b>Photo Album</b> tutorials'
+                + ('; <b>Chat &amp; MCP</b> shows how a language model can do all '
+                   'of this for you in plain language' if _ai() else '') + '.<br><br>'
                 'Happy figure-making!'
             ),
             get_target=None,
@@ -3222,11 +3230,12 @@ def automation_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Automate complete!',
             message=(
-                'You can now build and check figures in bulk.<br><br>'
-                'PyFigures also ships an <b>MCP server</b> with the same tools (see '
-                '<code>docs/MCP_SERVER.md</code>): connect it to an MCP client such as '
-                'Claude, ask for "a 3-panel figure from this folder with 10 µm scale bars" '
-                'and it drives PyFigures for you. The <b>Chat &amp; MCP</b> tutorial (Help menu) shows how.'
+                'You can now build and check figures in bulk.'
+                + ('<br><br>PyFigures also ships an <b>MCP server</b> with the same tools (see '
+                   '<code>docs/MCP_SERVER.md</code>): connect it to an MCP client such as '
+                   'Claude, ask for "a 3-panel figure from this folder with 10 µm scale bars" '
+                   'and it drives PyFigures for you. The <b>Chat &amp; MCP</b> tutorial (Help menu) '
+                   'shows how.' if _ai() else '')
             ),
         ),
     ], first=4)

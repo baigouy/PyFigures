@@ -30,7 +30,10 @@ BEGIN = 'PYFIGURES-CALLS'
 END = 'END-PYFIGURES-CALLS'
 RESULTS = 'PYFIGURES-RESULTS'
 TEMPLATE = 'TOOL_NAME'       # the placeholder of the example block, never a real call
+_BEGIN = re.compile(r'(?<![A-Z-])' + re.escape(BEGIN))
 _BLOCK = re.compile(r'(?<![A-Z-])' + re.escape(BEGIN) + r'\s*(.*?)\s*' + re.escape(END), re.S)
+# words of the instructions message: the page shows them while its conversation is the one PyFigures started
+SIGNATURE = 'edit a scientific figure that is open in PyFigures'
 
 # look-ups: change nothing, so they may run without a click
 READ_ONLY = frozenset({'inspect_figure', 'preview_figure', 'list_pyfigures_categories', 'find_pyfigures_tools'})
@@ -40,6 +43,13 @@ def is_web_chat_app(executable):
     PYFIGURES_WEB_CHAT=1: Qt WebEngine bundled, opens with the web chat),
     told apart from the other apps by its executable's name."""
     import os
+    import sys
+    if executable == sys.executable:
+        # written into the app by pyfigures.spec: a renamed executable stays what it is
+        from . import bundled_app_kind
+        kind = bundled_app_kind()
+        if kind:
+            return kind == 'web_chat'
     name = os.path.basename(executable).lower().replace('_', ' ').replace('-', ' ')
     return 'web chat' in name or 'webchat' in name
 
@@ -72,6 +82,10 @@ class Block:
     def read_only(self):
         return bool(self.calls) and all(c['tool'] in READ_ONLY for c in self.calls)
 
+    @property
+    def writes_files(self):
+        return any(writes_files(c) for c in self.calls)
+
     def describe(self):
         if self.error:
             return 'Unreadable request: ' + self.error
@@ -87,6 +101,23 @@ def describe_call(call):
     return f'{tool} {text if len(text) < 200 else text[:197] + "…"}'
 
 
+# operations that write outside the figure: never run without a click, even in automatic mode
+_FILE_WORDS = ('save', 'export', 'write', 'consolidate', 'bundle', 'render', 'script', 'delete_file')
+_PATH_KEYS = ('path', 'folder', 'dir', 'directory', 'file', 'filename')
+
+
+def writes_files(call):
+    """The call saves, exports or runs a script, or names a file or folder
+    (the open figure's own 'live' path apart)."""
+    tool, args = call['tool'], call.get('arguments') or {}
+    if tool == 'use_pyfigures_tool':
+        tool, args = str(args.get('tool_name', '')), args.get('arguments') or {}
+    if any(word in tool.lower() for word in _FILE_WORDS):
+        return True
+    return any(isinstance(k, str) and k.lower().endswith(_PATH_KEYS) and isinstance(v, str)
+               and v not in ('', 'live') for k, v in (args.items() if isinstance(args, dict) else ()))
+
+
 def _strip_fences(text):
     text = text.strip()
     text = re.sub(r'^```[a-zA-Z]*\s*', '', text)
@@ -95,18 +126,26 @@ def _strip_fences(text):
 
 def _load(text):
     """JSON as models write it in a chat: smart quotes and trailing commas
-    are tolerated."""
+    are tolerated. Read as written first: curly quotes and non-breaking
+    spaces inside a label are text, not mistakes."""
     text = _strip_fences(text)
-    text = text.replace('“', '"').replace('”', '"').replace(' ', ' ')
     # a page's code block adds its own words around the JSON ("json", "Copy code")
     starts = [i for i in (text.find('['), text.find('{')) if i >= 0]
     end = max(text.rfind(']'), text.rfind('}'))
     if starts and end > min(starts):
         text = text[min(starts):end + 1]
-    try:
-        return json.loads(text)
-    except ValueError:
-        return json.loads(re.sub(r',\s*([\]}])', r'\1', text))
+    repaired = text.replace('“', '"').replace('”', '"').replace(' ', ' ')
+    error = None
+    for attempt in (text, _no_trailing_commas(text), repaired, _no_trailing_commas(repaired)):
+        try:
+            return json.loads(attempt)
+        except ValueError as exc:
+            error = error or exc
+    raise error
+
+
+def _no_trailing_commas(text):
+    return re.sub(r',\s*([\]}])', r'\1', text)
 
 
 def parse_blocks(text, tool_names=None):
@@ -119,6 +158,9 @@ def parse_blocks(text, tool_names=None):
     blocks = []
     for match in _BLOCK.finditer(text or ''):
         raw = match.group(1)
+        again = list(_BEGIN.finditer(raw))
+        if again:           # the marker named in the model's prose before its block
+            raw = raw[again[-1].end():].strip()
         if TEMPLATE in raw:
             continue        # the example of the instructions, shown on the page once sent
         try:
@@ -188,9 +230,10 @@ def instructions_prompt(tools, server_instructions, state=None, request=None):
         lines.append(f'- {tool["name"]}: {(tool.get("description") or "").strip()}')
         lines.append('  arguments schema: ' + json.dumps(schema, ensure_ascii=False, separators=(',', ':')))
     if state is not None:
-        lines += ['', 'The figure now (inspect_figure):', _truncate(json.dumps(state, ensure_ascii=False), 8000)]
+        lines += ['', 'The figure now (inspect_figure):',
+                  _no_markers(_truncate(json.dumps(state, ensure_ascii=False), 8000))]
     if request:
-        lines += ['', 'My request: ' + request.strip()]
+        lines += ['', 'My request: ' + _no_markers(request.strip())]
     else:
         lines += ['', 'Reply "Ready" and wait for my request.']
     return '\n'.join(lines)
@@ -200,13 +243,19 @@ def _truncate(text, limit):
     return text if len(text) <= limit else text[:limit] + f'… [{len(text) - limit} more characters cut]'
 
 
+def _no_markers(text):
+    """*text* (a result, the figure's own texts) without the marker words:
+    typed into the page, they would be read back as a request of the model."""
+    return text.replace(BEGIN, BEGIN.replace('-', '_'))
+
+
 def results_message(outcomes):
     """The message written back into the chat box after a block ran:
     outcomes = [(call, ok, text)]."""
     lines = [f'{RESULTS} (from PyFigures):']
     for i, (call, ok, text) in enumerate(outcomes, 1):
-        lines.append(f'{i}. {describe_call(call)} -> {"OK" if ok else "ERROR"}')
-        lines.append(_truncate(text, MAX_RESULT_CHARS))
+        lines.append(_no_markers(f'{i}. {describe_call(call)} -> {"OK" if ok else "ERROR"}'))
+        lines.append(_no_markers(_truncate(text, MAX_RESULT_CHARS)))
     # a reminder each time: models drift back to their own tools ("Let me look…") after a few turns.
     # Never both marker words here: the page would show them as a block.
     lines.append('Continue with the next step (operations only in a block between the two marker lines, as at the '
@@ -223,7 +272,8 @@ def _content_text(blocks, images):
             parts.append(block.text)
         elif kind == 'image':
             images.append(base64.b64decode(block.data))
-            parts.append('[image: a preview PyFigures keeps for you; ask me to paste it if you need to see it]')
+            parts.append('[image: a preview of the figure, attached to this message when the chat site takes '
+                         'pasted images; if you do not see it, ask me to paste it]')
         else:
             parts.append(str(block))
     return '\n'.join(parts)

@@ -211,7 +211,11 @@ def sidecar_config(descriptor=None):
 def apply_launch_flags(window, argv):
     """``--share``: share the figure with the MCP server at start-up;
     ``--chat``: also dock the chat (qtpy_ai_sidecar); ``--web-chat``: dock
-    an online chat page instead (pyfigures.gui.web_chat_panel)."""
+    an online chat page instead (pyfigures.gui.web_chat_panel). None of
+    them in the no-AI install: the window is left as it is."""
+    from pyfigures.assistant import ai_features_enabled
+    if not ai_features_enabled():
+        return window
     if '--web-chat' in argv:
         window = start_live_session(window).window
         from pyfigures.gui.web_chat_panel import attach

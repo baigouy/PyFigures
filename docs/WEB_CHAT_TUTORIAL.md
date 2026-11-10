@@ -101,17 +101,26 @@ Tick **Automatic** to let PyFigures do the clicking:
 - it applies every operation the model asks for and sends the results back,
   round after round, until the model answers without operations (at most 20
   rounds per request);
-- **Stop** pauses it at once; Ctrl+Z undoes each change.
+- **Stop** pauses it at once; Ctrl+Z undoes each change;
+- operations that save, export or name a file on your computer still wait for
+  your **Apply**.
 
 Automatic is off by default: sending messages for you is scripted use of the
 site, which some sites' terms or institutions' rules do not allow.
 
 ## 6. Tips and problems
 
-- **Start over with a new sign-in:** close PyFigures, then delete the folder
+- **Start over with a new sign-in:** click **Forget my login…** (it deletes
+  the cookies and cached pages PyFigures keeps for the chat sites). To remove
+  everything by hand: close PyFigures, then delete the folder
   `pyfigures-web-chat` in `%APPDATA%\python\QtWebEngine\` (Windows).
-- **Copy the last preview** puts the latest figure preview on the clipboard,
-  to paste into the chat if the site accepts images.
+- **New conversation** opens the chat page afresh: the next request gives it
+  the instructions and the figure again. **←** and **⟳** go back a page and
+  load it again.
+- **Previews:** with *Paste figure previews into the chat with the results*
+  ticked, a preview the model asks for is pasted into the message box, so a
+  model that reads pictures sees the figure. **Copy the last preview** puts
+  the latest one on the clipboard, to paste it yourself.
 - **Clipboard mode** (no PyQt6-WebEngine): choosing a page in the address list
   opens it in your usual browser. Click **Start**, paste (Ctrl+V) into the
   chat and send; copy the model's answer and click **Read a copied reply**.

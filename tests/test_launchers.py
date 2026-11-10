@@ -113,6 +113,21 @@ def test_workflow_ships_the_launchers_on_macos():
     assert "${{ matrix.artifact_path }}" in dmg
 
 
+def test_the_no_ai_app_has_the_launchers_too_and_a_linux_build():
+    wf = _read(".github", "workflows", "build.yml")
+    step = wf[wf.index("Album and poster launchers (macOS)"):wf.index("Package (macOS — dmg, web chat app)")]
+    assert "matrix.web_chat != '1'" in step and "no_ai" not in step       # PyFigures and PyFigures NoAI
+    assert 'print(__VERSION__)\')" "$APP_NAME"' in step                  # they open that app
+    dmg = wf[wf.index("Package (macOS — dmg)"):]
+    assert 'cp -R "dist/$APP_NAME.app" "dist/PyFigures Album.app"' in dmg and "matrix.no_ai != '1'" not in dmg
+    assert "artifact_path: PyFigures-NoAI-Linux-x86_64.*" in wf
+    assert 'make_linux_packages.sh dist ./appimagetool "$APP_NAME"' in wf
+    script = _read("packaging", "make_linux_packages.sh")
+    assert 'APP="${3:-PyFigures}"' in script and 'ln -s "$APP" "$APPDIR/usr/lib/PyFigures/PyFigures"' in script
+    # Qt and Qt WebEngine of the very same version in the web chat app
+    assert "PyQt6-WebEngine-Qt6" in wf and 'pip install "PyQt6-Qt6==$WE"' in wf
+
+
 _LAUNCHER_SCRIPT = os.path.join(ROOT, "packaging", "make_macos_launcher_apps.sh")
 
 
@@ -170,3 +185,10 @@ def test_macos_launcher_apps_are_made_next_to_pyfigures_app(tmp_path, name, flag
     assert f'exec open -n -a "$main" --args {flag}' in launcher
     assert f"Keep {name} next to PyFigures.app" in launcher
     assert '/../../..' in launcher and "/Applications/PyFigures.app" in launcher
+    # the no-AI dmg: the same launchers open "PyFigures NoAI.app"
+    (tmp_path / "PyFigures NoAI.app").mkdir()
+    r = subprocess.run([_BASH, script, _posix(tmp_path), "1.2.3", "PyFigures NoAI"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    launcher = (app / "MacOS" / name).read_text(encoding="utf-8")
+    assert 'main="$here/PyFigures NoAI.app"' in launcher and '"/Applications/PyFigures NoAI.app"' in launcher
+    assert f"Keep {name} next to PyFigures NoAI.app" in launcher and f"--args {flag}" in launcher

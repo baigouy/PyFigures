@@ -1150,12 +1150,28 @@ def _pixel_size(img: ET.Element) -> tuple[float | None, str]:
     return None, "none"
 
 
+# lengths in µm, the unit pixel sizes are stored in (image files give µm per pixel)
+_LENGTH_UNITS = {"nm": 1e-3, "µm": 1.0, "μm": 1.0, "um": 1.0, "micron": 1.0, "microns": 1.0,
+                 "mm": 1e3, "cm": 1e4, "m": 1e6}
+
+
+def _length_unit_factor(unit) -> float | None:
+    """How many µm one *unit* is; None for 'px' or a unit that is not a length
+    known here (the number is then used as it is, as before)."""
+    return _LENGTH_UNITS.get(str(unit or "").strip().lower().replace("μ", "µ"))
+
+
 def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
-                            px_to_unit: float | None, unit: str = "µm") -> str | None:
+                            px_to_unit: float | None, unit: str = "µm",
+                            unit_factor: float = 1.0) -> str | None:
     """An error when the bar would be as wide as the (cropped) image or wider —
     it was drawn clipped to the panel, i.e. at a wrong length (a model asked for
-    100 µm at 0.1 µm/px on a 512 px image), or when the length or the pixel
-    size is not a positive number. None when fine or unknown."""
+    100 µm at 0.1 µm/px on a 512 px image), shorter than one pixel (100 µm on a
+    CT scan at 597 µm/px: a label without a bar), or when the length or the
+    pixel size is not a positive number. None when fine or unknown.
+    *unit_factor*: how many of the stored pixel-size units one *unit* is (1000
+    for a bar in mm on an image calibrated in µm); the length and *px_to_unit*
+    are in *unit*."""
     if px_to_unit is not None and not px_to_unit > 0:
         return (f"px_to_unit must be the pixel size, a positive number of {unit} per pixel "
                 f"(got {px_to_unit}).")
@@ -1164,11 +1180,20 @@ def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
     px = px_to_unit
     if px is None:
         try:
-            px = float(_child_text(img, "px_to_unit_conversion_factor") or 0)
+            px = float(_child_text(img, "px_to_unit_conversion_factor") or 0) / (unit_factor or 1.0)
         except (TypeError, ValueError):
             px = 0
     if not px or px <= 0 or bar_width_in_units <= 0:
         return None
+    if bar_width_in_units / px < 1:
+        size = _raw_size_from_file(_first_filename(img))
+        hint = ""
+        if size:
+            hint = (f" The image is {size[0] * px:g} {unit} wide: a bar of about a fifth of it is "
+                    f"{_nice_bar_length(size[0] * px * 0.2):g} {unit}.")
+        return (f"a {bar_width_in_units:g} {unit} bar is {bar_width_in_units / px:.2g} px at {px:g} {unit}/px: "
+                f"shorter than one pixel, it would not be seen (only its label).{hint} Check the unit "
+                f"too: a larger one (mm, cm) may be what this image needs.")
     size = _raw_size_from_file(_first_filename(img))
     if not size:
         return None

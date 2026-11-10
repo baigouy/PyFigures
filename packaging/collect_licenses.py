@@ -278,7 +278,15 @@ def notices(out_dir):
         "...) are listed with their licences in the Qt source archive",
         "(qt_attribution.json files).",
         "",
-    ]
+    ] + ([
+        "Qt WebEngine (the PyFigures Web Chat app) contains the Chromium browser",
+        "engine and its many third-party components (BSD-3-Clause for Chromium",
+        "itself; MIT, Apache-2.0, LGPL and others for its parts). They are listed",
+        "with their licence texts at https://doc.qt.io/qt-6/qtwebengine-licensing.html",
+        "and in the Qt source archive (qtwebengine/src/3rdparty), which is part of",
+        "the corresponding source named above.",
+        "",
+    ] if any(c["name"].lower() == "pyqt6-webengine-qt6" for c in py) else [])
     body = []
     for c in py:
         body += ["", "-" * 72, f"{c['name']} {c['version']}  -  {c['license']}", "-" * 72]

@@ -4697,6 +4697,12 @@ class MyWidget(QWidget):
                 # print(custom_dialog.main_widget.qt_viewer.background)  # TODO --> maybe add a method to simplify that ???? because that is a bit heavy
 
                 clone = custom_dialog.main_widget.qt_viewer.background # that is why it was not working !!!
+                # the letter's own text and style (set through the chat / MCP: a capital G, its
+                # colour) live on the panel object, not in what is cloned: without this the edited
+                # panel came back with the toolbar's default letter ("g")
+                letter_policy = getattr(image2d, 'live_letter_policy', None)
+                if letter_policy and not getattr(clone, 'live_letter_policy', None):
+                    clone.live_letter_policy = letter_policy
                 # need replace the image2D by its clone
                 clone.set_to_scale(scale_before)
                 clone.setTopLeft(topleft_before)
