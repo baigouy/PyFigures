@@ -227,6 +227,27 @@ def test_no_hint_for_other_dialogs_or_when_stopped(win, qapp):
     assert id(dlg) not in ctrl._dialog_injector._hints
 
 
+def test_a_dialog_shown_after_the_bubble_was_deleted_is_left_alone(win, qapp):
+    """The injector's 150 ms timer fired after the window (and its bubble) was
+    gone: 'wrapped C/C++ object of type HintBubble has been deleted' (CI, 0.2.8)."""
+    from qtpy import sip
+    ctrl = win._tutorial
+    ctrl.start(_steps(2))
+    ctrl.stop()
+    dlg = QDialog(win)
+    dlg.show()
+    old = ctrl._bubble
+    try:
+        gone = type(old)(win)
+        ctrl._bubble = gone
+        sip.delete(gone)
+        ctrl._dialog_injector._inject(dlg)                 # no RuntimeError
+        assert id(dlg) not in ctrl._dialog_injector._hints
+    finally:
+        ctrl._bubble = old
+        dlg.hide()
+
+
 # ---------------------------------------------------------------------------
 # skipping steps: "Set it up for me" must always unblock the next step
 # ---------------------------------------------------------------------------

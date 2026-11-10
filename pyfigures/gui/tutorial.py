@@ -738,7 +738,11 @@ class _DialogInjector(QObject):
         key = id(dialog)
         if key in self._hints:
             return
-        if not self._ctrl._bubble.isVisible():
+        try:
+            if not self._ctrl._bubble.isVisible():
+                return
+        except RuntimeError:
+            # the tutorial (and its bubble) was closed while the timer waited
             return
         if not self._is_annotation_editor_dialog(dialog):
             return
