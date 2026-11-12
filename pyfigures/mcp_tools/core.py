@@ -1057,6 +1057,84 @@ def _scalebar_info(sb: ET.Element) -> dict:
     }
 
 
+_GENERIC_FAMILIES = {"sans serif", "sans-serif", "ms shell dlg", "ms shell dlg 2", "system-ui", ""}
+
+
+def _html_font_family(html: str) -> str | None:
+    """The font family a rich-text string names for its text (its first text span,
+    else its body), None when it names none or only Qt's generic default."""
+    import re
+    if not html or html == "None":
+        return None
+    found = None
+    body = re.search(r"<body[^>]*style=\"([^\"]*)\"", html)
+    if body:
+        m = re.findall(r"font-family\s*:\s*([^;\"]+)", body.group(1))
+        found = m[-1] if m else None                 # the last one given wins (CSS)
+    for css, inner in re.findall(r"<span[^>]*style=\"([^\"]*)\"[^>]*>(.*?)</span>", html, flags=re.S):
+        if re.sub(r"<[^>]+>", "", inner).strip():
+            m = re.findall(r"font-family\s*:\s*([^;\"]+)", css)
+            if m:
+                found = m[-1]
+            break
+    if found is None:
+        return None
+    family = found.split(",")[0].strip().strip("'\"")
+    return None if family.lower() in _GENERIC_FAMILIES else family
+
+
+def _with_font_family(html: str, family: str) -> str:
+    """*html* drawn in *family* (its generic or missing font replaced)."""
+    import re
+    if not html or html == "None":
+        return html
+    if "<body" in html or "<span" in html:
+        html = re.sub(r"font-family\s*:\s*[^;\"]+", f"font-family:'{family}'", html)
+        if "font-family" not in html:
+            html = re.sub(r'(<body[^>]*style=")', rf"\1font-family:'{family}'; ", html, count=1)
+        if "font-family" not in html:
+            html = re.sub(r"(<body)", rf"\1 style=\"font-family:'{family}';\"", html, count=1)
+        return html
+    return f"<span style=\"font-family:'{family}';\">{html}</span>"
+
+
+def _other_text_family(root: ET.Element) -> str | None:
+    """The font of the figure's texts other than the panel letters (labels, legends,
+    scale-bar labels): the one most of them use, else the figure font."""
+    from collections import Counter
+    counts: Counter = Counter()
+    for ta in root.iter("TAText2D"):
+        if (ta.findtext("is_letter") or "") != "True":
+            f = _html_font_family(_decode(ta.findtext("text") or ""))
+            if f:
+                counts[f] += 1
+    for sb in root.iter("ScaleBar"):
+        f = _html_font_family(_decode(sb.findtext("legend") or ""))
+        if f:
+            counts[f] += 1
+    if counts:
+        return counts.most_common(1)[0][0]
+    return _figure_font(root).get("font_family")
+
+
+def _scale_bars_in_text_font(root: ET.Element) -> int:
+    """Give every scale-bar label that has no font of its own the font of the other
+    texts (they were saved in Qt's generic "Sans Serif", drawn in another font than
+    the labels next to them, user request 2026-11-12). Returns how many changed."""
+    family = _other_text_family(root)
+    if not family:
+        return 0
+    n = 0
+    for sb in root.iter("ScaleBar"):
+        el = sb.find("legend")
+        html = _decode(el.text or "") if el is not None else ""
+        if not html or html == "None" or _html_font_family(html):
+            continue
+        el.text = _with_font_family(html, family)
+        n += 1
+    return n
+
+
 def _new_scalebar_elem(
     bar_width_in_units: float,
     legend_html: str,

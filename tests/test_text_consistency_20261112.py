@@ -82,6 +82,58 @@ def test_letters_may_have_their_own_font_the_other_texts_share_one(tmp_path):
     assert not d["consistent"] and any(i["property"] == "font" for i in d["issues"])
 
 
+def _label_font(pyf, family):
+    """Give the first non-letter text (or a new one) the font *family*."""
+    from pyfigures.mcp_server import add_annotation
+    add_annotation(pyf, [0], 0, "control")
+    tree = ET.parse(pyf)
+    ta = next(e for e in tree.getroot().iter("TAText2D") if e.findtext("is_letter") != "True")
+    field = ta.find("text")
+    raw = field.text
+    quoted = raw.startswith('""')
+    html = raw[2:-2] if quoted else raw
+    html = f"<span style=\"font-family:'{family}';\">{html}</span>" if "<span" not in html else \
+        re.sub(r'(<span style=")', rf"\1font-family:'{family}'; ", html, count=1)
+    field.text = f'""{html}""' if quoted else html
+    tree.write(pyf)
+
+
+def test_new_scale_bars_take_the_font_of_the_other_texts(tmp_path):
+    """Scale-bar labels were saved in Qt's generic "Sans Serif", drawn in another font
+    than the labels next to them (user request 2026-11-12)."""
+    from pyfigures.mcp_server import set_scale_bar_all, set_scale_bar, check_text_consistency
+    from pyfigures.mcp_tools.core import _html_font_family
+    pyf = _figure(tmp_path, n=2)
+    _label_font(pyf, "Courier New")
+    set_scale_bar_all(pyf, bar_width_in_units=5, px_to_unit=0.5)
+    fams = [_html_font_family(e.findtext("legend")) for e in ET.parse(pyf).getroot().iter("ScaleBar")]
+    assert fams == ["Courier New", "Courier New"]
+    d = json.loads(check_text_consistency(pyf))
+    assert d["consistent"], d["summary"]
+    # a label given its own font keeps it
+    _restyle_one(pyf, "ScaleBar", 0, "font-family:'Arial'")
+    set_scale_bar(pyf, [0], 1, bar_width_in_units=8)
+    fams = [_html_font_family(e.findtext("legend")) for e in ET.parse(pyf).getroot().iter("ScaleBar")]
+    assert fams[0] == "Arial"
+
+
+def test_a_scale_bar_added_in_the_panel_editor_takes_that_font(qapp):
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.scalebar import ScaleBar
+    from batoolset.drawings.shapes.txt2d import TAText2D
+    from pyfigures.text_fonts import scale_bar_in_text_font
+    from pyfigures.mcp_tools.core import _html_font_family
+    panel = Image2D(data=np.zeros((50, 50), dtype=np.uint8))
+    panel.annotations = [TAText2D("<span style=\"font-family:'Courier New';\">control</span>")]
+    sb = ScaleBar(bar_width_in_units=10, legend=TAText2D("10 µm"))
+    assert scale_bar_in_text_font(sb, [panel], fallback="Arial")
+    assert _html_font_family(sb.legend.getHtmlText()) == "Courier New"
+    alone = ScaleBar(bar_width_in_units=10, legend=TAText2D("10 µm"))
+    assert scale_bar_in_text_font(alone, [], fallback="Arial")              # no other text: the figure font
+    assert _html_font_family(alone.legend.getHtmlText()) == "Arial"
+    assert not scale_bar_in_text_font(sb, [panel], fallback="Arial")        # it has its own now
+
+
 def test_recipe_text_check(tmp_path):
     out = _figure(tmp_path, n=2, checks=["text"])
     assert "text" in json.dumps(out["checks"]) and "consistent" in json.dumps(out["checks"])

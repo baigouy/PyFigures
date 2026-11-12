@@ -24,6 +24,7 @@ from .app import (
 from .core import (
     _corner_error,
     _apply_scalebar_to_img,
+    _scale_bars_in_text_font,
     _first_filename,
     _pixel_size,
     _scale_bar_length_error,
@@ -325,6 +326,7 @@ def set_scale_bar(
         placement, bar_color_int, None if px_to_unit is None else px_to_unit * factor,
         bar_height_px=bar_height_px,
     )
+    _scale_bars_in_text_font(tree.getroot())        # in the font of the other texts
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
@@ -540,6 +542,7 @@ def set_scale_bar_all(
         if not updated:
             return ("ERROR: no image has a scale bar yet: give the length in bar_width_in_units "
                     "to add them. Nothing was changed.")
+        _scale_bars_in_text_font(tree.getroot())
         _save(tree, pyf_path)
         what = [w for w, on in (("no text", no_text), (f"text '{label}'", label is not None and not no_text),
                                 (f"bar colour {bar_color}", bar_color is not None),
@@ -550,6 +553,7 @@ def set_scale_bar_all(
                 f"lengths kept. {skipped} image(s) without a scale bar left as they are.")
     if total == 0:
         return "No images found in this figure."
+    _scale_bars_in_text_font(tree.getroot())        # in the font of the other texts
     _save(tree, pyf_path)
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
     if px_to_unit is not None and kept_own:

@@ -1148,6 +1148,8 @@ class VectorialDrawPane2(QWidget):
                 result = custom_dialog.exec_()
                 if result:
                     scale = editor.getScaleBar()
+                    from pyfigures.text_fonts import scale_bar_in_text_font
+                    scale_bar_in_text_font(scale)        # a new label: the font of the other texts
                     self.selected_shape[0].__init__(**scale.to_dict())
 
 
@@ -2940,6 +2942,9 @@ class MainWindow(QWidget):
 
         if custom_dialog.exec_():
             scale_bar = editor.getScaleBar()
+            # in the font of the figure's other texts (not Qt's generic "Sans Serif")
+            from pyfigures.text_fonts import scale_bar_in_text_font
+            scale_bar_in_text_font(scale_bar)
             self.qt_viewer.shapes.append(scale_bar)
             self.qt_viewer.shapeAdded.emit()
 
