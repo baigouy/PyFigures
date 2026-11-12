@@ -106,6 +106,37 @@ def test_the_user_ctrl_z_counts_against_the_chat_undos(live):
     assert len(g.paint.EZFIG_panel.shapes_to_draw) == n
 
 
+def test_i_wanna_edit_it_myself_opens_the_editor_through_the_bridge(qapp, gui, runtime, tmp_path):  # noqa: F811
+    """The chat opens the panel's editor itself for "I wanna edit the ROI of the inset in
+    b" (two questions came first, user chat 2026-11-12)."""
+    import threading
+    import time
+    pytest.importorskip("qtpy_ai_sidecar")
+    from qtpy_ai_sidecar.adapters.pyfigures import PyFiguresAdapter
+    from pyfigures.assistant import launch
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    launch.start_live_session(g)
+    g.auto_lettering_checkbox.setChecked(True)
+    g.update_letters()
+    opened = []
+    g.paint.EZFIG_panel.update_image_annotations = lambda image2d=None, tab=None, draw_tool=True: opened.append(tab)
+    adapter = PyFiguresAdapter(runtime / "connection.json")
+    box = {}
+
+    def run():
+        box["out"] = adapter.preflight_manual_response("I wanna edit the ROI of the inset in panel a")
+    t = threading.Thread(target=run)
+    t.start()
+    while t.is_alive():
+        qapp.processEvents()
+        t.join(0.02)
+    end = time.time() + 2
+    while not opened and time.time() < end:
+        qapp.processEvents()
+    assert box["out"] and "OK" in box["out"]["content"] and opened == ["Annotations"]
+
+
 def test_an_undo_never_empties_the_figure(qapp, gui, tmp_path):  # noqa: F811
     """PyFigures opened empty, the figure dropped on it: undoing that empties the canvas."""
     from pyfigures.assistant import launch
