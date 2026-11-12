@@ -1731,6 +1731,11 @@ class EZFIG_GUI(QMainWindow):
                                             "compared by eye across panels.")
         qc_menu.addAction(scale_consistency_action)
         scale_consistency_action.triggered.connect(self.check_scale_consistency_action)
+        text_consistency_action = QAction("Check text consistency…", self)
+        text_consistency_action.setToolTip("Panel letters alike, scale-bar labels alike, the other "
+                                           "texts alike, and one font family for all of them.")
+        qc_menu.addAction(text_consistency_action)
+        text_consistency_action.triggered.connect(self.check_text_consistency_action)
         review_action = QAction("Pre-submission review (all checks)…", self)
         review_action.setToolTip("Run every mechanical QC check at once and list the "
                                  "reviewer questions to judge before submitting.")
@@ -6615,6 +6620,36 @@ class EZFIG_GUI(QMainWindow):
                 who = m['filename'] if isinstance(m, dict) else m
                 lines.append(f"  - {who}")
         self._show_report('Scale-bar consistency', "\n".join(lines))
+
+    def check_text_consistency_action(self):
+        """Letters alike, scale-bar labels alike, other texts alike, one font family
+        (MCP: check_text_consistency; recipe checks: "text")."""
+        from pyfigures.mcp_server import check_text_consistency
+        import json
+        try:
+            p = self._save_current_to_temp_pyf()
+            raw = self._run_busy('Checking the texts…', check_text_consistency, p)
+        except Exception:
+            logger.error('text consistency check failed:\n' + traceback.format_exc())
+            QMessageBox.warning(self, 'Check failed', 'Could not run the text-consistency check (see log).')
+            return
+        if raw.startswith('ERROR'):
+            self._show_report('Text consistency', raw)
+            return
+        d = json.loads(raw)
+        lines = [d['summary'], '']
+        for kind, info in d.get('kinds', {}).items():
+            s = info['style']
+            look = ', '.join(x for x in (s.get('font'), f"{s['size']:g} pt" if s.get('size') else None,
+                                        'bold' if s.get('bold') else None, 'italic' if s.get('italic') else None) if x)
+            lines.append(f"  {kind} ({info['count']}): {look}")
+        if d.get('issues'):
+            lines.append('')
+            for issue in d['issues']:
+                lines.append(f"[FAIL] {issue['kind']}, {issue['property']}"
+                             + (f" (most: {issue['most_have']})" if 'most_have' in issue else '') + ':')
+                lines.extend(f"    - {x}" for x in issue['differ'])
+        self._show_report('Text consistency', "\n".join(lines))
 
     def figure_review_action(self):
         """Run all mechanical QC checks and list the reviewer questions

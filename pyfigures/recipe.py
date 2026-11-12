@@ -187,6 +187,7 @@ _EXPORT_KEYS = {"format", "path", "dpi", "color_mode", "frame_mode", "with_capti
 # checks: name -> the options it takes (besides `check` and `fail`)
 _CHECKS = {"integrity": {"hamming_threshold", "min_clones"},
            "scale": {"tolerance"},
+           "text": set(),                     # letters / scale-bar labels / texts alike
            "scale_bars": set(),
            "labels": set(),
            "resolution": {"min_dpi"},
@@ -1641,6 +1642,9 @@ def _run_check(M, out, spec, plan):
     if name == "scale":
         r = json.loads(_ok(M.check_scale_consistency(out, **opts), "check scale"))
         return name, r["inconsistent_count"] == 0, r["summary"]
+    if name == "text":
+        r = json.loads(_ok(M.check_text_consistency(out), "check text"))
+        return name, r["consistent"], r["summary"]
     if name in ("scale_bars", "labels"):
         r = json.loads(_ok(M.audit_figure(out), f"check {name}"))
         key = "panels_missing_scale_bar" if name == "scale_bars" else "panels_missing_label"

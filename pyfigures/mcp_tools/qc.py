@@ -452,6 +452,166 @@ def check_scale_consistency(pyf_path: str, tolerance: float = 0.05) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+_CSS = re.compile(r"(font-family|font-size|font-weight|font-style|text-decoration)\s*:\s*([^;\"]+)")
+
+
+def _html_text_style(html: str) -> dict | None:
+    """The look of the text a Qt rich-text string shows: font family, size (pt),
+    bold, italic, underline; the body style overridden by its first span that holds
+    text. None when it shows no text."""
+    if not html:
+        return None
+    plain = re.sub(r"<[^>]+>", "", re.sub(r"<head>.*?</head>", "", html, flags=re.S)).strip()
+    if not plain:
+        return None
+    style: dict = {}
+
+    def take(css):
+        for key, value in _CSS.findall(css or ""):
+            value = value.strip().strip("'\"")
+            if key == "font-family":
+                style["font"] = value.split(",")[0].strip().strip("'\"")
+            elif key == "font-size" and value.endswith("pt"):
+                try:
+                    style["size"] = float(value[:-2])
+                except ValueError:
+                    pass
+            elif key == "font-weight":
+                style["bold"] = value in ("bold", "bolder") or (value.isdigit() and int(value) >= 600)
+            elif key == "font-style":
+                style["italic"] = value in ("italic", "oblique")
+            elif key == "text-decoration":
+                style["underline"] = "underline" in value
+    body = re.search(r"<body[^>]*style=\"([^\"]*)\"", html)
+    take(body.group(1) if body else "")
+    for css, inner in re.findall(r"<span[^>]*style=\"([^\"]*)\"[^>]*>(.*?)</span>", html, flags=re.S):
+        if re.sub(r"<[^>]+>", "", inner).strip():
+            take(css)
+            break
+    for flag in ("bold", "italic", "underline"):
+        style.setdefault(flag, False)
+    return style
+
+
+def _figure_texts(root) -> list[dict]:
+    """Every text a reader sees: panel letters, scale-bar labels and the other texts,
+    with their style and where they are."""
+    parent = {c: p for p in root.iter() for c in p}
+    out = []
+    panel_no = 0
+    letter_of = {}
+    for img in root.iter("Image2D"):
+        ann = img.find("annotations")
+        if ann is None or parent.get(img) is not None and parent[img].tag == "annotations":
+            continue                                 # an inset: no texts of its own
+        panel_no += 1
+        name = f"#{panel_no}"
+        for ta in ann.findall("TAText2D"):
+            if (ta.findtext("is_letter") or "") == "True":
+                letter = re.sub(r"<[^>]+>", "", re.sub(r"<head>.*?</head>", "",
+                                _decode(ta.findtext("text") or ""), flags=re.S)).strip()
+                if letter:
+                    name = letter
+                    break
+        letter_of[img] = name
+    for el in root.iter():
+        if el.tag not in ("TAText2D", "ScaleBar"):
+            continue
+        html = _decode(el.findtext("legend" if el.tag == "ScaleBar" else "text") or "")
+        style = _html_text_style(html)
+        if style is None:
+            continue
+        holder = parent.get(parent.get(el)) if parent.get(el) is not None and parent[el].tag == "annotations" else None
+        where = f"panel {letter_of[holder]}" if holder in letter_of else "figure"
+        fill = (el.findtext("fill_color") or "").strip().strip('"')
+        style["box"] = None if fill in ("", "None") else fill
+        if el.tag == "ScaleBar":
+            role = "scale-bar labels"
+        elif (el.findtext("is_letter") or "") == "True":
+            role = "panel letters"
+            # the letter's own settings (chat / MCP) are drawn over its stored text
+            try:
+                policy = json.loads(_decode(holder.findtext("live_letter_policy") or "") or "{}") if holder is not None else {}
+            except ValueError:
+                policy = {}
+            effective = {**(policy.get("base") or {}), **{k: v for k, v in policy.items() if k != "base"}}
+            for key, ours in (("font_family", "font"), ("font_size", "size"), ("bold", "bold"),
+                              ("italic", "italic"), ("underline", "underline"), ("background", "box")):
+                if key in effective:
+                    style[ours] = effective[key]
+        else:
+            role = "other texts"
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", re.sub(r"<head>.*?</head>", "", html, flags=re.S))).strip()
+        out.append(dict(role=role, where=where, text=text[:30], **style))
+    return out
+
+
+_GENERIC_FONTS = {"sans serif", "sans-serif", "ms shell dlg", "ms shell dlg 2", "helvetica", "system-ui", ""}
+
+
+def _drawn_family(family):
+    """The family compared across texts: None for Qt's generic default name ("Sans
+    Serif", "MS Shell Dlg 2"), which the scale-bar labels of a saved figure carry when
+    no font was chosen for them; which font it is drawn with depends on the computer."""
+    if family is None or family.strip().lower() in _GENERIC_FONTS:
+        return None
+    return family
+
+
+@mcp.tool()
+def check_text_consistency(pyf_path: str) -> str:
+    """Check that the texts of the figure look consistent: every panel letter in one
+    font, size and weight, every scale-bar label alike, the other texts (labels,
+    titles, captions on the figure) alike, and one font family across all of them.
+    A letter or label that differs (one bold letter, one scale bar in another size) is
+    named, with the style most others have. Read-only; fix with edit_panel_letters
+    (letters), set_scale_bar_all (scale bars) or restyle_texts (other texts).
+    Sizes may differ between kinds (letters larger than scale-bar labels); that is
+    only reported, not flagged. Returns JSON (summary, kinds, issues)."""
+    try:
+        _, root = _load(pyf_path)
+    except Exception as e:
+        return f"ERROR: could not read {pyf_path}: {e}"
+    texts = _figure_texts(root)
+    if not texts:
+        return json.dumps({"summary": "No text in the figure.", "issues": [], "consistent": True})
+    names = {"font": "font", "size": "size", "bold": "bold", "italic": "italic", "underline": "underline",
+             "box": "background box"}
+    kinds, issues = {}, []
+    for role in ("panel letters", "scale-bar labels", "other texts"):
+        items = [t for t in texts if t["role"] == role]
+        if not items:
+            continue
+        common = {}
+        for key in names:
+            values = [t.get(key) for t in items]
+            most = max(set(map(repr, values)), key=lambda v: sum(repr(x) == v for x in values))
+            common[key] = next(v for v in values if repr(v) == most)
+            if role == "other texts" and key == "size":
+                continue                             # titles and small labels differ on purpose
+            odd = [t for t in items if repr(t.get(key)) != most]
+            if odd:
+                issues.append({"kind": role, "property": key, "most_have": common[key],
+                               "differ": [f"{t['where']} ('{t['text']}'): {t.get(key)}" for t in odd]})
+        kinds[role] = {"count": len(items), "style": common}
+    families = sorted({_drawn_family(t.get("font")) for t in texts if t.get("font")} - {None})
+    if len(families) > 1:
+        uses = {f: sorted({t["role"] for t in texts if _drawn_family(t.get("font")) == f}) for f in families}
+        issues.append({"kind": "all texts", "property": "font",
+                       "differ": [f"{f}: {', '.join(r)}" for f, r in uses.items()]})
+    if issues:
+        summary = (f"{len(issues)} inconsistenc{'y' if len(issues) == 1 else 'ies'}: " +
+                   "; ".join(f"{i['kind']}: {names.get(i['property'], i['property'])} ({len(i['differ'])} differ)"
+                             for i in issues) +
+                   ". In a figure the letters, the scale-bar labels and the other texts should each look alike, "
+                   "in one font family.")
+    else:
+        summary = ("Texts are consistent: " + ", ".join(f"{k} ({v['count']})" for k, v in kinds.items()) +
+                   (f", all in {families[0]}." if families else "."))
+    return json.dumps({"summary": summary, "consistent": not issues, "kinds": kinds, "issues": issues},
+                      ensure_ascii=False, indent=2)
+
+
 def _bump_font_size_in_html(html: str, min_pt: float) -> tuple[str, int]:
     """Raise every 'font-size:Npt' below *min_pt* in a Qt rich-text string to
     *min_pt*. Returns (new_html, number_bumped)."""
@@ -718,6 +878,13 @@ def check_journal_compliance(
                 parts.append("installed sans-serif alternatives: " + ", ".join(repr(f) for f in sans))
         results.append(("sans-serif font", is_sans,
                         "font family " + ", ".join(parts) if requested else "no font family set"))
+
+    # ── consistent texts (letters alike, scale bars alike, one font family) ────
+    try:
+        tc = json.loads(check_text_consistency(pyf_path))
+        results.append(("consistent texts", tc["consistent"], tc["summary"]))
+    except Exception as e:
+        results.append(("consistent texts", False, f"could not analyse: {e}"))
 
     # ── resolution ─────────────────────────────────────────────────────────────
     try:

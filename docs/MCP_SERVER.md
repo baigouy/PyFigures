@@ -598,6 +598,7 @@ together.
 |------|-------------|
 | `check_resolution(pyf_path, min_dpi, journal, column)` | Flag panels below a target print DPI at the figure's physical width |
 | `check_scale_consistency(pyf_path, tolerance)` | Flag panels whose **displayed physical scale** differs (a µm feature occupies different on-figure pixels per panel) so they can't be honestly compared by eye; recommends the on-figure width to fix each |
+| `check_text_consistency(pyf_path)` | Flag texts that do not look alike: panel letters (font, size, bold, italic, underline, background box), scale-bar labels, other texts (size aside), and more than one font family; names each odd one and the style most have. Also a criterion of `check_journal_compliance` |
 | `enforce_min_font_size(pyf_path, min_pt, ...)` | Bump every label up to a minimum point size |
 | `check_journal_compliance(pyf_path, journal, ...)` | Report width / DPI / font issues against a journal's rules |
 | `apply_journal_guidelines(pyf_path, journal, ...)` | Bundle: resize + min-font + resolution fixes for a journal in one call |

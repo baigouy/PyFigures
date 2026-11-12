@@ -84,6 +84,7 @@ Every action reachable in the figure editor and the tests that run it and check 
 | QC > Show color-blind assistant | `test_gui_e2e_menus.py::test_menu_action` |
 | QC > Check image integrity (duplicates / clones)… | `test_gui_e2e_menus.py::test_menu_action` |
 | QC > Check scale-bar consistency… | `test_gui_e2e_menus.py::test_menu_action` |
+| QC > Check text consistency… | `test_gui_e2e_menus.py::test_menu_action` |
 | QC > Pre-submission review (all checks)… | `test_gui_e2e_menus.py::test_menu_action` |
 | QC > Adjustment provenance ledger (Methods)… | `test_gui_e2e_menus.py::test_menu_action` |
 | QC > Fonts (portable / Helvetica)… | `test_gui_e2e_menus.py::test_menu_action` |

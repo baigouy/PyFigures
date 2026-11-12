@@ -267,8 +267,14 @@ def edit(session,panel_ref,annotation_index,token,changes,substring=None,occurre
             if w.save_state(show_popup=False) is None:raise RuntimeError('Could not checkpoint edited annotation')
             w._mark_dirty()
         after=describe(obj)
-        return {'next_token':after['token'],'panel_ref':panel_ref,'annotation_index':annotation_index,'changed':changed,'outcome':'VERIFIED_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
+        result={'next_token':after['token'],'panel_ref':panel_ref,'annotation_index':annotation_index,'changed':changed,'outcome':'VERIFIED_CHANGE' if changed else 'NO_CHANGE','before':before,'after':after,
                 'verification':'Read back actual native annotation properties; visual readability is not guaranteed.'}
+        if changed and isinstance(changes,dict) and changes.get('font_family'):
+            # texts of a figure should share one font (user, 2026-11-12)
+            result['consistency_note']=('Only this text has the font '+str(changes['font_family'])+' now. Texts of a figure '
+                'should share one font family: tell the user and offer to apply it to every text (restyle_texts '
+                'target="all"), unless they asked for this text alone.')
+        return result
     except Exception:
         w.reload_state(str(backup),append=False,skip_add_to_stack=True)
         w.undo_stack,w.redo_stack,w.current_index,w.last_called_state=history

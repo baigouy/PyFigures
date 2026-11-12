@@ -181,7 +181,7 @@ created as needed. Forward slashes work on every OS.
 | `copy_style_from` | none | Another `.pyf` whose look (fonts, letters, scale bars, spacing, plots) is copied; `copy_style_aspects` limits what. |
 | `exports` | none | Files to write after building: `[pdf, png, svg, tif, jpg, latex, print, video, source_data, review, caption, ledger, colorblind, pptx, illustrator, vectorcraft, deckcraft]`. §20. |
 | `allow_scripts` | `false` | Must be `true` for `script:` panels (they run Python code). §18. |
-| `checks` | none | Checks run after the build — `integrity`, `scale`, `scale_bars`, `labels`, `resolution`, `journal`; a failing one stops the build before the exports. §20. |
+| `checks` | none | Checks run after the build — `integrity`, `scale`, `text`, `scale_bars`, `labels`, `resolution`, `journal`; a failing one stops the build before the exports. §20. |
 | `consolidate` | `false` | `true`: copy every source file into `<figure>.files/` and link the figure to the copies; or a `.pyf` path to write that self-contained copy elsewhere. §20. |
 | `download_remote` | `false` | With `consolidate`: also save remote images (web links, OME-Zarr URLs, OMERO links) into the bundle instead of keeping their links. §20. |
 | `template` + `fill` | none | Build from a template `.pyf` (instead of `rows`): `fill` lists the image files (or globs) for its slots, in order. §20. |
@@ -1018,6 +1018,7 @@ into a warning. The build summary's `checks` gives each result.
 |---|---|---|
 | `integrity` | two panels are the same image (also flipped, rotated or inverted), or a region is copy-pasted inside a panel, or a panel can't be read. A screening aid: a hit can be legitimate. | `hamming_threshold` (6; lower = stricter), `min_clones` (3) |
 | `scale` | panels show the same physical length at different sizes (pixel sizes needed) | `tolerance` (0.05 = 5 %) |
+| `text` | the panel letters do not all look alike (font, size, bold, italic, underline, background box), nor the scale-bar labels, nor the other texts (size aside), or the texts use more than one font family | — |
 | `scale_bars` | an image panel has no scale bar | — |
 | `labels` | an image panel has no letter or text label | — |
 | `resolution` | a panel prints below `min_dpi` at the figure's size | `min_dpi` (300) |
@@ -1426,7 +1427,7 @@ server, and edited afterwards in either.
 | `alt_text` | File → Alt text (accessibility)… | `generate_alt_text`, `set_alt_text` |
 | `copy_style_from` | File → Copy style from another figure… | `copy_style` |
 | `exports` | File → Export As ▶, File → Review comments → Export for review…, QC → Adjustment provenance ledger (Methods)…, QC → Preview figure under colour-blindness… | `export_figure`, `export_latex`, `export_print_ready`, `export_video`, `export_source_data`, `export_review`, `export_caption`, `export_adjustment_ledger`, `simulate_color_blindness`, `export_pptx`, `export_illustrator_script`, `export_vectorcraft`, `export_deckcraft` |
-| `checks` | QC → Check image integrity…, Check scale-bar consistency…, Audit figure (missing scale bars / labels), Check print resolution…, Check journal compliance…, Pre-submission review (all checks)… | `check_image_integrity`, `check_scale_consistency`, `audit_figure`, `check_resolution`, `check_journal_compliance` |
+| `checks` | QC → Check image integrity…, Check scale-bar consistency…, Check text consistency…, Audit figure (missing scale bars / labels), Check print resolution…, Check journal compliance…, Pre-submission review (all checks)… | `check_image_integrity`, `check_scale_consistency`, `check_text_consistency`, `audit_figure`, `check_resolution`, `check_journal_compliance` |
 | `consolidate` | File → Save And Consolidate... | `consolidate_figure` |
 | `template`, `fill` | File → Convert figure to template; drop images on the slots | `templatify_figure`, `fill_template`, `batch_fill_templates` |
 | `properties` | Edit Image | `set_image_property` |

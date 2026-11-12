@@ -53,6 +53,7 @@ from .qc import (
     check_journal_compliance,
     check_resolution,
     check_scale_consistency,
+    check_text_consistency,
 )
 
 # ---------------------------------------------------------------------------
@@ -492,6 +493,7 @@ def figure_review_brief(pyf_path: str, journal: str | None = None,
     checks: dict = {
         "audit": _run(audit_figure, pyf_path),
         "scale_consistency": _run(check_scale_consistency, pyf_path),
+        "text_consistency": _run(check_text_consistency, pyf_path),
         "image_integrity": _run(check_image_integrity, pyf_path),
         "fonts": _run(list_fonts),
     }
