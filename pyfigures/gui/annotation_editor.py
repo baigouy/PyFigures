@@ -1913,7 +1913,7 @@ class MainWindow(QWidget):
             arrow.setToolTip("Dual Headed Arrow")
             arrow.clicked.connect(self.qt_viewer.change_shape)
             shapes_toolbox_layout.addWidget(arrow, 0, 2)
-            significance_bracket = QPushButton("Signif. bracket")
+            significance_bracket = QPushButton("Significance (*)")
             significance_bracket.setFocusPolicy(Qt.NoFocus)
             significance_bracket.setToolTip(
                 "Significance bracket — drag horizontally over two bars, then type a label (*, n.s., p<0.001…)")

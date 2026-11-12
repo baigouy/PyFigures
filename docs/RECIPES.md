@@ -1406,7 +1406,7 @@ server, and edited afterwards in either.
 | `text`, `corner_labels` | Edit Image → text tool; right-click → Add labels ▶ | `add_annotation`, `add_corner_labels` |
 | `rois` | Edit Image → Annotations tab (rectangle, ellipse, line, arrow, polygon…) | `add_roi_rect`, `add_roi_ellipse`, `add_roi_line`, `add_roi_polygon` |
 | `connectors` | Edit Image → select two shapes → Connect two shapes | `add_connector` |
-| `brackets` | Edit Image → Signif. bracket | `add_significance_bracket` |
+| `brackets` | Edit Image → Significance (*) | `add_significance_bracket` |
 | `inset` | Edit Image → Rect ROI → Inset | `add_inset` |
 | `zoom` | Annotations → Add zoom callout to selected panel… | `add_zoom_callout` |
 | `rotate`, `flip` | Edit Image → Rotate + Crop | `transform_image` |

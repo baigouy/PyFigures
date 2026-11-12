@@ -180,7 +180,7 @@ def test_significance_bracket(fig, ui, monkeypatch):
 
     def do(ed):
         v = ed.qt_viewer
-        tool(ed, next(b.toolTip() for b in ed.findChildren(QPushButton) if b.text() == "Signif. bracket"))
+        tool(ed, next(b.toolTip() for b in ed.findChildren(QPushButton) if b.text() == "Significance (*)"))
         assert v._bracket_mode
         draw(ed, 50, 60, 200, 64)
         assert not v._bracket_mode                         # one-shot tool
@@ -195,7 +195,7 @@ def test_significance_bracket_without_label(fig, ui, monkeypatch):
     monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False)))
 
     def do(ed):
-        tool(ed, next(b.toolTip() for b in ed.findChildren(QPushButton) if b.text() == "Signif. bracket"))
+        tool(ed, next(b.toolTip() for b in ed.findChildren(QPushButton) if b.text() == "Significance (*)"))
         draw(ed, 50, 60, 200, 64)
     img = edit(fig, ui, "gray", do)
     assert len(_of(img, "PolyLine2D")) == 1 and not any(t.getPlainText() == "**" for t in _of(img, "TAText2D"))

@@ -181,6 +181,52 @@ def test_a_row_emptied_by_a_move_is_said_to_need_nothing(tmp_path):
     assert "is now empty" in out and "nothing needs removing" in out
 
 
+def test_leader_lines_drawn_before_connectors_are_attached(qapp, gui, runtime, tmp_path):  # noqa: F811
+    """A figure from before connectors: one leader line a few pixels off the ROI corner
+    stayed behind when the ROI was moved in the editor, and the inset end, fine in the
+    editor, missed the inset in the figure (user chat 2026-11-12)."""
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import panels, Image2D
+    from pyfigures import connectors
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    from batoolset.serializations.tools import clone_object
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    launch.start_live_session(g)
+
+    def panel():
+        return next(p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw))
+    p = panel()
+    roi = Rectangle2D(300, 100, 60, 40, color=0xFFFF00, stroke=2)
+    p.annotations.append(roi)
+    state = _call(qapp, "inspect")
+    _call(qapp, "roi_to_inset", session_id=state["session_id"], expected_revision=state["revision"],
+          arguments={"panel_ref": "0/0"}, request_id="r1")
+    p = panel()
+    roi = next(a for a in p.annotations if type(a) is Rectangle2D)
+    inset = next(a for a in p.annotations if isinstance(a, Image2D))
+    inset.follows_roi = None                              # as saved by an older version
+    g.paint.EZFIG_panel.grab()
+    x, y, w, h = connectors.shape_box(inset, p)
+    # as drawn by hand: one end exactly on a corner, the other 4 px off, the inset ends 20 px off
+    p.annotations += [Line2D(300, 100, x + w, y - 20), Line2D(304, 139, x + w + 3, y + h + 20)]
+    g.paint.EZFIG_panel.grab()
+    lines = [a for a in p.annotations if isinstance(a, Line2D)]
+    assert inset.follows_roi == roi.link_id and all(connectors.is_connector(l) for l in lines)
+    roi.moveTo(100, 250)
+    g.paint.EZFIG_panel.grab()
+    x, y, w, h = connectors.shape_box(inset, p)
+    ends = sorted((l.x1(), l.y1(), l.x2(), l.y2()) for l in lines)
+    assert (inset.crop_left, inset.crop_top) == (100, 250)
+    assert all(e[0] in (100, 160) and e[1] in (250, 290) for e in ends)           # on the ROI's corners
+    assert all(min(abs(e[2] - x), abs(e[2] - x - w)) < 1e-6 and min(abs(e[3] - y), abs(e[3] - y - h)) < 1e-6
+               for e in ends)                                                   # on the inset's corners
+    # saved and opened again, still attached
+    copy = clone_object(lines[0])
+    assert connectors.is_connector(copy)
+
+
 def test_an_inset_follows_its_roi_and_its_lines_too(qapp, gui, runtime, tmp_path):  # noqa: F811
     """'I made the changes then pressed ok yet changes did not make it to the figure': the
     ROI had moved, its inset and the leader lines had not."""

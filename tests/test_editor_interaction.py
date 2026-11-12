@@ -168,7 +168,7 @@ def test_zoom_buttons_above_the_image(fig, ui):
 def test_bracket_button_does_not_cover_the_arrowhead_button(fig, ui):
     def do(ed):
         buttons = ed.findChildren(QPushButton)
-        bracket = next(b for b in buttons if b.text() == 'Signif. bracket')
+        bracket = next(b for b in buttons if b.text() == 'Significance (*)')
         head = next(b for b in buttons if b.toolTip().startswith('Arrowhead only'))
         layout = bracket.parentWidget().layout()
         cells = {}

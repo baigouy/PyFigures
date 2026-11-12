@@ -133,6 +133,7 @@ def _box_sites(box):
 
 
 _measuring = False
+_box_cache = None      # inset boxes measured once per snap()
 
 
 def shape_box(shape, parent):
@@ -140,17 +141,29 @@ def shape_box(shape, parent):
     from batoolset.drawings.shapes.image2d import Image2D
     if isinstance(shape, Image2D):
         global _measuring
-        if getattr(parent, 'theta', 0) and not _measuring:
-            # a rotated panel: the inset stays upright while ROIs turn with the image
+        key = (id(parent), id(shape))
+        if _box_cache is not None and key in _box_cache:
+            return _box_cache[key]
+        if parent is not None and not _measuring:
+            # measured where it is drawn: an inset in a corner stacks under the panel
+            # letter, whose size in image pixels depends on the panel's size, so the
+            # inset sits elsewhere in the editor and in the figure (a leader line fine
+            # in the editor missed the inset in the figure, user chat 2026-11-12); on a
+            # rotated panel the inset stays upright while ROIs turn with the image
             from .zoom_geometry import measured_inset_corners
             _measuring = True
             try:
                 corners = measured_inset_corners(parent, shape)
+            except Exception:
+                corners = None
             finally:
                 _measuring = False
             if corners:
-                xs, ys = [c[0] for c in corners], [c[1] for c in corners]
-                return min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)
+                xs, ys = [c.x() if hasattr(c, 'x') else c[0] for c in corners], [c.y() if hasattr(c, 'y') else c[1] for c in corners]
+                box = min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)
+                if _box_cache is not None:
+                    _box_cache[key] = box
+                return box
         from .zoom_geometry import inset_rect
         parent_size, inset_size = parent.get_raw_size(), shape.get_raw_size()
         if not parent_size or not inset_size:
@@ -179,13 +192,109 @@ def _end(spec):
     return parts[0], (parts[1] if len(parts) > 1 and parts[1] else 'auto'), offset
 
 
+def _near_border(point, box, tol):
+    x, y, w, h = box
+    px, py = point
+    inside_outer = x - tol <= px <= x + w + tol and y - tol <= py <= y + h + tol
+    inside_inner = x + tol < px < x + w - tol and y + tol < py < y + h - tol
+    return inside_outer and not inside_inner
+
+
+def adopt_legacy(parent, shapes) -> int:
+    """Figures made before connectors (2026-11-12): an inset showing exactly an ROI's
+    region follows that ROI, and a line from the ROI's border to the inset's border is
+    attached to both, where it is drawn (a leader line whose end was a few pixels off
+    the ROI corner stayed behind when the ROI was moved). Returns how many were adopted."""
+    from batoolset.drawings.shapes.image2d import Image2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    insets = [s for s in shapes if isinstance(s, Image2D) and not getattr(s, 'isText', False)
+              and any((getattr(s, c, 0) or 0) for c in ('crop_left', 'crop_right', 'crop_top', 'crop_bottom'))]
+    loose = [s for s in shapes if isinstance(s, Line2D) and not is_connector(s)]
+    if not insets or (all(getattr(i, 'follows_roi', None) for i in insets) and not loose):
+        return 0
+    rois = [s for s in shapes if type(s) is Rectangle2D]
+    by_id = {getattr(s, 'link_id', None): s for s in shapes if getattr(s, 'link_id', None)}
+    adopted = 0
+    pairs = []
+    try:
+        size = parent.get_raw_size() if parent is not None else None
+    except Exception:
+        size = None
+    for inset in insets:
+        roi = by_id.get(getattr(inset, 'follows_roi', None))
+        if roi is None and size:
+            from qtpy.QtCore import QRectF
+            from batoolset.pyqts.tools import get_original_shape_from_rect_and_angle
+            crop = (inset.crop_left, inset.crop_right, inset.crop_top, inset.crop_bottom)
+            for r in rois:
+                try:
+                    found = get_original_shape_from_rect_and_angle(QRectF(0, 0, size[0], size[1]), r.getRect(),
+                                                                   getattr(r, 'theta', 0) or 0)[1:]
+                except Exception:
+                    continue
+                if all(abs(a - b) <= 2 for a, b in zip(found, crop)):
+                    follow_roi(inset, r)
+                    roi = r
+                    adopted += 1
+                    break
+        if roi is not None:
+            pairs.append((roi, inset))
+    if getattr(parent, 'theta', 0):
+        return adopted                      # inset corners need a full paint there: lines left as drawn
+    from .zoom_geometry import leader_lines
+    for roi, inset in pairs:
+        box_r, box_i = shape_box(roi, parent), shape_box(inset, parent)
+        if not box_r or not box_i:
+            continue
+        tol = max(3.0, 0.1 * min(box_r[2], box_r[3]))
+        # the inset end was drawn where the inset sat at the size the panel had then:
+        # the inset moves with the panel's letter, so it may be well off now
+        reach = 0.3 * max(box_i[2], box_i[3])
+        canonical = list(leader_lines(box_r, box_i, connectors=2))
+        for line in loose:
+            if is_connector(line) or not canonical:
+                continue
+            p, q = (line.x1(), line.y1()), (line.x2(), line.y2())
+            if _near_border(q, box_r, tol) and not _near_border(p, box_r, tol):
+                p, q = q, p
+            if not _near_border(p, box_r, tol) or not _near_border(q, box_i, reach):
+                continue
+            # the usual funnel between the two boxes, the pair nearest this line
+            best = min(canonical, key=lambda c: math.dist(c[0], p) + math.dist(c[1], q))
+            canonical.remove(best)
+            (x1, y1), (x2, y2) = best
+            line.setLine(x1, y1, x2, y2)
+            line.connect_start = f'{link_id(roi)}:{site_of(box_r, best[0])}'
+            line.connect_end = f'{link_id(inset)}:{site_of(box_i, best[1])}'
+            adopted += 1
+    return adopted
+
+
 def snap(parent, annotations=None) -> int:
     """Re-attach every connector of *parent* and re-crop the insets that follow an
     ROI. Returns how many connectors were placed."""
+    global _box_cache
+    if _measuring:
+        return 0                            # the measuring paint of shape_box()
+    if _box_cache is not None:
+        return _snap(parent, annotations)
+    _box_cache = {}
+    try:
+        return _snap(parent, annotations)
+    finally:
+        _box_cache = None
+
+
+def _snap(parent, annotations=None) -> int:
     from batoolset.drawings.shapes.image2d import Image2D
     shapes = list(annotations if annotations is not None else (getattr(parent, 'annotations', None) or []))
     if not shapes:
         return 0
+    try:
+        adopt_legacy(parent, shapes)
+    except Exception:
+        traceback.print_exc()
     by_id = {getattr(s, 'link_id', None): s for s in shapes if getattr(s, 'link_id', None)}
     if not by_id:
         return 0
