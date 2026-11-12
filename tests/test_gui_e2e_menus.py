@@ -600,6 +600,8 @@ ACTIONS = {
     "menu: QC > Check scale-bar consistency…": spec(report_says("no pixel size set", "panel D"),
                                                     [("Scale-bar consistency", "report")],
                                                     inv=False),
+    "menu: QC > Check text consistency…": spec(report_says("panel letters"),
+                                               [("Text consistency", "report")], inv=False),
     "menu: QC > Pre-submission review (all checks)…": spec(report_says("Mechanical checks", "Reviewer questions"),
                                                            [("Pre-submission review", "report")], inv=False),
     "menu: QC > Adjustment provenance ledger (Methods)…": spec(report_says("panel"),
