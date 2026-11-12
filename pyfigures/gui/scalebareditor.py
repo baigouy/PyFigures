@@ -100,6 +100,16 @@ class ScaleBarEditor(QWidget):
             layout.addWidget(self.vertical_combo)
             layout.addWidget(self.horizontal_combo)
 
+            # thickness of the bar (it could only be changed in the file)
+            self.thickness_spinner = QDoubleSpinBox(self)
+            self.thickness_spinner.setRange(0.5, 100.0)
+            self.thickness_spinner.setSingleStep(0.5)
+            self.thickness_spinner.setDecimals(1)
+            self.thickness_spinner.setSuffix(' px')
+            self.thickness_spinner.setToolTip('Thickness of the bar, in pixels')
+            self.thickness_spinner.setValue(float(getattr(self.scale_bar, 'bar_height_in_px', None) or 3))
+            layout.addWidget(QLabel("Thickness:"))
+            layout.addWidget(self.thickness_spinner)
 
             # Connect the combo boxes to a slot that handles the position change
             self.vertical_combo.currentIndexChanged.connect(self.handle_position_change)
@@ -180,9 +190,12 @@ class ScaleBarEditor(QWidget):
         if self.scale_bar is None:
             return ScaleBar(bar_width_in_units=self.size_spinner.value(),
                             legend=self._legend(),
+                            bar_height_in_px=self.thickness_spinner.value(),
                             placement=self._chosen_placement())
         else:
             self.scale_bar.setBarWidth(self.size_spinner.value())
+            self.scale_bar.bar_height_in_px = self.thickness_spinner.value()
+            self.scale_bar.bar.setHeight(self.scale_bar.bar_height_in_px)
 
             # print('changing scale bar size to:',self.size_spinner.value())
 

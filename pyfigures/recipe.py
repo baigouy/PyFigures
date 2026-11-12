@@ -108,8 +108,10 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
 _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
-               "corner_labels", "rois", "inset", "zoom", "brackets", "properties",
+               "corner_labels", "rois", "connectors", "inset", "zoom", "brackets", "properties",
                "page"}
+# a connector joins two of the panel's rois (numbered from 1) and stays attached to them
+_CONNECTOR_KEYS = {"from", "to", "from_site", "to_site", "color", "stroke", "arrow"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label", "latex", "colors"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
@@ -134,7 +136,7 @@ _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
                     "scale_bar_panels"}
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
-                      "rois", "inset", "zoom", "brackets"}
+                      "rois", "connectors", "inset", "zoom", "brackets"}
 _PANEL_KINDS = ("image", "glob", "plot", "montage", "split", "merge", "colorbar", "script",
                 "equation", "tex")
 _KIND_KEYS = {"image": _IMAGE_KEYS, "glob": _IMAGE_KEYS - _SINGLE_PANEL_ONLY,
@@ -147,7 +149,7 @@ _DEFAULT_KEYS = (_IMAGE_KEYS | _PLOT_KEYS) - _SINGLE_PANEL_ONLY - {"title"}
 _ROW_KEYS = {"panels", "orientation", "spacing", "labels", "labels_position",
              "labels_orientation", "side_label", "side_label_position"}
 _CROP_KEYS = {"left", "right", "top", "bottom"}
-_SCALE_BAR_KEYS = {"units", "unit", "color", "placement", "label"}
+_SCALE_BAR_KEYS = {"units", "unit", "color", "placement", "label", "thickness"}
 _ARROW_KEYS = {"at", "from", "length", "color", "stroke", "head", "both_ends", "label", "style"}
 _KYMO_KEYS = {"line", "width", "channel", "projection", "frame_height", "cmap", "mark_line",
               "line_color", "label"}
@@ -651,6 +653,25 @@ def _check_extras(opts, where, base):
                 _check_point(roi[shape], _ROI_ARITY[shape], where, f"{name} {shape}")
             if "size" in roi and not (_is_num(roi["size"]) and roi["size"] > 0):
                 raise RecipeError(f"{where}: {name} size must be a positive number")
+    if "connectors" in opts:
+        from .connectors import normalise_site
+        n_rois = len(opts.get("rois") or [])
+        if not isinstance(opts["connectors"], list):
+            raise RecipeError(f"{where}: connectors must be a list")
+        for k, c in enumerate(opts["connectors"]):
+            _check_mapping(c, _CONNECTOR_KEYS, {"from", "to"}, where, f"connector {k + 1}")
+            for end in ("from", "to"):
+                if not (isinstance(c[end], int) and 1 <= c[end] <= n_rois):
+                    raise RecipeError(f"{where}: connector {k + 1} '{end}' must be the number of one of "
+                                      f"this panel's rois (1 to {n_rois})")
+            if c["from"] == c["to"]:
+                raise RecipeError(f"{where}: connector {k + 1} joins a roi to itself")
+            for end in ("from_site", "to_site"):
+                if end in c:
+                    try:
+                        normalise_site(c[end])
+                    except ValueError as exc:
+                        raise RecipeError(f"{where}: connector {k + 1} {exc}") from None
     for key, allowed, required in (("inset", _INSET_KEYS, {"image"}), ("zoom", _ZOOM_KEYS, {"box"})):
         if key in opts:
             for k, item in enumerate(_as_list(opts[key])):
@@ -1411,7 +1432,18 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
         corners = {c: [_label_html(str(x)) for x in _as_list(v)]
                    for c, v in opts["corner_labels"].items()}
         w += _check(M.add_corner_labels(out, gp, i, **corners), step + " corner labels")
+    roi_at = []          # annotation index of each roi's first shape (for connectors)
+
+    def _n_annotations():
+        import json as _json
+        try:
+            found = _json.loads(M.get_annotations(out))
+        except Exception:
+            return None
+        return sum(1 for a in found if list(a.get("group_path") or []) == list(gp) and a.get("image_index") == i)
     for k, roi in enumerate(opts.get("rois") or []):
+        if opts.get("connectors"):
+            roi_at.append(_n_annotations())
         style = {"color": roi.get("color", "yellow"), "stroke": roi.get("stroke", 2.0),
                  "opacity": roi.get("opacity", 1.0)}
         name = step + f" roi {k + 1}"
@@ -1444,6 +1476,18 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
             w += _check(M.add_roi_polygon(out, gp, i, [list(p) for p in roi["polygon"]],
                                           fill_color=roi.get("fill"),
                                           style=roi.get("style", "polygon"), **style), name)
+    for k, c in enumerate(opts.get("connectors") or []):
+        first, second = roi_at[c["from"] - 1], roi_at[c["to"] - 1]
+        if first is None or second is None:
+            w.append(f"{step} connector {k + 1}: the rois could not be found")
+            continue
+        kw = {"from_site": c.get("from_site", "auto"), "to_site": c.get("to_site", "auto"),
+              "arrow": bool(c.get("arrow", False))}
+        if "color" in c:
+            kw["line_color"] = c["color"]
+        if "stroke" in c:
+            kw["stroke"] = c["stroke"]
+        w += _check(M.add_connector(out, gp, i, first, second, **kw), step + f" connector {k + 1}")
     for k, a in enumerate(opts.get("arrows") or []):
         kw = {"from_direction": a.get("from", "top left")}
         kw.update({key: a[key] for key in ("length", "color", "stroke", "head",
@@ -1919,7 +1963,7 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             placement=sb.get("placement", "bottom right"),
             bar_color=sb.get("color", "white"),
             label_color=sb.get("color", "white"),
-            px_to_unit=px), step + " scale bar")
+            px_to_unit=px, bar_height_px=sb.get("thickness")), step + " scale bar")
 
     def series_finish(group_path, opts, step, default="last"):
         """Scale bar of a montage / split group: one bar, on the last panel (a

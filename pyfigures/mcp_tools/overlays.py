@@ -212,24 +212,33 @@ def set_scale_bar(
     pyf_path: str,
     group_path: list[int],
     image_index: int,
-    bar_width_in_units: float,
+    bar_width_in_units: float | None = None,
     label: str | None = None,
     unit: str = "µm",
-    placement: str = "bottom right",
-    bar_color: str = "white",
-    label_color: str = "white",
+    placement: str | None = None,
+    bar_color: str | int | None = None,
+    label_color: str | int | None = None,
     px_to_unit: float | None = None,
+    bar_height_px: float | None = None,
 ) -> str:
     """Add or update the scale bar on a specific image.
 
     If the image already has a ScaleBar annotation it is updated; otherwise a new
     one is added.  Reopen the figure in PyFigures to see the change.
 
+    To change ONE thing of an existing bar, pass only that: "too thick" is
+    bar_height_px alone, "move it to the left" placement alone, "no text"
+    label="" alone, "black bar" bar_color alone. What is not passed is kept
+    (length, text, corner, colours). A new bar needs *bar_width_in_units*.
+
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *image_index*: 0-based index among Image2D elements at that location.
     *bar_width_in_units*: numeric width of the bar in physical units (e.g. 10).
     *label*: text shown next to the bar. If omitted, auto-generated as
-             "10 µm" (combining bar_width_in_units and unit).
+             "10 µm" (combining bar_width_in_units and unit). ``""`` (or
+             "none") is a bar WITHOUT text.
+    *bar_height_px*: thickness of the bar in pixels (default 3; "thinner" 2
+                     or 1.5, "thicker" 5 or 6).
     *unit*: the unit of *bar_width_in_units* (and of *px_to_unit*), shown in
             the auto-label: "µm" (default), "nm", "mm", "cm", "m". Pixel sizes
             are kept in µm, so a bar in another unit is converted: 100 with
@@ -253,15 +262,15 @@ def set_scale_bar(
     red=16711680, green=65280, blue=255, cyan=65535, magenta=16711935.
     """
     try:
-        bar_color_int  = _color_to_int(bar_color)
-        label_color_int = _color_to_int(label_color)
+        bar_color_int = None if bar_color is None else _color_to_int(bar_color)
+        label_color_int = None if label_color is None else _color_to_int(label_color)
     except ValueError as e:
         return f"ERROR: {e}"
-    if _corner_error(placement):
+    if placement is not None and _corner_error(placement):
         return f"ERROR: {_corner_error(placement)}"
-
-    text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
-    legend_html = _scale_bar_legend_html(text, label_color_int)
+    if bar_height_px is not None and not 0 < float(bar_height_px) <= 100:
+        return f"ERROR: bar_height_px is the bar's thickness in pixels, between 0 and 100 (got {bar_height_px})."
+    no_text = label is not None and str(label).strip().lower() in ("", "none", "hidden", "off", "no")
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -272,27 +281,59 @@ def set_scale_bar(
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
     calibrated = px_to_unit is not None or _pixel_size(imgs[image_index])[0] is not None
     factor = _stored_units_per(unit) if calibrated else 1.0
-    too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit, factor)
-    if too_long:
-        return f"ERROR: {too_long} Nothing was changed."
-
+    annotations = imgs[image_index].find("annotations")
+    existing = annotations.find("ScaleBar") if annotations is not None else None
+    if bar_width_in_units is None and existing is None:
+        return ("ERROR: this image has no scale bar yet: give its length in bar_width_in_units "
+                "(ask the user for it when they gave none). Nothing was changed.")
     uncal = []
-    if not calibrated:
-        # no pixel size anywhere: the bar is a length in pixels and says so
-        uncal = [os.path.basename(str(_first_filename(imgs[image_index])))]
-        text = _default_bar_label(bar_width_in_units, "px")
-        legend_html = _scale_bar_legend_html(text, label_color_int)
-    # the bar is stored in the pixel size's unit (µm): "100 mm" is 100000 of them, labelled 100 mm
+    stored_width = None
+    if bar_width_in_units is not None:
+        too_long = _scale_bar_length_error(imgs[image_index], bar_width_in_units, px_to_unit, unit, factor)
+        if too_long:
+            return f"ERROR: {too_long} Nothing was changed."
+        # the bar is stored in the pixel size's unit (µm): "100 mm" is 100000 of them, labelled 100 mm
+        stored_width = bar_width_in_units * factor
+        from .core import _scale_bar_small_note
+        small = _scale_bar_small_note(imgs[image_index], bar_width_in_units, px_to_unit, unit, factor)
+    else:
+        small = ""
+    # the legend: none, the text given, the default for a new length, or (nothing asked) the one it has
+    old_legend = (existing.findtext("legend") or "") if existing is not None else ""
+    old_text = "" if old_legend.strip() in ("", "None") else _html_to_plain(old_legend).strip()
+    old_colour = re.search(r'color="(#[0-9a-fA-F]{6})"', old_legend)
+    colour = label_color_int if label_color_int is not None else (old_colour[1] if old_colour else 16777215)
+    if no_text:
+        text, legend_html = "no text", ""
+    elif label is not None:
+        text = str(label)
+        legend_html = _scale_bar_legend_html(text, colour)
+    elif bar_width_in_units is not None:
+        if not calibrated:
+            # no pixel size anywhere: the bar is a length in pixels and says so
+            uncal = [os.path.basename(str(_first_filename(imgs[image_index])))]
+        text = _default_bar_label(bar_width_in_units, unit if calibrated else "px")
+        # a bar whose text was removed stays without text when only its length changes
+        hidden = existing is not None and old_legend.strip() == "None"
+        legend_html = None if hidden else _scale_bar_legend_html(text, colour)
+    elif label_color_int is not None and old_text:
+        text, legend_html = old_text, _scale_bar_legend_html(old_text, colour)
+    else:
+        text, legend_html = old_text or "no text", None
     action = _apply_scalebar_to_img(
-        imgs[image_index], bar_width_in_units * factor, legend_html,
+        imgs[image_index], stored_width, legend_html,
         placement, bar_color_int, None if px_to_unit is None else px_to_unit * factor,
+        bar_height_px=bar_height_px,
     )
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
+    bar = annotations.find("ScaleBar") if annotations is not None else imgs[image_index].find("annotations/ScaleBar")
+    where = (bar.findtext("placement") if bar is not None else None) or placement or "bottom right"
+    thick = f", {float(bar.findtext('bar_height_in_px') or 3):g} px thick" if bar is not None else ""
     return (
         f"Scale bar {action} on image {image_index} in {loc}: "
-        f"{text}, {placement}{px_note}." + _uncalibrated_warning(uncal, unit)
+        f"{text}, {where}{thick}{px_note}." + _uncalibrated_warning(uncal, unit) + small
     )
 
 
@@ -331,16 +372,22 @@ def remove_scale_bar(
 @mcp.tool()
 def set_scale_bar_all(
     pyf_path: str,
-    bar_width_in_units: float,
+    bar_width_in_units: float | None = None,
     label: str | None = None,
     unit: str = "µm",
-    placement: str = "bottom right",
-    bar_color: str = "white",
-    label_color: str = "white",
+    placement: str | None = None,
+    bar_color: str | int | None = None,
+    label_color: str | int | None = None,
     px_to_unit: float | None = None,
     px_to_unit_scope: str = "all",
+    bar_height_px: float | None = None,
 ) -> str:
     """Add or update the scale bar on EVERY image in the figure at once.
+
+    WITHOUT *bar_width_in_units* nothing is added: the bars that exist are
+    restyled with what is passed, the rest kept ("no text on the bars":
+    label="" alone; "bars in black": bar_color alone; "thinner bars":
+    bar_height_px alone; "bars on the left": placement alone).
 
     When the user gives ONE pixel size for the figure, pass it as *px_to_unit*
     and leave *px_to_unit_scope* at "all" (the default): every image then uses
@@ -375,19 +422,23 @@ def set_scale_bar_all(
     Returns a summary: how many images were updated vs. how many got a new bar.
     """
     try:
-        bar_color_int   = _color_to_int(bar_color)
-        label_color_int = _color_to_int(label_color)
+        bar_color_int = None if bar_color is None else _color_to_int(bar_color)
+        label_color_int = None if label_color is None else _color_to_int(label_color)
     except ValueError as e:
         return f"ERROR: {e}"
 
     if px_to_unit_scope not in ("all", "missing"):
         return "ERROR: px_to_unit_scope must be 'all' or 'missing'."
-    if _corner_error(placement):
+    if placement is not None and _corner_error(placement):
         return f"ERROR: {_corner_error(placement)}"
-    text = label if label is not None else _default_bar_label(bar_width_in_units, unit)
-    legend_html = _scale_bar_legend_html(text, label_color_int)
-    px_legend_html = _scale_bar_legend_html(_default_bar_label(bar_width_in_units, "px"),
-                                            label_color_int)
+    if bar_height_px is not None and not 0 < float(bar_height_px) <= 100:
+        return f"ERROR: bar_height_px is the bar's thickness in pixels, between 0 and 100 (got {bar_height_px})."
+    no_text = label is not None and str(label).strip().lower() in ("", "none", "hidden", "off", "no")
+    text_colour = 16777215 if label_color_int is None else label_color_int
+    width_for_text = 0 if bar_width_in_units is None else bar_width_in_units
+    text = label if label is not None else _default_bar_label(width_for_text, unit)
+    legend_html = _scale_bar_legend_html(text, text_colour)
+    px_legend_html = _scale_bar_legend_html(_default_bar_label(width_for_text, "px"), text_colour)
 
     tree, root = _load(pyf_path)
 
@@ -419,6 +470,25 @@ def set_scale_bar_all(
             px = None                    # a calibrated image keeps its own pixel size
             kept_own += 1
         factor = _stored_units_per(unit) if (px is not None or own is not None) else 1.0
+        if bar_width_in_units is None:
+            # "no text on the bars", "bars in black", "thinner bars": the bars that exist, restyled
+            bar = _find_scale_bar(img)
+            if bar is None:
+                skipped += 1
+                return
+            old_legend = bar.findtext("legend") or ""
+            old_text = "" if old_legend.strip() in ("", "None") else _html_to_plain(old_legend).strip()
+            legend = None
+            if no_text:
+                legend = ""
+            elif label is not None:
+                legend = legend_html
+            elif label_color_int is not None and old_text:
+                legend = _scale_bar_legend_html(old_text, label_color_int)
+            _apply_scalebar_to_img(img, None, legend, placement, bar_color_int,
+                                   None if px is None else px * factor, bar_height_px=bar_height_px)
+            updated += 1
+            return
         err = _scale_bar_length_error(img, bar_width_in_units, px, unit, factor)
         if err:
             too_long.append(f"{os.path.basename(str(_first_filename(img)))}: {err}")
@@ -433,9 +503,12 @@ def set_scale_bar_all(
         else:
             used.append(f"{name} {own:g} (its own"
                         + (", kept: NOT the value given)" if px_to_unit is not None else ")"))
+        if no_text:
+            legend = ""
         action = _apply_scalebar_to_img(
             img, bar_width_in_units * factor, legend,
-            placement, bar_color_int, None if px is None else px * factor,
+            placement or "bottom right", 16777215 if bar_color_int is None else bar_color_int,
+            None if px is None else px * factor, bar_height_px=bar_height_px,
         )
         if action == "added":
             added += 1
@@ -463,6 +536,18 @@ def set_scale_bar_all(
     if too_long:
         return "ERROR: " + " | ".join(too_long[:3]) + " Nothing was changed."
     total = added + updated
+    if bar_width_in_units is None:
+        if not updated:
+            return ("ERROR: no image has a scale bar yet: give the length in bar_width_in_units "
+                    "to add them. Nothing was changed.")
+        _save(tree, pyf_path)
+        what = [w for w, on in (("no text", no_text), (f"text '{label}'", label is not None and not no_text),
+                                (f"bar colour {bar_color}", bar_color is not None),
+                                (f"text colour {label_color}", label_color is not None),
+                                (f"{placement}", placement is not None),
+                                (f"{bar_height_px:g} px thick" if bar_height_px is not None else "", bar_height_px is not None)) if on]
+        return (f"{updated} existing scale bar(s) restyled ({', '.join(what) or 'nothing to change'}); "
+                f"lengths kept. {skipped} image(s) without a scale bar left as they are.")
     if total == 0:
         return "No images found in this figure."
     _save(tree, pyf_path)
@@ -474,7 +559,7 @@ def set_scale_bar_all(
     return (
         f"Scale bar applied to {total} image(s): "
         f"{added} added, {updated} updated. "
-        f"Settings: '{text}', {placement}{px_note}.{skip_note}"
+        f"Settings: '{'no text' if no_text else text}', {placement or 'bottom right'}{px_note}.{skip_note}"
         # per image: a 27B model chose "missing", then said every image used 1.24
         + (f"\nPixel size per image ({unit}/px): " + "; ".join(used[:12])
            + (f"; and {len(used) - 12} more" if len(used) > 12 else "") + "." if used else "")
@@ -864,6 +949,15 @@ def connect_roi_to_inset(
         return ("ERROR: " + ("this panel has no rectangle ROI." if not rects else
                 f"the panel has {len(rects)} rectangle ROIs: give roi_index "
                 f"(one of {[i for i, _ in rects]})."))
+    # the inset made from this ROI shows its region: with two insets the lines went to
+    # the other one (user chat 2026-11-12: "connected to the wrong inset")
+    made_from = [k for k, ins in enumerate(insets) if _inset_shows(ins, _rect_box(rects[0][1]))]
+    note = ""
+    if len(made_from) == 1 and len(insets) > 1:
+        if inset_index is not None and inset_index != made_from[0]:
+            note = (f" Inset {inset_index} shows another region: joined inset {made_from[0]}, "
+                    "the one made from this ROI.")
+        inset_index = made_from[0]
     if inset_index is not None:
         if not 0 <= inset_index < len(insets):
             return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
@@ -915,13 +1009,184 @@ def connect_roi_to_inset(
             removed += 1
     # before the inset, so the inset is drawn over their ends
     pos = list(annots).index(inset)
+    from ..connectors import xml_attach
     for k, ((x1, y1), (x2, y2)) in enumerate(lines):
-        annots.insert(pos + k, _new_roi_line(x1, y1, x2, y2, color, width, 1.0, False, False))
+        line = _new_roi_line(x1, y1, x2, y2, color, width, 1.0, False, False)
+        # sticky: the lines follow the ROI and the inset when either moves (2026-11-12)
+        xml_attach(line, roi, inset, box, where)
+        annots.insert(pos + k, line)
     _save(tree, pyf_path)
     ends = "; ".join(f"({x1:.0f},{y1:.0f})→({x2:.0f},{y2:.0f})" for (x1, y1), (x2, y2) in lines)
     return (f"{len(lines)} leader line(s) join ROI {roi_i} and the inset (drawn at x={where[0]:.0f}, "
-            f"y={where[1]:.0f}, {where[2]:.0f}×{where[3]:.0f} px): {ends}."
-            + (f" Replaced {removed} earlier line(s) between them." if removed else ""))
+            f"y={where[1]:.0f}, {where[2]:.0f}×{where[3]:.0f} px): {ends}. They stay attached when the "
+            "ROI or the inset moves."
+            + (f" Replaced {removed} earlier line(s) between them." if removed else "") + note)
+
+
+@mcp.tool()
+def add_connector(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    from_index: int,
+    to_index: int,
+    from_site: str = "auto",
+    to_site: str = "auto",
+    line_color: str | int | None = None,
+    stroke: float | None = None,
+    arrow: bool = False,
+) -> str:
+    """A connector: a line between two annotations of the same panel that stays
+    attached to them when they move, as connectors do in PowerPoint ("join these
+    two ROIs with a line", "connect the box to the label").
+
+    *from_index* / *to_index*: annotation_index of the two shapes (get_annotations):
+    rectangle or ellipse ROIs, polygons, texts or an inset. *from_site* /
+    *to_site*: where each end sits on its shape's box: "auto" (default, the
+    nearest corners or edge middles), "top left", "top", "top right", "right",
+    "bottom right", "bottom", "bottom left", "left" or "center".
+    *line_color* / *stroke*: default to the first shape's own; *arrow*: an
+    arrowhead at the second shape. Nothing is connected unless asked.
+    For an ROI and its inset, connect_roi_to_inset draws the usual two leader lines.
+    GUI: panel editor → select two shapes → Connect two shapes.
+    """
+    from ..connectors import SITES, normalise_site, xml_attach
+    try:
+        from_site, to_site = normalise_site(from_site), normalise_site(to_site)
+    except ValueError as exc:
+        return f"ERROR: {exc}"
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    parent = imgs[image_index]
+    annots = parent.find("annotations")
+    items = list(annots) if annots is not None else []
+    for index in (from_index, to_index):
+        if not 0 <= index < len(items):
+            return f"ERROR: annotation_index {index} out of range ({len(items)} items; see get_annotations)."
+    if from_index == to_index:
+        return "ERROR: a connector joins two different shapes."
+    first, second = items[from_index], items[to_index]
+    boxes = []
+    for el in (first, second):
+        box = _xml_box(parent, el)
+        if box is None:
+            return (f"ERROR: annotation {items.index(el)} ({el.tag}) has no box a connector can attach to "
+                    "(lines and scale bars cannot be connected).")
+        boxes.append(box)
+    from ..connectors import _box_sites
+    import math
+    sites_a, sites_b = _box_sites(boxes[0]), _box_sites(boxes[1])
+    pick_a = [sites_a[from_site]] if from_site != "auto" else [v for k, v in sites_a.items() if k != "center"]
+    pick_b = [sites_b[to_site]] if to_site != "auto" else [v for k, v in sites_b.items() if k != "center"]
+    (x1, y1), (x2, y2) = min(((a, b) for a in pick_a for b in pick_b), key=lambda pair: math.dist(*pair))
+
+    def num(el, tag, default):
+        try:
+            return float(_decode(el.findtext(tag)))
+        except (TypeError, ValueError):
+            return default
+    color = _color_to_int(line_color) if line_color is not None else int(num(first, "color", 0xFFFF00))
+    width = float(stroke) if stroke is not None else (num(first, "stroke", 1.5) or 1.5)
+    line = _new_roi_line(x1, y1, x2, y2, color, width, 1.0, bool(arrow), False)
+    xml_attach(line, first, second, boxes[0], boxes[1], from_site, to_site)
+    annots.append(line)
+    _save(tree, pyf_path)
+    return (f"Connector added (annotation {len(items)}): from annotation {from_index} ({from_site}) to "
+            f"{to_index} ({to_site}), ({x1:.0f},{y1:.0f})→({x2:.0f},{y2:.0f}). It stays attached when either "
+            "shape moves; remove it with remove_annotation.")
+
+
+def _xml_box(parent: ET.Element, el: ET.Element):
+    """(x, y, w, h) of an annotation stored in a .pyf, in the panel's image pixels."""
+    from ..zoom_geometry import inset_rect
+    if el.tag == "Image2D":
+        parent_size, inset_size = _xml_raw_size(parent), _xml_raw_size(el)
+        if not parent_size or not inset_size:
+            return None
+        try:
+            fraction = float(_decode(el.findtext("fraction_of_parent_image_width_if_image_is_inset")) or 0.25)
+        except (TypeError, ValueError):
+            fraction = 0.25
+        return inset_rect(parent_size, _xml_crops(parent), inset_size, _xml_crops(el), fraction,
+                          el.findtext("placement") or "top right")
+    if el.tag in ("Rectangle2D", "Ellipse2D", "Square2D", "Circle2D"):
+        box = _rect_box(el)
+        return box if box[2] > 0 and box[3] > 0 else None
+    if el.tag in ("Polygon2D", "PolyLine2D", "Freehand2D"):
+        try:
+            from ..mcp_tools.core import _decode as dec
+            points = dec(el.findtext("points")) or dec(el.findtext("polygon")) or []
+            xs = [float(p[0]) for p in points]
+            ys = [float(p[1]) for p in points]
+            return (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)) if xs else None
+        except Exception:
+            return None
+    return None
+
+
+def _rect_box(rect: ET.Element) -> tuple[float, float, float, float]:
+    def num(tag):
+        try:
+            return float(_decode(rect.findtext(tag)) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return tuple(num(t) for t in ("x", "y", "width", "height"))
+
+
+def _inset_shows(inset: ET.Element, box, tol: float = 3.0) -> bool:
+    """True when *inset* shows the source region *box* (x, y, w, h): an inset made
+    from that ROI (its crops cut the rest of the same image away)."""
+    size = _xml_raw_size(inset)
+    if not size:
+        return False
+    left, right, top, bottom = _xml_crops(inset)
+    region = (left, top, size[0] - left - right, size[1] - top - bottom)
+    return all(abs(a - b) <= tol for a, b in zip(region, box))
+
+
+def _inset_leaders(parent: ET.Element, inset: ET.Element):
+    """The leader lines that end on *inset* where it is drawn now, with the ROI each
+    starts from: [(line, roi)]. Used to redraw them when the inset moves or goes."""
+    from ..zoom_geometry import inset_rect
+    parent_size, inset_size = _xml_raw_size(parent), _xml_raw_size(inset)
+    if not parent_size or not inset_size:
+        return []
+    try:
+        fraction = float(_decode(inset.findtext("fraction_of_parent_image_width_if_image_is_inset")) or 0.25)
+    except (TypeError, ValueError):
+        fraction = 0.25
+    where = inset_rect(parent_size, _xml_crops(parent), inset_size, _xml_crops(inset),
+                       fraction, inset.findtext("placement") or "top right")
+    annots = parent.find("annotations")
+    items = list(annots) if annots is not None else []
+    rects = [a for a in items if a.tag == "Rectangle2D"]
+
+    def num(el, tag):
+        try:
+            return float(_decode(el.findtext(tag)) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def on_rect(x, y, r, tol=2.0):
+        rx, ry, rw, rh = r
+        inside = rx - tol <= x <= rx + rw + tol and ry - tol <= y <= ry + rh + tol
+        return inside and min(abs(x - rx), abs(x - rx - rw), abs(y - ry), abs(y - ry - rh)) <= tol
+    found = []
+    for line in items:
+        if line.tag != "Line2D":
+            continue
+        ends = ((num(line, "x1"), num(line, "y1")), (num(line, "x2"), num(line, "y2")))
+        for here, there in (ends, ends[::-1]):
+            roi = next((r for r in rects if on_rect(*here, _rect_box(r))), None)
+            if roi is not None and on_rect(*there, where):
+                found.append((line, roi))
+                break
+    return found
 
 
 @mcp.tool()
@@ -1001,10 +1266,15 @@ def remove_inset(
         return f"ERROR: inset_index {inset_index} out of range ({len(insets)} insets)."
 
     annots = imgs[image_index].find("annotations")
+    # its leader lines go with it (they were left pointing at nothing, 2026-11-12)
+    leaders = _inset_leaders(imgs[image_index], insets[inset_index])
+    for line, _roi in leaders:
+        annots.remove(line)
     annots.remove(insets[inset_index])
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Inset {inset_index} removed from image {image_index} in {loc}."
+    return (f"Inset {inset_index} removed from image {image_index} in {loc}."
+            + (f" Its {len(leaders)} leader line(s) were removed too." if leaders else ""))
 
 
 @mcp.tool()
@@ -1092,6 +1362,9 @@ def set_inset_property(
     err = _check_property_value(property_name, raw)
     if err:
         return err
+    # its leader lines follow it: moved to the top left, they still pointed at the top right
+    # and had to be found and removed by hand (user chat 2026-11-12)
+    leaders = _inset_leaders(imgs[image_index], insets[inset_index])
     _set_child_text(insets[inset_index], property_name, raw)
     if property_name.startswith("crop_"):
         # crops are margins cut from each side, not coordinates: a model set
@@ -1104,13 +1377,42 @@ def set_inset_property(
             return (f"ERROR: {crop_err} For an inset made from an ROI: move/resize the ROI, then "
                     "remove_inset and roi_to_inset again. "
                     "Nothing was changed.")
+    annots = imgs[image_index].find("annotations")
+    redraw = {}
+    for line, roi in leaders:
+        annots.remove(line)
+        entry = redraw.setdefault(id(roi), [roi, 0, line])
+        entry[1] += 1
     _save(tree, pyf_path)
     stored = _stored_image_property(pyf_path, group_path, image_index, property_name,
                                     inset_index=inset_index)
+    redrawn = 0
+    for roi, count, line in redraw.values():
+        box = _rect_box(roi)
+        _, fresh = _load(pyf_path)
+        container_now, _err = _get_container(fresh, group_path)
+        items = list([c for c in container_now if c.tag == "Image2D"][image_index].find("annotations"))
+        index = next((k for k, a in enumerate(items) if a.tag == "Rectangle2D" and _rect_box(a) == box), None)
+        if index is None:
+            continue
+        try:
+            colour = int(float(_decode(line.findtext("color"))))
+        except (TypeError, ValueError):
+            colour = None
+        try:
+            stroke = float(_decode(line.findtext("stroke")))
+        except (TypeError, ValueError):
+            stroke = None
+        reply = connect_roi_to_inset(pyf_path, group_path, image_index, roi_index=index,
+                                     inset_index=inset_index, connectors=min(2, count),
+                                     line_color=colour, stroke=stroke)
+        if not str(reply).startswith("ERROR"):
+            redrawn += min(2, count)
     loc = "canvas" if not group_path else f"group {group_path}"
     return (
         f"Inset {inset_index} on image {image_index} in {loc}: "
         f"{property_name} = {stored} (read back from the saved file)"
+        + (f"; its {redrawn} leader line(s) were redrawn to its new position" if redrawn else "")
     )
 
 

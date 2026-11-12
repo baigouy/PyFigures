@@ -176,10 +176,40 @@ def uninstall_canvas(canvas):
 def adopt_letter_deltas(before,after,window,operation=None):
     """Honor actual native-letter deltas without freezing letters on moved media."""
     from .categorized_mcp import category_for
-    if operation and category_for(operation)=="layout":return
-    if operation in ('add_image','remove_image','add_group','remove_group'):return
+    # clone_image: the copy carries its source's letter; pinning it gave A, B, C, A, D…
+    # that renumbering could not repair (2026-11-12)
     from .partner_gui import panels,letters,letter_info,POLICY,TAText2D
     from pyfigures.mcp_tools.core import _html_to_plain
+    # layout operations too (remove_group is one: deleting the second row left A, B, C, G, H, I)
+    if operation in ('add_image','remove_image','add_group','remove_group','clone_image','move_image') \
+            or (operation and category_for(operation)=="layout"):
+        # Letters pinned one by one that are just the plain sequence (A, B, C…) follow the
+        # panels again, as with the Letters box of the toolbar: "delete the second row" left
+        # A, B, C, G, H, I and a copy of A was a second A.
+        from batoolset.strings.tools import increment_letter
+        texts=[]
+        def collect(nodes):
+            for n in nodes:
+                if n.tag=='Group':collect(list(n.find('content') or []))
+                elif n.tag=='Image2D' and n.findtext('isText')!='True':
+                    found=[a for a in list(n.find('annotations') or []) if a.tag=='TAText2D' and a.findtext('is_letter')=='True']
+                    texts.append(_html_to_plain(_decode(found[0].findtext('text')) or '').strip() if len(found)==1 else None)
+        collect(list(ET.fromstring(before)))
+        if not texts or not window.auto_lettering_checkbox.isChecked() or not all(t and t.isalpha() for t in texts):return
+        expected=texts[0]
+        for text in texts:
+            if text!=expected:return
+            expected=increment_letter(expected)
+        pinned=False
+        for _,_,panel in panels(window.paint.EZFIG_panel.shapes_to_draw):
+            policy=json.loads(getattr(panel,POLICY,'{}'))
+            if policy.get('automatic_text',True) is False:
+                policy['automatic_text']=True;policy.pop('text',None);policy.get('base',{}).pop('text',None)
+                setattr(panel,POLICY,json.dumps(policy,sort_keys=True));pinned=True
+        if pinned:
+            window.letter_line_edit.blockSignals(True);window.letter_line_edit.setText(texts[0]);window.letter_line_edit.blockSignals(False)
+            window.update_letters()
+        return
     def indexed(data):
         out={}
         def walk(nodes,path=()):

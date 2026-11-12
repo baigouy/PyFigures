@@ -87,6 +87,26 @@ def category_for(name):
     return 'setup'
 
 
+def topic_note(words):
+    """What a search cannot find because it does not exist, or hides under another name:
+    said at once, before the tool list (2026-11-12: "make the 2nd row a little taller"
+    took thirty calls and ended in a row wider than the figure; "show the next z" was
+    searched eight times)."""
+    words = set(words)
+    if words & {'row', 'rows'} and words & {'height', 'taller', 'shorter', 'tall', 'heights', 'equal', 'same'} \
+            or words & {'image', 'panel', 'picture'} and words & {'bigger', 'larger', 'smaller', 'resize'} and 'figure' not in words:
+        return ('ROW HEIGHT / SIZE OF ONE IMAGE: there is no such property. Every row spans the figure width and the '
+                'images of a row share one height, so a row is as tall as the shapes of its images make it. To make a row '
+                'taller: put fewer images in it (arrange_live_images row_counts), crop its images narrower '
+                '(transform_image), or widen the whole figure (resize_figure). set_size on one row makes it wider than '
+                'the others: not what is asked. Say this and offer these choices; do not search further. ')
+    if words & {'z', 'slice', 'slices', 'plane'} and not words & {'montage', 'orthogonal'}:
+        return ('ONE Z SLICE: configure_image(projection="max", projection_z_start=k, projection_z_end=k+1) shows slice k '
+                '(0-based) alone; "next z" = the current start + 1 (no stored start = a projection of all slices or slice 0: '
+                'say which one you show). ')
+    return ''
+
+
 def build_server(full_server, send):
     from .original_registry import registry
     originals = set(registry())
@@ -117,6 +137,7 @@ def build_server(full_server, send):
         'For manual drag cancellation: release the mouse, then choose Ignore or dismiss the opened context menu. Escape is verified for the open menu, not during the active drag; do not invent clicking empty canvas as cancellation. '
         'For manual questions use explain_live_interaction with the actual topic or explain_how; follow returned current menu paths. Manual teaching never authorizes editing. API examples inside tool descriptions are developer references, not user-facing instructions: omit them unless code or recipe is explicitly requested. Panel-by-panel joining is ONE drop/operation with ordered contents. '
         'HOW-TO requests mean human GUI instructions by default: discover explain_how or list_how_to_guides, give authored menu/right-click paths, and offer to do the edit from natural language. Show commands only if the user explicitly asks for code or recipe; teaching is not permission to edit. '
+        'RELATIVE requests (bigger, smaller, thicker, thinner, a bit more, too much, brighter) carry no number and need none: change the current value by a moderate step (about a third; half that for "a bit"), say the old and the new value, and offer to go further. Never ask for a number first. Misspelt words are read as the obvious word ("mak lettrs biger" = make the letters bigger). '
         'An invalid quantity or unsupported value requires clarification. For row deletion, a count larger than available means delete all available rows and report the ACTUAL number removed, using the bulk operation once. Do not turn zero columns into one, change a negative size to a positive size, or choose a substitute LUT/corner after validation fails. Explain the valid range and ask the user for a corrected value. '
         'A missing or ambiguous named panel is unresolved user intent, not an instruction to choose another panel. After UNKNOWN_PANEL_REFERENCE or AMBIGUOUS_PANEL_REFERENCE, ask for the corrected target and stop that edit. Never replace a failed letter with guessed numeric coordinates, an ordinal, or the last panel; inspection cannot establish which replacement the user intended. '
         'SWAPS: swap q and o means swap image PANELS identified by those letters. Default target=images. '
@@ -145,7 +166,7 @@ def build_server(full_server, send):
         'categories if needed. All original functions remain available underneath. '
         'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
         'For figure/group LETTER edits, removal or restoration prefer edit_panel_letters '
-        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, foreground and background; bold/italic/underline are handled by restyle_texts(target=letters), not guessed edit_panel_letters fields. '
+        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, bold/italic/underline, foreground and background; bold on SOME letters ("the letter of A", "the rotated panels") is edit_panel_letters scope=panels with panel_ids and bold=true (restyle_texts(target=letters) changes every letter). '
         'For ALL scale bars use remove_scale_bar_all or set_scale_bar_all once. '
         'For deleting last N rows use delete_last_rows in one call. Never guess shifted indices after an error; verify actual removed targets before claiming success. '
         'For ungroup all / images as single images / move all to free canvas use ungroup_all_images once; never consolidate into one group or loop over shifting indices. '
@@ -171,13 +192,16 @@ def build_server(full_server, send):
         'figure_summary in the state answers "what is in the figure?". When it says empty=true, reply at once from its answer and how_to_add_content, without calling tools or previewing. '
         'PyFigures cannot reorder channels, but every channel colour can be set on its own, which gives the same picture. For "swap channels 3->1, 1->2, 2->3" say so, then offer: do it now (set_lut with the channel_colours of the panel permuted: what each channel shows now, its LUT or else the own colour of the file; [RED, GREEN, BLUE] swapped 1<->2 is luts=["GREEN", "RED", "BLUE"]), or how to do it yourself in the GUI (right-click the image > Appearance > Set LUT(s); double-click it > File Infos + Scale tab > Set LUTs; Annotations > Figure colours… for every image), with a chat example such as "make channel 1 blue, channel 2 red, channel 3 green". The channels property is only show/hide. '
         'Colours named without a target ("use magenta and green"): on a figure whose only coloured things are multichannel images they mean the CHANNEL colours (set_figure_colors, one per channel in channel order). If it also has coloured ROIs, arrows or text, or the colours could fit several things, ASK which ones the user means before changing anything. Which colour names work? list_colors(query=the_colour), answer from color_check. '
+        '"Restore it as it was", "put it back", "revert / cancel that", "go back" just after your edit: use undo_redo(action="undo"), once per edit of that request, not a new edit that rebuilds the old values. '
+        'In replies, call a panel by its name in the panel state: its visible letter, else its canvas number "#3" (shown when the panel is selected). Never by a panel_id such as "1/1"; a letter it no longer has may only be added ("#5, formerly E"). '
+        'Colours that look unnatural, weird, wrong, or "back to normal / the original / default colours", with no colour named: the FIRST option to offer (or to apply when the user asks to restore) is the image file\'s own colours, file_colours in the panel state: set_lut with "NONE" for each channel. Name those colours in the offer; other LUTs come after it. '
         'Which LUTs/colour tables exist, or is a LUT available? Use list_luts(query=the_name), answer from lut_check and pass its exact_key to set_lut. In set_lut, null keeps a channel unchanged. '
         'Column headers or a heading above/below a row: add_label_row(group_path=[row index], labels=[one per image] or one string). A label left/right of a row: add_side_label. add_annotation writes text INSIDE an image, not beside a row. '
         'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
 
     @server.tool()
     def inspect_figure() -> dict:
-        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
+        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), channel_colours (what each channel shows), file_colours (the file's own colours: what set_lut "NONE" restores), stack (None = a single image; else z, t and channel counts and what is shown: "which images are stacks?" is answered here, no other tool), kind ('image' pixels from a file, 'code' made by a script or plot, 'vector' SVG/PDF), name (what to call it in a reply: its letter, else "#N"), number (shown on the canvas on a selected panel: "#3" or "number 3" from the user is panel_ref "#3"), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
         state = send('inspect')
         summary = state.get('figure_summary') or {}
         if summary.get('empty'):          # nothing else in the state says anything useful
@@ -196,7 +220,11 @@ def build_server(full_server, send):
 
     @server.tool()
     def undo_redo(action: str = 'undo') -> dict:
-        """Undo or redo one GUI document edit. action: undo or redo."""
+        """Undo or redo one GUI document edit. action: undo or redo.
+
+        "Restore it as it was", "put it back", "revert that", "cancel that", "go back" right
+        after your edit: call undo once per edit you made for that request (one set_lut =
+        one undo), instead of re-creating the old state with a new edit."""
         if action not in ('undo', 'redo'):
             raise ValueError('Use undo or redo')
         from .live_mcp import call_live
@@ -280,6 +308,17 @@ def build_server(full_server, send):
             if name=='preview_panel' and any(w in ('crop','cropping','cropped','uncropped','uncrop') for w in words):score+=430
             if name=='transform_image' and any(w in ('crop','cropping','rotate','rotation','flip') for w in words):score+=200
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
+            # "brighter", "increase the contrast in d": the display range (four searches each, 2026-11-12)
+            if name=='configure_image' and any(w in ('brightness','brighter','bright','contrast','darker','dim','dimmer','intensity','normalization','normalisation','saturated','window','gamma') for w in words):score+=420
+            # "join these two boxes with a line", "connector between the ROIs" (sticky, 2026-11-12)
+            if name=='add_connector' and any(w in ('connect','connector','connectors','join','link','linking','joining') for w in words) and any(w in ('box','boxes','roi','rois','shape','shapes','rectangle','rectangles','ellipse','label','circle','circles') for w in words) and 'inset' not in words:score+=650
+            # "the pixel size of g is 0.5 um"
+            if name in ('set_image_property','set_scale_bar') and 'pixel' in words and any(w in ('size','calibration','um','micron','microns') for w in words):score+=520 if name=='set_image_property' else 480
+            # "put the scale bar bottom most", "the label above the bar": the order of items sharing
+            # a corner (the bar was moved to the other corner instead, 2026-11-12)
+            if name=='move_annotation_in_corner' and (any(w in ('most','bottommost','topmost','below','above','under','over','order','stacked','stack','closest','lowest','highest') for w in words) and any(w in ('bar','label','text','corner','inset','annotation','annotations','scale') for w in words)):score+=700
+            # "letters outside", "rename g to G'", "numbers instead of letters"
+            if name=='edit_panel_letters' and any(w in ('letter','lettering','numbering','numerals','numbers','rename') for w in words):score+=260
             side=any(w in ('left','right','side','vertical') for w in words)
             if name in ('add_label_row','add_side_label') and (any(w in ('column','columns','heading','header','headers','above','below','beside') for w in words) or (side and any(w in ('label','labels') for w in words))):
                 score+=300 if (name=='add_side_label')==side else 150   # beside a row -> side label, else a label row
@@ -390,7 +429,7 @@ def build_server(full_server, send):
             if bounded and used+size>budget:break
             bounded.append(entry);used+=size
         found=bounded
-        return {'manual_guides':manual_guides,'guidance': ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Missing or non-unique references require clarification: stop, never substitute an existing panel or retry with other references. Never remove letters as a swap workaround.'
+        return {'manual_guides':manual_guides,'guidance': topic_note(words) + ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Missing or non-unique references require clarification: stop, never substitute an existing panel or retry with other references. Never remove letters as a swap workaround.'
                              if any(w in ('swap', 'exchange', 'switch') for w in words) else
                              'Report verified after-state, not merely native success text. Ordinary text/captions are NOT automatic panel letters: inspect get_annotations and remove_annotation for quoted text, preserving letters. removal_request must quote the actual human request verbatim, never an invented clearer request.'),
                 'total_matches': len(ranked), 'offset': offset,

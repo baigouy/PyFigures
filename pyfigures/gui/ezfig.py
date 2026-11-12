@@ -656,6 +656,15 @@ class MyWidget(QWidget):
         #         self.selected_shape.draw(painter)
         #     except:
         #         pass
+        if not self.dragging:
+            # marks of the selected panels (number, kind, stack, crop… and warnings):
+            # _paint only runs for the screen (paintEvent), never for an export
+            try:
+                from pyfigures.gui.selection_badges import draw_badges
+                draw_badges(painter, self.shapes_to_draw, self.selected_shape, self.scale,
+                            avoid=self._selection_label_rect(painter))
+            except Exception:
+                traceback.print_exc()
         self.draw_selection(painter) # but draw its selection so that it will be visible for the user
 
         if isinstance(self.bounds, QRectF):
@@ -741,6 +750,22 @@ class MyWidget(QWidget):
     # TODO --> see how to do that ???
     # the other possibility is to draw from within the object --> can be draw its skeleton by the way --> would allow to handle more shapes
     # see how I can handle selection groups --> see how I was doing in EZF by the way because it was really working well!!
+    def _selection_label_rect(self, painter):
+        """Where draw_selection writes the selected object's name (centred on the
+        selection): the panel marks keep clear of it, they hid it (2026-11-12)."""
+        if self.selected_shape is None:
+            return None
+        rect = self._get_rect(self.selected_shape)
+        if rect is None:
+            return None
+        try:
+            text = self.selected_shape.__repr__()
+        except Exception:
+            text = 'Multi'
+        metrics = QFontMetrics(painter.font())
+        w, h = metrics.width(text), metrics.height()
+        return QRectF(rect.center().x() - w / 2., rect.center().y() - h / 2., w, h)
+
     def draw_selection(self, painter):
         if self.selected_shape is not None:
             # could also color according to shapes

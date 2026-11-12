@@ -713,6 +713,7 @@ Everything here is drawn **on** an image panel, in its raw-pixel coordinates
 | `text` | a text, a mapping `{text, placement}`, or a list of them | Text on the panel; `placement` is a corner (default `bottom left`, so it does not sit on the letter). Plain text is white; rich text (`<i>…</i>`) is kept as written. |
 | `corner_labels` | `top_left`, `top_right`, `bottom_left`, `bottom_right` → a text or a list | Labels stacked from each corner inward (two labels in one corner sit one under the other). |
 | `rois` | list of shapes | Each has **one** of `rect: [x, y, w, h]`, `ellipse: [x, y, w, h]`, `line: [x1, y1, x2, y2]`, `polygon: [[x, y], …]`, `circle: [cx, cy, radius]`, `square: [cx, cy, side]`, `point: [x, y]`, `points: [[x, y], …]`, plus optional `color` (`yellow`), `fill` (none), `stroke` (2), `opacity` (1). A line takes `arrow: true` / `both_ends: true` (or use `arrows`, §12, for an arrow whose tip sits exactly on a point); a polygon `style: polyline` for an open path. Points are filled discs (fill = `color` unless given) of diameter `size` (6 px), each an editable ellipse in the GUI. |
+| `connectors` | list | Lines joining two of the panel's `rois` that stay attached when either moves (as PowerPoint connectors): `from` / `to` are roi numbers (1 = the first roi), optional `from_site` / `to_site` (`auto`, the nearest corners or edge middles; or `top left`, `top`, `top right`, `right`, `bottom right`, `bottom`, `bottom left`, `left`, `center`), `color`, `stroke`, `arrow: true`. Nothing is connected unless listed. |
 | `brackets` | list of `{x1, x2, y}` | Significance brackets from `x1` to `x2` at height `y`, with `label` (`*`), `color` (`black`), `stroke`, `font_pt`, `tick`, `label_gap`, `whiskers` (`down`/`up`). |
 
 To draw a bracket *from the data* (with the test run for you), use a `plot`
@@ -1095,6 +1096,7 @@ px_to_unit: 0.1
 | `color` | `white` | Colour of the bar **and** its label. |
 | `placement` | `bottom right` | `bottom right`, `bottom left`, `top right`, `top left`. |
 | `label` | `"<units> <unit>"` | Custom text (`""` = bar only — then state the size in the caption). |
+| `thickness` | `3` | Thickness of the bar in pixels (`thickness: 1.5` for a thin bar). |
 | `px_to_unit` | | The pixel size may also be given here; it is the panel's `px_to_unit`. |
 
 The bar's length on screen is `units ÷ px_to_unit` pixels of the raw image, so
@@ -1403,6 +1405,7 @@ server, and edited afterwards in either.
 
 | `text`, `corner_labels` | Edit Image → text tool; right-click → Add labels ▶ | `add_annotation`, `add_corner_labels` |
 | `rois` | Edit Image → Annotations tab (rectangle, ellipse, line, arrow, polygon…) | `add_roi_rect`, `add_roi_ellipse`, `add_roi_line`, `add_roi_polygon` |
+| `connectors` | Edit Image → select two shapes → Connect two shapes | `add_connector` |
 | `brackets` | Edit Image → Signif. bracket | `add_significance_bracket` |
 | `inset` | Edit Image → Rect ROI → Inset | `add_inset` |
 | `zoom` | Annotations → Add zoom callout to selected panel… | `add_zoom_callout` |

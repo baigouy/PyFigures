@@ -127,6 +127,49 @@ def measured_inset_corners(panel, inset):
     return [back.map(inset_transform.map(QPointF(c))) for c in corners]
 
 
+def scene_to_image_point(panel, scene_point):
+    """The panel's image pixel (raw source pixels, where ROIs and arrows are
+    stored) under a point of the figure, measured on a real paint: valid for a
+    rotated and/or cropped panel ("add an arrowhead where I clicked" on a rotated
+    panel could not be placed, 2026-11-12). None if it cannot be measured or the
+    point falls outside the image."""
+    from qtpy.QtCore import QPointF
+    from qtpy.QtGui import QImage, QPainter, QTransform
+    from batoolset.drawings.shapes.line2d import Line2D
+    seen = {}
+
+    class _Probe(Line2D):
+        def draw(self, painter, draw=True, parent=None):
+            seen['free'] = QTransform(painter.worldTransform())
+
+    annotations = panel.annotations
+    panel.annotations = list(annotations or []) + [_Probe(0, 0, 1, 1)]
+    try:
+        image = QImage(8, 8, QImage.Format.Format_ARGB32)
+        painter = QPainter(image)
+        try:
+            panel.draw(painter)
+        finally:
+            painter.end()
+    except Exception:
+        return None
+    finally:
+        panel.annotations = annotations
+    if 'free' not in seen:
+        return None
+    s = panel.scale or 1.0
+    tl = panel.topLeft()
+    to_device = QTransform(1.0 / s, 0, 0, 1.0 / s, tl.x(), tl.y()) * seen['free']
+    back, ok = to_device.inverted()
+    if not ok:
+        return None
+    p = back.map(QPointF(scene_point[0], scene_point[1]))
+    width, height = panel.get_raw_size()
+    if not (0 <= p.x() <= width and 0 <= p.y() <= height):
+        return None
+    return p.x(), p.y()
+
+
 def _hull(points):
     """Convex hull (counter-clockwise), collinear points kept out."""
     pts = sorted(set(points))

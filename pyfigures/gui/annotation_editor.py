@@ -1,6 +1,8 @@
 from batoolset.settings.global_settings import set_UI # set the UI to qtpy
 set_UI()
 from pyfigures.gui.lutmultiselector import LutWidget
+from pyfigures import connectors as _connectors
+_connectors.install()      # sticky connectors, insets that follow their ROI (also when run alone)
 import matplotlib.pyplot as plt
 import numpy as np
 from batoolset.img import guess_dimensions
@@ -2060,6 +2062,21 @@ class MainWindow(QWidget):
                                          'the image has several.')
             self.connectInset.clicked.connect(self.connect_roi_to_inset)
             shapes_toolbox_layout.addWidget(self.connectInset, 11, 0, 1, 3)
+            # a line that stays attached to two shapes when they move, as in PowerPoint
+            self.connectShapes = QPushButton('Connect two shapes')
+            self.connectShapes.setFocusPolicy(Qt.NoFocus)
+            self.connectShapes.setToolTip('Select two shapes (ROIs, texts or an inset; Ctrl+click), then click: '
+                                          'a connector line joins their nearest corners or edge middles and '
+                                          'stays attached when either is moved.')
+            self.connectShapes.clicked.connect(self.connect_two_shapes)
+            shapes_toolbox_layout.addWidget(self.connectShapes, 12, 0, 1, 2)
+            # where the connector ends sit: the nearest corners / edge middles, or the
+            # centres of the two shapes (the user's request, 2026-11-12)
+            self.connectSite = QComboBox()
+            self.connectSite.addItem('Nearest corner/edge', 'auto')
+            self.connectSite.addItem('Shape centres', 'center')
+            self.connectSite.setToolTip('Where the connector ends attach on the two shapes')
+            shapes_toolbox_layout.addWidget(self.connectSite, 12, 2)
 
             self.shapes_toolbox.setLayout(shapes_toolbox_layout)
             content_layout.addWidget(self.shapes_toolbox)
@@ -3232,6 +3249,27 @@ class MainWindow(QWidget):
         msg_box.setText(message)
         msg_box.exec_()
 
+    def connect_two_shapes(self):
+        """'Connect two shapes': a sticky connector between the two selected shapes
+        (pyfigures.connectors): it follows them when they move."""
+        from pyfigures.connectors import make_connector, snap
+        bg = self.qt_viewer.background
+        selected = [s for s in (self.qt_viewer.selected_shape or []) if not isinstance(s, Line2D)]
+        if bg is None or len(selected) != 2:
+            self.show_warning('Select exactly two shapes (ROIs, texts or an inset; Ctrl+click the second one), '
+                              'then click Connect two shapes.')
+            return False
+        self.qt_viewer.push_undo()
+        site = self.connectSite.currentData() if hasattr(self, 'connectSite') else 'auto'
+        line = make_connector(selected[0], selected[1], site or 'auto', site or 'auto')
+        shapes = list(self.qt_viewer.shapes)
+        shapes.append(line)
+        snap(bg, shapes)
+        self.update_annotations_list(lst=shapes, update=True, repopulate_list=True, repopulate_texts=True)
+        self.qt_viewer.update_size()
+        self.qt_viewer.update()
+        return True
+
     def connect_roi_to_inset(self, connectors=2):
         """'Connect ROI <-> inset': leader lines from the rectangle ROI to the
         inset, ending on the corners where the inset is drawn in the figure.
@@ -3278,8 +3316,11 @@ class MainWindow(QWidget):
         keep = [a for a in self.qt_viewer.shapes if not (isinstance(a, Line2D) and (
             (on_rect(a.p1(), box) and on_rect(a.p2(), where)) or (on_rect(a.p2(), box) and on_rect(a.p1(), where))))]
         pos = keep.index(inset)
+        from pyfigures.connectors import attach
         for k, ((x1, y1), (x2, y2)) in enumerate(lines):
-            keep.insert(pos + k, Line2D(x1, y1, x2, y2, color=roi.color, stroke=roi.stroke or 0.65))
+            line = Line2D(x1, y1, x2, y2, color=roi.color, stroke=roi.stroke or 0.65)
+            attach(line, roi, inset, box, where, bg)     # they follow the ROI and the inset (2026-11-12)
+            keep.insert(pos + k, line)
         self.update_annotations_list(lst=keep, update=True, repopulate_list=True, repopulate_texts=True)
         self.qt_viewer.update_size()
         self.qt_viewer.update()
@@ -3319,6 +3360,11 @@ class MainWindow(QWidget):
         clone.theta = angle
         clone.annotations = []  # maybe just keep the scale bar but maybe not ???
         clone = clone_object(clone)
+        if not to_crop:
+            # the inset re-crops to its ROI when the ROI is moved (an ROI moved by hand left
+            # its inset showing the old region, 2026-11-12)
+            from pyfigures.connectors import follow_roi
+            follow_roi(clone, self.qt_viewer.selected_shape[0])
 
         if to_crop:
             # send a message

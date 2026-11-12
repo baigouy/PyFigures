@@ -281,6 +281,14 @@ def test_scale_bar_editor_with_and_without_bar(qapp):
     assert ed2.text_editor.isHidden()
     out = ed2.getScaleBar()
     assert out is bar and out.bar_width_in_units == 50 and out.legend is None
+    # the bar's thickness: shown, and applied to a new bar and to an edited one
+    assert ed2.thickness_spinner.value() == 3 and out.bar.height() == 3
+    ed2.thickness_spinner.setValue(6.5)
+    out = ed2.getScaleBar()
+    assert out.bar_height_in_px == 6.5 and out.bar.height() == 6.5
+    assert ScaleBarEditor(scale_bar=out).thickness_spinner.value() == 6.5
+    ed.thickness_spinner.setValue(1.5)
+    assert ed.getScaleBar().bar.height() == 1.5
 
 
 def test_lut_widget(qapp):

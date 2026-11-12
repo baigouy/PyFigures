@@ -113,6 +113,7 @@ class NativeGUI:
         if record['kind']=='password' or not obj.isEnabled() or not obj.isVisible(): record['operations']=[]
         return record
     def inventory(self,query='',scope='active',limit=40,offset=0):
+        scope={'dialog':'active','window':'main','current':'active'}.get(scope,scope)     # what models say
         if scope not in ('active','main','all'): raise ValueError('scope must be active/main/all')
         if not 1<=limit<=200 or offset<0: raise ValueError('Invalid pagination')
         records=[]; seen=set()
@@ -187,6 +188,8 @@ class NativeGUI:
             raise ValueError('Use native_gui_keys, native_gui_gesture or native_gui_drop_files for those operations')
         obj=self.resolve(control_id)
         state=self.describe(obj)
+        if operation=='activate' and value is not None and 'activate' not in state['operations'] and 'set' in state['operations']:
+            operation='set'      # a value for a tab bar / field with no operation named: set it (refused three times in a row)
         if operation not in state['operations']: raise ValueError('Operation unavailable: '+json.dumps(state))
         active=self.active()
         if active and obj is not active and not (isinstance(obj,QWidget) and active.isAncestorOf(obj)) and not (isinstance(active,QMenu) and isinstance(obj,QAction) and obj in active.actions()):

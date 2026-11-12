@@ -109,6 +109,45 @@ def test_file_tool_errors_and_cropped_parent(tmp_path):
     assert y2 in (pytest.approx(350 - 250 * 400 / 600), pytest.approx(350))
 
 
+def test_two_insets_lines_go_to_the_right_one_and_follow_it(tmp_path):
+    """Two insets on the wing (user chat 2026-11-12): the lines were 'connected to the wrong
+    inset', and moving an inset left its lines pointing at its old corner."""
+    import xml.etree.ElementTree as ET
+    from pyfigures.mcp_server import add_roi_rect, add_inset, connect_roi_to_inset, set_inset_property, remove_inset
+    pyf = _big_figure(tmp_path)                                   # 600 x 400
+    src = str(tmp_path / "big.tif")
+    add_roi_rect(pyf, [0], 0, 50, 60, 40, 40)                    # ROI 0
+    add_roi_rect(pyf, [0], 0, 300, 200, 60, 60)                  # ROI 1
+    for placement, (x, y, w, h) in (("top right", (300, 200, 60, 60)), ("bottom left", (50, 60, 40, 40))):
+        add_inset(pyf, [0], 0, src, placement=placement, size_fraction=0.3)
+        k = 0 if placement == "top right" else 1
+        for side, value in (("crop_left", x), ("crop_right", 600 - x - w), ("crop_top", y), ("crop_bottom", 400 - y - h)):
+            set_inset_property(pyf, [0], 0, k, side, value)
+
+    def line_ends():
+        root = ET.parse(pyf).getroot()
+        return [(float(l.findtext("x2")), float(l.findtext("y2"))) for l in root.iter("Line2D")]
+    # ROI 0 was made into inset 1 (bottom left); asking for inset 0 joins inset 1
+    out = connect_roi_to_inset(pyf, [0], 0, roi_index=0, inset_index=0)
+    assert "joined inset 1" in out
+    assert all(y > 200 and x < 300 for x, y in line_ends())       # bottom left
+    out = set_inset_property(pyf, [0], 0, 1, "placement", "top left")
+    assert "redrawn" in out
+    assert len(line_ends()) == 2 and all(y < 200 for x, y in line_ends())   # follow it up
+    assert "2 leader line(s) were removed" in remove_inset(pyf, [0], 0, 1)
+    assert line_ends() == []
+
+
+def test_a_scale_bar_too_small_to_see_is_reported(tmp_path):
+    """'scale bar in I is way too small, can't you see it' (user chat 2026-11-12): 2000 µm
+    on a CT scan at 597 µm/px was 3 px wide, and nothing said so."""
+    from pyfigures.mcp_server import set_scale_bar, set_image_property
+    pyf = _big_figure(tmp_path)                                   # 600 px wide
+    set_image_property(pyf, [0], 0, "px_to_unit_conversion_factor", "1")
+    assert "hard to see" in set_scale_bar(pyf, [0], 0, bar_width_in_units=10, unit="µm")
+    assert "hard to see" not in set_scale_bar(pyf, [0], 0, bar_width_in_units=100, unit="µm")
+
+
 def test_editor_button_connects_and_undo_removes(qapp, tmp_path):
     from batoolset.drawings.shapes.image2d import Image2D
     from batoolset.drawings.shapes.rectangle2d import Rectangle2D

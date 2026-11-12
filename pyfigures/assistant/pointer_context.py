@@ -42,8 +42,19 @@ class PointerContext(QObject):
         self.panel, self.signature = p, data
         self.last.update(panel_id='/'.join(map(str, (*gp, ix))), group_path=list(gp), image_index=ix,
                          geometry=data, panel_position=[point.x()-data['scene_bounds']['x'], point.y()-data['scene_bounds']['y']])
-        if data['rotation_degrees'] or data['source_size']['width'] <= 0 or data['source_size']['height'] <= 0:
-            self.last['reason'] = 'Raw pixel conversion not verified for this rotation or missing source size'
+        if data['source_size']['width'] <= 0 or data['source_size']['height'] <= 0:
+            self.last['reason'] = 'Raw pixel conversion not verified: missing source size'
+            return
+        if data['rotation_degrees']:
+            # a rotated panel: measured on a real paint ("add an arrowhead where I clicked" on
+            # the rotated panel I could not be placed, 2026-11-12)
+            from pyfigures.zoom_geometry import scene_to_image_point
+            pixel = scene_to_image_point(p, (point.x(), point.y()))
+            if pixel is None:
+                self.last['reason'] = 'The click is on the rotated panel but outside its image (a corner of the frame)'
+                return
+            self.last.update(valid=True, image_position=[pixel[0], pixel[1]],
+                             coordinate_system='raw image pixels, origin top left (rotation measured)')
             return
         x, y = self.last['panel_position']
         self.last.update(valid=True, image_position=[x*float(p.scale)+data['crop']['left'],

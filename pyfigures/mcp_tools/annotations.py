@@ -561,16 +561,24 @@ def add_significance_bracket(
     _, annots, err = _get_annots_for_roi(root, group_path, image_index)
     if err:
         return f"ERROR: {err}"
+    before = len(list(annots))
     x_lo, x_hi = _append_bracket_shapes(annots, x1, x2, y, label, tick, color,
                                         stroke, font_pt, label_gap, whiskers_point)
+    after = len(list(annots))
 
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
+    # A model that did not see its thin black bracket on a micrograph added it again and
+    # again, then removed pieces by stale indices until it was stopped (2026-11-12).
     return (
         f"Significance bracket '{_strip_tags(label)}' added to image {image_index} "
         f"in {loc}: span x=[{x_lo:g},{x_hi:g}] at y={y:g}, tick={tick:g}, "
-        f"color={color}. Note: label centring is approximate — nudge it in the GUI "
-        f"if needed."
+        f"color={color}, stroke={stroke:g} px. Note: label centring is approximate — nudge it in the GUI "
+        f"if needed. It is {after - before} annotations of this image (annotation_index "
+        f"{before} to {after - 1}: the lines, then the label). It IS there: do not add it again. "
+        f"Coordinates are image pixels, so on a large or dark image a thin {color} bracket is hard "
+        f"to see in a small preview; to change it, undo this one step (undo_redo) and add it once "
+        f"with another color, stroke or font_pt."
     )
 
 

@@ -2,7 +2,12 @@
 FIELDS = ('text', 'placement', 'font_family', 'font_size', 'color', 'background', 'opacity', 'bold', 'italic', 'underline')
 MOVE_HINT = 'To regroup images into rows (equal or uneven, e.g. 3-2-2-2) use arrange_live_images with columns or row_counts in ONE call; it keeps reading order and letters. To move single images, move them so the reading order stays the same.'
 REQUEST_FIELDS = {'placement': 'placement', 'font_family': 'font_family', 'font_size': 'font_size',
-                  'color_value': 'color', 'background': 'background'}
+                  'color_value': 'color', 'background': 'background',
+                  # "rename g to G'": the requested text of one panel's letter (it was rolled back
+                  # as an unrequested change, 2026-11-12)
+                  'text': 'text',
+                  # "the letter bold on every rotated panel" (2026-11-12)
+                  'bold': 'bold', 'italic': 'italic', 'underline': 'underline'}
 
 
 def specification(state):

@@ -5,8 +5,25 @@ from qtpy.QtCore import QTimer
 from batoolset.drawings.shapes.group import Group
 from .partner_gui import panels, letters, selection_state
 
+def panel_number(ref, entries):
+    """'#3' / '# 3' / 'no 3': the number the canvas shows on a selected panel (reading
+    order, from 1), for figures without letters or with letters outside the rows."""
+    found = re.fullmatch(r'\s*(?:#|n[o°]\.?|number)\s*(\d+)\s*', str(ref), re.I)
+    if not found:
+        return None
+    number = int(found[1])
+    return entries[number - 1] if 1 <= number <= len(entries) else 'missing'
+
+
 def resolve_panel(window, ref):
-    matches = [p for gp, ix, p in panels(window.paint.EZFIG_panel.shapes_to_draw)
+    entries = list(panels(window.paint.EZFIG_panel.shapes_to_draw))
+    numbered = panel_number(ref, entries)
+    if numbered == 'missing':
+        raise ValueError(f'UNKNOWN_PANEL_REFERENCE: there is no panel {ref} (the figure has {len(entries)} panels, '
+                         'numbered 1 to that). Ask the user; no edit performed.')
+    if numbered is not None:
+        return numbered[2]
+    matches = [p for gp, ix, p in entries
                if '/'.join(map(str, (*gp, ix))) == ref or any(a.getPlainText() == ref for a in letters(p))]
     if len(matches) != 1:
         raise ValueError('CLARIFICATION_REQUIRED: Panel reference must identify exactly one current image')

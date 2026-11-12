@@ -1035,8 +1035,16 @@ def _scalebar_info(sb: ET.Element) -> dict:
     """Extract the key scale bar fields as a plain dict."""
     legend_el = sb.find("legend")
     legend_html = legend_el.text or "" if legend_el is not None else ""
+    if legend_html.strip() == "None":
+        legend_html = ""            # a bar without text
     plain_label = _html_to_plain(legend_html) if legend_html else ""
+    try:
+        thickness = float(sb.findtext("bar_height_in_px") or 3)
+    except ValueError:
+        thickness = 3.0
     return {
+        "bar_height_px":               thickness,
+        "has_text":                    bool(plain_label.strip()),
         "bar_width_in_units":          _decode(sb.findtext("bar_width_in_units")),
         "unit_to_pixel_conversion_factor": _decode(sb.findtext("unit_to_pixel_conversion_factor")),
         "placement":                   sb.findtext("placement") or "",
@@ -1223,6 +1231,35 @@ def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
             f"asked for, a bar of about a quarter of the width is {suggestion:g} {unit}.")
 
 
+def _scale_bar_small_note(img: ET.Element, bar_width_in_units: float, px_to_unit: float | None,
+                          unit: str = "µm", unit_factor: float = 1.0) -> str:
+    """A warning when the bar is under 3 % of the shown image width: a 2000 µm bar on a
+    CT scan at 597 µm/px was 3 px wide and the user asked "can't you see it" (2026-11-12).
+    Not an error: the user may have asked for that length."""
+    px = px_to_unit
+    if px is None:
+        try:
+            px = float(_child_text(img, "px_to_unit_conversion_factor") or 0) / (unit_factor or 1.0)
+        except (TypeError, ValueError):
+            return ""
+    size = _raw_size_from_file(_first_filename(img))
+    if not px or px <= 0 or not size or not bar_width_in_units or bar_width_in_units <= 0:
+        return ""
+
+    def _c(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+    visible = size[0] - _c("crop_left") - _c("crop_right")
+    bar_px = bar_width_in_units / px
+    if visible <= 0 or bar_px >= 0.03 * visible:
+        return ""
+    return (f" WARNING: the bar is only {bar_px:.0f} px of a {visible} px wide image "
+            f"({100 * bar_px / visible:.1f} %): hard to see. If the user gave no length, about a fifth "
+            f"of the width is {_nice_bar_length(visible * px * 0.2):g} {unit}; otherwise tell the user.")
+
+
 def _apply_scalebar_to_img(
     img: ET.Element,
     bar_width_in_units: float,
@@ -1230,8 +1267,14 @@ def _apply_scalebar_to_img(
     placement: str,
     bar_color: int,
     px_to_unit: float | None,
+    bar_height_px: float | None = None,
 ) -> str:
-    """Add or update a ScaleBar on *img*. Returns 'added' or 'updated'."""
+    """Add or update a ScaleBar on *img*. Returns 'added' or 'updated'.
+
+    On an existing bar, None for *bar_width_in_units*, *legend_html*,
+    *placement* or *bar_color* keeps what the bar has. *legend_html* ``""``
+    is a bar without text. *bar_height_px*: thickness of the bar."""
+    legend_text = "None" if legend_html == "" else legend_html      # 'None' = no legend drawn
     # Optionally update the image-level pixel-size field so PyFigures uses the
     # correct conversion factor when rendering (it overrides the ScaleBar's own
     # unit_to_pixel_conversion_factor at render time from this value).
@@ -1245,21 +1288,31 @@ def _apply_scalebar_to_img(
     sb = annots.find("ScaleBar")
     if sb is not None:
         # Update existing fields in-place
-        _set_child_text(sb, "bar_width_in_units", str(float(bar_width_in_units)))
-        legend_el = sb.find("legend")
-        if legend_el is None:
-            legend_el = ET.SubElement(sb, "legend")
-        legend_el.text = legend_html
-        _set_child_text(sb, "placement", placement)
-        _set_child_text(sb, "color", str(int(bar_color)))
-        _set_child_text(sb, "bar_color", str(int(bar_color)))   # what is drawn
+        if bar_width_in_units is not None:
+            _set_child_text(sb, "bar_width_in_units", str(float(bar_width_in_units)))
+        if legend_text is not None:
+            legend_el = sb.find("legend")
+            if legend_el is None:
+                legend_el = ET.SubElement(sb, "legend")
+            legend_el.text = legend_text
+        if placement is not None:
+            _set_child_text(sb, "placement", placement)
+        if bar_color is not None:
+            _set_child_text(sb, "color", str(int(bar_color)))
+            _set_child_text(sb, "bar_color", str(int(bar_color)))   # what is drawn
+        if bar_height_px is not None:
+            _set_child_text(sb, "bar_height_in_px", f"{float(bar_height_px):g}")
         _set_child_text(sb, "isSet", "True")
         if px_to_unit is not None:
             _set_child_text(sb, "unit_to_pixel_conversion_factor", str(float(px_to_unit)))
         return "updated"
     else:
         eff_px = px_to_unit if px_to_unit is not None else 1.0
-        annots.append(_new_scalebar_elem(bar_width_in_units, legend_html, placement, bar_color, eff_px))
+        new = _new_scalebar_elem(bar_width_in_units, legend_text, placement or "bottom right",
+                                 0xFFFFFF if bar_color is None else bar_color, eff_px)
+        if bar_height_px is not None:
+            _set_child_text(new, "bar_height_in_px", f"{float(bar_height_px):g}")
+        annots.append(new)
         return "added"
 
 

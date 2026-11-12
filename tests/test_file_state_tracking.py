@@ -67,6 +67,53 @@ def test_save_writes_back_to_current_file_without_dialog(gui, sample_tif, monkey
     assert gui._dirty is False
 
 
+def _saved_figure(gui, tif, name):
+    pyf = os.path.join(tempfile.mkdtemp(), name)
+    _add_edit(gui, tif)
+    gui.current_file = pyf
+    gui.save_pyfigures()
+    return pyf
+
+
+def test_one_pyf_dropped_on_an_empty_canvas_is_opened(gui, sample_tif, monkeypatch):
+    """Drag a .pyf onto an empty window, edit it (through the chat), Save: it asked where
+    to save, as for a new figure (2026-11-12). It writes back to the dropped file now."""
+    pyf = _saved_figure(gui, sample_tif, 'dropped.pyf')
+    gui.paint.EZFIG_panel.shapes_to_draw.clear()
+    gui.current_file = None
+    gui.add_image_from_an_external_source_context_menu([pyf], None)
+    assert gui.wait_for_images(timeout=60)
+    assert gui.current_file == pyf and gui._dirty is False
+    assert len(gui.paint.EZFIG_panel.shapes_to_draw) == 1
+    _add_edit(gui, sample_tif)
+
+    def _boom(*a, **k):
+        raise AssertionError('Save must not prompt for a dropped-and-opened figure')
+    monkeypatch.setattr('pyfigures.gui.pfgui.saveFileDialog', _boom)
+    assert gui.save_pyfigures() is True
+
+
+def test_a_pyf_dropped_onto_a_figure_is_still_a_new_composition(gui, sample_tif):
+    pyf = _saved_figure(gui, sample_tif, 'other.pyf')
+    gui.current_file = None                      # an unsaved figure is on the canvas
+    gui.add_image_from_an_external_source_context_menu([pyf], None)
+    assert gui.wait_for_images(timeout=60)
+    assert gui.current_file is None and gui._dirty is True
+
+
+def test_save_as_starts_in_the_figure_folder(gui, sample_tif, monkeypatch):
+    """Save As opened in the home folder although the figure had a file (2026-11-12)."""
+    pyf = _saved_figure(gui, sample_tif, 'here.pyf')
+    seen = {}
+
+    def dialog(parent_window=None, path=None, **kw):
+        seen['path'] = path
+        return None                                   # cancelled
+    monkeypatch.setattr('pyfigures.gui.pfgui.saveFileDialog', dialog)
+    assert not gui.save_pyfigures(file=None)
+    assert seen['path'] == pyf and gui.current_file == pyf      # cancelling keeps the file
+
+
 def test_written_pyf_is_utf8(gui, sample_tif):
     pyf = os.path.join(tempfile.mkdtemp(), 'u.pyf')
     gui.current_file = pyf

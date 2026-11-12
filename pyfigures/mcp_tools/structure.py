@@ -1048,6 +1048,99 @@ def remove_annotation(
     return f"Removed {target.tag} (index {annotation_index}) from image {image_index} in {loc}."
 
 
+def _corner_of(elem: ET.Element) -> str:
+    """'bottom right' for an annotation pinned to a corner (placement stored as
+    'bottom right', '""bottom right""' or 'bottom-right'), '' when free."""
+    text = _decode(_child_text(elem, "placement")) or ""
+    text = str(text).strip().strip("'\"").lower().replace("-", " ").replace("_", " ")
+    return " ".join(text.split())
+
+
+@mcp.tool()
+def move_annotation_in_corner(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    annotation_index: int,
+    to: str = "corner",
+) -> str:
+    """Change the stacking order of the annotations that share one corner (or
+    edge) of an image: a text label, a scale bar, an inset… pinned to the same
+    corner are stacked from the corner inward, the FIRST one closest to the corner.
+
+    "Put the scale bar bottom most" / "the bar below the label": *to* = "bottom".
+    "The label above the scale bar": move the label with *to* = "top" (or the bar
+    with "bottom"). "corner" (closest to the corner) and "away" (farthest from it)
+    also work. ONE call does it: the reply lists the corner from top to bottom;
+    do not call again in the other direction, that undoes it. It keeps its corner;
+    to change corner, set its placement instead.
+
+    *annotation_index*: its index from get_annotations (scale bars and insets
+    included). In the GUI: double-click the panel, Annotations tab, drag the item
+    in the list.
+    """
+    to = str(to).strip().lower()
+    to = {"bottom most": "bottom", "bottommost": "bottom", "lowest": "bottom", "below": "bottom",
+          "top most": "top", "topmost": "top", "highest": "top", "above": "top"}.get(to, to)
+    if to not in ("corner", "away", "bottom", "top"):
+        return ("ERROR: to must be 'bottom' (lowest), 'top' (highest), 'corner' (closest to the corner) "
+                "or 'away' (farthest from it).")
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range."
+    annots = imgs[image_index].find("annotations")
+    children = list(annots) if annots is not None else []
+    if not 0 <= annotation_index < len(children):
+        return f"ERROR: annotation_index {annotation_index} out of range ({len(children)} items)."
+    target = children[annotation_index]
+    corner = _corner_of(target)
+    if not corner or corner in ("free", "relative", "none"):
+        return (f"ERROR: the {target.tag} at index {annotation_index} is not pinned to a corner, so it is not "
+                "stacked with anything. Nothing was changed.")
+    sharing = [c for c in children if _corner_of(c) == corner]
+    if len(sharing) < 2:
+        return (f"Nothing to change: the {_annotation_name(target)} is the only annotation in the {corner} corner. "
+                "To move it to another corner, change its placement.")
+    bottom_corner = not corner.startswith("top")
+    if to in ("bottom", "top"):
+        # stacked from the corner inward: the corner item of a bottom corner is the lowest
+        to = "corner" if (to == "bottom") == bottom_corner else "away"
+
+    def top_to_bottom():
+        order = [c for c in annots if _corner_of(c) == corner]
+        if bottom_corner:
+            order.reverse()
+        return "; ".join(_annotation_name(c) for c in order)
+    if (to == "corner" and sharing[0] is target) or (to == "away" and sharing[-1] is target):
+        return (f"Already so, nothing changed. The {corner} corner from top to bottom: {top_to_bottom()}. "
+                "This is the requested order; do not move it again.")
+    annots.remove(target)
+    rest = list(annots)
+    anchor = sharing[0] if to == "corner" else sharing[-1]
+    position = rest.index(anchor) + (0 if to == "corner" else 1)
+    annots.insert(position, target)
+    _save(tree, pyf_path)
+    return (f"Done. The {corner} corner from top to bottom is now: {top_to_bottom()}. "
+            "The requested order is in place; do not call this again in the other direction (that undoes it). "
+            "Annotation indices changed; read get_annotations before other edits.")
+
+
+def _annotation_name(elem: ET.Element) -> str:
+    """'the scale bar', 'the text "a label"': how the user sees an annotation."""
+    if elem.tag == "ScaleBar":
+        return "the scale bar"
+    if elem.tag == "TAText2D":
+        text = " ".join(str(_describe_roi(elem, 0).get("text") or "").split())
+        if len(text) > 40:
+            text = text[:37] + "…"
+        return f'the text "{text}"' if text else "a text"
+    return f"the {elem.tag}"
+
+
 @mcp.tool()
 def add_group(
     pyf_path: str,
@@ -1719,11 +1812,18 @@ def move_image(
         else:
             dst_container.insert(dst_image_index, img)
 
+    # the row it left may now be empty: kept (removing it would renumber the rows after it in
+    # the middle of a series of moves) and said, so that no one tries to delete it (a model
+    # tried delete_last_rows on it, 2026-11-12)
+    emptied = ""
+    if src_group_path and not any(c.tag in ("Image2D", "Group") for c in src_container):
+        emptied = (f" Row {src_group_path} is now empty: nothing is drawn there and nothing needs "
+                   "removing (check the preview before saying more).")
     _save(tree, pyf_path, recompute=True)
     src_loc = "canvas" if not src_group_path else str(src_group_path)
     dst_loc = "canvas" if not dst_group_path else str(dst_group_path)
     dst_label = dst_image_index if dst_image_index >= 0 else "end"
-    return (f"Moved image from {src_loc}[{src_image_index}] to {dst_loc}[{dst_label}]."
+    return (f"Moved image from {src_loc}[{src_image_index}] to {dst_loc}[{dst_label}]." + emptied
             + _actual_layout(pyf_path))
 
 
@@ -1883,6 +1983,18 @@ def list_image_properties(
     return json.dumps(result, indent=2, default=str)
 
 
+# the names people and models say for a property ("the pixel size of g is 0.5 um":
+# five searches before px_to_unit_conversion_factor was found, 2026-11-12)
+_PROPERTY_ALIASES = {
+    "px_to_unit": "px_to_unit_conversion_factor", "pixel_size": "px_to_unit_conversion_factor",
+    "pixel size": "px_to_unit_conversion_factor", "pixelsize": "px_to_unit_conversion_factor",
+    "pixel_size_um": "px_to_unit_conversion_factor", "um_per_pixel": "px_to_unit_conversion_factor",
+    "calibration": "px_to_unit_conversion_factor",
+    "background": "fill_color", "background_color": "fill_color", "bg": "fill_color", "bg_color": "fill_color",
+    "rotation": "theta", "angle": "theta", "border": "border_size", "border_width": "border_size",
+}
+
+
 @mcp.tool()
 def get_image_property(
     pyf_path: str,
@@ -1913,6 +2025,7 @@ def get_image_property(
     imgs = [c for c in container if c.tag == "Image2D"]
     if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    property_name = _PROPERTY_ALIASES.get(str(property_name).strip().lower(), property_name)
     val = _child_text(imgs[image_index], property_name)
     if val is None:
         child = imgs[image_index].find(property_name)
@@ -1979,8 +2092,14 @@ def set_image_property(
 
     The change is saved immediately; reopen in PyFigures to see the result.
     """
+    property_name = _PROPERTY_ALIASES.get(str(property_name).strip().lower(), property_name)
     _READONLY = {"x", "y", "width", "height", "scale",
                  "__init_called__", "__version__", "extra_user_translation"}
+    if property_name == "scale":
+        return ("ERROR: 'scale' is computed by the layout: every image of a row has the same height and every "
+                "row spans the figure's width, so one image cannot be made bigger or smaller by a size property. "
+                "To change relative sizes: crop the image (transform_image), change how many images each row "
+                "holds (arrange_live_images), or the figure's width (resize_figure). Tell the user; nothing was changed.")
     if property_name in _READONLY:
         return (
             f"ERROR: '{property_name}' is a layout/internal field managed by "

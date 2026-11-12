@@ -44,6 +44,23 @@ def decode(value):
     return value
 
 
+def annotations_of_panel(decoded, state, ref):
+    """get_annotations(panel_ref="C"): the entries of that panel only (a visible
+    letter or a panel ID; the argument was refused as unknown, 2026-11-12)."""
+    import json
+    wanted = str(ref).strip().casefold()
+    hits = [p for p in state.get('panel_references') or []
+            if str(p.get('panel_id')) == wanted or wanted in [str(v).casefold() for v in p.get('letters', [])]]
+    if len(hits) != 1:
+        raise ValueError(f'No single panel is named {ref!r}; omit panel_ref to list every annotation.')
+    entries = json.loads(decoded) if isinstance(decoded, str) else decoded
+    if not isinstance(entries, list):
+        return decoded
+    kept = [e for e in entries if e.get('group_path') == hits[0].get('group_path')
+            and e.get('image_index') == hits[0].get('image_index')]
+    return json.dumps(kept, indent=2)
+
+
 def register_all(server, send):
     """Keep every original name/help/argument, defaulting figure targets to live."""
     for name, tool in registry().items():
@@ -69,6 +86,7 @@ def register_all(server, send):
                         if kwargs.get('annotation_index') is not None and kwargs['annotation_index']!=index:
                             raise ValueError('Conflicting text_index and annotation_index; use text_index from get_annotations for text tools')
                         kwargs['annotation_index']=index
+                only = kwargs.pop('panel_ref', None) if name == 'get_annotations' else None
                 ref=kwargs.get('panel_ref')
                 if addressable:
                     for key in ('group_path','image_index'):
@@ -92,6 +110,8 @@ def register_all(server, send):
                             if attempt or getattr(exc, 'code', '') not in ('REVISION_CONFLICT', 'SESSION_CHANGED'):
                                 raise
                     decoded = decode(result['tool_result'])
+                    if only is not None:
+                        decoded = annotations_of_panel(decoded, state, only)
                     if result['document_changed'] or result.get('metadata_changed') or name in ('add_corner_labels', 'set_label_background'):
                         return finish({'result': decoded, 'document_changed': result['document_changed'],
                                 'metadata_changed': result.get('metadata_changed', False), 'revision': result['revision'],
@@ -115,7 +135,7 @@ def register_all(server, send):
                 if text_indexed and p.name=='annotation_index':
                     p=p.replace(name='text_index')
                 params.append(p)
-            if addressable:
+            if addressable or name == 'get_annotations':
                 params.append(inspect.Parameter('panel_ref',inspect.Parameter.KEYWORD_ONLY,default=None,annotation=str | None))
             invoke.__name__ = name
             invoke.__signature__ = inspect.Signature(params, return_annotation=Any)
@@ -140,7 +160,7 @@ def register_all(server, send):
             'list_fonts': 'Read-only fonts/typeface inventory. For is Helvetica/Arial available or installed, pass query and answer font_check.installed; if missing, report drawn_as and offer alternatives. For list fonts omit query and summarise installed_families/count. ',
             'set_figure_caption': 'caption is exact plain text, including its final period when supplied; title is a separate field. caption_markdown is an optional formatted string of that same text, never a boolean. ',
             'add_annotation': 'Write/put <words> on <panel> supplies literal text without needing quotation marks. Add dependent text before a later swap so it travels with its image. ',
-            'set_scale_bar': 'Single-panel operation: Give a a scale bar names panel a. Prefer panel_ref even without a selection. Length and pixel size must be finite and positive. Bulk is only for an explicit whole-figure request. ',
+            'set_scale_bar': 'Single-panel operation: Give a a scale bar names panel a. Prefer panel_ref even without a selection. Length and pixel size must be finite and positive. To change one thing of an existing bar pass only that (bar_height_px for thicker/thinner, placement, label="" for no text, bar_color, label_color); the rest is kept. Bulk is only for an explicit whole-figure request. ',
             'set_scale_bar_all': 'Whole-figure operation ONLY when explicitly requested; a named panel never authorizes bulk changes. Length and pixel size must be finite and positive. ',
         }
         description=tool.description.replace('annotation_index','text_index') if text_indexed else tool.description

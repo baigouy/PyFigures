@@ -397,6 +397,24 @@
         <tr><td><strong>Status bar</strong></td><td>Bottom strip. Shows loading messages and a progress bar during image loading.</td></tr>
       </table>
     </div>
+    <h3 id="selection-marks">Marks on the selected panels</h3>
+    <p>Each selected panel shows small marks in its centre (the corners stay free for letters, insets and scale bars), on screen only (they are never exported):</p>
+    <ul>
+      <li><strong>#3</strong>: the panel's number in reading order (rows from top to bottom, left to right). In the chat, “#3” or “number 3” names that panel, which helps when the figure has no letters or one letter per row.</li>
+      <li><strong>▦ image</strong>, <strong>ƒ code</strong> or <strong>◇ vector</strong>: pixels from a file, a panel made by a script or a plot, or a vector drawing (SVG, PDF).</li>
+      <li><strong>▤ 21z 19t (max)</strong>: the panel's file is a stack, with 21 Z slices and 19 time points, shown as a maximum projection (<em>(z 5)</em>: one slice).</li>
+      <li><strong>series 2</strong>: the second series of a multi-series file (.lif, .czi…).</li>
+      <li><strong>◐ ch</strong>: some channels are hidden or recoloured compared to the file.</li>
+      <li><strong>⌗ crop</strong>, <strong>↻ 30°</strong>, <strong>⇋ flip</strong> / <strong>⇵ flip</strong>: cropped, rotated, flipped.</li>
+      <li><strong>◑ contrast</strong>: the display range was changed (journals ask about such adjustments).</li>
+    </ul>
+    <p>Warnings, in orange:</p>
+    <ul>
+      <li><strong>⚠ 120 dpi</strong>: below 300 dpi at the figure's current width; show the panel smaller or use a higher-resolution file.</li>
+      <li><strong>⚠ same as #1</strong>: the same image (same file, series, crop, channels, slices) is shown twice.</li>
+      <li><strong>⚠ missing</strong>: the image file cannot be found.</li>
+    </ul>
+    <p>Nothing is drawn when nothing is selected. Press <kbd>Ctrl A</kbd> to see the marks of every panel.</p>
   </section>
 
   <!-- ── TOOLBAR ──────────────────────────────────────────────── -->
@@ -451,7 +469,7 @@
         <tr><td><strong>✓ (Apply size)</strong></td><td>Apply the width value; the label after it says to what: <em>→ all</em> (the whole figure) or <em>→ sel.</em> (only what is selected).</td></tr>
         <tr><td><strong>Gap</strong></td><td>Gap (pixels) between panels in the layout.</td></tr>
         <tr><td><strong>Bg</strong></td><td>Colour of the figure background (white, black, transparent or another colour).</td></tr>
-        <tr><td><strong>Letters</strong></td><td>When checked, panels are automatically labelled a, b, c… starting from the letter in the adjacent field.</td></tr>
+        <tr><td><strong>Letters</strong></td><td>When checked, panels are automatically labelled a, b, c… starting from the letter in the adjacent field. Empty that field to remove every letter; type a letter again to bring them back.</td></tr>
         <tr><td><strong>Page</strong></td><td>Toggle a page-size overlay on the canvas. Opens a dialog to set width and height.</td></tr>
       </table>
     </div>
@@ -861,6 +879,9 @@
       <li>Set the <strong>starting letter</strong> in the one-character field next to the checkbox.</li>
       <li>Configure font, size, color, and case via <strong>Annotations → Panel letters (A, B, C…)</strong>.</li>
       <li>Letters are rendered live and update as you add or remove panels.</li>
+      <li>Empty the starting-letter field to remove every letter; type a letter again to bring them back.</li>
+      <li>Some letters only can be bold, italic or underlined: in the chat, <em>make the letter of A bold</em>;
+        from the MCP server, <code>edit_panel_letters(scope="panels", panel_ids=[…], bold=True)</code>.</li>
       <li>Individual letter text elements are locked — edit them only through the Parameters dialog.</li>
     </ul>
     <h3 id="row-letters">One letter per row, outside the row</h3>
@@ -1247,7 +1268,8 @@
       <div class="ctx-card"><h4>Scale bar</h4><p>Right-click an image → Add scale bar. Requires pixel-to-unit conversion factor. See <a href="#scalebar">Scale bars</a>.</p></div>
       <div class="ctx-card"><h4>Text</h4><p>Rich-text labels with full font control. Placed above, below, or overlaid on images.</p></div>
       <div class="ctx-card"><h4>ROI shapes</h4><p>Circle, Ellipse, Rectangle, Square, Line, Polyline, Polygon, Freehand, Point — drawn directly on images.</p></div>
-      <div class="ctx-card"><h4>Insets</h4><p>Images embedded inside other images as magnified detail panels. In the image editor, <strong>Rect ROI --&gt; Inset</strong> magnifies a drawn rectangle; <strong>Connect ROI ↔ inset</strong> then draws two lines from the rectangle to the inset's corners (the chat: <em>connect_roi_to_inset</em>).</p></div>
+      <div class="ctx-card"><h4>Insets</h4><p>Images embedded inside other images as magnified detail panels. In the image editor, <strong>Rect ROI --&gt; Inset</strong> magnifies a drawn rectangle; <strong>Connect ROI ↔ inset</strong> then draws two lines from the rectangle to the inset's corners (the chat: <em>connect_roi_to_inset</em>). An inset made from a rectangle follows it: move or resize the rectangle and the inset shows the new region. The lines stay attached to both when either moves or the inset changes corner.</p></div>
+      <div class="ctx-card"><h4>Connectors</h4><p>A line that stays attached to two shapes, as connectors do in PowerPoint. In the image editor, select two shapes (ROIs, texts or an inset; Ctrl+click the second) and click <strong>Connect two shapes</strong>: the line joins their nearest corners or edge middles and follows them when they move. Nothing is connected unless you ask. Recipe: <code>connectors</code>; MCP server: <code>add_connector</code>; the chat: <em>join these two boxes with a line</em>.</p></div>
     </div>
     <h3 id="image-editor">Image editor (double-click a panel)</h3>
     <p>
@@ -1280,7 +1302,21 @@
       <li>Right-click the image.</li>
       <li>Set or confirm the <strong>pixel-to-unit conversion factor</strong> (usually stored in the image metadata).</li>
       <li>Choose bar width in physical units and placement (bottom-right by default).</li>
+      <li>Optional: set the <strong>Thickness</strong> of the bar (3 px by default), and untick <em>Enable Text</em> for a bar without text.</li>
     </ol>
+    <p>
+      In the chat, one thing of an existing bar can be asked for on its own: <em>the bar in d is too thick</em>,
+      <em>no text on the bars</em>, <em>bars in black</em>, <em>move it to the left</em>. The length and the rest are kept.
+      From a script or the MCP server: <code>set_scale_bar(..., bar_height_px=2)</code>, <code>label=""</code> for no text;
+      <code>set_scale_bar_all</code> without a length restyles the bars that exist.
+    </p>
+    <p>
+      A scale bar, a text and an inset in the same corner are stacked from the corner inward, in the order of the
+      panel editor's annotation list (the first one sits in the corner). To change it, double-click the panel and
+      drag the item in that list; in the chat: <em>put the scale bar bottom most</em>; from the MCP server:
+      <code>move_annotation_in_corner(..., to="bottom")</code> (or <code>"top"</code>, <code>"corner"</code>,
+      <code>"away"</code>); the reply lists that corner from top to bottom.
+    </p>
     <div class="callout">
       Scale bars automatically recompute their pixel length when the image is resized.
     </div>

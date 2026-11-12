@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import re
 
-__all__ = ["stack_info", "StackInfoError", "parse_frames", "format_stamp"]
+__all__ = ["stack_info", "header_sizes", "StackInfoError", "parse_frames", "format_stamp"]
 
 _TIME_UNITS = {"sec": "s", "second": "s", "seconds": "s", "s": "s",
                "min": "min", "minute": "min", "minutes": "min",
@@ -122,6 +122,47 @@ def stack_info(path: str, series: int | None = None) -> dict:
         "interval": interval,
         "time_unit": tunit,
     }
+
+
+_HEADER_CACHE = {}
+_MULTI_DIMENSIONAL = ('.czi', '.lif', '.nd2', '.oib', '.oir', '.ims', '.h5', '.hdf5', '.vsi', '.lei',
+                      '.zvi', '.dv', '.mrc', '.nii', '.gz')
+
+
+def header_sizes(path, series=None):
+    """{'d': z, 't': t, 'c': c} of an image file from its HEADER only, None for a
+    single image (or no / unreadable file), 'unknown' for a multi-dimensional format
+    not read here. For the canvas and the chat inspection, which run on the GUI thread
+    at every repaint / chat turn: stack_info reads every pixel, and on an .IPL file it
+    starts Fiji. Cached per file version (path, size, mtime, series)."""
+    if not path or not isinstance(path, str):
+        return None
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (os.path.abspath(path), st.st_size, st.st_mtime, series)
+    if key in _HEADER_CACHE:
+        return _HEADER_CACHE[key]
+    ext = os.path.splitext(path)[1].lower()
+    sizes = None
+    if ext in (".tif", ".tiff", ".lsm", ".btf", ".tf8"):
+        try:
+            import tifffile
+            with tifffile.TiffFile(path) as t:
+                index = series if isinstance(series, int) and 0 <= series < len(t.series) else 0
+                s = t.series[index]
+                axes = dict(zip(s.axes.upper(), s.shape))
+            # S: the RGB samples of a colour image; Q / I: an axis tifffile cannot name in
+            # a multi-page file without ImageJ metadata, a Z series in practice
+            sizes = {"d": axes.get("Z", 1) * axes.get("Q", 1) * axes.get("I", 1),
+                     "t": axes.get("T", 1), "c": axes.get("C", axes.get("S", 1))}
+        except Exception:
+            sizes = None
+    elif ext in _MULTI_DIMENSIONAL:
+        sizes = "unknown"
+    _HEADER_CACHE[key] = sizes
+    return sizes
 
 
 def parse_frames(spec, n: int, default_count: int = 6) -> list[int]:

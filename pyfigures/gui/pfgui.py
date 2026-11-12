@@ -29,6 +29,8 @@ from batoolset.strings.tools import increment_letter
 from pyfigures.gui.autolettering_widget import AutoLetteringOptions
 from pyfigures.gui import row_letters as _row_letters
 _row_letters.install_gui_params_fields()   # letter_layout survives reopen / undo
+from pyfigures import connectors as _connectors
+_connectors.install()      # sticky connectors, insets that follow their ROI
 from batoolset.drawings.shapes.Position import Position
 from batoolset.drawings.shapes.serializablefont import SerializableQFont
 from batoolset.lists.tools import find_all_objects_of_type, find_first_index, find_first_object_of_type, \
@@ -2663,7 +2665,14 @@ class EZFIG_GUI(QMainWindow):
 
             if pyf_list:
                 lst_after_pyf = [elm for elm in lst if elm not in pyf_list]
+                # ONE .pyf dropped onto an EMPTY canvas is opening it: Save writes back to it
+                # (it asked where to save, as for a new figure, 2026-11-12); dropped onto a
+                # figure it is merged in, and the result is a new, unsaved composition
+                opens = (len(pyf_list) == 1 and not lst_after_pyf
+                         and not self.paint.EZFIG_panel.shapes_to_draw and not self.current_file)
                 self._start_pyf_loader(pyf_list, only_pyf_drop=not lst_after_pyf)
+                if opens:
+                    self._pyf_drop_opens = pyf_list[0]
 
             lst = [elm for elm in lst if elm not in pyf_list] # we remove pyf files from the list
             # we clean the lst from pyf files and open the pyf content
@@ -4454,7 +4463,12 @@ class EZFIG_GUI(QMainWindow):
     def _on_pyf_loading_done(self):
         self._pyf_loads_pending = max(0, getattr(self, '_pyf_loads_pending', 0) - 1)
         source = getattr(self, '_pyf_single_source', None)
-        if self._pyf_only_drop:
+        opened_by_drop = getattr(self, '_pyf_drop_opens', None)
+        self._pyf_drop_opens = None
+        if opened_by_drop:
+            source = opened_by_drop
+            self._bind_label_maths(source)
+        if self._pyf_only_drop and not opened_by_drop:
             # a .pyf dropped onto the canvas becomes an unsaved new composition
             self.current_file = None
             self.save_state(show_popup=False)
@@ -4462,6 +4476,8 @@ class EZFIG_GUI(QMainWindow):
         elif source:
             # opened a single file as a replacement: Save should write back to it
             self.current_file = source
+            if opened_by_drop:
+                self.save_state(show_popup=False)      # undo goes back to the empty canvas, as before
             self._mark_clean()
             # after the loading returns to the event loop: report changed sources
             QTimer.singleShot(0, lambda p=source: self._warn_changed_sources(p))
@@ -7890,8 +7906,11 @@ class EZFIG_GUI(QMainWindow):
 
         success = False
         if not file:
-            # file = saveFileDialog(parent_window=self, extensions="Supported Files (*.pyf);;All Files (*)",
-            file = saveFileDialog(parent_window=self, extensions="Supported Files (*.pyf);;All Files (*)",
+            # Save As starts in the folder of the figure's own file, its name filled in
+            # (it opened in the home folder, 2026-11-12)
+            start = self.current_file if self.current_file else os.path.expanduser('~')
+            file = saveFileDialog(parent_window=self, path=start,
+                                  extensions="Supported Files (*.pyf);;All Files (*)",
                                   default_ext='.pyf')
             if file:
                 self.current_file = file

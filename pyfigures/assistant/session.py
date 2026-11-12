@@ -20,6 +20,7 @@ from pyfigures.assistant import runtime_dir
 from pyfigures.gui.pfgui import EZFIG_GUI, QApplication, QTimer, object_to_xml, TAText2D, Image2D
 from qtpy.QtCore import QSettings
 from .partner_gui import PartnerGUI
+from pyfigures.gui.selection_badges import panel_kind
 EZFIG_GUI = PartnerGUI
 
 STATE = runtime_dir()
@@ -92,8 +93,20 @@ class Session:
                        'luts': [str(l) if l is not None else None for l in (getattr(p, 'LUTs', None) or [])] or None,
                        # what each channel really shows (its LUT, else the file's own colour):
                        # "swap channels 1 and 2" permutes these (user chat 2026-11-05)
-                       'channel_colours': channel_colours(p)}
-                      for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)]
+                       'channel_colours': channel_colours(p),
+                       # the file's own colours: what set_lut "NONE" gives back ("colours look
+                       # unnatural" -> offer these first, 2026-11-12)
+                       'file_colours': file_colours(p),
+                       # None = a single image; else Z/T/channel counts and what is shown
+                       'stack': stack_summary(p),
+                       # 'image' (pixels), 'code' (script / plot) or 'vector' (SVG, PDF)
+                       'kind': panel_kind(p),
+                       # the number the canvas shows on a selected panel; panel_ref "#3" names it
+                       'number': number}
+                      for number, (gp, ix, p) in enumerate(panels(self.window.paint.EZFIG_panel.shapes_to_draw), 1)]
+        for r in references:
+            # what to call it in a reply: its letter, else "#N" (never the panel_id)
+            r['name'] = panel_name(r)
         from .advanced_annotations import describe, text_inspection_record
         annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,
                         index, sum(isinstance(v, TAText2D) for v in p.annotations[:index]))
@@ -772,6 +785,30 @@ def lut_colour_name(lut):
         return 'custom'
 
 
+def stack_summary(panel):
+    """{'z': 21, 't': 19, 'channels': 2, 'shown': 'max projection of z 0-21'} for a
+    panel whose file is a stack, None for a plain image or an unreadable file.
+    "tell me which images are stacks?" was searched for thirty times: no tool said it
+    (2026-11-12). File header only, read once per file version."""
+    from pyfigures.stack_info import header_sizes
+    sizes = header_sizes(getattr(panel, 'filename', None), getattr(panel, 'serie_to_open', None))
+    if sizes == 'unknown':
+        return {'unknown': 'this file format is not read here; the panel editor (double-click) shows its dimensions'}
+    if not sizes:
+        return None
+    z, t, c = sizes.get('d', 1), sizes.get('t', 1), sizes.get('c', 1)
+    if z <= 1 and t <= 1:
+        return None
+    out = {'z': z, 't': t, 'channels': c}
+    if z > 1:
+        projection = getattr(panel, 'projection', None)
+        start = getattr(panel, 'projection_z_start', None)
+        end = getattr(panel, 'projection_z_end', None)
+        span = f'z {start or 0}-{end if end is not None else z}'
+        out['shown'] = f'{projection} projection of {span}' if projection else 'one z slice (no projection)'
+    return out
+
+
 def channel_colours(panel):
     """Per channel, the colour it is shown in: its LUT when set, else the
     image file's own LUT (named by lut_colour_name). None when unknown
@@ -792,6 +829,29 @@ def channel_colours(panel):
             out.append(file_luts[i].upper() if isinstance(file_luts[i], str) else lut_colour_name(file_luts[i]))
         else:
             out.append(None)
+    return out if any(out) else None
+
+
+def panel_name(reference):
+    """How to name a panel to the user: its visible letter, else its canvas number
+    "#3". The internal panel_id ("1/1") means nothing to the user: after "remove all
+    letters", "which images are max proj" was answered "1/1 (formerly E)" (2026-11-12)."""
+    letters = [str(x) for x in reference.get('letters') or [] if str(x).strip()]
+    if letters:
+        return letters[0]
+    number = reference.get('number')
+    return f'#{number}' if number else str(reference.get('panel_id'))
+
+
+def file_colours(panel):
+    """Per channel, the image file's own colour: what set_lut "NONE" restores
+    ("the colors look unnatural": the default LUT was never offered, 2026-11-12).
+    None when the file stores no colours (then NONE draws gray)."""
+    img = getattr(panel, 'img', None)
+    meta = getattr(img, 'metadata', None) or {}
+    file_luts = list(meta.get('LUTs') or []) if isinstance(meta, dict) else []
+    out = [None if lut is None else (lut.upper() if isinstance(lut, str) else lut_colour_name(lut))
+           for lut in file_luts]
     return out if any(out) else None
 
 
@@ -863,6 +923,14 @@ def figure_summary(objects, references, missing=(), row_letters=()):
         text += ', one letter per row (outside, on the left): ' + ', '.join(row_letters)
     elif letters:
         text += ', letters ' + ', '.join(letters)
+    stacks = []
+    for r in references:
+        s = r.get('stack')
+        if s and 'unknown' not in s:
+            name = panel_name(r)
+            parts = [f"{s['z']} z" if s['z'] > 1 else '', f"{s['t']} t" if s['t'] > 1 else '']
+            stacks.append(f"{name} ({', '.join(p for p in parts if p)})")
+    text += '; stacks: ' + ', '.join(stacks) if stacks else '; no stacks (every panel is a single image)'
     if missing:
         text += f'; {len(missing)} image file(s) missing (see missing_source_files)'
     return {'empty': False, 'answer': text}

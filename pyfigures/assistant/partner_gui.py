@@ -295,17 +295,28 @@ class PartnerGUI(BaseGUI):
         it, else only its case."""
         from batoolset.strings.tools import increment_letter
         texts = []
+        starts_the_figure = None
+        automatic = 0
         for _, _, panel in panels(self.paint.EZFIG_panel.shapes_to_draw):
             policy = json.loads(getattr(panel, POLICY, '{}'))
-            if policy.get('visible') is False or policy.get('automatic_text', 'text' not in policy):
+            if policy.get('visible') is False:
+                continue
+            pinned = not policy.get('automatic_text', 'text' not in policy)
+            if starts_the_figure is None:
+                starts_the_figure = pinned
+            if not pinned:
+                automatic += 1
                 continue
             text = policy.get('text')
             if isinstance(text, str) and len(text) == 1 and text.isalpha():
                 texts.append(text)
         box = self.letter_line_edit.text()
-        if not texts or not box:
+        # one panel given its own letter among automatic ones sets nothing for the others
+        if not texts or not box or automatic >= len(texts):
             return
-        expected, sequence = texts[0], True
+        # only a sequence pinned from the FIRST panel on sets where it starts: "rename b
+        # to Z" restarted every other letter at Z (2026-11-12)
+        expected, sequence = texts[0], bool(starts_the_figure)
         for text in texts:
             sequence = sequence and text == expected
             expected = increment_letter(expected)
@@ -332,11 +343,19 @@ class PartnerGUI(BaseGUI):
                 panel.annotations = []
         self._sync_first_letter_box()
         super().update_letters()
+        # an empty first-letter box with Letters ticked means no letters at all, as it
+        # always did: letters the chat had styled or pinned came back (2026-11-12). Their
+        # policies stay, so typing a letter again brings them back as they were.
+        no_letters = self.auto_lettering_checkbox.isChecked() and not self.letter_line_edit.text().strip()
         for _, _, panel in panels(self.paint.EZFIG_panel.shapes_to_draw):
             policy = json.loads(getattr(panel, POLICY, '{}'))
             if not policy:
                 continue
             existing = letters(panel)
+            if no_letters:
+                for a in existing:
+                    panel.annotations.remove(a)
+                continue
             if policy.get('visible') is False:
                 for a in existing:
                     panel.annotations.remove(a)
@@ -354,14 +373,17 @@ class PartnerGUI(BaseGUI):
             family = policy.get('font_family', base.get('font_family', self.serializable_font.family()))
             size = policy.get('font_size', base.get('font_size', self.serializable_font.pointSize()))
             foreground = policy.get('color', base.get('color', '#000000'))
-            weight = 'bold' if base.get('bold') else 'normal'
-            italic = 'italic' if base.get('italic') else 'normal'
-            decoration = 'underline' if base.get('underline') else 'none'
+            weight = 'bold' if policy.get('bold', base.get('bold')) else 'normal'
+            italic = 'italic' if policy.get('italic', base.get('italic')) else 'normal'
+            decoration = 'underline' if policy.get('underline', base.get('underline')) else 'none'
             body = f'<span style="font-family:&quot;{html.escape(family, quote=True)}&quot;;font-size:{size:g}pt;color:{foreground};font-weight:{weight};font-style:{italic};text-decoration:{decoration}">{html.escape(text)}</span>'
             # Base auto-lettering may reset the QTextDocument style while leaving
             # text and our cached HTML unchanged. Reapply the effective style,
             # rather than trusting a cache that does not describe the actual doc.
             a.setText(body)
+            # the native pass must not take its cached HTML for what the letter shows now:
+            # "renumber all" changed nothing on letters that had been pinned (2026-11-12)
+            a._letter_source_html = None
             a.placement = Position(policy.get('placement', base.get('placement', 'top left')))
             fill = policy.get('background', base.get('background'))
             a.fill_color = None if fill is None else int(fill.lstrip('#'), 16)
@@ -429,6 +451,9 @@ class PartnerGUI(BaseGUI):
         if hasattr(inset, POLICY):
             delattr(inset, POLICY)
         inset = clone_object(inset)
+        # it re-crops to the ROI when the ROI is moved (by hand in the editor too, 2026-11-12)
+        from pyfigures.connectors import follow_roi
+        follow_roi(inset, roi)
         original = list(panel.annotations)
         panel.annotations.append(inset)
         canvas = self.paint.EZFIG_panel
@@ -717,11 +742,25 @@ class PartnerGUI(BaseGUI):
                            panel_ids=None, placement=None, font_family=None,
                            font_size=None, color_value=None, background=None,
                            start_letter=None, replace_overrides=False, validate_only=False,
-                           removal_request=None):
+                           removal_request=None, text=None, bold=None, italic=None, underline=None):
+        if text is not None:
+            # "rename g to G'": one panel's own letter text (it had no operation: the model searched until
+            # stopped); a list, one text per panel_ids entry: "numbers instead of letters" in one call
+            # (nine calls hit the chat's step limit, 2026-11-12)
+            texts = text if isinstance(text, list) else [text]
+            if action != 'style' or scope != 'panels' or not panel_ids or len(panel_ids) != len(texts):
+                raise ValueError('text sets the letters of the panels named in panel_ids: action=style, scope=panels, and '
+                                 'one text per panel_ids entry (a string for one panel, a list for several). '
+                                 'For an alphabetic sequence use action=renumber with start_letter. No edit performed.')
+            if any(not isinstance(t, str) or not t.strip() or len(t.strip()) > 12 for t in texts):
+                raise ValueError('text must be the new letter, 1 to 12 characters. No edit performed.')
+            texts = [t.strip() for t in texts]
         if action == 'remove':
             request = (removal_request or '').lower()
-            if (not re.search(r'\b(remove|hide|delete|erase|clear)\b', request)
-                    or not re.search(r'\b(letters?|lettering|labels?)\b', request)
+            # "no letters", "get rid of the letters", "sans lettres" ask for it too (2026-11-12)
+            if (not re.search(r"\b(remove|hide|delete|erase|clear|no|without|drop|strip|lose|kill|off|rid|"
+                              r"take\s+(?:out|away)|don'?t\s+want|enl[eè]ve\w*|supprime\w*|retire\w*|sans|pas\s+de)\b", request)
+                    or not re.search(r'\b(letters?|lettering|labels?|lettres?)\b', request)
                     or re.search(r'\b(swap|exchange|relabel|rename|replace)\b', request)):
                 raise ValueError('CLARIFICATION_REQUIRED: Removing letters requires removal_request quoting an explicit user request to remove/hide letters. Never remove letters to swap images or rename letters. Ask which meaning was intended; no edit performed.')
         if action not in ('style', 'remove', 'restore', 'renumber'):
@@ -761,8 +800,40 @@ class PartnerGUI(BaseGUI):
         foreground = color(color_value) if color_value is not None else None
         fill = color(background, True) if background is not None else None
         if start_letter is not None and not re.fullmatch('[A-Za-z]{1,3}', start_letter):
-            raise ValueError('start_letter must contain one to three letters')
+            raise ValueError('start_letter must contain one to three letters. Automatic lettering is alphabetic only: '
+                             'numbers (1, 2, 3) and roman numerals are not available as a sequence. Give every panel its '
+                             'text in ONE call instead: action=style, scope=panels, panel_ids=[every panel ID in reading '
+                             'order], text=["1", "2", ...] (or "I", "II", ...). Tell the user these labels no longer '
+                             'follow when panels are added or moved. Do not search for another operation. No edit performed.')
         all_panels = list(panels(self.paint.EZFIG_panel.shapes_to_draw))
+        if scope == 'panels':
+            # panel_ids=["B"]: the visible letter names the panel too ("remove the letter of b"
+            # was refused as "No matching image panels", 2026-11-12)
+            by_letter = {}
+            for path, index, panel in all_panels:
+                shown = [a.getPlainText().strip().casefold() for a in letters(panel)]
+                if len(shown) == 1:
+                    by_letter.setdefault(shown[0], []).append('/'.join(map(str, (*path, index))))
+            resolved = []
+            from .gui_selection import panel_number
+            for ref in panel_ids:
+                ref = str(ref).strip()
+                numbered = panel_number(ref, all_panels)
+                if numbered == 'missing':
+                    raise ValueError(f'There is no panel {ref}; the figure has {len(all_panels)} panels. No edit performed.')
+                if numbered is not None:
+                    ref = '/'.join(map(str, (*numbered[0], numbered[1])))
+                elif not re.fullmatch(r'\d+(?:/\d+)*', ref):
+                    hits = by_letter.get(ref.casefold(), [])
+                    if len(hits) != 1:
+                        raise ValueError(f'No single panel shows the letter {ref!r}; use the panel IDs of '
+                                         'inspect_panel_letters (like "0/1"). No edit performed.')
+                    ref = hits[0]
+                resolved.append(ref)
+            panel_ids = resolved
+        text_for = dict(zip(panel_ids, texts)) if text is not None else {}
+        if text is not None and len(text_for) != len(texts):
+            raise ValueError('panel_ids names the same panel twice. No edit performed.')
         selected = self.paint.EZFIG_panel.selected_shape
         selected = selected if isinstance(selected, list) else [selected]
         selected_ids = set()
@@ -828,6 +899,9 @@ class PartnerGUI(BaseGUI):
                     if scope == 'all':
                         policy.pop('text', None)
                         policy.get('base', {}).pop('text', None)
+                if text is not None:
+                    policy['text'] = text_for[pid]
+                    policy['automatic_text'] = False
                 if placement is not None:
                     assign('placement', placement)
                 if font_family is not None:
@@ -838,6 +912,10 @@ class PartnerGUI(BaseGUI):
                     assign('color', foreground)
                 if background is not None:
                     assign('background', fill)
+                # "the letter bold on every rotated panel": per panel, as the other fields
+                for key, value in (('bold', bold), ('italic', italic), ('underline', underline)):
+                    if value is not None:
+                        assign(key, bool(value))
             policy['local_fields'] = sorted(local)
             setattr(panel, POLICY, json.dumps(policy, sort_keys=True))
             changed.append(pid)
@@ -891,6 +969,10 @@ class PartnerGUI(BaseGUI):
             raise ValueError('CLARIFICATION_REQUIRED: Ask whether to exchange image panels or only their letter text. target must be images or letters.')
         entries = list(panels(self.paint.EZFIG_panel.shapes_to_draw))
         def resolve(value):
+            from .gui_selection import panel_number
+            numbered = panel_number(value, entries)
+            if numbered not in (None, 'missing'):
+                return numbered
             matches = [(path, index, p) for path, index, p in entries
                        if '/'.join(map(str, (*path, index))) == value
                        or any(a.getPlainText() == value for a in letters(p))]
@@ -973,10 +1055,17 @@ class PartnerGUI(BaseGUI):
         ids = ['/'.join(map(str, (*item[0], item[1]))) for item in (a, b)]
         if after['visible_letter_count'] != before['visible_letter_count']:
             raise RuntimeError('Swap verification failed: letter count changed')
+
+        def slot_letters(panel):
+            # an automatic letter is black on a bright image and white on a dark one: its
+            # colour follows the image moved into the slot ("swap c and e" failed on every
+            # try, 2026-11-12); a colour set by hand stays part of the slot
+            pinned = 'color' in (panel.get('override') or {}).get('local_fields', [])
+            return [a if pinned else {k: v for k, v in a.items() if k != 'color'} for a in panel['letters']]
         for old, new in zip(before['panels'], after['panels']):
             if old['panel_id'] not in ids and old != new:
                 raise RuntimeError('Swap verification failed: unrelated panel changed')
-            if target == 'images' and old['letters'] != new['letters']:
+            if target == 'images' and slot_letters(old) != slot_letters(new):
                 raise RuntimeError('Swap verification failed: slot lettering changed')
         affected = [p for p in after['panels'] if p['panel_id'] in ids]
         previous = [p for p in before['panels'] if p['panel_id'] in ids]

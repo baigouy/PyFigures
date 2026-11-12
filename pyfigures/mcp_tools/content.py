@@ -1449,6 +1449,10 @@ def configure_image(
         configure_image("fig.pyf", [0], 0, projection="max",
                         projection_z_start=5, projection_z_end=20)
 
+        # ONE Z slice ("show slice 7", "the next z"): a projection of that slice alone
+        configure_image("fig.pyf", [0], 0, projection="max",
+                        projection_z_start=7, projection_z_end=8)
+
         # Open series 2 of a .lif file
         configure_image("fig.pyf", [0], 0, serie_to_open=2)
 
