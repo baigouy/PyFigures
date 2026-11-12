@@ -70,6 +70,64 @@ class Session:
             self.fingerprint = digest
             self.recovery.capture()
 
+    def _last_chat_records(self):
+        actions = getattr(self, 'actions', None)
+        if actions is None:
+            return None, []
+        active = actions.active
+        records = []
+        for path in actions.root.glob('*/journal.json'):
+            try:
+                record = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if (not active or record.get('id') != active['record']['id']) and record.get('changed'):
+                records.append(record)
+        return active, records
+
+    def _is_last_chat_result(self):
+        """True when the figure is what the chat's last change made (undoing it is undoing the chat)."""
+        active, records = self._last_chat_records()
+        if active and any(o.get('status') == 'completed' for o in active['record']['operations']):
+            return True
+        if not records:
+            return False
+        last = max(records, key=lambda r: r.get('created_at', 0))
+        if last.get('status') != 'applied' or not active:
+            return False
+        from .assistant_actions import capture
+        return capture(self, active['folder'] / 'undo_guard.pyf') == last.get('after_digest')
+
+    def _check_assistant_undo(self):
+        """An undo asked by the chat as the first edit of its message must not undo
+        something else: when the user already undid the chat's last change (the
+        message's undo button), the step before belongs to the user (user chat
+        2026-11-12: "No I just wanted you to open the dialog" -> the model's undo
+        removed the opened figure)."""
+        active, records = self._last_chat_records()
+        if not active or not records:
+            return
+        if any(o.get('status') == 'completed' and o.get('operation') not in ('undo', 'redo')
+               for o in active['record']['operations']):
+            return                                   # undoing its own edit of this message
+        last = max(records, key=lambda r: r.get('created_at', 0))
+        quoted = '("' + str(last.get('request', ''))[:80] + '")'
+        if last.get('status') == 'undone':
+            from .assistant_actions import capture
+            if last.get('undo_digest') and capture(self, active['folder'] / 'undo_guard.pyf') != last['undo_digest']:
+                return                               # the user changed things since: theirs to undo
+            raise ValueError('ALREADY_UNDONE: the user already undid your last change ' + quoted + ' with its undo '
+                             'button: the figure is back as it was before it. Another undo would remove an older step '
+                             'that is not yours. Nothing was undone; do not undo, do what the user asks now.')
+        from .assistant_actions import capture
+        if last.get('status') == 'applied' and last.get('baseline') \
+                and capture(self, active['folder'] / 'undo_guard.pyf') == last['baseline']:
+            # the user's own Ctrl+Z (or the chat's earlier undos) took the change back: what
+            # was left of it could be undone, never more (the user's request, 2026-11-12)
+            raise ValueError('ALREADY_UNDONE: your last change ' + quoted + ' is already fully undone (the user pressed '
+                             'Undo in PyFigures, or your earlier undos took it back): the figure is as it was before it. '
+                             'A further undo would remove an older step that is not yours. Nothing was undone.')
+
     def snapshot(self):
         self.sync()
         from .gui_selection import sync_editor,native_dialog_titles
@@ -372,7 +430,19 @@ class Session:
                                      brighten=bool(args.get('brighten', True)))
                 result = {'path': str(output), 'description': text, 'revision': self.revision}
             elif op in ('undo', 'redo'):
+                if op == 'undo':
+                    self._check_assistant_undo()
+                from .partner_gui import panels as _image_panels
+                had_images = op == 'undo' and any(True for _ in _image_panels(panel.shapes_to_draw)) \
+                    and not self._is_last_chat_result()
                 getattr(w, op)()
+                if had_images and not panel.shapes_to_draw:
+                    # the step undone was opening / building the whole figure (user chat
+                    # 2026-11-12: the model's undo emptied the canvas)
+                    w.redo()
+                    raise ValueError('UNDO_WOULD_EMPTY: that undo would remove the whole figure (the step before is the '
+                                     'figure being opened or built), so it was put back: nothing changed. There is no '
+                                     'edit of yours left to undo; tell the user so.')
                 result = self.snapshot()
             elif op in ('add_label', 'set_label'):
                 text = args['text']

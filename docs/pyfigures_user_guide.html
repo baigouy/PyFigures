@@ -1036,7 +1036,13 @@
       Ask in plain words — "add 10 µm scale bars to every image (0.1 µm per pixel)", "use magenta
       and green", "is the figure ready for a Nature double column?" — and a language model makes the
       change on the figure open in the window, unsaved changes included. Each change is <strong>one
-      undo step</strong> (Ctrl+Z), and nothing is written to disk until you save. While the figure
+      undo step</strong> (Ctrl+Z), and nothing is written to disk until you save. A reply's own
+      <strong>Undo</strong> button takes back everything that reply changed. Asking the chat to undo
+      ("put it back") only takes back what is left of its last change: after that button, or after
+      your own Ctrl+Z took it all back, the chat undoes nothing more, and it never undoes past
+      that change into your own edits or the figure being opened. "I want to edit the ROI in b"
+      (no value given), "let me do it", "myself", "by hand" open the panel editor for you and
+      change nothing. While the figure
       is shared, a recovery copy is kept after each change in PyFigures' app-data folder
       (<code>%LOCALAPPDATA%\PyFigures\assistant\recovery</code> on Windows; it is not your file).
       When changes stay unsaved for 10 minutes, a small reminder in the corner says so, with that

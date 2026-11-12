@@ -429,6 +429,20 @@ class PartnerGUI(BaseGUI):
                                  'not on it. Ask the user to click the region to magnify (or draw an ROI) on this panel.')
         if at_click is None and len(candidates) != 1:
             raise ValueError('CLARIFICATION_REQUIRED: Choose one rectangular ROI using its inspected annotation_index')
+        if at_click is None:
+            # its inset already exists (user chat 2026-11-12: "i wanna edit smallest ROI inset in b"
+            # made a second inset of the same region)
+            from qtpy.QtCore import QRectF
+            index0, roi0 = candidates[0]
+            w0, h0 = panel.get_raw_size()
+            crop0 = get_original_shape_from_rect_and_angle(QRectF(0, 0, w0, h0), roi0.getRect(), roi0.theta)[1:]
+            roi_id = getattr(roi0, 'link_id', None)
+            for j, a in enumerate(panel.annotations or []):
+                if isinstance(a, Image2D) and ((roi_id and getattr(a, 'follows_roi', None) == roi_id)
+                                               or (a.crop_left, a.crop_right, a.crop_top, a.crop_bottom) == tuple(crop0)):
+                    raise ValueError(f'ALREADY_HAS_INSET: ROI {index0} already has its inset (annotation_index {j}); nothing was '
+                                     'added. To change it: edit_annotation_properties on that inset; to let the user edit it '
+                                     'by hand: open_annotation_editor. Make a second inset only if the user asks for another one.')
         if validate_only:
             return
         if at_click is not None:
