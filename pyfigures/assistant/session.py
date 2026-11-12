@@ -174,6 +174,17 @@ class Session:
               for gp,ix,p in panels(self.window.paint.EZFIG_panel.shapes_to_draw)
               for index,a in enumerate(p.annotations or [])
               if type(a).__name__ in ('Rectangle2D','Rect2D','Ellipse2D','Circle2D','Square2D','Line2D','Polygon2D','PolyLine2D','Freehand2D')]
+        # the magnified insets: a model told panel b had "no insets yet" (user chat 2026-11-12)
+        insets = []
+        for gp, ix, p in panels(self.window.paint.EZFIG_panel.shapes_to_draw):
+            anns = list(p.annotations or [])
+            ids = {getattr(a, 'link_id', None): i for i, a in enumerate(anns) if getattr(a, 'link_id', None)}
+            for index, a in enumerate(anns):
+                if isinstance(a, Image2D) and not getattr(a, 'isText', False):
+                    insets.append(dict(panel_id='/'.join(map(str, (*gp, ix))), annotation_index=index,
+                                       placement=str(getattr(a, 'placement', '') or ''),
+                                       shows_region=dict(left=a.crop_left, right=a.crop_right, top=a.crop_top, bottom=a.crop_bottom),
+                                       roi_annotation_index=ids.get(getattr(a, 'follows_roi', None))))
         objects = self.window.paint.EZFIG_panel.shapes_to_draw
         letter_state = lettering_state(self.window)
         return {'figure_summary': figure_summary(objects, references, missing | unreadable,
@@ -181,6 +192,7 @@ class Session:
                 'session_id': self.id, 'revision': self.revision,
                 'text_annotations': annotations,
                 'roi_annotations': rois,
+                'insets': insets,
                 'selection': selection_state(self.window),
                 'verified_letter_specification': specification(letter_state),
                 'panel_references': references,

@@ -253,6 +253,9 @@ def test_an_inset_follows_its_roi_and_its_lines_too(qapp, gui, runtime, tmp_path
     inset = next(a for a in p.annotations if isinstance(a, Image2D))
     lines = [a for a in p.annotations if isinstance(a, Line2D)]
     assert inset.follows_roi == roi.link_id and len(lines) == 2 and all(l.connect_start for l in lines)
+    # the chat sees the inset and its ROI (it once said panel b had "no insets yet")
+    seen = _call(qapp, "inspect")["insets"]
+    assert [(i["panel_id"], i["roi_annotation_index"]) for i in seen] == [("0/0", p.annotations.index(roi))]
     before = [(l.x1(), l.y1()) for l in lines]
     roi.moveTo(200, 100)                                  # moved by hand, as in the editor
     g.paint.EZFIG_panel.grab()
