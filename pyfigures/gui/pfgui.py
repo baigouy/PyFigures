@@ -1733,7 +1733,7 @@ class EZFIG_GUI(QMainWindow):
         scale_consistency_action.triggered.connect(self.check_scale_consistency_action)
         text_consistency_action = QAction("Check text consistency…", self)
         text_consistency_action.setToolTip("Panel letters alike, scale-bar labels alike, the other "
-                                           "texts alike, and one font family for all of them.")
+                                           "texts alike; every text but the letters in one font.")
         qc_menu.addAction(text_consistency_action)
         text_consistency_action.triggered.connect(self.check_text_consistency_action)
         review_action = QAction("Pre-submission review (all checks)…", self)
@@ -6622,7 +6622,7 @@ class EZFIG_GUI(QMainWindow):
         self._show_report('Scale-bar consistency', "\n".join(lines))
 
     def check_text_consistency_action(self):
-        """Letters alike, scale-bar labels alike, other texts alike, one font family
+        """Letters alike, scale-bar labels alike, other texts alike, the non-letter texts in one font
         (MCP: check_text_consistency; recipe checks: "text")."""
         from pyfigures.mcp_server import check_text_consistency
         import json

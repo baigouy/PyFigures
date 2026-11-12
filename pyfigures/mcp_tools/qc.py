@@ -562,7 +562,8 @@ def _drawn_family(family):
 def check_text_consistency(pyf_path: str) -> str:
     """Check that the texts of the figure look consistent: every panel letter in one
     font, size and weight, every scale-bar label alike, the other texts (labels,
-    titles, captions on the figure) alike, and one font family across all of them.
+    titles, captions on the figure) alike, and one font family for every text other
+    than the letters (the letters may have their own font).
     A letter or label that differs (one bold letter, one scale bar in another size) is
     named, with the style most others have. Read-only; fix with edit_panel_letters
     (letters), set_scale_bar_all (scale bars) or restyle_texts (other texts).
@@ -594,20 +595,23 @@ def check_text_consistency(pyf_path: str) -> str:
                 issues.append({"kind": role, "property": key, "most_have": common[key],
                                "differ": [f"{t['where']} ('{t['text']}'): {t.get(key)}" for t in odd]})
         kinds[role] = {"count": len(items), "style": common}
-    families = sorted({_drawn_family(t.get("font")) for t in texts if t.get("font")} - {None})
+    # the letters have their font; every other text (scale-bar labels, legends, labels)
+    # shares one, which may differ from the letters' (user, 2026-11-12)
+    rest = [t for t in texts if t["role"] != "panel letters"]
+    families = sorted({_drawn_family(t.get("font")) for t in rest if t.get("font")} - {None})
     if len(families) > 1:
-        uses = {f: sorted({t["role"] for t in texts if _drawn_family(t.get("font")) == f}) for f in families}
-        issues.append({"kind": "all texts", "property": "font",
+        uses = {f: sorted({t["role"] for t in rest if _drawn_family(t.get("font")) == f}) for f in families}
+        issues.append({"kind": "texts other than letters", "property": "font",
                        "differ": [f"{f}: {', '.join(r)}" for f, r in uses.items()]})
     if issues:
         summary = (f"{len(issues)} inconsistenc{'y' if len(issues) == 1 else 'ies'}: " +
                    "; ".join(f"{i['kind']}: {names.get(i['property'], i['property'])} ({len(i['differ'])} differ)"
                              for i in issues) +
-                   ". In a figure the letters, the scale-bar labels and the other texts should each look alike, "
-                   "in one font family.")
+                   ". In a figure the letters should all look alike, and so should the scale-bar labels and the "
+                   "other texts, which share one font (the letters may have their own).")
     else:
         summary = ("Texts are consistent: " + ", ".join(f"{k} ({v['count']})" for k, v in kinds.items()) +
-                   (f", all in {families[0]}." if families else "."))
+                   (f"; texts other than letters in {families[0]}." if families else "."))
     return json.dumps({"summary": summary, "consistent": not issues, "kinds": kinds, "issues": issues},
                       ensure_ascii=False, indent=2)
 
@@ -879,7 +883,7 @@ def check_journal_compliance(
         results.append(("sans-serif font", is_sans,
                         "font family " + ", ".join(parts) if requested else "no font family set"))
 
-    # ── consistent texts (letters alike, scale bars alike, one font family) ────
+    # ── consistent texts (letters alike, the other texts in one font) ─────────
     try:
         tc = json.loads(check_text_consistency(pyf_path))
         results.append(("consistent texts", tc["consistent"], tc["summary"]))

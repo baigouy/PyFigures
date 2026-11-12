@@ -1018,7 +1018,7 @@ into a warning. The build summary's `checks` gives each result.
 |---|---|---|
 | `integrity` | two panels are the same image (also flipped, rotated or inverted), or a region is copy-pasted inside a panel, or a panel can't be read. A screening aid: a hit can be legitimate. | `hamming_threshold` (6; lower = stricter), `min_clones` (3) |
 | `scale` | panels show the same physical length at different sizes (pixel sizes needed) | `tolerance` (0.05 = 5 %) |
-| `text` | the panel letters do not all look alike (font, size, bold, italic, underline, background box), nor the scale-bar labels, nor the other texts (size aside), or the texts use more than one font family | — |
+| `text` | the panel letters do not all look alike (font, size, bold, italic, underline, background box), nor the scale-bar labels, nor the other texts (size aside), or the texts other than the letters (scale-bar labels, legends, labels) use more than one font; the letters may have their own | — |
 | `scale_bars` | an image panel has no scale bar | — |
 | `labels` | an image panel has no letter or text label | — |
 | `resolution` | a panel prints below `min_dpi` at the figure's size | `min_dpi` (300) |

@@ -69,13 +69,17 @@ def test_one_bold_letter_and_one_big_scale_bar_label_are_named(tmp_path):
         re.search(r"consistent texts.*FAIL|FAIL.*consistent texts", check_journal_compliance(pyf, width_mm=180))
 
 
-def test_two_font_families_are_flagged(tmp_path):
+def test_letters_may_have_their_own_font_the_other_texts_share_one(tmp_path):
+    """"Letters usually have one font, the rest of the text of the figure (legends,
+    extra labels) the same font, which can differ from the letters'" (user, 2026-11-12)."""
     from pyfigures.mcp_server import check_text_consistency
     pyf = _figure(tmp_path, n=2)
     for nth in range(2):
         _restyle_one(pyf, "ScaleBar", nth, "font-family:'Times New Roman'")
+    assert json.loads(check_text_consistency(pyf))["consistent"]        # letters in another font: fine
+    _restyle_one(pyf, "ScaleBar", 1, "font-family:'Courier New'")
     d = json.loads(check_text_consistency(pyf))
-    assert any(i["kind"] == "all texts" and i["property"] == "font" for i in d["issues"])
+    assert not d["consistent"] and any(i["property"] == "font" for i in d["issues"])
 
 
 def test_recipe_text_check(tmp_path):
