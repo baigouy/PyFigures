@@ -50,6 +50,12 @@ def gui(qapp, runtime):
             stop_live_session(g)
             g._dirty = False
             g.close()
+            # closed is not deleted: hundreds of hidden main windows over the whole
+            # suite ran Windows out of handles (access violation in initUI, CI 2026-11-12)
+            g.deleteLater()
+    qapp.processEvents()
+    from qtpy.QtCore import QCoreApplication, QEvent
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     qapp.processEvents()
 
 
