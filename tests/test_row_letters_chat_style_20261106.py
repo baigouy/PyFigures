@@ -51,11 +51,12 @@ def test_style_on_row_letters_is_reported_as_a_change(gui, qapp, tmp_path):
     assert [t.getPlainText() for _, t in canvas._row_letter_texts()] == ["A", "B"]
 
 
-def test_row_letters_refuse_a_partial_scope(gui, qapp, tmp_path):
+def test_row_letters_styled_for_one_group_style_them_all(gui, qapp, tmp_path):
+    """A letter style always goes to every letter (user rule 2026-11-12)."""
     pyf, _ = _recipe_figure(tmp_path)
     _open(gui, qapp, pyf)
-    with pytest.raises(ValueError, match="scope=\"all\""):
-        gui.edit_panel_letters(action="style", scope="group", group_path=[0], background="none")
+    out = gui.edit_panel_letters(action="style", scope="group", group_path=[0], background="none")
+    assert out["scope"] == "all" and "EVERY letter" in out["letters_kept_consistent"]
 
 
 def test_placement_outside_points_to_row_letters(gui, qapp, tmp_path):

@@ -166,7 +166,7 @@ def build_server(full_server, send):
         'categories if needed. All original functions remain available underneath. '
         'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
         'For figure/group LETTER edits, removal or restoration prefer edit_panel_letters '
-        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, bold/italic/underline, foreground and background; bold on SOME letters ("the letter of A", "the rotated panels") is edit_panel_letters scope=panels with panel_ids and bold=true (restyle_texts(target=letters) changes every letter). '
+        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, bold/italic/underline, foreground and background; letters stay consistent: a style asked for one letter ("I can\'t see the letter b") goes to every letter; only when the user explicitly wants some letters different ("only b bold", "bold on the rotated panels only") use scope=panels with panel_ids and only_these_letters_request quoting those words. '
         'For ALL scale bars use remove_scale_bar_all or set_scale_bar_all once. '
         'For deleting last N rows use delete_last_rows in one call. Never guess shifted indices after an error; verify actual removed targets before claiming success. '
         'For ungroup all / images as single images / move all to free canvas use ungroup_all_images once; never consolidate into one group or loop over shifting indices. '

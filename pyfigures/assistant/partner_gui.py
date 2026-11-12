@@ -756,7 +756,8 @@ class PartnerGUI(BaseGUI):
                            panel_ids=None, placement=None, font_family=None,
                            font_size=None, color_value=None, background=None,
                            start_letter=None, replace_overrides=False, validate_only=False,
-                           removal_request=None, text=None, bold=None, italic=None, underline=None):
+                           removal_request=None, text=None, bold=None, italic=None, underline=None,
+                           only_these_panels=False):
         if text is not None:
             # "rename g to G'": one panel's own letter text (it had no operation: the model searched until
             # stopped); a list, one text per panel_ids entry: "numbers instead of letters" in one call
@@ -779,6 +780,29 @@ class PartnerGUI(BaseGUI):
                 raise ValueError('CLARIFICATION_REQUIRED: Removing letters requires removal_request quoting an explicit user request to remove/hide letters. Never remove letters to swap images or rename letters. Ask which meaning was intended; no edit performed.')
         if action not in ('style', 'remove', 'restore', 'renumber'):
             raise ValueError('action must be style, remove, restore or renumber')
+        shared = {k: v for k, v in (('placement', placement), ('font_family', font_family), ('font_size', font_size),
+                                    ('background', background), ('bold', bold), ('italic', italic),
+                                    ('underline', underline)) if v is not None}
+        if action == 'style' and scope != 'all' and shared and not only_these_panels:
+            # "in a figure letters should be consistent: one cannot change one without
+            # changing the others" (user, 2026-11-12: "I can't see the letter b" made b alone
+            # bigger, bold and boxed): the letter style goes to every letter; only the text,
+            # the colour (white on dark panels) and an explicit "only b bold" stay per panel
+            if scope == 'panels':
+                self.edit_panel_letters(action='style', scope=scope, panel_ids=panel_ids,
+                                        validate_only=True)       # the panels named must exist
+            report = self.edit_panel_letters(action='style', scope='all', validate_only=validate_only, **shared)
+            if text is not None or color_value is not None:
+                own = self.edit_panel_letters(action='style', scope=scope, group_path=group_path, panel_ids=panel_ids,
+                                              color_value=color_value, text=text, validate_only=validate_only)
+                if not validate_only:
+                    report = {**report, 'changed_panel_ids': sorted(set(own['changed_panel_ids']) | set(report['changed_panel_ids']))}
+                    report['changed'] = len(report['changed_panel_ids'])
+            if not validate_only:
+                report = dict(report, letters_kept_consistent=(
+                    'The letter style (' + ', '.join(sorted(shared)) + ') was applied to EVERY letter: letters stay '
+                    'consistent in a figure. Only a letter\'s text and colour can differ per panel. Say so to the user.'))
+            return report
         if scope not in ('all', 'group', 'panels', 'selection'):
             raise ValueError('scope must be all, group, panels or selection')
         if scope == 'group' and group_path is None:
@@ -892,11 +916,16 @@ class PartnerGUI(BaseGUI):
                     skipped.append({'panel_id': pid, 'reason': 'No panel letter; use restore to add it'})
                 continue
             local = set(policy.get('local_fields', []))
-            if replace_overrides and scope == 'all':
+            if scope == 'all' and action == 'style':
                 # Replace only the properties explicitly supplied, not the whole
-                # accepted appearance (which would resurrect the old base font).
+                # accepted appearance (which would resurrect the old base font). The style
+                # is figure-wide, a letter made different before follows too (user rule
+                # 2026-11-12); a colour set on one panel stays unless replace_overrides.
                 requested_fields = {'placement': placement, 'font_family': font_family,
-                    'font_size': font_size, 'color': color_value, 'background': background}
+                    'font_size': font_size, 'background': background,
+                    'bold': bold, 'italic': italic, 'underline': underline}
+                if replace_overrides:
+                    requested_fields['color'] = color_value
                 local.difference_update(key for key, value in requested_fields.items() if value is not None)
             def assign(key, value):
                 if scope != 'all' or replace_overrides or key not in local:

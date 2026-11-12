@@ -8,6 +8,7 @@ Large 4 over its API, 2026-11-12): what the application refused or lacked.
 """
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -64,28 +65,51 @@ def test_one_panel_gets_its_own_letter_text(qapp, gui, runtime, tmp_path):  # no
     assert texts() == [["a"], ["B'"]]
 
 
-def test_one_panel_letter_can_be_bold_through_the_chat(qapp, gui, runtime, tmp_path):  # noqa: F811
-    """'rotate A, then make the letter bold on every rotated panel' (2026-11-12): there was no
-    way to bold SOME letters; restyle_texts bolded all nine and the model undid it."""
+def test_a_letter_style_goes_to_every_letter(qapp, gui, runtime, tmp_path):  # noqa: F811
+    """"In a figure letters should be consistent, one cannot change one without changing
+    the others" (user, 2026-11-12: b alone was made bold with a white box). The style of
+    one letter is applied to all; its text and colour stay per panel."""
     from test_assistant_live import _call
     from pyfigures.assistant.partner_gui import letters, letter_info, panels
     g, run, shown = _live(qapp, gui, tmp_path)
 
-    def bold():
-        return [[letter_info(a)['bold'] for a in letters(p)] for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)]
+    def style(key):
+        return [[letter_info(a)[key] for a in letters(p)] for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)]
     state = _call(qapp, "inspect")
-    _call(qapp, "bulk_letters", session_id=state["session_id"], expected_revision=state["revision"],
-          arguments={"action": "style", "scope": "panels", "panel_ids": ["0/1"], "bold": True}, request_id="b1")
-    assert bold() == [[False], [True]]
+    out = _call(qapp, "bulk_letters", session_id=state["session_id"], expected_revision=state["revision"],
+                arguments={"action": "style", "scope": "panels", "panel_ids": ["0/1"], "bold": True,
+                           "background": "white", "color_value": "red"}, request_id="b1")
+    assert style('bold') == [[True], [True]] and style('background') == [["#ffffff"], ["#ffffff"]]
+    assert style('color')[0] != style('color')[1]               # the colour stays on b only
+    assert "EVERY letter" in json.dumps(out)
     g.update_letters()                                          # it stays through a refresh
-    assert bold() == [[False], [True]] and shown() == [["a"], ["b"]]
+    assert style('bold') == [[True], [True]] and shown() == [["a"], ["b"]]
     state = _call(qapp, "inspect")
     _call(qapp, "bulk_letters", session_id=state["session_id"], expected_revision=state["revision"],
           arguments={"action": "style", "scope": "panels", "panel_ids": ["0/1"], "bold": False,
                      "italic": True}, request_id="b2")
-    assert bold() == [[False], [False]]
-    assert [letter_info(a)['italic'] for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)
-            for a in letters(p)] == [False, True]
+    assert style('bold') == [[False], [False]] and style('italic') == [[True], [True]]
+    # asked explicitly ("only b bold", "bold on the rotated panels"): those letters only
+    state = _call(qapp, "inspect")
+    _call(qapp, "bulk_letters", session_id=state["session_id"], expected_revision=state["revision"],
+          arguments={"action": "style", "scope": "panels", "panel_ids": ["0/1"], "bold": True,
+                     "only_these_panels": True}, request_id="b3")
+    assert style('bold') == [[False], [True]]
+
+
+def test_only_these_letters_needs_the_user_asking_for_it():
+    from pyfigures.assistant import live_mcp
+    sent = []
+    live_mcp.call_live, old = (lambda op, args: sent.append(args) or {}), live_mcp.call_live
+    try:
+        live_mcp.edit_panel_letters(scope="panels", panel_ids=["0/1"], bold=True,
+                                    only_these_letters_request="make the letters bold on the rotated panels only")
+        assert sent[-1]["only_these_panels"] is True
+        with pytest.raises(ValueError, match="SOME letters"):
+            live_mcp.edit_panel_letters(scope="panels", panel_ids=["0/1"], font_size=14,
+                                        only_these_letters_request="I can't see well the letter of panel b")
+    finally:
+        live_mcp.call_live = old
 
 
 def test_an_empty_first_letter_box_removes_every_letter(qapp, gui, runtime, tmp_path):  # noqa: F811
