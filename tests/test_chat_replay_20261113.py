@@ -102,8 +102,16 @@ def test_a_procedure_names_the_figure_it_runs_on(tmp_path):
     proc = tmp_path / 'steps.json'
     R.save_procedure(R.procedure_steps(R.load_steps(chat)), proc, source=chat)
     data = json.loads(proc.read_text(encoding='utf-8'))
-    assert data['pyfigures_procedure'] == 1 and len(data['steps']) == 3
-    assert data['steps'][2]['arguments']['out_path'] == '{folder}/{name}.pptx'
+    # the chat sidecar's format: one MCP call per step (its Procedures menu runs it too)
+    assert data['procedure'] == 1 and data['application'] == 'PyFigures' and len(data['steps']) == 3
+    assert data['steps'][2]['call'] == 'use_pyfigures_tool'
+    assert data['steps'][2]['arguments']['arguments']['out_path'] == '{folder}/{name}.pptx'
+    # a procedure in the first PyFigures layout ("tool", "batch") still runs
+    old = tmp_path / 'old.json'
+    old.write_text(json.dumps({'pyfigures_procedure': 1, 'steps': [
+        {'request': 'r', 'tool': 'transform_image', 'arguments': {'rotation': 25}, 'batch': [{'panel_ref': 'a'}]}]}),
+        encoding='utf-8')
+    assert R.load_procedure(old)[0].batch == [{'panel_ref': 'a'}]
     again = R.load_procedure(proc)
     assert again[0].batch == [{'panel_ref': 'a'}, {'panel_ref': 'b'}]
     assert R._fill(again[2].arguments, 'D:/other', 'kidney') == {'out_path': 'D:/other/kidney.pptx'}

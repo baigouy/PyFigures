@@ -26,16 +26,12 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 PROCEDURE_VERSION = 1
+DISPATCHER = 'use_pyfigures_tool'
 
-# operations that only read: left out of procedures, shown greyed in the debugger
-_READ_PREFIXES = ('get_', 'list_', 'inspect_', 'describe_', 'check_', 'preview_', 'explain_', 'find_',
-                  'audit_', 'search_', 'review_')
-_READ_NAMES = {'find_pyfigures_tools', 'list_pyfigures_categories', 'inspect_figure', 'preview_figure',
-               'preview_panel', 'preview_luts', 'readability', 'list_fonts', 'list_colors', 'list_luts',
-               'show_me_where', 'close_guidance', 'explain_live_interaction', 'select_live_objects',
-               'open_annotation_editor', 'open_annotation_properties', 'list_how_to_guides', 'explain_how',
-               # the replay tools themselves: a saved procedure does not save procedures again
-               'save_chat_procedure', 'run_procedure', 'list_chat_steps'}
+# Reading chat logs and choosing the steps that stayed is the chat sidecar's
+# (qtpy_ai_sidecar.procedures, shared by every application it serves); procedure files
+# are plain JSON, read here too, so recipes, the MCP server and the command line run
+# them without the sidecar installed.
 
 
 @dataclass
@@ -52,6 +48,21 @@ class Step:
     recorded_result: str = ''
     reads_only: bool = False
     turn_undone: bool = False
+    role: str = 'edit'              # edit, read, undo, redo, skip (the sidecar's PyFigures adapter)
+
+    def call(self):
+        """The MCP call it is: (name, arguments)."""
+        if self.direct:
+            return self.tool, dict(self.arguments)
+        return DISPATCHER, {'tool_name': self.tool, 'arguments': dict(self.arguments),
+                            **({'batch': self.batch} if self.batch else {})}
+
+    @classmethod
+    def from_call(cls, request, turn, name, arguments):
+        if name == DISPATCHER:
+            return cls(request, turn, str(arguments.get('tool_name', '')), dict(arguments.get('arguments') or {}),
+                       arguments.get('batch') or None, False)
+        return cls(request, turn, name, dict(arguments or {}), None, True)
 
     def describe(self) -> str:
         args = {k: v for k, v in self.arguments.items() if k != 'pyf_path'}
@@ -74,108 +85,53 @@ def recent_chats(limit=30) -> list[Path]:
     return sorted(folder.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]
 
 
-def _events(path) -> list[dict]:
-    path = Path(path)
-    if path.suffix.lower() == '.zip':
-        with zipfile.ZipFile(path) as z:
-            name = next((n for n in z.namelist() if n.endswith('events.jsonl')), None)
-            if name is None:
-                raise ValueError(f'{path.name} has no events.jsonl (not a chat debug export)')
-            lines = z.read(name).decode('utf-8').splitlines()
-    else:
-        lines = path.read_text(encoding='utf-8').splitlines()
-    events = []
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            events.append(json.loads(line))
-        except ValueError:
-            continue
-    return events
-
-
-def reads_only(tool: str, arguments: dict | None = None) -> bool:
-    if tool in _READ_NAMES or tool.startswith(_READ_PREFIXES):
-        return True
-    return bool((arguments or {}).get('dry_run'))
+def _sidecar():
+    """The chat sidecar's procedures module and its PyFigures adapter (it wrote the logs)."""
+    try:
+        from qtpy_ai_sidecar import procedures
+        from qtpy_ai_sidecar.adapters.pyfigures import PyFiguresAdapter
+    except ImportError as exc:
+        raise ValueError('Reading chat logs needs the chat sidebar package: pip install qtpy-ai-sidecar') from exc
+    return procedures, PyFiguresAdapter('unused')
 
 
 def load_steps(path) -> list[Step]:
-    """Every operation of the chat log *path*, in order, with the request it answered."""
-    steps, pending = [], []
-    request, turn = '', 0
-    undone = set()
-    turn_of_request = {}
-    for event in _events(path):
-        kind, value = event.get('kind'), event.get('value')
-        if kind == 'user':
-            request, turn = str(value), turn + 1
-            turn_of_request.setdefault(request, []).append(turn)
-        elif kind == 'action' and isinstance(value, dict) and value.get('status') == 'undone':
-            undone.update(turn_of_request.get(str(value.get('request')), []))
-        elif kind == 'tool_call' and isinstance(value, dict):
-            name, args = value.get('name'), value.get('arguments') or {}
-            if name == 'use_pyfigures_tool':
-                tool, arguments, batch, direct = args.get('tool_name', ''), dict(args.get('arguments') or {}), \
-                    args.get('batch'), False
-            else:
-                tool, arguments, batch, direct = name or '', dict(args), None, True
-            step = Step(request, turn, tool, arguments, batch or None, direct)
-            step.reads_only = reads_only(tool, arguments)
-            steps.append(step)
-            pending.append(step)
-        elif kind == 'tool_result' and pending:
-            step = pending.pop(0)
-            if isinstance(value, dict):
-                step.recorded_error = bool(value.get('is_error'))
-                step.recorded_result = str(value.get('content', ''))[:4000]
-    for step in steps:
-        step.turn_undone = step.turn in undone
+    """Every operation of the chat log *path* (or debug zip), in order, with the request
+    it answered and what it gave then."""
+    P, adapter = _sidecar()
+    steps = []
+    for g in P.load_steps(path, adapter):
+        s = Step.from_call(g.request, g.turn, g.call, g.arguments)
+        s.role, s.reads_only = g.role, g.role in ('read', 'skip')
+        s.recorded_error, s.recorded_result, s.turn_undone = g.recorded_error, g.recorded_result, g.turn_undone
+        steps.append(s)
     return steps
+
+
+def reads_only(tool: str, arguments: dict | None = None) -> bool:
+    P, adapter = _sidecar()
+    return adapter.procedure_role(tool, arguments or {}) in ('read', 'skip')
 
 
 def procedure_steps(steps) -> list[Step]:
     """The steps a procedure keeps: the ones that changed the figure and stayed (not the
     reads, not the failed calls, not a reply undone with its Undo button, not an edit the
     chat undid itself with undo_redo, which a redo puts back)."""
-    kept, undone = [], []
-    for s in steps:
-        if s.tool == 'undo_redo':
-            if s.recorded_error:
-                continue
-            if str(s.arguments.get('action', 'undo')) == 'redo':
-                if undone:
-                    kept.append(undone.pop())
-            elif kept:
-                undone.append(kept.pop())       # one call (a batch included) = one undo step
-            continue
-        if s.reads_only or s.recorded_error or s.turn_undone:
-            continue
-        kept.append(s)
-        undone.clear()                          # a new edit ends the redo history
-    return kept
+    P, _adapter = _sidecar()
+    return P.kept_steps(steps)
 
 
 def _document(path):
-    """(folder, name) of the figure the chat worked on, from its state, if known."""
-    for event in _events(path):
-        if event.get('kind') == 'host_context' and isinstance(event.get('value'), dict):
-            doc = event['value'].get('document') or {}
-            if doc.get('folder') and doc.get('name'):
-                return doc['folder'], doc['name']
-    return None, None
+    P, _adapter = _sidecar()
+    return P.document_of(path)
 
 
 def _templated(value, folder, name):
-    """A path under the chat's figure folder / with its name, made relative to the
-    figure the procedure runs on: "{folder}", "{name}"."""
-    if isinstance(value, str) and folder and name and (os.sep in value or '/' in value):
-        norm = value.replace('\\', '/')
-        f = folder.replace('\\', '/')
-        if norm.lower().startswith(f.lower() + '/'):
-            rest = norm[len(f) + 1:]
+    """A path under the chat's figure folder / with its name: "{folder}", "{name}"."""
+    if isinstance(value, str) and folder and name and ('/' in value or '\\' in value):
+        norm, base = value.replace('\\', '/'), folder.replace('\\', '/').rstrip('/')
+        if norm.lower().startswith(base.lower() + '/'):
+            rest = norm[len(base) + 1:]
             stem, dot, ext = rest.rpartition('.')
             if dot and stem == name:
                 rest = '{name}.' + ext
@@ -188,31 +144,36 @@ def _templated(value, folder, name):
 
 
 def save_procedure(steps, out_path, name=None, source=None) -> str:
-    """Write *steps* (from load_steps / procedure_steps) as a procedure file."""
+    """Write *steps* as a procedure file, in the chat sidecar's format (each step one MCP
+    call), so its Procedures menu runs it too."""
     folder, figure = _document(source) if source else (None, None)
-    data = {'pyfigures_procedure': PROCEDURE_VERSION, 'name': name or Path(out_path).stem,
+    data = {'procedure': PROCEDURE_VERSION, 'application': 'PyFigures', 'name': name or Path(out_path).stem,
             'source_chat': str(source) if source else None,
-            'note': 'Run with Tools > Run a procedure…, MCP run_procedure, recipe procedure:, or '
-                    'python -m pyfigures.assistant.chat_replay run THIS.json figure.pyf. Panels are named '
-                    'by their letters; {folder} / {name} are the folder and name of the figure it runs on.',
-            'steps': [{'request': s.request, 'tool': s.tool,
-                       'arguments': _templated(s.arguments, folder, figure),
-                       **({'batch': _templated(s.batch, folder, figure)} if s.batch else {}),
-                       **({'direct': True} if s.direct else {})} for s in steps]}
+            'note': 'Run with Tools > Run a procedure…, the chat\'s Procedures menu, MCP run_procedure, '
+                    'recipe procedure:, or python -m pyfigures.assistant.chat_replay run THIS.json figure.pyf. '
+                    'Panels are named by their letters; {folder} / {name} are the folder and name of the '
+                    'figure it runs on.',
+            'steps': [{'request': s.request, 'call': s.call()[0],
+                       'arguments': _templated(s.call()[1], folder, figure)} for s in steps]}
     Path(out_path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
     return str(out_path)
 
 
 def load_procedure(path) -> list[Step]:
+    """The steps of a procedure file: the sidecar's format ("call" per step) or the first
+    PyFigures one ("tool", "arguments", "batch")."""
     data = json.loads(Path(path).read_text(encoding='utf-8'))
-    if not isinstance(data, dict) or 'steps' not in data:
+    if not isinstance(data, dict) or not isinstance(data.get('steps'), list):
         raise ValueError(f'{Path(path).name} is not a PyFigures procedure (no "steps")')
     steps = []
     for k, s in enumerate(data['steps'], 1):
-        if not isinstance(s, dict) or not s.get('tool'):
-            raise ValueError(f'step {k} of {Path(path).name} has no "tool"')
-        steps.append(Step(s.get('request', ''), k, s['tool'], dict(s.get('arguments') or {}),
-                          s.get('batch') or None, bool(s.get('direct'))))
+        if isinstance(s, dict) and s.get('call'):
+            steps.append(Step.from_call(s.get('request', ''), k, s['call'], dict(s.get('arguments') or {})))
+        elif isinstance(s, dict) and s.get('tool'):
+            steps.append(Step(s.get('request', ''), k, s['tool'], dict(s.get('arguments') or {}),
+                              s.get('batch') or None, bool(s.get('direct'))))
+        else:
+            raise ValueError(f'step {k} of {Path(path).name} names no operation ("call")')
     return steps
 
 
