@@ -658,17 +658,26 @@ class Session:
     def original_tool(self, args):
         """Invoke any original figure tool on a retained live-session workspace."""
         import shutil
-        from .original_registry import registry, live_parameter, encode
+        from .original_registry import registry, live_parameter, encode, batchable_original
         from .existing_tools import checked
         name = args['tool']
         parameter = live_parameter(name)
         if not parameter:
             raise ValueError('This tool requires its original explicit paths')
-        supplied = dict(args.get('arguments', {}))
         from .gui_selection import resolve_panel_arguments
-        supplied = resolve_panel_arguments(self.window, supplied)
-        supplied = resolve_relative_sources(self.window, supplied, skip=parameter)
-        supplied[parameter] = 'live'
+        batch = args.get('batch')
+        if batch is not None and not batchable_original(name):
+            raise ValueError(f'{name} cannot run as a batch; call it once per item')
+
+        def resolved(arguments):
+            out = resolve_panel_arguments(self.window, dict(arguments))
+            out = resolve_relative_sources(self.window, out, skip=parameter)
+            out[parameter] = 'live'
+            return out
+        # a batch: every item edits the same snapshot, then ONE reload (2026-11-13: 26
+        # recolours took a save + reload each). Panel refs are resolved before any edit.
+        batch_supplied = [resolved(item) for item in batch] if batch is not None else None
+        supplied = batch_supplied[0] if batch_supplied else resolved(args.get('arguments', {}))
         w = self.window
         from .partner_gui import state as letter_state, panels as image_panels
         letters_before = letter_state(w)
@@ -708,7 +717,16 @@ class Session:
             w._copy_sidecars(str(path.with_suffix('')), str(output_snapshot.with_suffix('')))
             supplied[parameter] = str(output_snapshot)
         try:
-            response = checked(fn(**supplied))
+            if batch_supplied is not None:
+                response = []
+                for item in batch_supplied:
+                    item[parameter] = str(path)
+                    try:
+                        response.append({'ok': True, 'result': checked(fn(**item))})
+                    except Exception as exc:      # the file tools save atomically: earlier items stay
+                        response.append({'ok': False, 'error': str(exc)})
+            else:
+                response = checked(fn(**supplied))
             # Some original layout tools deserialize/reserialize with the original
             # classes, dropping extension metadata. Retain policies only for panels
             # whose filename/script/letter text still identify an exact match.

@@ -22,6 +22,33 @@ def live_parameter(name):
     return None
 
 
+# Tools the live session runs as one batch on one snapshot with a single reload. Left out:
+# reads, renders/exports, and the tools whose GUI follow-up checks look at one call's
+# arguments (letters, captions, figure size, moved images).
+_NOT_BATCHABLE = {'set_figure_properties', 'set_label_background', 'set_annotation_text', 'add_corner_labels',
+                  'move_image', 'resize_figure', 'set_figure_caption', 'render_preview', 'simulate_color_blindness',
+                  'copy_style'}
+
+# A batch collects the arguments each item would send, instead of sending them one by one.
+import contextvars
+_COLLECT = contextvars.ContextVar('pyfigures_original_batch', default=None)
+
+
+def batchable_original(name):
+    return (name in registry() and live_parameter(name) == 'pyf_path' and name not in _NOT_BATCHABLE
+            and not name.startswith(('export_', 'get_', 'list_', 'describe_', 'inspect_', 'check_', 'preview_', 'render_')))
+
+
+def collect_batch():
+    """Start collecting: returns (list the wrapped calls fill, token for stop_collecting)."""
+    items = []
+    return items, _COLLECT.set(items)
+
+
+def stop_collecting(token):
+    _COLLECT.reset(token)
+
+
 def encode(value):
     if isinstance(value, Image):
         return {'__live_mcp_image__': value.to_image_content().model_dump()}
@@ -100,6 +127,10 @@ def register_all(server, send):
                     raise ValueError('Supply text_index from get_annotations (text tools count texts, not all annotations)')
                 target = kwargs.get(parameter, 'live') if parameter else None
                 if parameter and target == 'live':
+                    collector = _COLLECT.get()
+                    if collector is not None and batchable_original(name):
+                        collector.append(kwargs)          # sent with the others as one batch
+                        return {'__collected__': True}
                     for attempt in range(2):
                         state = send('inspect')
                         try:

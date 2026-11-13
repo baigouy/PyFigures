@@ -200,6 +200,8 @@ def build_server(full_server, send):
         'To see a panel\'s own pixels use preview_panel(panel_ref), never preview_figure (the whole figure, each panel small): '
         'coordinates for crops, ROIs and arrows are read off its source-pixel rulers, region=[x0,y0,x1,y1] zooms, and it draws '
         'the panel\'s ROIs to check where they landed. "ROIs over every cell / each nucleus / all the embryos", "how many cells": '
+        'SAME OPERATION ON MANY ITEMS (recolour 26 ROIs, add 20 polygons, move 10 arrows): ONE use_pyfigures_tool call with '
+        'arguments = the shared fields and batch = [{fields of item 1}, {item 2}, ...], never one call per item (each call is a slow step). '
         'detect_objects(panel_ref) boxes them all in one call (dry_run=true only counts; for nuclei inside stained cells pass '
         'the nuclei channel: its number, counted from 1, or the colour it is shown in from channel_colours, e.g. "blue", '
         'as all channels together outline whole cells); then preview_panel to check and say '
@@ -463,9 +465,97 @@ def build_server(full_server, send):
                 'next_offset': offset + len(found) if offset + len(found) < len(ranked) else None,
                 'tools': found}
 
+    # The same operation called again and again, one model step each (2026-11-13: 26
+    # add_roi_polygon then 26 set_roi_properties, ~4 s per step, the 32-step limit hit):
+    # batch runs them all in one call, and a repeated call is told to batch the rest.
+    repeats = {'key': None, 'count': 0}
+    BATCH_LIMIT = 400
+
+    def _short(value, limit=160):
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+        return text if len(text) <= limit else text[:limit] + '…'
+
     @server.tool(structured_output=False)
-    async def use_pyfigures_tool(tool_name: str, arguments: dict) -> object:
-        """Execute a discovered original PyFigures operation or live convenience operation. Pass its exact name and arguments matching the schema from find_pyfigures_tools. Omit pyf_path for the open figure. Session/revision/request fields for prototype operations may be omitted: filled automatically. Errors are returned as MCP tool errors; images remain image content."""
+    async def use_pyfigures_tool(tool_name: str, arguments: dict, batch: list[dict] | None = None) -> object:
+        """Execute a discovered original PyFigures operation or live convenience operation. Pass its exact name and arguments matching the schema from find_pyfigures_tools. Omit pyf_path for the open figure. Session/revision/request fields for prototype operations may be omitted: filled automatically. Errors are returned as MCP tool errors; images remain image content.
+        SAME OPERATION ON MANY ITEMS (recolour 26 ROIs, add 20 polygons, move 10 arrows, set 6 panels): ONE call, never one call per item. arguments = the fields shared by all, batch = [{the fields of item 1}, {item 2}, ...]; each item is merged over arguments and run in order. Example: tool_name=set_roi_properties, arguments={panel_ref: "e", color: "red"}, batch=[{annotation_index: 1}, {annotation_index: 2}, ...]."""
+        if batch:
+            if not isinstance(batch, list) or not all(isinstance(item, dict) for item in batch):
+                raise ValueError('batch is a list of argument objects, e.g. [{"annotation_index": 1}, {"annotation_index": 2}]')
+            if len(batch) > BATCH_LIMIT:
+                raise ValueError(f'batch holds at most {BATCH_LIMIT} items; split it in two calls')
+            if tool_name.startswith(('preview_', 'render_', 'export_')):
+                raise ValueError(f'{tool_name} returns images or files: call it once, not in a batch')
+            repeats.update(key=None, count=0)
+            done, errors, results = 0, [], []
+            outcomes = []           # (item number, item, result or exception)
+            from .original_registry import batchable_original, collect_batch, stop_collecting, decode
+            if batchable_original(tool_name):
+                # figure edits: collected, then run by the open figure as ONE batch and one reload
+                collected, token = collect_batch()
+                numbers = []
+                try:
+                    for number, item in enumerate(batch, 1):
+                        size = len(collected)
+                        try:
+                            await _run_one(tool_name, {**arguments, **item})
+                        except Exception as exc:
+                            outcomes.append((number, item, exc))
+                            continue
+                        if len(collected) > size:
+                            numbers.append((number, item))
+                finally:
+                    stop_collecting(token)
+                if collected:
+                    reply = None
+                    for attempt in range(2):
+                        state = send('inspect')
+                        try:
+                            reply = send('original_tool', state['session_id'], state['revision'],
+                                         {'tool': tool_name, 'arguments': collected[0], 'batch': collected})
+                            break
+                        except ValueError as exc:
+                            if attempt or getattr(exc, 'code', '') not in ('REVISION_CONFLICT', 'SESSION_CHANGED'):
+                                raise
+                    for (number, item), each in zip(numbers, decode(reply['tool_result'])):
+                        outcomes.append((number, item, each.get('result') if each.get('ok') else ValueError(each.get('error'))))
+                    outcomes.sort(key=lambda o: o[0])
+            else:
+                for number, item in enumerate(batch, 1):
+                    try:
+                        outcomes.append((number, item, await _run_one(tool_name, {**arguments, **item})))
+                    except Exception as exc:
+                        outcomes.append((number, item, exc))
+            for number, item, out in outcomes:
+                if isinstance(out, Exception):
+                    errors.append({'item': number, 'arguments': item, 'error': _short(str(out), 300)})
+                    continue
+                text = out if isinstance(out, str) else json.dumps(out, ensure_ascii=False, default=str)
+                if text.lstrip().startswith('ERROR'):
+                    errors.append({'item': number, 'arguments': item, 'error': _short(text, 300)})
+                    continue
+                done += 1
+                if len(results) < 3:
+                    results.append({'item': number, 'result': _short(out)})
+            summary = f'{tool_name}: {done} of {len(batch)} item(s) done in one call'
+            if errors:
+                summary += f'; {len(errors)} failed (see errors, the others are done: do not redo them)'
+            return {'result': summary, 'batch_done': done, 'batch_total': len(batch),
+                    'document_changed': done > 0, 'first_results': results, 'errors': errors[:20]}
+        out = await _run_one(tool_name, arguments)
+        key = (tool_name, tuple(sorted(arguments)))
+        repeats['count'] = repeats['count'] + 1 if repeats['key'] == key else 1
+        repeats['key'] = key
+        if repeats['count'] >= 2 and not tool_name.startswith(('preview_', 'inspect_', 'get_', 'list_')):
+            tip = (f'TIP: this is call #{repeats["count"]} of {tool_name} in a row. Do ALL the remaining items in ONE '
+                   f'use_pyfigures_tool call: arguments = the shared fields, batch = [{{fields of item}}, ...].')
+            if isinstance(out, dict):
+                out = {**out, 'tip': tip}
+            elif isinstance(out, str):
+                out = out + '\n\n' + tip
+        return out
+
+    async def _run_one(tool_name, arguments):
         if tool_name not in available:
             raise ValueError('Unknown operation; search with find_pyfigures_tools')
         tool = available[tool_name]
