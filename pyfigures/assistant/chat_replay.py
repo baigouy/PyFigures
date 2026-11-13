@@ -208,6 +208,31 @@ def _fill(value, folder, name):
     return value
 
 
+REDACTED = '[REDACTED]'
+
+
+def _current_token(arguments):
+    """An annotation edit replayed from a chat log: the log redacts every "token" key, so
+    the object's stale-check token (a hash of what the model had inspected, no secret) is
+    read again from the object at that index now. Any other arguments are unchanged."""
+    if not isinstance(arguments, dict) or arguments.get('token') != REDACTED \
+            or not isinstance(arguments.get('annotation_index'), int):
+        return arguments
+    from .live_mcp import call_live
+    index, offset = arguments['annotation_index'], 0
+    while offset is not None:
+        found = call_live('inspect_annotation_objects', dict(panel_ref=arguments.get('panel_ref'), offset=offset,
+                                                             limit=24, include_panel_letters=True))
+        if not isinstance(found, dict):
+            break
+        pool = found.get('editor_draft_objects') if found.get('edit_target') == 'editor_draft' else found.get('objects')
+        for obj in pool or []:
+            if obj.get('annotation_index') == index and obj.get('token'):
+                return {**arguments, 'token': obj['token']}
+        offset = found.get('next_offset') if found.get('edit_target') != 'editor_draft' else None
+    return arguments
+
+
 class Runner:
     """Runs steps on the figure shared by the live session (the open window), through
     the same dispatcher the chat uses. Call run() from a thread other than the Qt one:
@@ -222,8 +247,8 @@ class Runner:
     def run(self, step: Step):
         """The result of *step* (text or JSON), or raises its error."""
         folder, name = self.document
-        arguments = _fill(step.arguments, folder, name)
-        batch = _fill(step.batch, folder, name) if step.batch else None
+        arguments = _current_token(_fill(step.arguments, folder, name))
+        batch = [_current_token(b) for b in _fill(step.batch, folder, name)] if step.batch else None
         if step.direct:
             tool = self.tools.get(step.tool)
             if tool is None:

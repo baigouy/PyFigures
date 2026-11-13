@@ -25,6 +25,11 @@ def resolve_panel(window, ref):
         return numbered[2]
     matches = [p for gp, ix, p in entries
                if '/'.join(map(str, (*gp, ix))) == ref or any(a.getPlainText() == ref for a in letters(p))]
+    if not matches and isinstance(ref, str) and ref.strip():
+        # "crop e" on a figure lettered A, B, C…: the letter in the other case, when only
+        # one panel has it
+        wanted = ref.strip().casefold()
+        matches = [p for gp, ix, p in entries if any(a.getPlainText().strip().casefold() == wanted for a in letters(p))]
     if len(matches) != 1:
         raise ValueError('CLARIFICATION_REQUIRED: Panel reference must identify exactly one current image')
     return matches[0]

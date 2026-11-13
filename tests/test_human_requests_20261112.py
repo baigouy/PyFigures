@@ -496,6 +496,21 @@ def test_a_panel_number_names_the_panel(qapp, gui, runtime, tmp_path):  # noqa: 
     g.swap_panels("#1", "#2")
 
 
+def test_a_letter_in_the_other_case_names_the_panel(qapp, gui, runtime, tmp_path):  # noqa: F811
+    """"crop e" on a figure lettered A, B… (recorded replay of every chat, 2026-11-13:
+    330 calls refused once a chat had switched the letters to capitals)."""
+    from pyfigures.assistant.gui_selection import resolve_panel
+    g, found, texts = _lettered(gui, tmp_path)
+    g.edit_panel_letters(action="renumber", scope="all", start_letter="A")
+    assert texts() == [["A"], ["B"]]
+    assert resolve_panel(g, "b") is resolve_panel(g, "B") is found[1]
+    assert resolve_panel(g, " a ") is found[0]
+    g.edit_panel_letters(action="style", scope="panels", panel_ids=["0/1"], text="a")
+    assert resolve_panel(g, "a") is found[1]                 # the exact letter wins
+    with pytest.raises(ValueError, match="exactly one"):
+        resolve_panel(g, "c")
+
+
 def test_selected_panels_show_their_number_stack_and_changed_channels(qapp, gui, runtime, tmp_path):  # noqa: F811
     """Marks on the selected panels (the user's idea, 2026-11-12): the number the chat
     accepts, the stack size, and 'ch' when colours differ from the file. Screen only."""
