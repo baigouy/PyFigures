@@ -618,11 +618,12 @@ class VectorialDrawPane2(QWidget):
             painter.restore()
         box = self._single_selected_box()
         if box is not None and self.crop_controller is None:
-            # resize handles on the corners and edge middles
+            # resize handles on the corners and edge middles: hollow, so the shape
+            # stays visible under them (a tiny ROI disappeared under white squares)
             painter.save()
             painter.setOpacity(1)
-            painter.setPen(QPen(QColor(0xFF0000), 1.5 / max(self.scale, 1e-6)))
-            painter.setBrush(QColor(255, 255, 255))
+            painter.setPen(QPen(QColor(0xFF0000), 1.2 / max(self.scale, 1e-6)))
+            painter.setBrush(QColor(255, 255, 255, 60))
             for r in EI.box_handle_rects(box, self.scale):
                 painter.drawRect(r)
             painter.restore()
@@ -634,7 +635,8 @@ class VectorialDrawPane2(QWidget):
     def draw_sel(self, sel, painter, col=QColor(0xFF0000)):
         if sel is not None and self.shapes:
             pen = QPen(col)
-            pen.setWidthF(3)  # makes the sel much more visible --> so really use that!!!
+            pen.setWidthF(2)  # makes the sel much more visible --> so really use that!!!
+            pen.setCosmetic(True)   # 2 screen pixels at any zoom: a thick frame hid tiny ROIs
             pen.setStyle(Qt.DashDotLine)
             painter.setPen(pen)  # draw red transparent selection
             painter.setOpacity(1)

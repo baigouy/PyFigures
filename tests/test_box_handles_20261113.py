@@ -33,9 +33,23 @@ def test_the_eight_handles_and_what_they_grab():
     class Box(QRectF):
         pass
     box = Box(r)
-    assert EI.box_handle_at(box, QPointF(108, 69), 1.0) == 'bottom right'
-    assert EI.box_handle_at(box, QPointF(11, 45), 1.0) == 'left'
-    assert EI.box_handle_at(box, QPointF(60, 45), 1.0) is None          # the inside still moves it
+    assert EI.box_handle_at(box, QPointF(108, 69), 2.0) == 'bottom right'
+    assert EI.box_handle_at(box, QPointF(11, 45), 2.0) == 'left'
+    assert EI.box_handle_at(box, QPointF(60, 45), 2.0) is None          # the inside still moves it
+
+
+def test_a_tiny_shape_keeps_its_middle_free_and_visible():
+    """A tiny ROI vanished under its eight opaque squares (user, 2026-11-13): small
+    shapes get 4 smaller corner handles and a smaller grab zone."""
+    class Box(QRectF):
+        pass
+    tiny = Box(QRectF(100, 100, 12, 12))
+    rects = EI.box_handle_rects(tiny, 1.0)
+    assert len(rects) == 4 and all(r.width() <= 4 for r in rects)
+    assert EI.box_handle_at(tiny, QPointF(106, 106), 1.0) is None      # the middle moves it
+    assert EI.box_handle_at(tiny, QPointF(112, 112), 1.0) == 'bottom right'
+    # zoomed in, the same shape is big on screen: all 8 handles again
+    assert len(EI.box_handle_rects(tiny, 8.0)) == 8
 
 
 def test_resized_box_keeps_the_opposite_side():

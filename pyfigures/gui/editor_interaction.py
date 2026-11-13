@@ -126,25 +126,40 @@ def set_box_rect(shape, rect):
         shape.setRect(QRectF(rect))
 
 
-def box_handle_points(rect):
-    """{handle name: point} for the 8 handles of *rect*."""
+def box_handle_points(rect, scale=None):
+    """{handle name: point} for the handles of *rect*: 8, or only the 4 corners when
+    the shape is small on screen (at zoom *scale*), so the handles do not cover it."""
     c = rect.center()
-    return {'top left': rect.topLeft(), 'top': QPointF(c.x(), rect.top()), 'top right': rect.topRight(),
-            'right': QPointF(rect.right(), c.y()), 'bottom right': rect.bottomRight(),
-            'bottom': QPointF(c.x(), rect.bottom()), 'bottom left': rect.bottomLeft(),
-            'left': QPointF(rect.left(), c.y())}
+    points = {'top left': rect.topLeft(), 'top': QPointF(c.x(), rect.top()), 'top right': rect.topRight(),
+              'right': QPointF(rect.right(), c.y()), 'bottom right': rect.bottomRight(),
+              'bottom': QPointF(c.x(), rect.bottom()), 'bottom left': rect.bottomLeft(),
+              'left': QPointF(rect.left(), c.y())}
+    if scale is not None and min(rect.width(), rect.height()) * scale < 8 * HANDLE_PX:
+        points = {k: v for k, v in points.items() if ' ' in k}
+    return points
+
+
+def _box_handle_px(rect, scale):
+    """Handle half-size in screen pixels: smaller on a small shape (a tiny ROI was
+    hidden under its eight squares, user 2026-11-13)."""
+    side = min(rect.width(), rect.height()) * max(scale, 1e-6)
+    return max(2.0, min(HANDLE_PX * 0.8, side / 6))
 
 
 def box_handle_rects(shape, scale):
-    h = HANDLE_PX * 0.8 / max(scale, 1e-6)
-    return [QRectF(p.x() - h, p.y() - h, 2 * h, 2 * h) for p in box_handle_points(box_rect(shape)).values()]
+    rect = box_rect(shape)
+    h = _box_handle_px(rect, scale) / max(scale, 1e-6)
+    return [QRectF(p.x() - h, p.y() - h, 2 * h, 2 * h) for p in box_handle_points(rect, scale).values()]
 
 
 def box_handle_at(shape, point, scale):
-    """The handle of *shape* under *point* (image coordinates), or None."""
-    tol = HANDLE_PX / max(scale, 1e-6)
+    """The handle of *shape* under *point* (image coordinates), or None. On a small
+    shape the grab zone shrinks too, so its middle still moves it."""
+    rect = box_rect(shape)
+    side = min(rect.width(), rect.height()) * max(scale, 1e-6)
+    tol = min(HANDLE_PX, max(2.0, side / 4)) / max(scale, 1e-6)
     best, dist = None, tol
-    for name, p in box_handle_points(box_rect(shape)).items():
+    for name, p in box_handle_points(rect, scale).items():
         d = QLineF(p, point).length()
         if d <= dist:
             best, dist = name, d
