@@ -716,6 +716,7 @@ def detect_objects(
     min_area: int | None = None,
     max_area: int | None = None,
     split_touching: bool = True,
+    channel: str = "all",
     padding: int = 3,
     color: str | int = "yellow",
     stroke: float = 2.0,
@@ -740,6 +741,9 @@ def detect_objects(
     *min_area* / *max_area*: object size limits in pixels (default 0.02 % / 25 %
     of the searched area): raise min_area to skip debris.
     *split_touching*: split touching round objects (false keeps a clump whole).
+    *channel*: "all" (the colours averaged) or the colour the objects are shown
+    in: "red", "green", "blue" — nuclei shown blue inside green / red cells
+    need channel="blue" (all colours together outline the whole cells).
     *padding*: pixels added around each object.
     *dry_run*: true only reports what was found (count, boxes); nothing is added.
     *max_objects*: refuse to add more ROIs than this (likely a bad threshold).
@@ -773,7 +777,8 @@ def detect_objects(
     h, w = rgb.shape[:2]
     try:
         objects, info = detect(rgb, visible_region(panel_crop(panel), w, h), polarity=polarity,
-                               min_area=min_area, max_area=max_area, split_touching=split_touching)
+                               min_area=min_area, max_area=max_area, split_touching=split_touching,
+                               channel=channel)
     except ValueError as e:
         return f"ERROR: {e}"
     boxes = [dict(zip(("x", "y", "width", "height"), padded(o, max(0, int(padding)), w, h))) for o in objects]

@@ -111,7 +111,7 @@ _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "corner_labels", "rois", "connectors", "inset", "zoom", "brackets", "properties",
                "page", "detect_objects"}
 # detect_objects: true, or these options (an ROI around every object, by thresholding)
-_DETECT_KEYS = {"shape", "polarity", "min_area", "max_area", "split", "padding", "color", "stroke"}
+_DETECT_KEYS = {"shape", "polarity", "min_area", "max_area", "split", "padding", "color", "stroke", "channel"}
 # a connector joins two of the panel's rois (numbered from 1) and stays attached to them
 _CONNECTOR_KEYS = {"from", "to", "from_site", "to_site", "color", "stroke", "arrow"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
@@ -609,6 +609,8 @@ def _check_extras(opts, where, base):
             raise RecipeError(f"{where}: detect_objects shape must be rect or ellipse")
         if detect.get("polarity", "auto") not in ("auto", "dark", "bright"):
             raise RecipeError(f"{where}: detect_objects polarity must be auto, dark or bright")
+        if detect.get("channel", "all") not in ("all", "red", "green", "blue"):
+            raise RecipeError(f"{where}: detect_objects channel must be all, red, green or blue")
     if "kymograph" in opts:
         _check_mapping(opts["kymograph"], _KYMO_KEYS, {"line"}, where, "kymograph")
         _check_point(opts["kymograph"]["line"], 4, where, "kymograph 'line'")
@@ -1501,8 +1503,8 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
     detect = opts.get("detect_objects")
     if detect:
         d = detect if isinstance(detect, dict) else {}
-        kw = {key: d[key] for key in ("shape", "polarity", "min_area", "max_area", "padding", "color", "stroke")
-              if key in d}
+        kw = {key: d[key] for key in ("shape", "polarity", "min_area", "max_area", "padding", "color", "stroke",
+                                      "channel") if key in d}
         if "split" in d:
             kw["split_touching"] = bool(d["split"])
         raw = M.detect_objects(out, gp, i, **kw)

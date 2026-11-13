@@ -45,8 +45,24 @@ def _split_touching(mask, labels, min_area):
     return split
 
 
+CHANNELS = {'red': 0, 'green': 1, 'blue': 2}
+
+
+def channel_plane(rgb, channel='all'):
+    """The plane to threshold: the mean of the colours ('all'), or one colour as shown
+    ('red', 'green', 'blue'): blue nuclei inside green/red cells (2026-11-13: the mean
+    outlined whole cells)."""
+    import numpy as np
+    image = np.asarray(rgb, dtype=np.float32)
+    if image.ndim == 2 or channel in (None, 'all'):
+        return image.mean(axis=2) if image.ndim == 3 else image
+    if channel not in CHANNELS:
+        raise ValueError("channel is 'all', 'red', 'green' or 'blue'")
+    return image[..., CHANNELS[channel]]
+
+
 def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smooth=1.5,
-           exclude_border=True, max_elongation=5.0, split_touching=True):
+           exclude_border=True, max_elongation=5.0, split_touching=True, channel='all'):
     """Objects of *rgb* (h, w, 3 or h, w) inside *region* (x0, y0, x1, y1; None =
     whole image) as dicts x, y, width, height, area, in image pixels, top to
     bottom then left to right. *polarity*: 'auto', 'dark' (darker than the
@@ -60,8 +76,7 @@ def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smoo
 
     if polarity not in ('auto', 'dark', 'bright'):
         raise ValueError("polarity is 'auto', 'dark' or 'bright'")
-    image = np.asarray(rgb, dtype=np.float32)
-    gray = image.mean(axis=2) if image.ndim == 3 else image
+    gray = channel_plane(rgb, channel)
     h, w = gray.shape
     x0, y0, x1, y1 = region if region is not None else (0, 0, w, h)
     x0, y0 = max(0, int(x0)), max(0, int(y0))
@@ -103,7 +118,7 @@ def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smoo
             continue
         objects.append({'x': c0 + x0, 'y': r0 + y0, 'width': c1 - c0, 'height': r1 - r0, 'area': int(prop.area)})
     objects.sort(key=lambda o: (o['y'], o['x']))
-    return objects, {'polarity': polarity, 'threshold': round(threshold, 2), 'min_area': min_area,
+    return objects, {'channel': channel or 'all', 'polarity': polarity, 'threshold': round(threshold, 2), 'min_area': min_area,
                      'max_area': max_area, 'region': [x0, y0, x1, y1],
                      'dropped': {k: v for k, v in dropped.items() if v}}
 

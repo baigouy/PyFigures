@@ -60,6 +60,26 @@ def test_bright_objects_ellipses_dry_run_and_touching(tmp_path):
     assert out['added'] == 5 and {a.tag for a in _rois(p)} == {'Ellipse2D'}
 
 
+def test_nuclei_shown_in_blue_inside_green_cells(tmp_path):
+    """'segment nuclei in d' (HeLa cells, 2026-11-13): all colours together outlined the
+    whole cells; channel='blue' gives the nuclei."""
+    yy, xx = np.mgrid[:200, :200]
+    rgb = np.zeros((200, 200, 3), np.uint8)
+    for cx, cy in ((60, 60), (140, 130)):
+        rgb[(xx - cx) ** 2 + (yy - cy) ** 2 <= 45 ** 2, 1] = 200          # green cell
+        rgb[(xx - cx) ** 2 + (yy - cy) ** 2 <= 15 ** 2, 2] = 220          # blue nucleus
+    Image.fromarray(rgb).save(tmp_path / 'hela.png')
+    p = str(tmp_path / 'hela.pyf')
+    create_figure(p, mode='groups', num_groups=1)
+    add_image(p, [0], str(tmp_path / 'hela.png'))
+    cells = json.loads(detect_objects(p, [0], 0, dry_run=True, padding=0))
+    nuclei = json.loads(detect_objects(p, [0], 0, dry_run=True, padding=0, channel='blue'))
+    assert all(85 <= b['width'] <= 93 for b in cells['boxes']) and len(cells['boxes']) == 2
+    assert all(27 <= b['width'] <= 33 for b in nuclei['boxes']) and len(nuclei['boxes']) == 2
+    assert nuclei['channel'] == 'blue'
+    assert detect_objects(p, [0], 0, channel='purple').startswith('ERROR')
+
+
 def test_only_the_visible_part_is_searched(tmp_path):
     p = _figure(tmp_path)
     transform_image(p, [0], 0, crop_right=100)                  # keeps x 0-100

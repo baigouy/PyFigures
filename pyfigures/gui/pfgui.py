@@ -5346,19 +5346,23 @@ class EZFIG_GUI(QMainWindow):
         min_area.setSpecialValueText('automatic')
         min_area.setSuffix(' px²')
         min_area.setToolTip('Smaller pieces are ignored (debris); automatic = 0.02 % of the image')
+        channel = QComboBox(frame)
+        channel.addItems(['all colours', 'red', 'green', 'blue'])
+        channel.setToolTip('The colour the objects are shown in: blue for nuclei inside green or red cells')
         split = QCheckBox('Split touching objects', frame)
         split.setChecked(True)
         colour = QComboBox(frame)
         colour.addItems(['yellow', 'white', 'cyan', 'magenta', 'red', 'green', 'black'])
         for row, (text, widget) in enumerate((('ROI shape:', shape), ('Objects are:', polarity),
+                                              ('Objects shown in:', channel),
                                               ('Smallest object:', min_area), ('Colour:', colour))):
             grid.addWidget(QLabel(text, frame), row, 0)
             grid.addWidget(widget, row, 1)
-        grid.addWidget(split, 4, 0, 1, 2)
+        grid.addWidget(split, 5, 0, 1, 2)
         grid.addWidget(QLabel('Finds clear objects on a plain background (automatic threshold). '
                               'Only the visible (cropped) part is searched; check the ROIs and '
-                              'remove or move the odd ones in the panel editor.', frame), 5, 0, 1, 2)
-        grid.itemAtPosition(5, 0).widget().setWordWrap(True)
+                              'remove or move the odd ones in the panel editor.', frame), 6, 0, 1, 2)
+        grid.itemAtPosition(6, 0).widget().setWordWrap(True)
         values = answers
         if values is None:
             cd = CustomDialog(title="Detect objects", message="An ROI around each object of the selected image.",
@@ -5368,6 +5372,7 @@ class EZFIG_GUI(QMainWindow):
             values = dict(shape=('rect', 'ellipse')[shape.currentIndex()],
                           polarity=('auto', 'dark', 'bright')[polarity.currentIndex()],
                           min_area=min_area.value() or None, split_touching=split.isChecked(),
+                          channel=('all', 'red', 'green', 'blue')[channel.currentIndex()],
                           color=colour.currentText())
         import json
         from pyfigures.mcp_server import detect_objects
