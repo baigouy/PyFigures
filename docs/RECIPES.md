@@ -1412,6 +1412,7 @@ server, and edited afterwards in either.
 | `inset` | Edit Image → Rect ROI → Inset | `add_inset` |
 | `zoom` | Annotations → Add zoom callout to selected panel… | `add_zoom_callout` |
 | `detect_objects` | Annotations → Detect objects (ROIs) in selected panel… | `detect_objects` |
+| — (a recipe draws only the ROIs it lists) | Annotations → Remove ROIs…; panel editor **Remove all ROIs** | `remove_rois` |
 | `rotate`, `flip` | Edit Image → Rotate + Crop | `transform_image` |
 | `channels`, `z_range`, `display_range` | Edit Image → File Infos + Scale | `configure_image` |
 | `merge` | Insert → Multi-channel merge… | `add_channel_merge` |

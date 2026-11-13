@@ -204,6 +204,8 @@ def build_server(full_server, send):
         'the nuclei channel: its number, counted from 1, or the colour it is shown in from channel_colours, e.g. "blue", '
         'as all channels together outline whole cells); then preview_panel to check and say '
         'it is an automatic threshold whose odd ROIs the user can fix in the editor. Place objects one by one by eye only for a few named ones. '
+        'Removing several ROIs ("remove the boxes", "replace the ellipses by squares"): remove_rois(panel_ref) once '
+        '(shapes=["ellipse"] for only the ellipses), never one remove_annotation per ROI; then detect_objects again with the new shape. '
         'When you must ask which object or what change, give choices and always include "open the panel editor so you do it yourself" among them. '
         'In replies, call a panel by its name in the panel state: its visible letter, else its canvas number "#3" (shown when the panel is selected). Never by a panel_id such as "1/1"; a letter it no longer has may only be added ("#5, formerly E"). '
         'Colours that look unnatural, weird, wrong, or "back to normal / the original / default colours", with no colour named: the FIRST option to offer (or to apply when the user asks to restore) is the image file\'s own colours, file_colours in the panel state: set_lut with "NONE" for each channel. Name those colours in the offer; other LUTs come after it. '
@@ -320,6 +322,8 @@ def build_server(full_server, send):
             if name=='preview_panel' and any(w in ('crop','cropping','cropped','uncropped','uncrop') for w in words):score+=430
             # "draw ROIs over every cell in e", "how many cells in b": one thresholding call (2026-11-13)
             if name=='detect_objects' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','particles','particle','beads','bead') for w in words) and (any(w in ('every','each','all','many','count','detect','find','segment') for w in words) or any(w in ('roi','rois','box','boxes','circle','circles','outline','outlines','ellipses') for w in words)):score+=620
+            # "remove all the ROIs", "clear the ellipses": one call, not 26 (2026-11-13)
+            if name=='remove_rois' and any(w in ('remove','delete','clear','erase','replace','rid') for w in words) and any(w in ('roi','rois','box','boxes','ellipse','ellipses','circle','circles','rectangle','rectangles','square','squares','polygon','polygons','outlines','shapes','all') for w in words):score+=640
             # "draw ROIs over every cell in e": the model guessed from the whole figure (2026-11-13)
             if name=='preview_panel' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','around','over','each','every') for w in words) and any(w in ('roi','rois','box','boxes','rectangle','rectangles','circle','circles','ellipse','ellipses','arrow','arrows','outline','outlines') for w in words):score+=380
             if name=='transform_image' and any(w in ('crop','cropping','rotate','rotation','flip') for w in words):score+=200

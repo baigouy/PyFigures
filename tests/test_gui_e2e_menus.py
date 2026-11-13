@@ -353,6 +353,13 @@ def chk_annotation_added(cls):
     return chk
 
 
+def chk_rois_removed(g, b, a, run):
+    pa = next(p for p in a["panels"] if p["name"] == "gray8.tif")
+    pb = next(p for p in b["panels"] if p["name"] == "gray8.tif")
+    assert pb["rois"] and not pa["rois"], (pb["rois"], pa["rois"])
+    assert g._last_roi_removal.startswith("Removed")
+
+
 def chk_rois_detected(g, b, a, run):
     pa = next(p for p in a["panels"] if p["name"] == "cells.png")
     pb = next(p for p in b["panels"] if p["name"] == "cells.png")
@@ -575,6 +582,7 @@ ACTIONS = {
     "menu: Annotations > Add zoom callout to selected panel…": spec(chk_annotation_added("inset"),
                                                                     [("zoom callout", ok)]),
     "menu: Annotations > Add arrow pointing at a feature…": spec(chk_annotation_added("roi"), [("arrow", ok)]),
+    "menu: Annotations > Remove ROIs…": spec(chk_rois_removed, [("Remove ROIs", ok)]),
     "menu: Annotations > Detect objects (ROIs) in selected panel…": spec(chk_rois_detected,
                                                                           [("Detect objects", ok)], sel="cells"),
     "menu: Annotations > Text style (letters, labels, scale bars…)…": spec(chk_texts_bold, [("Text style", _bold_texts)]),

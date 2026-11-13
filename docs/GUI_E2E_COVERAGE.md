@@ -65,6 +65,7 @@ Every action reachable in the figure editor and the tests that run it and check 
 | Annotations > Add scale bar to all panels… | `test_gui_e2e_menus.py::test_menu_action` |
 | Annotations > Add zoom callout to selected panel… | `test_gui_e2e_menus.py::test_menu_action` |
 | Annotations > Detect objects (ROIs) in selected panel… | `test_gui_e2e_menus.py::test_menu_action` |
+| Annotations > Remove ROIs… | `test_gui_e2e_menus.py::test_menu_action` |
 | Annotations > Add arrow pointing at a feature… | `test_gui_e2e_menus.py::test_menu_action` |
 | Annotations > Draw ROIs, text, crop or rotate (double-click a panel)… | `test_gui_e2e_menus.py::test_menu_action` |
 | Annotations > Figure colours… | `test_gui_e2e_menus.py::test_menu_action` |

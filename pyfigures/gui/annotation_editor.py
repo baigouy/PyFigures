@@ -2123,6 +2123,14 @@ class MainWindow(QWidget):
             self.connectSite.addItem('Shape centres', 'center')
             self.connectSite.setToolTip('Where the connector ends attach on the two shapes')
             shapes_toolbox_layout.addWidget(self.connectSite, 12, 2)
+            # every ROI at once (a chat removed 26 ellipses one by one, 2026-11-13)
+            self.removeAllRois = QPushButton('Remove all ROIs')
+            self.removeAllRois.setFocusPolicy(Qt.NoFocus)
+            self.removeAllRois.setToolTip('Remove every rectangle, ellipse and polygon of this image, and the '
+                                          'connectors joining them (Ctrl+Z puts them back). The ROI an inset '
+                                          'shows, lines, arrows, texts and scale bars stay.')
+            self.removeAllRois.clicked.connect(self.remove_all_rois)
+            shapes_toolbox_layout.addWidget(self.removeAllRois, 13, 0, 1, 3)
 
             self.shapes_toolbox.setLayout(shapes_toolbox_layout)
             content_layout.addWidget(self.shapes_toolbox)
@@ -3297,6 +3305,34 @@ class MainWindow(QWidget):
         msg_box.setWindowTitle("Warning")
         msg_box.setText(message)
         msg_box.exec_()
+
+    def remove_all_rois(self):
+        """'Remove all ROIs': every rectangle, square, ellipse, circle and polygon of the
+        image (and the connectors joining them) in one click, Ctrl+Z to undo. The ROI an
+        inset shows stays; lines, arrows, texts, scale bars and insets stay.
+        (MCP: remove_rois; user, 2026-11-13: a chat removed 26 ellipses one by one.)"""
+        from pyfigures.connectors import link_id
+        shapes = list(self.qt_viewer.shapes)
+        area = ('Rectangle2D', 'Rect2D', 'Square2D', 'Ellipse2D', 'Circle2D', 'Polygon2D', 'PolyLine2D', 'Freehand2D')
+        followed = {getattr(s, 'follows_roi', None) for s in shapes if isinstance(s, Image2D)} - {None, ''}
+        gone = [s for s in shapes if type(s).__name__ in area
+                and not (getattr(s, 'link_id', None) and s.link_id in followed)]
+        if not gone:
+            self.show_warning('This image has no rectangle, ellipse or polygon ROI to remove '
+                              '(the ROI an inset shows is kept).')
+            return 0
+        ids = {getattr(s, 'link_id', None) for s in gone} - {None, ''}
+        for s in shapes:
+            if isinstance(s, Line2D) and ids and any(str(getattr(s, k, '') or '').split(':')[0] in ids
+                                                     for k in ('connect_start', 'connect_end')):
+                gone.append(s)
+        self.qt_viewer.push_undo()
+        kept = [s for s in shapes if all(s is not g for g in gone)]
+        self.qt_viewer.selected_shape = []
+        self.update_annotations_list(lst=kept, update=True, repopulate_list=True, repopulate_texts=True)
+        self.qt_viewer.update_size()
+        self.qt_viewer.update()
+        return len(gone)
 
     def connect_two_shapes(self):
         """'Connect two shapes': a sticky connector between the two selected shapes

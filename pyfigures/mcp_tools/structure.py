@@ -1048,6 +1048,111 @@ def remove_annotation(
     return f"Removed {target.tag} (index {annotation_index}) from image {image_index} in {loc}."
 
 
+_ROI_KINDS = {"rect": {"Rectangle2D", "Rect2D", "Square2D"},
+              "ellipse": {"Ellipse2D", "Circle2D"},
+              "polygon": {"Polygon2D", "PolyLine2D", "Freehand2D"},
+              "line": {"Line2D"}}
+
+
+def _plain(value) -> str:
+    if value is None:
+        return ""
+    return str(_decode(value) if isinstance(value, str) else value).strip().strip("'\"")
+
+
+@mcp.tool()
+def remove_rois(
+    pyf_path: str,
+    group_path: list[int] | None = None,
+    image_index: int | None = None,
+    shapes: list[str] | None = None,
+    all_panels: bool = False,
+    keep_inset_rois: bool = True,
+) -> str:
+    """Remove ALL the ROIs of one panel (or of every panel) in one call:
+    "remove all the ROIs of e", "clear the boxes", "replace the ellipses by
+    squares" (remove them, then draw the new ones). Instead of one
+    remove_annotation per ROI (26 calls, and shifting indexes).
+
+    *shapes*: which ROIs: any of "rect" (rectangles, squares), "ellipse"
+    (ellipses, circles, points), "polygon" (polygons, polylines, freehand),
+    "line" (lines, arrows, brackets). Default: rect, ellipse and polygon —
+    lines and arrows stay unless "line" is given.
+    *all_panels*: every panel of the figure (group_path / image_index omitted).
+    *keep_inset_rois*: the ROI an inset shows (its magnified region) stays, so
+    the inset keeps following it; false removes those too.
+    Connectors joining a removed ROI are removed with it. Texts, panel letters,
+    scale bars and insets are never removed here.
+    *group_path* / *image_index*: the panel, as for add_roi_rect.
+    """
+    kinds = shapes or ["rect", "ellipse", "polygon"]
+    bad = [k for k in kinds if k not in _ROI_KINDS]
+    if bad:
+        return f"ERROR: unknown shapes {bad}; use any of {sorted(_ROI_KINDS)}."
+    tags = set().union(*(_ROI_KINDS[k] for k in kinds))
+    tree, root = _load(pyf_path)
+    if all_panels:
+        images = [img for img in root.iter("Image2D") if img.find("annotations") is not None]
+    else:
+        if group_path is None or image_index is None:
+            return "ERROR: give group_path and image_index (or panel_ref in the chat), or all_panels=true."
+        container, err = _get_container(root, group_path)
+        if err:
+            return f"ERROR: {err}"
+        imgs = [c for c in container if c.tag == "Image2D"]
+        if not 0 <= image_index < len(imgs):
+            return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+        images = [imgs[image_index]]
+    removed, kept_for_insets = {}, 0
+    for img in images:
+        annots = img.find("annotations")
+        if annots is None:
+            continue
+        children = list(annots)
+        insets = [c for c in children if c.tag == "Image2D"]
+        followed = {_plain(_child_text(c, "follows_roi")) for c in insets} - {"", "None"}
+
+        def num(el, key):
+            try:
+                return float(_plain(_child_text(el, key)) or 0)
+            except ValueError:
+                return 0.0
+        # an inset written by a file tool (add_zoom_callout) does not name its ROI yet:
+        # its crop starts where the ROI starts (the GUI links them the same way)
+        corners = [(num(c, "crop_left"), num(c, "crop_top")) for c in insets]
+        gone = set()
+        for c in children:
+            if c.tag not in tags:
+                continue
+            ident = _plain(_child_text(c, "link_id"))
+            shown = (ident and ident in followed) or (c.tag in _ROI_KINDS["rect"] and any(
+                abs(num(c, "x") - cx) <= 2 and abs(num(c, "y") - cy) <= 2 for cx, cy in corners))
+            if keep_inset_rois and shown:
+                kept_for_insets += 1
+                continue
+            if c.tag == "Line2D" and _plain(_child_text(c, "connect_start")):
+                continue                    # a connector goes with its shapes, below
+            annots.remove(c)
+            removed[c.tag] = removed.get(c.tag, 0) + 1
+            if ident:
+                gone.add(ident)
+        for c in list(annots):              # connectors left hanging from a removed shape
+            if c.tag != "Line2D":
+                continue
+            ends = {_plain(_child_text(c, k)).split(":")[0] for k in ("connect_start", "connect_end")}
+            if ends & gone or ("line" in kinds and ends - {""}):
+                annots.remove(c)
+                removed["connector"] = removed.get("connector", 0) + 1
+    total = sum(removed.values())
+    if total:
+        _save(tree, pyf_path)
+    where = "every panel" if all_panels else ("canvas" if not group_path else f"image {image_index} in group {group_path}")
+    detail = ", ".join(f"{n} {tag}" for tag, n in sorted(removed.items())) or "nothing"
+    note = (f" {kept_for_insets} ROI(s) shown by an inset were kept (keep_inset_rois=false removes them)."
+            if kept_for_insets else "")
+    return f"Removed {total} ROI(s) from {where}: {detail}.{note}"
+
+
 def _corner_of(elem: ET.Element) -> str:
     """'bottom right' for an annotation pinned to a corner (placement stored as
     'bottom right', '""bottom right""' or 'bottom-right'), '' when free."""

@@ -1622,6 +1622,12 @@ class EZFIG_GUI(QMainWindow):
         annots.addAction(detect_action)
         detect_action.triggered.connect(self.detect_objects_action)
 
+        remove_rois_action = QAction("Remove ROIs…", self)
+        remove_rois_action.setToolTip('Remove all the rectangles, ellipses, polygons (and, if asked, lines and '
+                                      'arrows) of the selected panel or of every panel at once')
+        annots.addAction(remove_rois_action)
+        remove_rois_action.triggered.connect(self.remove_rois_action)
+
         arrow_action = QAction("Add arrow pointing at a feature…", self)
         arrow_action.setToolTip('Arrow whose point sits exactly on the chosen pixel of the '
                                 'selected image, whatever the figure size')
@@ -5325,6 +5331,60 @@ class EZFIG_GUI(QMainWindow):
             inset_corner=corner.currentText(), inset_fraction=frac.value() / 100.0,
             box_color=colour.currentText(), line_color=colour.currentText(),
             connectors=int(conn.currentText()))
+
+    def remove_rois_action(self, _checked=False, answers=None):
+        """Remove all the ROIs of the selected panel, or of every panel (MCP: remove_rois;
+        the panel editor has a Remove all ROIs button). *answers* (tests): the dialog's
+        values instead of showing it."""
+        sel = self.paint.EZFIG_panel.selected_shape
+        if isinstance(sel, list) and len(sel) == 1:
+            sel = sel[0]
+        loc = self._locate_panel(sel) if isinstance(sel, Image2D) and not sel.isText else None
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        scope = QComboBox(frame)
+        if loc is not None:
+            scope.addItem('the selected panel', 'one')
+        scope.addItem('every panel', 'all')
+        grid.addWidget(QLabel('Remove the ROIs of:', frame), 0, 0)
+        grid.addWidget(scope, 0, 1)
+        boxes = {}
+        for row, (key, text, on) in enumerate((('rect', 'rectangles and squares', True),
+                                              ('ellipse', 'ellipses, circles and points', True),
+                                              ('polygon', 'polygons and freehand shapes', True),
+                                              ('line', 'lines, arrows and brackets', False)), start=1):
+            boxes[key] = QCheckBox(text, frame)
+            boxes[key].setChecked(on)
+            grid.addWidget(boxes[key], row, 0, 1, 2)
+        keep = QCheckBox('Keep the ROI each inset shows', frame)
+        keep.setChecked(True)
+        grid.addWidget(keep, 5, 0, 1, 2)
+        values = answers
+        if values is None:
+            cd = CustomDialog(title="Remove ROIs", message="Texts, letters, scale bars and insets are not removed.",
+                              main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+            if cd.exec_() != QDialog.Accepted:
+                return
+            values = dict(shapes=[k for k, b in boxes.items() if b.isChecked()], all_panels=scope.currentData() == 'all',
+                          keep_inset_rois=keep.isChecked())
+        if not values.get('shapes'):
+            QMessageBox.information(self, 'Remove ROIs', 'Tick at least one kind of ROI.')
+            return
+        if not values.get('all_panels'):
+            if loc is None:
+                QMessageBox.information(self, 'Select an image', 'Click one image panel first, or choose every panel.')
+                return
+            values = dict(values, group_path=loc[0], image_index=loc[1])
+        from pyfigures.mcp_server import remove_rois
+        said = {}
+
+        def run(path, **kwargs):
+            said['text'] = remove_rois(path, **kwargs)
+            return said['text']
+        self._run_mcp_mutation(run, 'Removing ROIs…', **values)
+        if said.get('text') and not said['text'].startswith('ERROR'):
+            self.statusBar().showMessage(said['text'])
+        self._last_roi_removal = said.get('text')      # (tests)
 
     def detect_objects_action(self, _checked=False, answers=None):
         """ROIs around every object (cells, nuclei, embryos) of the selected image,
