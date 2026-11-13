@@ -2427,7 +2427,9 @@ def set_image_property(
         # name itself was stored, 2026-11-13)
         from .core import _color_to_int
         try:
-            value = _color_to_int(value)
+            text = value.strip()
+            # '0xFF0000' (a hex number) is a colour too, as before the conversion
+            value = int(text, 16) if text.lower().startswith("0x") else _color_to_int(value)
         except (ValueError, TypeError, KeyError):
             return f"ERROR: {value!r} is not a colour (a name such as white, or #RRGGBB)."
     if property_name == "placement":
