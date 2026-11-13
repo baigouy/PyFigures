@@ -11,6 +11,30 @@ def _kinds(ed):
     return [type(s).__name__ for s in ed.qt_viewer.shapes]
 
 
+def test_arrow_keys_nudge_the_selection(fig, ui):
+    """The GUI side of move_annotations: arrow keys move the selected shapes by
+    1 px, Shift+arrow by 10 px; Ctrl+Z puts them back."""
+    from qtpy.QtCore import Qt
+    from qtpy.QtTest import QTest
+    out = {}
+
+    def do(ed):
+        from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+        rect = Rectangle2D(10, 10, 30, 30)
+        ed.update_annotations_list(lst=list(ed.qt_viewer.shapes) + [rect], update=True, repopulate_list=True,
+                                   repopulate_texts=True)
+        ed.qt_viewer.selected_shape = [rect]
+        ed.qt_viewer.setFocus()
+        QApplication.processEvents()
+        QTest.keyClick(ed.qt_viewer, Qt.Key.Key_Right)
+        QTest.keyClick(ed.qt_viewer, Qt.Key.Key_Down, Qt.KeyboardModifier.ShiftModifier)
+        out['moved'] = (rect.x(), rect.y())
+        assert ed.qt_viewer.undo()
+        out['undone'] = (rect.x(), rect.y())
+    edit(fig, ui, "gray", do, accept=False)
+    assert out['moved'] == (11, 20) and out['undone'] == (11, 10)
+
+
 def test_remove_all_rois_button_then_undo(fig, ui):
     out = {}
 

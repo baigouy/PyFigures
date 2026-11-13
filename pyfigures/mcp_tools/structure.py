@@ -1153,6 +1153,135 @@ def remove_rois(
     return f"Removed {total} ROI(s) from {where}: {detail}.{note}"
 
 
+def _set_num(el, key, value):
+    child = el.find(key)
+    if child is None:
+        child = ET.SubElement(el, key)
+    child.text = str(float(value))
+
+
+def _num(el, key):
+    try:
+        return float(_plain(_child_text(el, key)) or 0)
+    except ValueError:
+        return 0.0
+
+
+def _shift(el, dx, dy) -> bool:
+    """Move one annotation element by (dx, dy) image pixels; False when it cannot move
+    (an inset or a text pinned to a corner, a scale bar)."""
+    import ast
+    if el.tag in ("Line2D",):
+        for k, d in (("x1", dx), ("y1", dy), ("x2", dx), ("y2", dy)):
+            _set_num(el, k, _num(el, k) + d)
+        return True
+    if el.tag in ("Polygon2D", "PolyLine2D", "Freehand2D"):
+        try:
+            flat = [float(v) for v in ast.literal_eval(_child_text(el, "coords_as_list") or "[]")]
+        except (ValueError, SyntaxError):
+            return False
+        flat = [v + (dx if i % 2 == 0 else dy) for i, v in enumerate(flat)]
+        node = el.find("coords_as_list")
+        node.text = str(flat)
+        return True
+    if el.tag in ("Image2D", "ScaleBar"):
+        return False
+    placed = _plain(_child_text(el, "placement"))
+    if el.tag == "TAText2D" and placed and placed.lower() not in ("none", "free"):
+        return False
+    if el.find("x") is None or el.find("y") is None:
+        return False
+    _set_num(el, "x", _num(el, "x") + dx)
+    _set_num(el, "y", _num(el, "y") + dy)
+    return True
+
+
+def _anchor(el):
+    """Top-left of an annotation element (lines: their first end)."""
+    import ast
+    if el.tag == "Line2D":
+        return min(_num(el, "x1"), _num(el, "x2")), min(_num(el, "y1"), _num(el, "y2"))
+    if el.tag in ("Polygon2D", "PolyLine2D", "Freehand2D"):
+        try:
+            flat = [float(v) for v in ast.literal_eval(_child_text(el, "coords_as_list") or "[]")]
+            return min(flat[0::2]), min(flat[1::2])
+        except (ValueError, SyntaxError):
+            return 0.0, 0.0
+    return _num(el, "x"), _num(el, "y")
+
+
+@mcp.tool()
+def move_annotations(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    dx: float = 0,
+    dy: float = 0,
+    annotation_indexes: list[int] | None = None,
+    shapes: list[str] | None = None,
+    to_x: float | None = None,
+    to_y: float | None = None,
+) -> str:
+    """Move ROIs, lines / arrows and free texts of one panel, in image pixels, in
+    one call: "move the box in b 100 px to the right" (dx=100), "move all the ROIs
+    of e up by 20" (dy=-20), "put ROI 3 at x=200, y=50" (to_x / to_y).
+
+    *dx* / *dy*: the shift (right and down are positive), in the image's pixels.
+    *annotation_indexes*: which annotations (from get_annotations); else every one
+    of *shapes*: any of "rect", "ellipse", "polygon", "line", "text" (default:
+    all of them).
+    *to_x* / *to_y*: put the top-left of ONE annotation (annotation_indexes with
+    a single index) at that point instead of shifting by dx / dy.
+    Connectors stay attached and an inset that shows a moved ROI follows it (its
+    region moves). Insets themselves sit in a corner of the panel: they are not
+    moved here — change their corner with set_inset_property(property_name=
+    "placement"), or move the ROI they show. Texts pinned to a corner and scale
+    bars do not move either.
+    *group_path* / *image_index*: the panel, as for add_roi_rect.
+    """
+    kinds = shapes or ["rect", "ellipse", "polygon", "line", "text"]
+    table = dict(_ROI_KINDS, text={"TAText2D"})
+    bad = [k for k in kinds if k not in table]
+    if bad:
+        return f"ERROR: unknown shapes {bad}; use any of {sorted(table)}."
+    if (to_x is not None or to_y is not None) and len(annotation_indexes or []) != 1:
+        return "ERROR: to_x / to_y place ONE annotation: give annotation_indexes with a single index (or use dx / dy)."
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path)
+    if err:
+        return f"ERROR: {err}"
+    imgs = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(imgs):
+        return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    annots = imgs[image_index].find("annotations")
+    children = list(annots) if annots is not None else []
+    if annotation_indexes is not None:
+        wrong = [i for i in annotation_indexes if not 0 <= i < len(children)]
+        if wrong:
+            return f"ERROR: annotation_indexes {wrong} out of range ({len(children)} annotations; see get_annotations)."
+        targets = [(i, children[i]) for i in annotation_indexes]
+    else:
+        tags = set().union(*(table[k] for k in kinds))
+        targets = [(i, c) for i, c in enumerate(children) if c.tag in tags
+                   and not (c.tag == "TAText2D" and _plain(_child_text(c, "is_letter")) == "True")
+                   and not _plain(_child_text(c, "connect_start"))]     # connectors re-attach by themselves
+    if to_x is not None or to_y is not None:
+        ax, ay = _anchor(targets[0][1])
+        dx = (to_x - ax) if to_x is not None else 0
+        dy = (to_y - ay) if to_y is not None else 0
+    moved, fixed = [], []
+    for i, el in targets:
+        (moved if _shift(el, dx, dy) else fixed).append(f"{i} ({el.tag})")
+    if moved:
+        _save(tree, pyf_path)
+    note = ""
+    if fixed:
+        note = (f" Not moved: {', '.join(fixed)} — insets and corner texts sit in a corner (change it with "
+                f"set_inset_property placement / the text placement), scale bars stay.")
+    return (f"Moved {len(moved)} annotation(s) by ({dx:g}, {dy:g}) px on image {image_index}"
+            f"{': ' + ', '.join(moved) if moved else ''}.{note}")
+
+
 def _corner_of(elem: ET.Element) -> str:
     """'bottom right' for an annotation pinned to a corner (placement stored as
     'bottom right', '""bottom right""' or 'bottom-right'), '' when free."""

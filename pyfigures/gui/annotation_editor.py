@@ -70,6 +70,8 @@ class VectorialDrawPane2(QWidget):
     # TODO change parameters
     def __init__(self, parent=None, demo=False, background=None):
         super(QWidget, self).__init__(parent)
+        # takes the keyboard when clicked: the arrow keys nudge the selected shapes
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
         self.ctrl_key = getCtrlModifierAsString()
 
@@ -305,6 +307,43 @@ class VectorialDrawPane2(QWidget):
             painter.restore()
             inset.fraction_of_parent_image_width_if_image_is_inset = fraction
             inset.setTopLeft(tl.x(), tl.y())      # selecting / dragging it uses its rect
+
+    def nudge(self, dx, dy):
+        """Move the selected shapes by (dx, dy) image pixels (arrow keys: 1 px, with
+        Shift 10 px); one undo step per press. MCP: move_annotations."""
+        if not self.selected_shape or self.currently_drawn_shape is not None:
+            return False
+        self.push_undo()
+        delta = QPointF(dx, dy)
+        for shape in self.selected_shape:
+            links = zoom_links(self.shapes, shape, moving=self.selected_shape)
+            shape.translate(delta)
+            if links:
+                follow_zoom_links(links, delta)
+        self.update_size()
+        self.update()
+        self.shapeChanged.emit()
+        return True
+
+    def event(self, event):
+        # the figure window's arrow-key shortcuts (move panels) must not take the arrows
+        # while shapes are selected here
+        from qtpy.QtCore import QEvent
+        if event.type() == QEvent.Type.ShortcutOverride and self.selected_shape and event.key() in (
+                Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            event.accept()
+            return True
+        return super().event(event)
+
+    def keyPressEvent(self, event):
+        steps = {Qt.Key.Key_Left: (-1, 0), Qt.Key.Key_Right: (1, 0), Qt.Key.Key_Up: (0, -1), Qt.Key.Key_Down: (0, 1)}
+        step = steps.get(event.key())
+        if step and self.selected_shape:
+            big = 10 if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else 1
+            if self.nudge(step[0] * big, step[1] * big):
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
     def _single_selected_line(self):
         if self.selected_shape and len(self.selected_shape) == 1 and isinstance(self.selected_shape[0], Line2D):
@@ -790,6 +829,7 @@ class VectorialDrawPane2(QWidget):
 
     def mousePressEvent(self, event):
         self.dragged = False
+        self.setFocus(Qt.FocusReason.MouseFocusReason)   # the arrow keys then nudge the selection
         # self.can_go_deeper = False
         if event.button() == Qt.LeftButton:
             self.drawing = True
