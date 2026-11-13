@@ -703,7 +703,7 @@ def add_zoom_callout(
     inset_fraction: float = 0.4,
     box_color: str | int = "yellow",
     line_color: str | int = "yellow",
-    stroke: float = 1.5,
+    stroke: float = 0.65,
     connectors: int = 2,
     inset_border: int = 2,
     inset_filename: str | None = None,
@@ -725,7 +725,7 @@ def add_zoom_callout(
     "top left", "bottom right", "bottom left".
     *inset_fraction*: inset width as a fraction of the parent width (0-1).
     *box_color* / *line_color*: ROI box and leader-line colour.
-    *stroke*: line width in px.
+    *stroke*: line width in points on the page (default 0.65 pt).
     *connectors*: number of leader lines (0, 1 or 2; 2 = the usual funnel).
     *inset_border*: inset frame thickness in px (0 = none).
 
@@ -789,22 +789,12 @@ def add_zoom_callout(
     lc = _color_to_int(line_color)
 
     # 1) source ROI box (exact, parent px)
-    annots.append(_new_roi_rect(source_x, source_y, source_w, source_h, bc, None, stroke, 1.0))
+    box_el = _new_roi_rect(source_x, source_y, source_w, source_h, bc, None, stroke, 1.0)
+    annots.append(box_el)
 
-    # 2) inset rect in parent px (flush to the chosen corner)
-    iw = inset_fraction * parent_width
-    ih = iw * (source_h / source_w)
-    ix = (parent_width - iw) if "right" in inset_corner else 0.0
-    iy = (parent_height - ih) if "bottom" in inset_corner else 0.0
-    ix2, iy2 = ix + iw, iy + ih
-
-    # 3) leader lines from the box side facing the inset to the inset side facing the box
-    from ..zoom_geometry import leader_lines
-    for (lx1, ly1), (lx2, ly2) in leader_lines((source_x, source_y, source_w, source_h),
-                                               (ix, iy, iw, ih), connectors):
-        annots.append(_new_roi_line(lx1, ly1, lx2, ly2, lc, stroke, 1.0, False, False))
-
-    # 4) magnified inset (drawn last = on top of the leaders), corner-placed
+    # 2) magnified inset, corner-placed; 3) the leader lines are added by
+    # connect_roi_to_inset below: sticky, and on the inset's drawn corners also on a
+    # rotated panel (they were computed as if upright there and stayed behind, 2026-11-13)
     src_file = inset_filename or _decode(parent_img.findtext("filename")) or ""
     inset = _new_image2d(str(src_file))
     _set_child_text(inset, "placement", inset_corner)
@@ -825,9 +815,19 @@ def add_zoom_callout(
         _set_child_text(inset, "crop_top",    str(int(source_y)))
         _set_child_text(inset, "crop_right",  str(int(max(0, parent_width - (source_x + source_w)))))
         _set_child_text(inset, "crop_bottom", str(int(max(0, parent_height - (source_y + source_h)))))
+        # it shows the box's region, also once the box is moved
+        from ..connectors import xml_link_id
+        from .core import _encode_str
+        _set_child_text(inset, "follows_roi", _encode_str(xml_link_id(box_el)))
     annots.append(inset)
 
     _save(tree, pyf_path)
+    if connectors:
+        joined = connect_roi_to_inset(pyf_path, group_path, image_index, roi_index=list(annots).index(box_el),
+                                      inset_index=[a for a in annots if a.tag == "Image2D"].index(inset),
+                                      connectors=connectors, line_color=lc, stroke=stroke)
+        if str(joined).startswith("ERROR"):
+            return f"ERROR: the callout was added but its leader lines could not be: {joined[7:]}"
     loc = "canvas" if not group_path else f"group {group_path}"
     return (
         f"Zoom callout added to image {image_index} in {loc}: source "

@@ -210,6 +210,9 @@ class Session:
                 'native_dialogs': native_dialog_titles(self),
                 'native_gui_jobs': list(self.native_gui.jobs.values())[-10:] if hasattr(self,'native_gui') else [],
                 'path': self.window.current_file, 'dirty': self.window._dirty,
+                # short and early in the chat's context: "export it with the same name as the pyf"
+                # (2026-11-13: the path sat deep in a 63 KB inspect result, 9 searches, no answer)
+                'document': document_info(self.window.current_file, self.window._dirty),
                 'row_spacing_px': self.window.main_space_spinner.value(),
                 'persistence': {'source_saved': not self.window._dirty,
                                 'recovery_snapshot': self.recovery.latest,
@@ -866,6 +869,17 @@ _OUTPUT_WORDS = ('out', 'save', 'export', 'dest')
 
 _PLAIN_COLOURS = {'RED': (1, 0, 0), 'GREEN': (0, 1, 0), 'BLUE': (0, 0, 1), 'GRAY': (1, 1, 1),
                   'MAGENTA': (1, 0, 1), 'CYAN': (0, 1, 1), 'YELLOW': (1, 1, 0)}
+
+
+def document_info(path, dirty):
+    """The open figure's file, for "save / export it next to the pyf, with its name"."""
+    if not path:
+        return {'file': None, 'name': None, 'folder': None, 'saved': False,
+                'note': 'never saved: no file name yet; ask where to save or which name to use'}
+    p = Path(str(path))
+    return {'file': str(p), 'name': p.stem, 'folder': str(p.parent), 'saved': not dirty,
+            'note': 'an export "with the same name" = folder + name + the format extension, '
+                    f'e.g. {p.with_suffix(".pptx")}'}
 
 
 def lut_colour_name(lut):

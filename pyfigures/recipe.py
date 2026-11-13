@@ -1458,7 +1458,7 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
     for k, roi in enumerate(opts.get("rois") or []):
         if opts.get("connectors"):
             roi_at.append(_n_annotations())
-        style = {"color": roi.get("color", "yellow"), "stroke": roi.get("stroke", 2.0),
+        style = {"color": roi.get("color", "yellow"), "stroke": roi.get("stroke", 0.65),
                  "opacity": roi.get("opacity", 1.0)}
         name = step + f" roi {k + 1}"
         if "rect" in roi or "ellipse" in roi:
@@ -1558,7 +1558,7 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
                   "inset_fraction": z.get("size", 0.4),
                   "box_color": z.get("color", "yellow"),
                   "line_color": z.get("line_color", z.get("color", "yellow")),
-                  "stroke": z.get("stroke", 1.5),
+                  "stroke": z.get("stroke", 0.65),
                   "connectors": z.get("connectors", 2),
                   "inset_border": z.get("border", 2)}
             if "image" in z:

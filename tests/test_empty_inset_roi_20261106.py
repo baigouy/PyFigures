@@ -29,6 +29,9 @@ def test_an_inset_cropped_to_nothing_does_not_hide_the_other_annotations(qapp, t
     panel = _callout(tmp_path)
     box, inset, lines = _parts(panel)
     w, _ = inset.get_raw_size()
+    # an inset that does not follow its box (callouts follow it since 2026-11-13, which
+    # re-crops them to the box at once)
+    inset.follows_roi = None
     inset.crop_left, inset.crop_right = 40, w - 40          # 0 px left
     assert inset._cropped_to_nothing()
     drawn = []

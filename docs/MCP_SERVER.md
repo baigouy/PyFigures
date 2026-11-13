@@ -472,7 +472,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `add_significance_bracket(pyf_path, group_path, image_index, x1, x2, y, label, ...)` | Add a stats bracket (bar + end whiskers + centred label like `*` / `n.s.` / `p<0.001`) |
 | `add_significance_bracket_from_data(pyf_path, group_path, image_index, x1, x2, y, values_a, values_b, ...)` | Same, but **computes** the stars from a two-group test (auto Welch t / Mann-Whitney) and records the test + p-value for the Methods section |
 
-Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent), `stroke` (line width px), `opacity` (0–1).  
+Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent), `stroke` (line width in points on the page, default 0.65 pt; the image's size does not change it), `opacity` (0–1).  
 `add_roi_polygon` accepts `style="polygon"` (closed), `"polyline"` (open), or `"freehand"`.  
 `points` can be flat `[x0,y0,x1,y1,…]` or paired `[[x0,y0],[x1,y1],…]`.
 

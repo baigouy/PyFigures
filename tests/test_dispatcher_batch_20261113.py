@@ -30,6 +30,11 @@ def dispatcher():
     def preview_panel(panel_ref: str) -> str:
         return 'image'
 
+    @full.tool()
+    def remove_annotation(annotation_index: int) -> str:
+        calls.append(('removed', annotation_index))
+        return 'ok'
+
     tools = build_server(full, lambda *a, **k: {})._tool_manager._tools
     run = tools['use_pyfigures_tool'].fn
     return (lambda **kw: asyncio.run(run(**kw))), calls, tools['use_pyfigures_tool']
@@ -111,6 +116,26 @@ def test_a_live_batch_edits_the_open_figure_with_one_reload(qapp, gui, runtime, 
     colours = {a['color'] for a in json.loads(run('get_annotations')['tool_result']) if a.get('type') == 'Polygon2D'}
     assert len(colours) == 1 and colours != {r['color'] for r in rois}
     assert g.undo_stack            # one undoable step
+    # the user's chat (2026-11-13): a background colour for three panels in one call
+    # failed with "'str' object has no attribute 'get'"
+    out = call(tool_name='set_image_property', arguments={'property_name': 'fill_color', 'value': '16777215'},
+               batch=[{'panel_ref': 'a'}, {'panel_ref': 'b'}])
+    assert out['batch_done'] == 2 and not out['errors'], out
+
+
+def test_removals_by_index_go_from_the_highest(dispatcher):
+    """Removing index 3 first shifted the later ones (the chat's 2026-11-13 log)."""
+    run, calls, _ = dispatcher
+    run(tool_name='remove_annotation', arguments={}, batch=[{'annotation_index': i} for i in (3, 41, 8)])
+    assert calls == [('removed', 41), ('removed', 8), ('removed', 3)]
+
+
+def test_the_document_names_its_file():
+    from pyfigures.assistant.session import document_info
+    info = document_info('C:/figs/wing_figure.pyf', dirty=True)
+    assert info['name'] == 'wing_figure' and info['folder'].endswith('figs') and not info['saved']
+    assert 'wing_figure.pptx' in info['note']
+    assert document_info(None, False)['name'] is None
 
 
 def test_the_schema_offers_batch(dispatcher):

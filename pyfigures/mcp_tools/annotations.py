@@ -68,7 +68,7 @@ def _roi_style_error(color, fill_color, stroke, opacity) -> str | None:
     except ValueError as e:
         return str(e)
     if not (isinstance(stroke, (int, float)) and math.isfinite(stroke) and stroke > 0):
-        return f"stroke must be a positive width in pixels (got {stroke!r})."
+        return f"stroke must be a positive width in points (got {stroke!r})."
     if not (isinstance(opacity, (int, float)) and 0 <= opacity <= 1):
         return f"opacity must be between 0 and 1 (got {opacity!r})."
     return None
@@ -85,7 +85,7 @@ def add_roi_rect(
     height: float,
     color: str | int = "yellow",
     fill_color: str | int | None = None,
-    stroke: float = 2.0,
+    stroke: float = 0.65,
     opacity: float = 1.0,
 ) -> str:
     """Overlay a rectangular ROI (highlight box) on an image.
@@ -100,7 +100,8 @@ def add_roi_rect(
     *width*, *height*: size in pixels.
     *color*: outline colour — name (yellow, red, …), #rrggbb hex, or integer.
     *fill_color*: fill colour (``null`` = transparent / no fill).
-    *stroke*: outline width in pixels.
+    *stroke*: outline width in points on the page (default 0.65 pt, the usual line
+    of a paper figure; the image's size or zoom does not change it).
     *opacity*: 0.0 (transparent) – 1.0 (opaque).
 
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
@@ -149,7 +150,7 @@ def add_roi_ellipse(
     height: float,
     color: str | int = "yellow",
     fill_color: str | int | None = None,
-    stroke: float = 2.0,
+    stroke: float = 0.65,
     opacity: float = 1.0,
 ) -> str:
     """Overlay an elliptical (or circular) ROI on an image.
@@ -162,7 +163,8 @@ def add_roi_ellipse(
     *width*, *height*: bounding-box size. Pass equal values for a circle.
     *color*: outline colour — name, #rrggbb, or integer.
     *fill_color*: fill colour (``null`` = transparent).
-    *stroke*: outline width in pixels.
+    *stroke*: outline width in points on the page (default 0.65 pt, the usual line
+    of a paper figure; the image's size or zoom does not change it).
     *opacity*: 0.0 – 1.0.
 
     Examples::
@@ -208,7 +210,7 @@ def add_roi_line(
     x2: float,
     y2: float,
     color: str | int = "yellow",
-    stroke: float = 2.0,
+    stroke: float = 0.65,
     opacity: float = 1.0,
     arrow: bool = False,
     arrow_at_both_ends: bool = False,
@@ -222,7 +224,7 @@ def add_roi_line(
     *x1*, *y1*: start point.
     *x2*, *y2*: end point.
     *color*: colour — name, #rrggbb, or integer.
-    *stroke*: line width in pixels.
+    *stroke*: line width in points on the page (default 0.65 pt).
     *arrow*: if ``true``, draw an arrowhead at (*x2*, *y2*).
     *arrow_at_both_ends*: if ``true``, arrowheads at both ends.
 
@@ -544,7 +546,7 @@ def add_significance_bracket(
     *label*: text above the bar (plain or Qt HTML). Use "*"/"**"/"***" or "n.s.".
     *tick*: whisker length in px (0 = no whiskers, a plain bar).
     *color*: line + default text colour — name, #rrggbb or integer.
-    *stroke*: line width in px.
+    *stroke*: line width in points on the page.
     *font_pt*: label font size in points.
     *label_gap*: gap in px between the bar and the label.
     *whiskers_point*: "down" (bar above the groups, ticks toward them — usual) or
@@ -581,7 +583,7 @@ def add_significance_bracket(
     return (
         f"Significance bracket '{_strip_tags(label)}' added to image {image_index} "
         f"in {loc}: span x=[{x_lo:g},{x_hi:g}] at y={y:g}, tick={tick:g}, "
-        f"color={color}, stroke={stroke:g} px. Note: label centring is approximate — nudge it in the GUI "
+        f"color={color}, stroke={stroke:g} pt. Note: label centring is approximate — nudge it in the GUI "
         f"if needed. It is {after - before} annotations of this image (annotation_index "
         f"{before} to {after - 1}: the lines, then the label). It IS there: do not add it again. "
         f"Coordinates are image pixels, so on a large or dark image a thin {color} bracket is hard "
@@ -719,7 +721,7 @@ def detect_objects(
     channel: str | int = "all",
     padding: int = 3,
     color: str | int = "yellow",
-    stroke: float = 2.0,
+    stroke: float = 0.65,
     dry_run: bool = False,
     max_objects: int = 300,
 ) -> str:
@@ -748,6 +750,8 @@ def detect_objects(
     the nuclei channel (all colours together outline the whole cells). The
     channel is taken as displayed: same z, time point, projection and range.
     *padding*: pixels added around each object.
+    *color* / *stroke*: the ROIs' colour and line width in points on the page
+    (default 0.65 pt, the usual paper line).
     *dry_run*: true only reports what was found (count, boxes); nothing is added.
     *max_objects*: refuse to add more ROIs than this (likely a bad threshold).
     *group_path* / *image_index*: the panel, as for add_roi_rect.
@@ -815,7 +819,7 @@ def add_roi_polygon(
     points: list,
     color: str | int = "yellow",
     fill_color: str | int | None = None,
-    stroke: float = 2.0,
+    stroke: float = 0.65,
     opacity: float = 1.0,
     style: str = "polygon",
 ) -> str:
@@ -827,7 +831,8 @@ def add_roi_polygon(
        or a list of ``[x,y]`` pairs: ``[[x0,y0],[x1,y1],…]``.
     *color*: outline colour — name, #rrggbb, or integer.
     *fill_color*: fill colour (``null`` = transparent).
-    *stroke*: outline width in pixels.
+    *stroke*: outline width in points on the page (default 0.65 pt, the usual line
+    of a paper figure; the image's size or zoom does not change it).
     *style*:
         - ``"polygon"``  — closed filled/outlined polygon  (default)
         - ``"polyline"`` — open connected line segments (not closed)
@@ -928,7 +933,7 @@ def set_roi_properties(
     words ("the box" with two rectangles)? Ask which one — do not edit the first.
 
     Style (any ROI): *color* outline; *fill_color* fill, "none" removes it;
-    *stroke* outline width (px); *opacity* 0–1; *line_style* solid, dashed,
+    *stroke* outline width (points on the page; 0.65 pt is the usual paper line); *opacity* 0–1; *line_style* solid, dashed,
     dotted or dash-dot.
     Geometry, in RAW image pixels (top-left of the uncropped image, the same
     coordinates get_annotations reports — never canvas/screen positions):

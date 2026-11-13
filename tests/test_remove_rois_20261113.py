@@ -79,5 +79,27 @@ def test_connectors_go_with_their_shapes_and_the_inset_roi_stays(tmp_path):
     assert 'connector' in out and 'kept' in out                        # the callout's box stays
     assert after.count('Rectangle2D') == 1 and 'Image2D' in after
     assert before.count('Line2D') - after.count('Line2D') == 1         # the connector, not the leaders
-    assert remove_rois(p, [0], 0, keep_inset_rois=False).startswith('Removed 1 ROI(s)')
+    # the callout's leader lines are connectors of its box (2026-11-13): they go with it
+    assert remove_rois(p, [0], 0, keep_inset_rois=False).startswith('Removed 3 ROI(s)')
+    assert 'Line2D' not in _tags(p)
     assert 'Rectangle2D' not in _tags(p) and 'Image2D' in _tags(p)      # the inset itself stays
+
+
+def test_only_some_rois_by_index_or_the_tiny_ones(tmp_path):
+    """"there are super tiny ROIs do remove them" (2026-11-13): the chat removed them one
+    by one (indexes shifting) and stopped after 2 of 5."""
+    p = _figure(tmp_path, n=1)
+    for x, size in ((5, 30), (40, 8), (60, 12), (80, 30)):
+        add_roi_ellipse(p, [0], 0, x=x, y=5, width=size, height=size)
+    add_roi_polygon(p, [0], 0, points=[[5, 60], [9, 60], [7, 64]])            # a tiny triangle
+    sizes = lambda: sorted(round(a.get('width') or 4) for a in json.loads(get_annotations(p))
+                           if a['type'] in ('Ellipse2D', 'Polygon2D'))
+    out = remove_rois(p, [0], 0, max_size=15)
+    assert out.startswith('Removed 3 ROI(s)'), out
+    assert sizes() == [30, 30]
+    first = next(a['annotation_index'] for a in json.loads(get_annotations(p)) if a['type'] == 'Ellipse2D')
+    assert remove_rois(p, [0], 0, annotation_indexes=[first]).startswith('Removed 1 ROI(s)')
+    assert sizes() == [30]
+    assert remove_rois(p, [0], 0, annotation_indexes=[99]).startswith('ERROR')
+    assert remove_rois(p, [0], 0, max_size=0).startswith('ERROR')
+    assert remove_rois(p, all_panels=True, annotation_indexes=[0]).startswith('ERROR')

@@ -262,3 +262,99 @@ def test_an_inset_follows_its_roi_and_its_lines_too(qapp, gui, runtime, tmp_path
     assert (inset.crop_left, inset.crop_top) == (200, 100)              # the inset shows the new region
     assert [(l.x1(), l.y1()) for l in lines] != before
     assert all(200 - 1 <= l.x1() <= 290 + 1 and 100 - 1 <= l.y1() <= 170 + 1 for l in lines)
+
+
+def _inset_sites(p, inset):
+    """The inset's drawn corners and edge middles, in the panel's image pixels."""
+    from pyfigures.zoom_geometry import measured_inset_corners
+    c = [(q.x(), q.y()) for q in measured_inset_corners(p, inset)]
+    return c + [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(c, c[1:] + c[:1])]
+
+
+@pytest.mark.parametrize("theta", [25, 90])
+def test_on_a_rotated_panel_the_lines_stay_on_the_inset(qapp, gui, runtime, tmp_path, theta):  # noqa: F811
+    """'the sticky connectors don't work with insets when image is rotated' (user,
+    2026-11-13): the inset end of each line was frozen on a rotated panel, so it was left
+    behind when the ROI moved (the inset is re-cropped and changes shape) or the inset
+    went to another corner."""
+    import math
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import panels, Image2D
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    launch.start_live_session(g)
+
+    def panel():
+        return next(p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw))
+    panel().annotations.append(Rectangle2D(60, 250, 90, 70, color=0xFFFF00, stroke=2))
+    state = _call(qapp, "inspect")
+    _call(qapp, "roi_to_inset", session_id=state["session_id"], expected_revision=state["revision"],
+          arguments={"panel_ref": "0/0"}, request_id="r1")
+    panel().theta = theta
+    g.paint.EZFIG_panel.grab()
+    state = _call(qapp, "inspect")
+    _call(qapp, "original_tool", session_id=state["session_id"], expected_revision=state["revision"],
+          arguments={"tool": "connect_roi_to_inset", "arguments": {"pyf_path": "live", "group_path": [0],
+                                                                   "image_index": 0}}, request_id="r2")
+    p = panel()
+    assert p.theta == theta
+    roi = next(a for a in p.annotations if type(a) is Rectangle2D)
+    inset = next(a for a in p.annotations if isinstance(a, Image2D))
+    lines = [a for a in p.annotations if isinstance(a, Line2D)]
+    assert len(lines) == 2 and all(l.connect_start for l in lines)
+
+    def on_inset():
+        g.paint.EZFIG_panel.grab()
+        sites = _inset_sites(p, inset)
+        return all(min(math.dist((l.x2(), l.y2()), s) for s in sites) < 2 for l in lines)
+    assert on_inset()
+    roi.setRect(200, 100, 160, 60)              # moved and reshaped: the inset changes shape too
+    assert on_inset()
+    assert all(199 <= l.x1() <= 361 and 99 <= l.y1() <= 161 for l in lines)
+    inset.placement = 'top_left' if 'left' not in str(inset.placement) else 'top_right'
+    assert on_inset()                            # another corner
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_a_zoom_callout_on_a_rotated_panel(qapp, gui, tmp_path, legacy):  # noqa: F811
+    """add_zoom_callout on a rotated panel drew its leader lines as if the image were
+    upright, not attached: they ended in the middle of the image and stayed there when
+    the box moved (2026-11-13). Now they are sticky connectors on the inset's drawn
+    corners; such lines in older figures are attached when the figure is opened."""
+    import math
+    from pyfigures.mcp_server import add_zoom_callout, transform_image
+    from pyfigures.assistant.partner_gui import panels, Image2D
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.line2d import Line2D
+    pyf = _figure(tmp_path)                                  # one 600 x 400 image
+    transform_image(pyf, [0], 0, rotation=25)
+    add_zoom_callout(pyf, [0], 0, source_x=80, source_y=250, source_w=90, source_h=70,
+                     parent_width=600, parent_height=400)
+    tree = ET.parse(pyf)
+    lines = [e for e in tree.iter("Line2D")]
+    assert len(lines) == 2 and all(e.findtext("connect_start") for e in lines)
+    if legacy:                                   # as an older version wrote it
+        for e in list(tree.iter()):
+            for tag in ("connect_start", "connect_end", "follows_roi", "link_id"):
+                for child in e.findall(tag):
+                    e.remove(child)
+        tree.write(pyf)
+    g = gui()
+    g.reload_state(pyf, append=False)
+    p = next(q for _, _, q in panels(g.paint.EZFIG_panel.shapes_to_draw))
+    roi = next(a for a in p.annotations if type(a) is Rectangle2D)
+    inset = next(a for a in p.annotations if isinstance(a, Image2D))
+    lines = [a for a in p.annotations if isinstance(a, Line2D)]
+    g.paint.EZFIG_panel.grab()
+    assert all(l.connect_start and l.connect_end for l in lines)
+
+    def on_inset():
+        g.paint.EZFIG_panel.grab()
+        sites = _inset_sites(p, inset)
+        return all(min(math.dist((l.x2(), l.y2()), s) for s in sites) < 2 for l in lines)
+    assert on_inset()
+    roi.moveTo(380, 70)
+    assert on_inset()
+    assert all(379 <= l.x1() <= 471 and 69 <= l.y1() <= 141 for l in lines)

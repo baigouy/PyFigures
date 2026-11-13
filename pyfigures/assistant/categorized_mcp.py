@@ -208,6 +208,10 @@ def build_server(full_server, send):
         'it is an automatic threshold whose odd ROIs the user can fix in the editor. Place objects one by one by eye only for a few named ones. '
         'Removing several ROIs ("remove the boxes", "replace the ellipses by squares"): remove_rois(panel_ref) once '
         '(shapes=["ellipse"] for only the ellipses), never one remove_annotation per ROI; then detect_objects again with the new shape. '
+        'Only some of them, still one call: remove_rois(panel_ref, annotation_indexes=[...]) or, for "remove the tiny ROIs", '
+        'max_size=<longest side in px> chosen from the sizes in inspect_annotation_objects. '
+        'The open figure\'s file is document in the state: "export it with the same name as the pyf" = '
+        'document.folder + document.name + the extension; no search needed. '
         '"Move the box / ROI / arrow 100 px to the right": move_annotations(panel_ref, dx=100, annotation_indexes=[...]) '
         '(dy negative = up; all of them when no index). An INSET cannot be moved freely: it sits in a corner of its panel; '
         'say so and offer another corner (set_inset_property placement) or moving the ROI it shows (the inset follows). '
@@ -487,6 +491,9 @@ def build_server(full_server, send):
             if tool_name.startswith(('preview_', 'render_', 'export_')):
                 raise ValueError(f'{tool_name} returns images or files: call it once, not in a batch')
             repeats.update(key=None, count=0)
+            if tool_name.startswith('remove_') and all(isinstance(i.get('annotation_index'), int) for i in batch):
+                # removing index 3 shifts every later one: the highest first keeps the others valid
+                batch = sorted(batch, key=lambda i: i['annotation_index'], reverse=True)
             done, errors, results = 0, [], []
             outcomes = []           # (item number, item, result or exception)
             from .original_registry import batchable_original, collect_batch, stop_collecting, decode
@@ -540,8 +547,15 @@ def build_server(full_server, send):
             summary = f'{tool_name}: {done} of {len(batch)} item(s) done in one call'
             if errors:
                 summary += f'; {len(errors)} failed (see errors, the others are done: do not redo them)'
-            return {'result': summary, 'batch_done': done, 'batch_total': len(batch),
-                    'document_changed': done > 0, 'first_results': results, 'errors': errors[:20]}
+            reading = tool_name.startswith(('get_', 'list_', 'inspect_', 'describe_', 'check_', 'find_'))
+            out = {'result': summary, 'batch_done': done, 'batch_total': len(batch),
+                   'document_changed': done > 0 and not reading, 'first_results': results, 'errors': errors[:20]}
+            if done and not reading and batchable_original(tool_name):
+                # each item's result is the figure's own readback after the one reload: a
+                # second inspect + re-read cost 40 s before the answer (2026-11-13)
+                out['verified'] = ('Each item was applied to the open figure and read back; do not inspect or '
+                                   're-read to check it: answer the user now.')
+            return out
         out = await _run_one(tool_name, arguments)
         key = (tool_name, tuple(sorted(arguments)))
         repeats['count'] = repeats['count'] + 1 if repeats['key'] == key else 1

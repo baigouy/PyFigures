@@ -180,8 +180,11 @@ def shape_box(shape, parent):
     return rect.x(), rect.y(), rect.width(), rect.height()
 
 
+SEEN = 'seen'      # an inset end named as the inset is seen in the figure (rotated panels)
+
+
 def _end(spec):
-    """'id:site' or 'id:site:dx:dy' -> (id, site, (dx, dy))."""
+    """'id:site', 'id:site:dx:dy' or 'id:site:seen' -> (id, site, (dx, dy), seen)."""
     parts = str(spec).split(':')
     offset = (0.0, 0.0)
     if len(parts) >= 4:
@@ -189,7 +192,37 @@ def _end(spec):
             offset = (float(parts[2]), float(parts[3]))
         except ValueError:
             pass
-    return parts[0], (parts[1] if len(parts) > 1 and parts[1] else 'auto'), offset
+    seen = len(parts) >= 3 and parts[2] == SEEN
+    return parts[0], (parts[1] if len(parts) > 1 and parts[1] else 'auto'), offset, seen
+
+
+def inset_sites(shape, parent):
+    """The sites of an inset as it is drawn: its corners named as seen in the figure
+    (top left is its top left on the page, also on a rotated panel, where the inset
+    stays upright while the image turns), edge middles and centre, in the panel's
+    image pixels. None if it cannot be measured."""
+    key = ('sites', id(parent), id(shape))
+    if _box_cache is not None and key in _box_cache:
+        return _box_cache[key]
+    global _measuring
+    from .zoom_geometry import measured_inset_corners
+    _measuring = True
+    try:
+        corners = measured_inset_corners(parent, shape)
+    except Exception:
+        corners = None
+    finally:
+        _measuring = False
+    sites = None
+    if corners:
+        tl, tr, br, bl = [(c.x(), c.y()) if hasattr(c, 'x') else tuple(c) for c in corners]
+        mid = lambda a, b: ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        sites = {'top left': tl, 'top': mid(tl, tr), 'top right': tr, 'right': mid(tr, br),
+                 'bottom right': br, 'bottom': mid(br, bl), 'bottom left': bl, 'left': mid(bl, tl),
+                 'center': mid(tl, br)}
+    if _box_cache is not None:
+        _box_cache[key] = sites
+    return sites
 
 
 def _near_border(point, box, tol):
@@ -240,18 +273,29 @@ def adopt_legacy(parent, shapes) -> int:
                     break
         if roi is not None:
             pairs.append((roi, inset))
-    if getattr(parent, 'theta', 0):
-        return adopted                      # inset corners need a full paint there: lines left as drawn
-    from .zoom_geometry import leader_lines
+    rotated = bool(getattr(parent, 'theta', 0))
+    from .zoom_geometry import leader_lines, leader_lines_to_corners
     for roi, inset in pairs:
-        box_r, box_i = shape_box(roi, parent), shape_box(inset, parent)
+        box_r = shape_box(roi, parent)
+        sites_i = None
+        if rotated:
+            # the inset stays upright while the image turns: its drawn (tilted) corners
+            sites_i = inset_sites(inset, parent)
+            if not sites_i:
+                continue
+            corners = [sites_i[k] for k in ('top left', 'top right', 'bottom right', 'bottom left')]
+            xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+            box_i = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+        else:
+            box_i = shape_box(inset, parent)
         if not box_r or not box_i:
             continue
         tol = max(3.0, 0.1 * min(box_r[2], box_r[3]))
         # the inset end was drawn where the inset sat at the size the panel had then:
         # the inset moves with the panel's letter, so it may be well off now
         reach = 0.3 * max(box_i[2], box_i[3])
-        canonical = list(leader_lines(box_r, box_i, connectors=2))
+        canonical = list(leader_lines_to_corners(box_r, corners, connectors=2) if rotated
+                         else leader_lines(box_r, box_i, connectors=2))
         for line in loose:
             if is_connector(line) or not canonical:
                 continue
@@ -266,7 +310,11 @@ def adopt_legacy(parent, shapes) -> int:
             (x1, y1), (x2, y2) = best
             line.setLine(x1, y1, x2, y2)
             line.connect_start = f'{link_id(roi)}:{site_of(box_r, best[0])}'
-            line.connect_end = f'{link_id(inset)}:{site_of(box_i, best[1])}'
+            if rotated:
+                name = min(sites_i.items(), key=lambda item: math.dist(item[1], best[1]))[0]
+                line.connect_end = f'{link_id(inset)}:{name}:{SEEN}'
+            else:
+                line.connect_end = f'{link_id(inset)}:{site_of(box_i, best[1])}'
             adopted += 1
     return adopted
 
@@ -306,20 +354,41 @@ def _snap(parent, annotations=None) -> int:
     for line in shapes:
         if not is_connector(line):
             continue
-        (a_id, a_site, a_off), (b_id, b_site, b_off) = _end(line.connect_start), _end(line.connect_end)
+        (a_id, a_site, a_off, a_seen), (b_id, b_site, b_off, b_seen) = _end(line.connect_start), _end(line.connect_end)
         a, b = by_id.get(a_id), by_id.get(b_id)
         if a is None or b is None or a is line or b is line:
             continue
-        if getattr(parent, 'theta', 0) and (isinstance(a, Image2D) or isinstance(b, Image2D)):
-            # a rotated panel: the inset stays upright and its tilted corners can only be
-            # measured on a full paint; the inset end stays, the ROI end follows its ROI
-            _follow_one_end(line, a, b, parent, a_site, b_site, a_off, b_off)
-            placed += 1
+        rotated = bool(getattr(parent, 'theta', 0))
+        ends = []
+        for shape, site, off, seen, attr in ((a, a_site, a_off, a_seen, 'connect_start'),
+                                             (b, b_site, b_off, b_seen, 'connect_end')):
+            if isinstance(shape, Image2D) and (rotated or seen):
+                # a rotated panel: the inset stays upright while the image turns, so its
+                # drawn corners are tilted in image pixels; they are measured on a paint
+                # (the inset end used to stay where it was drawn, user 2026-11-13)
+                sites = inset_sites(shape, parent)
+                if sites is None:
+                    ends = None
+                    break
+                if not seen and site != 'auto':
+                    # made against the upright box around the tilted inset: the corner it
+                    # was drawn on, named as seen in the figure from now on
+                    box = shape_box(shape, parent)
+                    if box:
+                        bx, by = _box_sites(box)[site]
+                        drawn = (bx + off[0], by + off[1])
+                        site = min(sites.items(), key=lambda item: math.dist(item[1], drawn))[0]
+                    setattr(line, attr, f'{link_id(shape)}:{site}:{SEEN}')
+                ends.append((sites, site, (0.0, 0.0)))
+            else:
+                box = shape_box(shape, parent)
+                if not box:
+                    ends = None
+                    break
+                ends.append((_box_sites(box), site, off))
+        if not ends:
             continue
-        box_a, box_b = shape_box(a, parent), shape_box(b, parent)
-        if not box_a or not box_b:
-            continue
-        sites_a, sites_b = _box_sites(box_a), _box_sites(box_b)
+        (sites_a, a_site, a_off), (sites_b, b_site, b_off) = ends
         if a_site != 'auto' and b_site != 'auto':
             p, q = sites_a.get(a_site), sites_b.get(b_site)
         else:
@@ -336,24 +405,6 @@ def _snap(parent, annotations=None) -> int:
         line.setLine(p[0], p[1], q[0], q[1])
         placed += 1
     return placed
-
-
-def _follow_one_end(line, a, b, parent, a_site, b_site, a_off, b_off):
-    """Move only the end(s) of *line* attached to a non-inset shape."""
-    from batoolset.drawings.shapes.image2d import Image2D
-    p, q = (line.x1(), line.y1()), (line.x2(), line.y2())
-    for shape, site, off, is_start in ((a, a_site, a_off, True), (b, b_site, b_off, False)):
-        if isinstance(shape, Image2D) or site == 'auto':
-            continue
-        box = shape_box(shape, parent)
-        if not box:
-            continue
-        sx, sy = _box_sites(box)[site]
-        if is_start:
-            p = (sx + off[0], sy + off[1])
-        else:
-            q = (sx + off[0], sy + off[1])
-    line.setLine(p[0], p[1], q[0], q[1])
 
 
 def _follow(parent, inset, roi):

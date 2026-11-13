@@ -1068,11 +1068,17 @@ def remove_rois(
     shapes: list[str] | None = None,
     all_panels: bool = False,
     keep_inset_rois: bool = True,
+    annotation_indexes: list[int] | None = None,
+    max_size: float | None = None,
 ) -> str:
     """Remove ALL the ROIs of one panel (or of every panel) in one call:
     "remove all the ROIs of e", "clear the boxes", "replace the ellipses by
     squares" (remove them, then draw the new ones). Instead of one
     remove_annotation per ROI (26 calls, and shifting indexes).
+    Only SOME of them, still in one call: *annotation_indexes* (from
+    get_annotations, all read before anything is removed, so no index shifts) or
+    *max_size* ("remove the tiny ROIs": only those whose longest side is at most
+    this many image pixels; look at the sizes first).
 
     *shapes*: which ROIs: any of "rect" (rectangles, squares), "ellipse"
     (ellipses, circles, points), "polygon" (polygons, polylines, freehand),
@@ -1090,6 +1096,10 @@ def remove_rois(
     if bad:
         return f"ERROR: unknown shapes {bad}; use any of {sorted(_ROI_KINDS)}."
     tags = set().union(*(_ROI_KINDS[k] for k in kinds))
+    if annotation_indexes is not None and all_panels:
+        return "ERROR: annotation_indexes are those of one panel: give its group_path / image_index, not all_panels."
+    if max_size is not None and max_size <= 0:
+        return "ERROR: max_size is a positive number of image pixels."
     tree, root = _load(pyf_path)
     if all_panels:
         images = [img for img in root.iter("Image2D") if img.find("annotations") is not None]
@@ -1120,9 +1130,19 @@ def remove_rois(
         # an inset written by a file tool (add_zoom_callout) does not name its ROI yet:
         # its crop starts where the ROI starts (the GUI links them the same way)
         corners = [(num(c, "crop_left"), num(c, "crop_top")) for c in insets]
+        if annotation_indexes is not None:
+            wrong = [i for i in annotation_indexes if not 0 <= i < len(children) or children[i].tag not in tags]
+            if wrong:
+                return (f"ERROR: annotation(s) {wrong} are not {'/'.join(kinds)} ROIs of this panel "
+                        f"(it has {len(children)} annotations; see get_annotations). Nothing was removed.")
+            chosen = {id(children[i]) for i in annotation_indexes}
         gone = set()
         for c in children:
             if c.tag not in tags:
+                continue
+            if annotation_indexes is not None and id(c) not in chosen:
+                continue
+            if max_size is not None and _roi_size(c) > max_size:
                 continue
             ident = _plain(_child_text(c, "link_id"))
             shown = (ident and ident in followed) or (c.tag in _ROI_KINDS["rect"] and any(
@@ -1151,6 +1171,23 @@ def remove_rois(
     note = (f" {kept_for_insets} ROI(s) shown by an inset were kept (keep_inset_rois=false removes them)."
             if kept_for_insets else "")
     return f"Removed {total} ROI(s) from {where}: {detail}.{note}"
+
+
+def _roi_size(el) -> float:
+    """The longest side of an ROI element, in image pixels (a line: its length)."""
+    import ast
+    import math
+    if el.tag == "Line2D":
+        return math.dist((_num(el, "x1"), _num(el, "y1")), (_num(el, "x2"), _num(el, "y2")))
+    raw = _plain(_child_text(el, "points"))
+    if raw:
+        try:
+            pts = ast.literal_eval(raw)
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            return max(max(xs) - min(xs), max(ys) - min(ys))
+        except (ValueError, SyntaxError, TypeError, IndexError):
+            pass
+    return max(_num(el, "width"), _num(el, "height"))
 
 
 def _set_num(el, key, value):
