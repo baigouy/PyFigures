@@ -27,6 +27,8 @@ def shape_state(shape):
         return ('poly', QPolygonF(shape), crops)
     if isinstance(shape, QRectF):
         return ('rect', QRectF(shape), crops)
+    if callable(getattr(shape, 'rect', None)) and callable(getattr(shape, 'setRect', None)):
+        return ('ellipse', QRectF(shape.rect()), crops)        # its size too, not only its position
     try:
         return ('topleft', QPointF(shape.topLeft()), crops)
     except Exception:
@@ -50,6 +52,8 @@ def restore_state(shape, state):
             shape.append(QPointF(p))
     elif kind == 'rect':
         shape.setRect(geom.x(), geom.y(), geom.width(), geom.height())
+    elif kind == 'ellipse':
+        shape.setRect(QRectF(geom))
     elif kind == 'topleft':
         shape.setTopLeft(geom)
 
@@ -100,6 +104,78 @@ def handle_rects(line, scale):
     """The squares drawn on the two ends of a selected line (image coords)."""
     h = HANDLE_PX / max(scale, 1e-6)
     return [QRectF(p.x() - h, p.y() - h, 2 * h, 2 * h) for p in (line.p1(), line.p2())]
+
+
+# ── rectangle / ellipse resize handles ──────────────────────────────────────
+# A selected line had end handles; rectangles, squares, ellipses and circles had
+# none, so their size could not be changed after drawing (user, 2026-11-13).
+BOX_HANDLES = ('top left', 'top', 'top right', 'right', 'bottom right', 'bottom', 'bottom left', 'left')
+
+
+def box_rect(shape):
+    """The box of a rectangle-like (QRectF) or ellipse-like (rect()) shape."""
+    if isinstance(shape, QRectF):
+        return QRectF(shape)
+    return QRectF(shape.rect())
+
+
+def set_box_rect(shape, rect):
+    if isinstance(shape, QRectF):
+        shape.setRect(rect.x(), rect.y(), rect.width(), rect.height())
+    else:
+        shape.setRect(QRectF(rect))
+
+
+def box_handle_points(rect):
+    """{handle name: point} for the 8 handles of *rect*."""
+    c = rect.center()
+    return {'top left': rect.topLeft(), 'top': QPointF(c.x(), rect.top()), 'top right': rect.topRight(),
+            'right': QPointF(rect.right(), c.y()), 'bottom right': rect.bottomRight(),
+            'bottom': QPointF(c.x(), rect.bottom()), 'bottom left': rect.bottomLeft(),
+            'left': QPointF(rect.left(), c.y())}
+
+
+def box_handle_rects(shape, scale):
+    h = HANDLE_PX * 0.8 / max(scale, 1e-6)
+    return [QRectF(p.x() - h, p.y() - h, 2 * h, 2 * h) for p in box_handle_points(box_rect(shape)).values()]
+
+
+def box_handle_at(shape, point, scale):
+    """The handle of *shape* under *point* (image coordinates), or None."""
+    tol = HANDLE_PX / max(scale, 1e-6)
+    best, dist = None, tol
+    for name, p in box_handle_points(box_rect(shape)).items():
+        d = QLineF(p, point).length()
+        if d <= dist:
+            best, dist = name, d
+    return best
+
+
+def resized_box(rect, handle, point, keep_square=False, minimum=2.0):
+    """*rect* with *handle* dragged to *point*; the opposite side stays put. With
+    *keep_square* (circles, squares) width and height stay equal."""
+    left, top, right, bottom = rect.left(), rect.top(), rect.right(), rect.bottom()
+    if 'left' in handle:
+        left = min(point.x(), right - minimum)
+    if 'right' in handle:
+        right = max(point.x(), left + minimum)
+    if handle.startswith('top'):
+        top = min(point.y(), bottom - minimum)
+    if handle.startswith('bottom'):
+        bottom = max(point.y(), top + minimum)
+    out = QRectF(left, top, right - left, bottom - top)
+    if keep_square:
+        horizontal = handle in ('left', 'right')
+        vertical = handle in ('top', 'bottom')
+        side = out.width() if horizontal else out.height() if vertical else max(out.width(), out.height())
+        x = out.left() if 'right' in handle or vertical else out.right() - side
+        y = out.top() if handle.startswith('bottom') or horizontal else out.bottom() - side
+        if horizontal:
+            y = rect.center().y() - side / 2          # an edge handle grows around the middle
+        if vertical:
+            x = rect.center().x() - side / 2
+        out = QRectF(x, y, side, side)
+    return out
 
 
 # ── crop rectangle ──────────────────────────────────────────────────────────

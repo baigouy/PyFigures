@@ -113,6 +113,7 @@ class VectorialDrawPane2(QWidget):
         self._undo = []
         self._press_snapshot = None
         self._drag_endpoint = None     # 1 / 2 while an end of the selected line is dragged
+        self._drag_box = None          # the handle of the selected rectangle / ellipse being dragged
         self._crop_grab = None         # a crop side / corner / 'move' being dragged
         self.crop_controller = None    # MainWindow while the Rotate + Crop tab is shown
         self.inset_geometry = None     # MainWindow: an inset's corners as the figure draws it
@@ -309,6 +310,18 @@ class VectorialDrawPane2(QWidget):
         if self.selected_shape and len(self.selected_shape) == 1 and isinstance(self.selected_shape[0], Line2D):
             return self.selected_shape[0]
         return None
+
+    _BOX_SHAPES = ('Rectangle2D', 'Rect2D', 'Square2D', 'Ellipse2D', 'Circle2D')
+
+    def _single_selected_box(self):
+        """The one selected rectangle, square, ellipse or circle (not rotated): it
+        gets 8 resize handles, as a line gets its end handles."""
+        if not self.selected_shape or len(self.selected_shape) != 1:
+            return None
+        shape = self.selected_shape[0]
+        if type(shape).__name__ not in self._BOX_SHAPES or (getattr(shape, 'theta', 0) or 0):
+            return None
+        return shape
 
     def color_picker(self, method_to_set_color):
         try:
@@ -564,6 +577,16 @@ class VectorialDrawPane2(QWidget):
             for r in EI.handle_rects(line, self.scale):
                 painter.drawRect(r)
             painter.restore()
+        box = self._single_selected_box()
+        if box is not None and self.crop_controller is None:
+            # resize handles on the corners and edge middles
+            painter.save()
+            painter.setOpacity(1)
+            painter.setPen(QPen(QColor(0xFF0000), 1.5 / max(self.scale, 1e-6)))
+            painter.setBrush(QColor(255, 255, 255))
+            for r in EI.box_handle_rects(box, self.scale):
+                painter.drawRect(r)
+            painter.restore()
 
         painter.restore()
         painter.end()
@@ -786,6 +809,13 @@ class VectorialDrawPane2(QWidget):
                 if self._drag_endpoint:
                     return
 
+            box = self._single_selected_box()
+            if box is not None and self.currently_drawn_shape is None and self.crop_controller is None:
+                self._drag_box = EI.box_handle_at(box, self.lastPoint, self.scale)
+                if self._drag_box:
+                    self._drag_box_start = EI.box_rect(box)
+                    return
+
             if self._bracket_mode:
                 # begin a bracket drag; skip the normal selection/creation logic
                 self._bracket_dragging = True
@@ -932,6 +962,15 @@ class VectorialDrawPane2(QWidget):
                 self.update()
             self.lastPoint = point
             return
+        if self._drag_box:
+            box = self._single_selected_box()
+            if box is not None:
+                square = type(box).__name__ in ('Square2D', 'Circle2D')
+                EI.set_box_rect(box, EI.resized_box(self._drag_box_start, self._drag_box, point, keep_square=square))
+                self.update_size()
+                self.update()
+            self.lastPoint = point
+            return
         if not event.buttons():
             self._hover_cursor(point)
         if self._bracket_mode and self._bracket_dragging:
@@ -967,6 +1006,10 @@ class VectorialDrawPane2(QWidget):
             grab = self.crop_controller.crop_hit(point, self.scale)
         elif line is not None and EI.line_handle_at(line, point, self.scale):
             grab = ('end',)
+        elif self._single_selected_box() is not None:
+            handle = EI.box_handle_at(self._single_selected_box(), point, self.scale)
+            if handle:
+                grab = tuple(handle.split()) if ' ' in handle else (handle,)
         if not grab:
             self.unsetCursor()
             return
@@ -992,10 +1035,11 @@ class VectorialDrawPane2(QWidget):
     def mouseReleaseEvent(self, event):
         self.dragged=False
 
-        if event.button() == Qt.LeftButton and (self._crop_grab or self._drag_endpoint):
-            ended_line = bool(self._drag_endpoint)
+        if event.button() == Qt.LeftButton and (self._crop_grab or self._drag_endpoint or self._drag_box):
+            ended_line = bool(self._drag_endpoint or self._drag_box)
             self._crop_grab = None
             self._drag_endpoint = None
+            self._drag_box = None
             self.drawing = False
             self._record_press_edit()
             if ended_line:
