@@ -5347,14 +5347,25 @@ class EZFIG_GUI(QMainWindow):
         min_area.setSuffix(' px²')
         min_area.setToolTip('Smaller pieces are ignored (debris); automatic = 0.02 % of the image')
         channel = QComboBox(frame)
-        channel.addItems(['all colours', 'red', 'green', 'blue'])
-        channel.setToolTip('The colour the objects are shown in: blue for nuclei inside green or red cells')
+        channel.addItem('all channels', 'all')
+        from pyfigures.panel_source_preview import panel_channels
+        try:
+            own = panel_channels(_panel)
+        except Exception:
+            own = []
+        for i, colour in enumerate(own):      # the image's real channels, with their colours
+            channel.addItem(f'channel {i + 1}' + (f' ({colour.lower()})' if colour else ''), str(i + 1))
+        if not own:                           # a picture as shown: its red, green or blue
+            for colour in ('red', 'green', 'blue'):
+                channel.addItem(colour, colour)
+        channel.setToolTip('The channel the objects are in: e.g. the blue (DAPI) channel for nuclei '
+                           'inside green or red cells')
         split = QCheckBox('Split touching objects', frame)
         split.setChecked(True)
         colour = QComboBox(frame)
         colour.addItems(['yellow', 'white', 'cyan', 'magenta', 'red', 'green', 'black'])
         for row, (text, widget) in enumerate((('ROI shape:', shape), ('Objects are:', polarity),
-                                              ('Objects shown in:', channel),
+                                              ('Objects are in:', channel),
                                               ('Smallest object:', min_area), ('Colour:', colour))):
             grid.addWidget(QLabel(text, frame), row, 0)
             grid.addWidget(widget, row, 1)
@@ -5372,7 +5383,7 @@ class EZFIG_GUI(QMainWindow):
             values = dict(shape=('rect', 'ellipse')[shape.currentIndex()],
                           polarity=('auto', 'dark', 'bright')[polarity.currentIndex()],
                           min_area=min_area.value() or None, split_touching=split.isChecked(),
-                          channel=('all', 'red', 'green', 'blue')[channel.currentIndex()],
+                          channel=channel.currentData(),
                           color=colour.currentText())
         import json
         from pyfigures.mcp_server import detect_objects

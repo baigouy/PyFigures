@@ -76,8 +76,48 @@ def test_nuclei_shown_in_blue_inside_green_cells(tmp_path):
     nuclei = json.loads(detect_objects(p, [0], 0, dry_run=True, padding=0, channel='blue'))
     assert all(85 <= b['width'] <= 93 for b in cells['boxes']) and len(cells['boxes']) == 2
     assert all(27 <= b['width'] <= 33 for b in nuclei['boxes']) and len(nuclei['boxes']) == 2
-    assert nuclei['channel'] == 'blue'
+    assert nuclei['channel'] == 'channel 3 (blue)'
     assert detect_objects(p, [0], 0, channel='purple').startswith('ERROR')
+
+
+def test_the_real_channels_of_a_two_channel_stack(tmp_path):
+    """Not every image is RGB (user, 2026-11-13): a 16-bit 2-channel file; channel 2
+    has the nuclei. Counted from 1, checked against the file's channel count."""
+    import tifffile
+    yy, xx = np.mgrid[:200, :200]
+    a = np.zeros((2, 200, 200), np.uint16)
+    for cx, cy in ((60, 60), (140, 130)):
+        a[0][(xx - cx) ** 2 + (yy - cy) ** 2 <= 45 ** 2] = 3000
+        a[1][(xx - cx) ** 2 + (yy - cy) ** 2 <= 15 ** 2] = 4000
+    tifffile.imwrite(tmp_path / 'two.tif', a, imagej=True, metadata={'axes': 'CYX'})
+    p = str(tmp_path / 'two.pyf')
+    create_figure(p, mode='groups', num_groups=1)
+    add_image(p, [0], str(tmp_path / 'two.tif'))
+    nuclei = json.loads(detect_objects(p, [0], 0, dry_run=True, padding=0, channel='2'))
+    cells = json.loads(detect_objects(p, [0], 0, dry_run=True, padding=0, channel=1))
+    assert nuclei['channel'].startswith('channel 2') and all(27 <= b['width'] <= 33 for b in nuclei['boxes'])
+    assert all(85 <= b['width'] <= 93 for b in cells['boxes']) and len(cells['boxes']) == 2
+    assert 'has 2 channel(s)' in detect_objects(p, [0], 0, channel='5')
+    from pyfigures.panel_source_preview import panel_channels
+    from batoolset.serializations.tools import element_to_dict, create_object
+    img = ET.parse(p).getroot().find('.//Image2D')
+    panel = create_object('Image2D', element_to_dict(img).get('Image2D', element_to_dict(img)))
+    assert len(panel_channels(panel)) == 2
+    assert panel.channels is None or len(panel.channels) == 2       # put back as it was
+
+
+def test_hela_channels_come_from_the_file():
+    import os
+    path = 'C:/Users/aigouy/OneDrive/Desktop/test_images/sample_images_FIJI/hela-cells.tif'
+    if not os.path.isfile(path):
+        pytest.skip('sample image not on this computer')
+    import tempfile
+    d = tempfile.mkdtemp()
+    p = os.path.join(d, 'h.pyf')
+    create_figure(p, mode='groups', num_groups=1)
+    add_image(p, [0], path)
+    out = json.loads(detect_objects(p, [0], 0, dry_run=True, channel='blue'))
+    assert out['channel'] == 'channel 3 (blue)' and out['found'] == 4
 
 
 def test_only_the_visible_part_is_searched(tmp_path):

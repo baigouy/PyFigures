@@ -609,8 +609,10 @@ def _check_extras(opts, where, base):
             raise RecipeError(f"{where}: detect_objects shape must be rect or ellipse")
         if detect.get("polarity", "auto") not in ("auto", "dark", "bright"):
             raise RecipeError(f"{where}: detect_objects polarity must be auto, dark or bright")
-        if detect.get("channel", "all") not in ("all", "red", "green", "blue"):
-            raise RecipeError(f"{where}: detect_objects channel must be all, red, green or blue")
+        ch = detect.get("channel", "all")
+        if not (isinstance(ch, int) and not isinstance(ch, bool) and ch >= 1) and not (isinstance(ch, str) and ch.strip()):
+            raise RecipeError(f"{where}: detect_objects channel must be all, a channel number (1, 2…) "
+                              "or the colour the channel is shown in (blue…)")
     if "kymograph" in opts:
         _check_mapping(opts["kymograph"], _KYMO_KEYS, {"line"}, where, "kymograph")
         _check_point(opts["kymograph"]["line"], 4, where, "kymograph 'line'")

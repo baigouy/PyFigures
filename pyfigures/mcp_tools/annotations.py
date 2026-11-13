@@ -716,7 +716,7 @@ def detect_objects(
     min_area: int | None = None,
     max_area: int | None = None,
     split_touching: bool = True,
-    channel: str = "all",
+    channel: str | int = "all",
     padding: int = 3,
     color: str | int = "yellow",
     stroke: float = 2.0,
@@ -741,9 +741,12 @@ def detect_objects(
     *min_area* / *max_area*: object size limits in pixels (default 0.02 % / 25 %
     of the searched area): raise min_area to skip debris.
     *split_touching*: split touching round objects (false keeps a clump whole).
-    *channel*: "all" (the colours averaged) or the colour the objects are shown
-    in: "red", "green", "blue" — nuclei shown blue inside green / red cells
-    need channel="blue" (all colours together outline the whole cells).
+    *channel*: "all" (the colours as shown, averaged), a channel number ("2",
+    counted from 1, of the image's real channels, however many) or the colour a
+    channel is shown in ("blue": the channel whose LUT or file colour is blue;
+    on an RGB picture, its blue). Nuclei shown blue inside green / red cells need
+    the nuclei channel (all colours together outline the whole cells). The
+    channel is taken as displayed: same z, time point, projection and range.
     *padding*: pixels added around each object.
     *dry_run*: true only reports what was found (count, boxes); nothing is added.
     *max_objects*: refuse to add more ROIs than this (likely a bad threshold).
@@ -770,17 +773,16 @@ def detect_objects(
     _ensure_qapp()
     props = element_to_dict(img)
     panel = create_object("Image2D", props.get("Image2D", props))
+    from ..panel_source_preview import detection_plane
     try:
-        rgb = panel_rgb(panel)
+        plane, rgb, what = detection_plane(panel, channel)
+        h, w = rgb.shape[:2]
+        objects, info = detect(rgb if plane is None else plane, visible_region(panel_crop(panel), w, h),
+                               polarity=polarity, min_area=min_area, max_area=max_area,
+                               split_touching=split_touching)
     except ValueError as e:
         return f"ERROR: {e}"
-    h, w = rgb.shape[:2]
-    try:
-        objects, info = detect(rgb, visible_region(panel_crop(panel), w, h), polarity=polarity,
-                               min_area=min_area, max_area=max_area, split_touching=split_touching,
-                               channel=channel)
-    except ValueError as e:
-        return f"ERROR: {e}"
+    info["channel"] = what
     boxes = [dict(zip(("x", "y", "width", "height"), padded(o, max(0, int(padding)), w, h))) for o in objects]
     result = {"found": len(boxes), "added": 0, "shape": shape, "boxes": boxes, **info}
     if not boxes and info.get("note"):

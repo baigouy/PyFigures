@@ -155,6 +155,93 @@ def panel_rgb(panel):
     return qimage_to_rgb(panel.qimage)
 
 
+def panel_channels(panel):
+    """The panel's real channels: a list, one entry per channel, of the colour it is
+    shown in (its LUT, else the file's own colour; None when unknown), or [] for a
+    single-channel image. An RGB file without channel colours gives RED/GREEN/BLUE."""
+    import numpy as np
+    from batoolset.img import guess_dimensions
+    img = getattr(panel, 'img', None)
+    if img is None and hasattr(panel, 'load_img'):
+        panel.load_img()
+        img = getattr(panel, 'img', None)
+    if not isinstance(img, np.ndarray):
+        return []
+    try:
+        dims = guess_dimensions(img) or ''
+    except Exception:
+        dims = ''
+    if 'c' not in dims:
+        return []
+    n = img.shape[dims.index('c')] if len(dims) == img.ndim else img.shape[-1]
+    if n < 2:
+        return []
+    try:
+        from pyfigures.assistant.session import channel_colours
+        colours = list(channel_colours(panel) or [])
+    except Exception:
+        colours = []
+    colours = (colours + [None] * n)[:n]
+    if not any(colours) and n == 3:
+        colours = ['RED', 'GREEN', 'BLUE']
+    return [str(c).upper() if c else None for c in colours]
+
+
+def panel_channel_plane(panel, index):
+    """Channel *index* (0-based) of *panel* as it is shown (same z, time point,
+    projection and display range), as a 2-D float array: the panel is drawn once
+    with only that channel on, in gray, then put back as it was."""
+    import numpy as np
+    n = len(panel_channels(panel))
+    if not 0 <= index < n:
+        raise ValueError(f'channel {index + 1} does not exist: the image has {n or 1} channel(s)')
+    saved = (getattr(panel, 'channels', None), getattr(panel, 'LUTs', None))
+    try:
+        panel.channels = [i == index for i in range(n)]
+        luts = list(saved[1] or [None] * n)
+        luts = (luts + [None] * n)[:n]
+        luts[index] = 'GRAY'
+        panel.LUTs = luts
+        panel.update_qimage()
+        plane = qimage_to_rgb(panel.qimage).astype(np.float32).mean(axis=2)
+    finally:
+        panel.channels, panel.LUTs = saved
+        try:
+            panel.update_qimage()
+        except Exception:
+            pass
+    return plane
+
+
+def detection_plane(panel, channel='all'):
+    """(plane, rgb, what) for object detection: *channel* 'all' (the colours as shown,
+    averaged), a channel number ('2', 1-based as people count) or a colour ('blue'):
+    the image's own channel shown in that colour when it has real channels (from the
+    file's metadata or its LUTs), else that colour of the picture as shown. *rgb* is
+    the picture as shown (its size is the image's)."""
+    rgb = panel_rgb(panel)
+    if channel in (None, '', 'all'):
+        return None, rgb, 'all channels'
+    text = str(channel).strip().lower()
+    colours = panel_channels(panel)
+    if text.isdigit():
+        index = int(text) - 1
+        if not colours:
+            if index == 0:
+                return None, rgb, 'channel 1 (the only one)'
+            raise ValueError(f'channel {text} does not exist: the image has a single channel')
+        return panel_channel_plane(panel, index), rgb, f'channel {text}' + (
+            f' ({colours[index].lower()})' if 0 <= index < len(colours) and colours[index] else '')
+    matches = [i for i, c in enumerate(colours) if c and c.lower() == text]
+    if len(matches) == 1:
+        return panel_channel_plane(panel, matches[0]), rgb, f'channel {matches[0] + 1} ({text})'
+    if text in ('red', 'green', 'blue'):
+        from .object_detection import channel_plane
+        return channel_plane(rgb, text), rgb, f'the {text} of the picture as shown'
+    names = ', '.join(f'{i + 1}' + (f' ({c.lower()})' if c else '') for i, c in enumerate(colours)) or '1'
+    raise ValueError(f'no channel is shown in {text!r}; channels: {names}. Use a channel number or "all".')
+
+
 def preview_panel(panel, out_path, title='', brighten=True, region=None):
     """Render *panel*'s whole source (or *region* of it) with rulers and its ROIs to
     *out_path*; returns its description."""
