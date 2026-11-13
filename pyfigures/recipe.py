@@ -109,7 +109,9 @@ _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
                "corner_labels", "rois", "connectors", "inset", "zoom", "brackets", "properties",
-               "page"}
+               "page", "detect_objects"}
+# detect_objects: true, or these options (an ROI around every object, by thresholding)
+_DETECT_KEYS = {"shape", "polarity", "min_area", "max_area", "split", "padding", "color", "stroke"}
 # a connector joins two of the panel's rois (numbered from 1) and stays attached to them
 _CONNECTOR_KEYS = {"from", "to", "from_site", "to_site", "color", "stroke", "arrow"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
@@ -600,6 +602,13 @@ def _check_extras(opts, where, base):
         for k, a in enumerate(arrows):
             _check_mapping(a, _ARROW_KEYS, {"at"}, where, f"arrow {k + 1}")
             _check_point(a["at"], 2, where, f"arrow {k + 1} 'at'")
+    detect = opts.get("detect_objects")
+    if detect is not None and detect is not True and detect is not False:
+        _check_mapping(detect, _DETECT_KEYS, set(), where, "detect_objects")
+        if detect.get("shape", "rect") not in ("rect", "ellipse"):
+            raise RecipeError(f"{where}: detect_objects shape must be rect or ellipse")
+        if detect.get("polarity", "auto") not in ("auto", "dark", "bright"):
+            raise RecipeError(f"{where}: detect_objects polarity must be auto, dark or bright")
     if "kymograph" in opts:
         _check_mapping(opts["kymograph"], _KYMO_KEYS, {"line"}, where, "kymograph")
         _check_point(opts["kymograph"]["line"], 4, where, "kymograph 'line'")
@@ -1489,6 +1498,20 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
         if "stroke" in c:
             kw["stroke"] = c["stroke"]
         w += _check(M.add_connector(out, gp, i, first, second, **kw), step + f" connector {k + 1}")
+    detect = opts.get("detect_objects")
+    if detect:
+        d = detect if isinstance(detect, dict) else {}
+        kw = {key: d[key] for key in ("shape", "polarity", "min_area", "max_area", "padding", "color", "stroke")
+              if key in d}
+        if "split" in d:
+            kw["split_touching"] = bool(d["split"])
+        raw = M.detect_objects(out, gp, i, **kw)
+        if raw.startswith("ERROR"):
+            w += _check(raw, step + " detect_objects")
+        else:
+            found = json.loads(raw)
+            if not found.get("added"):
+                w.append(f"{step} detect_objects: {found['summary']} {found.get('note', '')}".rstrip())
     for k, a in enumerate(opts.get("arrows") or []):
         kw = {"from_direction": a.get("from", "top left")}
         kw.update({key: a[key] for key in ("length", "color", "stroke", "head",

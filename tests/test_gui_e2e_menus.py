@@ -353,6 +353,13 @@ def chk_annotation_added(cls):
     return chk
 
 
+def chk_rois_detected(g, b, a, run):
+    pa = next(p for p in a["panels"] if p["name"] == "cells.png")
+    pb = next(p for p in b["panels"] if p["name"] == "cells.png")
+    assert len(pa["rois"]) > len(pb["rois"]), (pb["rois"], pa["rois"])
+    assert g._last_detection["added"] == len(pa["rois"]) - len(pb["rois"])
+
+
 def _bold_texts(dlg):
     w = dlg.parent()._text_style_widgets
     w["target"].setCurrentIndex(w["target"].findData("texts"))
@@ -568,6 +575,8 @@ ACTIONS = {
     "menu: Annotations > Add zoom callout to selected panel…": spec(chk_annotation_added("inset"),
                                                                     [("zoom callout", ok)]),
     "menu: Annotations > Add arrow pointing at a feature…": spec(chk_annotation_added("roi"), [("arrow", ok)]),
+    "menu: Annotations > Detect objects (ROIs) in selected panel…": spec(chk_rois_detected,
+                                                                          [("Detect objects", ok)], sel="cells"),
     "menu: Annotations > Text style (letters, labels, scale bars…)…": spec(chk_texts_bold, [("Text style", _bold_texts)]),
     "menu: Annotations > Draw ROIs, text, crop or rotate (double-click a panel)…": spec(
         unchanged, [("Annotate the image", H.reject)], inv=False),

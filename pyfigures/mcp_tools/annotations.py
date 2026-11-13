@@ -91,7 +91,10 @@ def add_roi_rect(
     """Overlay a rectangular ROI (highlight box) on an image.
 
     Coordinates are in *image pixels* relative to the top-left of the raw
-    image (before any crop or rotation applied in PyFigures).
+    image (before any crop or rotation applied in PyFigures). To put it on
+    something the image shows ("a box around each cell"), read the coordinates
+    off preview_panel_source (live chat: preview_panel) first, not off a whole
+    figure preview; detect_objects boxes every object at once.
 
     *x*, *y*: top-left corner of the rectangle.
     *width*, *height*: size in pixels.
@@ -152,6 +155,8 @@ def add_roi_ellipse(
     """Overlay an elliptical (or circular) ROI on an image.
 
     Coordinates are in *image pixels* relative to the top-left of the raw image.
+    Read them off preview_panel_source (live chat: preview_panel) for an ROI on
+    something the image shows; detect_objects outlines every object at once.
 
     *x*, *y*: top-left of the bounding box.
     *width*, *height*: bounding-box size. Pass equal values for a circle.
@@ -211,6 +216,8 @@ def add_roi_line(
     """Overlay a straight line (or arrow) on an image.
 
     Coordinates are in *image pixels* relative to the top-left of the raw image.
+    Read them off preview_panel_source (live chat: preview_panel) when they come
+    from what the image shows.
 
     *x1*, *y1*: start point.
     *x2*, *y2*: end point.
@@ -347,7 +354,8 @@ def add_arrow(
     do not apply). get_annotations reports kind "arrow" / "arrowhead".
 
     The arrowhead's point is exactly (*tip_x*, *tip_y*) in image pixels
-    (top-left of the raw image = 0,0) and stays on that pixel whatever the
+    (top-left of the raw image = 0,0; read them off preview_panel_source, live
+    chat: preview_panel, when they come from what the image shows) and stays on that pixel whatever the
     panel size, zoom or export resolution — the head keeps a constant size on
     the page and grows backwards from its point.
 
@@ -696,6 +704,100 @@ def add_significance_bracket_from_data(
         f"{image_index} in {loc}: span x=[{x_lo:g},{x_hi:g}] at y={y:g}. Recorded "
         f"in the statistics sidecar for the Methods section."
     )
+
+
+@mcp.tool()
+def detect_objects(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    shape: str = "rect",
+    polarity: str = "auto",
+    min_area: int | None = None,
+    max_area: int | None = None,
+    split_touching: bool = True,
+    padding: int = 3,
+    color: str | int = "yellow",
+    stroke: float = 2.0,
+    dry_run: bool = False,
+    max_objects: int = 300,
+) -> str:
+    """Find the objects of one image panel (cells, nuclei, embryos, blobs) by
+    thresholding and put an ROI around each, all in one call: "draw ROIs over
+    every cell in e", "box each nucleus", "how many cells are there in b?".
+
+    A simple tool for simple images: smoothing, an automatic (Otsu) threshold,
+    the objects taken as the minority class, small and elongated pieces (a
+    burnt-in scale bar, scratches) and objects cut by the visible edge dropped,
+    touching round objects split. It works on clear objects on a plain
+    background; check the result with preview_panel_source (live chat:
+    preview_panel), which draws the ROIs, then remove or fix the odd ones.
+    Only the visible (cropped) part of the image is searched.
+
+    *shape*: "rect" or "ellipse".
+    *polarity*: "auto" (the minority class), "dark" (objects darker than the
+    background: brightfield) or "bright" (fluorescence).
+    *min_area* / *max_area*: object size limits in pixels (default 0.02 % / 25 %
+    of the searched area): raise min_area to skip debris.
+    *split_touching*: split touching round objects (false keeps a clump whole).
+    *padding*: pixels added around each object.
+    *dry_run*: true only reports what was found (count, boxes); nothing is added.
+    *max_objects*: refuse to add more ROIs than this (likely a bad threshold).
+    *group_path* / *image_index*: the panel, as for add_roi_rect.
+
+    Returns JSON: found, added, the boxes (x, y, width, height in image pixels),
+    what was used (polarity, threshold, sizes) and what was dropped.
+    """
+    from ..object_detection import detect, padded, visible_region
+    from ..panel_source_preview import panel_rgb, panel_crop
+    if shape not in ("rect", "ellipse"):
+        return 'ERROR: shape is "rect" or "ellipse".'
+    bad = _roi_style_error(color, None, stroke, 1.0)
+    if bad:
+        return f"ERROR: {bad}"
+    tree, root = _load(pyf_path)
+    img, annots, err = _get_annots_for_roi(root, group_path, image_index)
+    if err:
+        return f"ERROR: {err}"
+    from batoolset.serializations.tools import element_to_dict, create_object
+    from batoolset.settings.global_settings import set_UI
+    from .core import _ensure_qapp
+    set_UI()
+    _ensure_qapp()
+    props = element_to_dict(img)
+    panel = create_object("Image2D", props.get("Image2D", props))
+    try:
+        rgb = panel_rgb(panel)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    h, w = rgb.shape[:2]
+    try:
+        objects, info = detect(rgb, visible_region(panel_crop(panel), w, h), polarity=polarity,
+                               min_area=min_area, max_area=max_area, split_touching=split_touching)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    boxes = [dict(zip(("x", "y", "width", "height"), padded(o, max(0, int(padding)), w, h))) for o in objects]
+    result = {"found": len(boxes), "added": 0, "shape": shape, "boxes": boxes, **info}
+    if not boxes and info.get("note"):
+        pass                                     # e.g. "the image is uniform: nothing to find"
+    elif not boxes:
+        result["note"] = ("Nothing found. Try polarity 'dark' or 'bright', or a smaller min_area; "
+                          "the objects may not stand out from the background.")
+    elif len(boxes) > max_objects:
+        result["note"] = (f"{len(boxes)} objects is more than max_objects={max_objects}: the threshold is "
+                          "probably picking background texture. Nothing was added; raise min_area or set polarity.")
+    elif not dry_run:
+        c = _color_to_int(color)
+        make = _new_roi_rect if shape == "rect" else _new_roi_ellipse
+        first = len(list(annots))
+        for b in boxes:
+            annots.append(make(b["x"], b["y"], b["width"], b["height"], c, None, stroke, 1.0))
+        _save(tree, pyf_path)
+        result["added"] = len(boxes)
+        result["annotation_indexes"] = [first, first + len(boxes) - 1]
+    result["summary"] = (f"{len(boxes)} object(s) found ({info['polarity']} on the background)"
+                         + (f"; {result['added']} {shape} ROI(s) added." if result["added"] else "; no ROI added."))
+    return json.dumps(result, indent=1)
 
 
 @mcp.tool()

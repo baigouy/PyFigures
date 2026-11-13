@@ -439,7 +439,7 @@ class Session:
                     raise ValueError('panel_ref must be a current visible letter or panel ID')
                 output = STATE / 'panel_source.png'
                 text = preview_panel(resolve_panel(w, ref), str(output), title='panel ' + ref,
-                                     brighten=bool(args.get('brighten', True)))
+                                     brighten=bool(args.get('brighten', True)), region=args.get('region'))
                 result = {'path': str(output), 'description': text, 'revision': self.revision}
             elif op in ('undo', 'redo'):
                 if op == 'undo':

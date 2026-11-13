@@ -197,6 +197,11 @@ def build_server(full_server, send):
         'All texts of a figure stay coherent: the panel letters alike, the scale-bar labels alike (restyle_texts target="scale_bars" styles them all), every text but the letters in one font (the letters may have their own); check_text_consistency checks it. '
         '"Consistent / the same letters (fonts)": every letter gets the same font, size, bold, italic, underline and background box; if one letter was made different on purpose, ask whether to spread that change to all letters or undo it on that one. '
         'Insets (magnified views) of each panel are listed in the state under insets, with the ROI they show. '
+        'To see a panel\'s own pixels use preview_panel(panel_ref), never preview_figure (the whole figure, each panel small): '
+        'coordinates for crops, ROIs and arrows are read off its source-pixel rulers, region=[x0,y0,x1,y1] zooms, and it draws '
+        'the panel\'s ROIs to check where they landed. "ROIs over every cell / each nucleus / all the embryos", "how many cells": '
+        'detect_objects(panel_ref) boxes them all in one call (dry_run=true only counts); then preview_panel to check and say '
+        'it is an automatic threshold whose odd ROIs the user can fix in the editor. Place objects one by one by eye only for a few named ones. '
         'When you must ask which object or what change, give choices and always include "open the panel editor so you do it yourself" among them. '
         'In replies, call a panel by its name in the panel state: its visible letter, else its canvas number "#3" (shown when the panel is selected). Never by a panel_id such as "1/1"; a letter it no longer has may only be added ("#5, formerly E"). '
         'Colours that look unnatural, weird, wrong, or "back to normal / the original / default colours", with no colour named: the FIRST option to offer (or to apply when the user asks to restore) is the image file\'s own colours, file_colours in the panel state: set_lut with "NONE" for each channel. Name those colours in the offer; other LUTs come after it. '
@@ -215,7 +220,7 @@ def build_server(full_server, send):
 
     @server.tool()
     def preview_figure():     # Image, or text for an empty figure ('Image | str' breaks FastMCP's schema)
-        """Show the current GUI canvas; no session parameters required. An empty figure gives a short text instead."""
+        """Show the current GUI canvas: the layout and overall look of the whole figure, each panel small; its rulers are figure units, not image pixels. To place or check anything in ONE panel's pixels (crops, ROIs, arrows, finding or counting objects) use preview_panel(panel_ref) instead: full size, source-pixel rulers, region zoom. No session parameters required. An empty figure gives a short text instead."""
         from .live_mcp import call_live
         summary = send('inspect').get('figure_summary') or {}
         if summary.get('empty'):
@@ -311,6 +316,10 @@ def build_server(full_server, send):
             # "crop g to the nuclei": see the whole source with rulers first (a model cropped/uncropped blind until out of steps)
             # (not "zoom"/"region": those ask for an inset)
             if name=='preview_panel' and any(w in ('crop','cropping','cropped','uncropped','uncrop') for w in words):score+=430
+            # "draw ROIs over every cell in e", "how many cells in b": one thresholding call (2026-11-13)
+            if name=='detect_objects' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','particles','particle','beads','bead') for w in words) and (any(w in ('every','each','all','many','count','detect','find','segment') for w in words) or any(w in ('roi','rois','box','boxes','circle','circles','outline','outlines','ellipses') for w in words)):score+=620
+            # "draw ROIs over every cell in e": the model guessed from the whole figure (2026-11-13)
+            if name=='preview_panel' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','around','over','each','every') for w in words) and any(w in ('roi','rois','box','boxes','rectangle','rectangles','circle','circles','ellipse','ellipses','arrow','arrows','outline','outlines') for w in words):score+=380
             if name=='transform_image' and any(w in ('crop','cropping','rotate','rotation','flip') for w in words):score+=200
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
             # "brighter", "increase the contrast in d": the display range (four searches each, 2026-11-12)

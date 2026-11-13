@@ -713,6 +713,7 @@ Everything here is drawn **on** an image panel, in its raw-pixel coordinates
 | `text` | a text, a mapping `{text, placement}`, or a list of them | Text on the panel; `placement` is a corner (default `bottom left`, so it does not sit on the letter). Plain text is white; rich text (`<i>…</i>`) is kept as written. |
 | `corner_labels` | `top_left`, `top_right`, `bottom_left`, `bottom_right` → a text or a list | Labels stacked from each corner inward (two labels in one corner sit one under the other). |
 | `rois` | list of shapes | Each has **one** of `rect: [x, y, w, h]`, `ellipse: [x, y, w, h]`, `line: [x1, y1, x2, y2]`, `polygon: [[x, y], …]`, `circle: [cx, cy, radius]`, `square: [cx, cy, side]`, `point: [x, y]`, `points: [[x, y], …]`, plus optional `color` (`yellow`), `fill` (none), `stroke` (2), `opacity` (1). A line takes `arrow: true` / `both_ends: true` (or use `arrows`, §12, for an arrow whose tip sits exactly on a point); a polygon `style: polyline` for an open path. Points are filled discs (fill = `color` unless given) of diameter `size` (6 px), each an editable ellipse in the GUI. |
+| `detect_objects` | `true`, or `{shape, polarity, min_area, max_area, split, padding, color, stroke}` | An ROI around every object of the image (cells, nuclei, embryos), found by an automatic threshold: `shape` `rect` (default) or `ellipse`, `polarity` `auto` (the minority class), `dark` (brightfield) or `bright` (fluorescence), `min_area` / `max_area` in pixels (default 0.02 % / 25 % of the visible area), `split: false` keeps touching objects whole, `padding` (3 px), `color` (`yellow`), `stroke` (2). Only the visible (cropped) part is searched; objects cut by its edge and elongated pieces (a burnt-in scale bar) are skipped. A simple tool for clear objects on a plain background: a warning says when nothing was found. |
 | `connectors` | list | Lines joining two of the panel's `rois` that stay attached when either moves (as PowerPoint connectors): `from` / `to` are roi numbers (1 = the first roi), optional `from_site` / `to_site` (`auto`, the nearest corners or edge middles; or `top left`, `top`, `top right`, `right`, `bottom right`, `bottom`, `bottom left`, `left`, `center`), `color`, `stroke`, `arrow: true`. Nothing is connected unless listed. |
 | `brackets` | list of `{x1, x2, y}` | Significance brackets from `x1` to `x2` at height `y`, with `label` (`*`), `color` (`black`), `stroke`, `font_pt`, `tick`, `label_gap`, `whiskers` (`down`/`up`). |
 
@@ -1410,6 +1411,7 @@ server, and edited afterwards in either.
 | `brackets` | Edit Image → Significance (*) | `add_significance_bracket` |
 | `inset` | Edit Image → Rect ROI → Inset | `add_inset` |
 | `zoom` | Annotations → Add zoom callout to selected panel… | `add_zoom_callout` |
+| `detect_objects` | Annotations → Detect objects (ROIs) in selected panel… | `detect_objects` |
 | `rotate`, `flip` | Edit Image → Rotate + Crop | `transform_image` |
 | `channels`, `z_range`, `display_range` | Edit Image → File Infos + Scale | `configure_image` |
 | `merge` | Insert → Multi-channel merge… | `add_channel_merge` |

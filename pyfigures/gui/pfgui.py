@@ -1616,6 +1616,12 @@ class EZFIG_GUI(QMainWindow):
         annots.addAction(zoom_callout_action)
         zoom_callout_action.triggered.connect(self.add_zoom_callout_action)
 
+        detect_action = QAction("Detect objects (ROIs) in selected panel…", self)
+        detect_action.setToolTip('An ROI around every cell, nucleus or embryo of the selected image, '
+                                 'found by an automatic threshold (clear objects on a plain background)')
+        annots.addAction(detect_action)
+        detect_action.triggered.connect(self.detect_objects_action)
+
         arrow_action = QAction("Add arrow pointing at a feature…", self)
         arrow_action.setToolTip('Arrow whose point sits exactly on the chosen pixel of the '
                                 'selected image, whatever the figure size')
@@ -5319,6 +5325,68 @@ class EZFIG_GUI(QMainWindow):
             inset_corner=corner.currentText(), inset_fraction=frac.value() / 100.0,
             box_color=colour.currentText(), line_color=colour.currentText(),
             connectors=int(conn.currentText()))
+
+    def detect_objects_action(self, _checked=False, answers=None):
+        """ROIs around every object (cells, nuclei, embryos) of the selected image,
+        found by thresholding (MCP: detect_objects; recipe: detect_objects). A simple
+        tool for clear objects on a plain background; fix the odd ROI in the editor.
+        *answers* (tests): the dialog's values instead of showing it."""
+        picked = self._selected_image_panel('detect its objects')
+        if picked is None:
+            return
+        _panel, group_path, image_index = picked
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        shape = QComboBox(frame)
+        shape.addItems(['rectangles', 'ellipses'])
+        polarity = QComboBox(frame)
+        polarity.addItems(['automatic', 'dark objects on a light background', 'bright objects on a dark background'])
+        min_area = QSpinBox(frame)
+        min_area.setRange(0, 10_000_000)
+        min_area.setSpecialValueText('automatic')
+        min_area.setSuffix(' px²')
+        min_area.setToolTip('Smaller pieces are ignored (debris); automatic = 0.02 % of the image')
+        split = QCheckBox('Split touching objects', frame)
+        split.setChecked(True)
+        colour = QComboBox(frame)
+        colour.addItems(['yellow', 'white', 'cyan', 'magenta', 'red', 'green', 'black'])
+        for row, (text, widget) in enumerate((('ROI shape:', shape), ('Objects are:', polarity),
+                                              ('Smallest object:', min_area), ('Colour:', colour))):
+            grid.addWidget(QLabel(text, frame), row, 0)
+            grid.addWidget(widget, row, 1)
+        grid.addWidget(split, 4, 0, 1, 2)
+        grid.addWidget(QLabel('Finds clear objects on a plain background (automatic threshold). '
+                              'Only the visible (cropped) part is searched; check the ROIs and '
+                              'remove or move the odd ones in the panel editor.', frame), 5, 0, 1, 2)
+        grid.itemAtPosition(5, 0).widget().setWordWrap(True)
+        values = answers
+        if values is None:
+            cd = CustomDialog(title="Detect objects", message="An ROI around each object of the selected image.",
+                              main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+            if cd.exec_() != QDialog.Accepted:
+                return
+            values = dict(shape=('rect', 'ellipse')[shape.currentIndex()],
+                          polarity=('auto', 'dark', 'bright')[polarity.currentIndex()],
+                          min_area=min_area.value() or None, split_touching=split.isChecked(),
+                          color=colour.currentText())
+        import json
+        from pyfigures.mcp_server import detect_objects
+        found = {}
+
+        def run(path, **kwargs):
+            raw = detect_objects(path, **kwargs)
+            if raw.startswith('ERROR'):
+                return raw
+            found.update(json.loads(raw))
+            return 'done'
+        self._run_mcp_mutation(run, 'Detecting objects…', group_path=group_path, image_index=image_index, **values)
+        if not found:
+            return
+        message = found['summary'] + (' ' + found['note'] if found.get('note') else '')
+        self.statusBar().showMessage(message)
+        if not found.get('added'):
+            QMessageBox.information(self, 'Detect objects', message)
+        self._last_detection = found        # (tests)
 
     # ------------------------------------------------------------------
     # Arrows and stack views (MCP: add_arrow, add_stack_montage,

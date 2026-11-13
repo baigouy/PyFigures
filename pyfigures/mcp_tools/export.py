@@ -170,13 +170,17 @@ def export_figure(pyf_path: str, out_path: str, dpi: int = 300) -> str:
 
 @mcp.tool()
 def preview_panel_source(pyf_path: str, group_path: list[int], image_index: int,
-                         brighten: bool = True) -> list:
-    """See ONE panel's whole source image, uncropped, with pixel rulers and its
-    current crop as a dashed yellow box. Use it before transform_image crops
-    ("crop to the nuclei"): read the region's pixel coordinates off the rulers,
-    then crop once (crop_left=x0, crop_top=y0, crop_right=width-x1,
-    crop_bottom=height-y1), instead of cropping and uncropping blind.
+                         brighten: bool = True, region: list[float] | None = None) -> list:
+    """See ONE panel's whole source image, uncropped, with pixel rulers, its
+    current crop as a dashed yellow box and its ROIs in magenta (labelled with
+    their annotation index). The rulers are the source pixels that crops, ROIs
+    and arrows use. Use it before transform_image crops ("crop to the
+    nuclei") and before placing ROIs or arrows on what the image shows ("a box
+    around each cell"): read the coordinates off the rulers, then act once,
+    instead of guessing from render_preview (a whole figure, each panel small).
 
+    *region*: [x0, y0, x1, y1] in source pixels shows only that part, magnified
+    (check small objects or where an ROI landed).
     *brighten* stretches the contrast of this preview only (dim fluorescence);
     the figure is unchanged. Read-only.
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
@@ -198,7 +202,8 @@ def preview_panel_source(pyf_path: str, group_path: list[int], image_index: int,
     props = element_to_dict(imgs[image_index])
     panel = create_object("Image2D", props.get("Image2D", props))
     out = os.path.join(tempfile.mkdtemp(prefix="pyf_panel_"), "panel_source.png")
-    text = preview_panel(panel, out, title=f"group {group_path} image {image_index}", brighten=brighten)
+    text = preview_panel(panel, out, title=f"group {group_path} image {image_index}", brighten=brighten,
+                         region=region)
     return [text, Image(path=out)]
 
 
