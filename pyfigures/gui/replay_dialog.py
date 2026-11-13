@@ -90,9 +90,14 @@ class ReplayDialog(QDialog):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        # every column resized by dragging its edge (two stretched columns could not be:
+        # long commands were cut, user 2026-11-13); the last one takes the rest
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setStretchLastSection(True)
+        for col, width in enumerate((36, 200, 300, 50, 50)):
+            self.table.setColumnWidth(col, width)
+        self.table.setWordWrap(False)
         self.table.itemSelectionChanged.connect(self.show_step)
 
         detail = QFrame(self)

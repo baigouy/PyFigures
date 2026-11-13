@@ -125,6 +125,9 @@ def test_the_dialog_steps_through_a_chat_and_resets(qapp, gui, runtime, tmp_path
     dialog = g.replay_chat_action(str(_chat(tmp_path)))
     try:
         assert dialog.table.rowCount() == 3                      # the steps that changed the figure
+        from qtpy.QtWidgets import QHeaderView
+        header = dialog.table.horizontalHeader()                 # every column can be resized by hand
+        assert all(header.sectionResizeMode(c) == QHeaderView.ResizeMode.Interactive for c in range(5))
         dialog.table.selectRow(0)
         dialog.run_selected()                                    # rotate, then the next row is selected
         assert [p.theta for p in panels()] == [25, 25] and dialog.current_row() == 1
