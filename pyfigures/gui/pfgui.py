@@ -6536,7 +6536,9 @@ class EZFIG_GUI(QMainWindow):
                 dialog.add_sources(inside)
                 return dialog
         if not path.lower().endswith('.json'):
-            return self.replay_chat_action(path)
+            # a chat: played back in the chat panel, request by request, with the model's
+            # answers (the step table showed only calls, user 2026-11-13)
+            return self.replay_chat_in_panel(path) or self.replay_chat_action(path)
         if answer is None:
             box = QMessageBox(self)
             box.setWindowTitle('Procedure dropped')
@@ -6573,6 +6575,14 @@ class EZFIG_GUI(QMainWindow):
         R.save_procedure(steps, path, source=chats[0])
         self.statusBar().showMessage(f'{len(steps)} step(s) saved to {path}', 8000)
         return path
+
+    def replay_chat_in_panel(self, path):
+        """The chat log *path* replayed in the chat sidebar, turn by turn (the sidecar's
+        Procedures > Replay a chat…). None when the chat sidebar cannot open."""
+        dock = self.open_chat_sidebar()
+        if dock is None or not hasattr(dock, 'procedure_action'):
+            return None
+        return dock.procedure_action('replay', path)
 
     def replay_chat_action(self, source=None):
         """Tools > Replay a chat…: a recorded chat's operations, step by step, on this

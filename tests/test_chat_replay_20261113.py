@@ -184,7 +184,11 @@ def test_drag_and_drop_a_procedure_a_chat_or_a_zip(qapp, gui, runtime, tmp_path)
     assert g.replay_drop(str(proc), answer='cancel') is None
     assert g.replay_drop(str(proc), answer='run') == (2, 2, [])
     assert [p.theta for p in panels()] == [25, 25]
-    dialog = g.replay_drop(str(chat))                   # a chat log: the step-by-step dialog
+    # a chat log: replayed in the chat panel (request, edits, model's answer), turn by turn
+    g.replay_chat_in_panel = lambda path: ('chat panel', path)
+    assert g.replay_drop(str(chat)) == ('chat panel', str(chat))
+    g.replay_chat_in_panel = lambda path: None          # no chat panel: the step table
+    dialog = g.replay_drop(str(chat))
     assert dialog.table.rowCount() == 3
     dialog.close()
     many = tmp_path / 'procedures.zip'
