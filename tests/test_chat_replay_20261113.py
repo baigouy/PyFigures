@@ -69,6 +69,22 @@ def test_the_steps_of_a_chat(tmp_path):
     assert [s.tool for s in kept] == ['transform_image', 'set_image_property', 'export_pptx']
 
 
+def test_an_edit_the_chat_undid_is_left_out(tmp_path):
+    """'skip steps that failed or were undone' (2026-11-13): undo_redo in the chat drops
+    the edit before it; a redo puts it back; a new edit ends the redo history."""
+    undo = _ev('tool_call', {'name': 'undo_redo', 'arguments': {'action': 'undo'}})
+    redo = _ev('tool_call', {'name': 'undo_redo', 'arguments': {'action': 'redo'}})
+    lines = [_ev('user', 'rotate a'), _use('transform_image', {'panel_ref': 'a', 'rotation': 10}), OK,
+             _ev('user', 'make b black'), _use('set_image_property', {'panel_ref': 'b', 'value': '0'}), OK,
+             _ev('user', 'undo that'), undo, OK,
+             _ev('user', 'rotate c'), _use('transform_image', {'panel_ref': 'c', 'rotation': 5}), OK,
+             _ev('user', 'undo, then redo'), undo, OK, redo, OK]
+    path = tmp_path / 'undo.jsonl'
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    kept = R.procedure_steps(R.load_steps(path))
+    assert [s.arguments['panel_ref'] for s in kept] == ['a', 'c']
+
+
 def test_a_debug_zip_is_read_like_a_log(tmp_path):
     z = tmp_path / 'sidecar-debug.zip'
     with zipfile.ZipFile(z, 'w') as out:
@@ -175,11 +191,28 @@ def test_drag_and_drop_a_procedure_a_chat_or_a_zip(qapp, gui, runtime, tmp_path)
     dialog.close()
 
 
+def test_save_the_last_chat_and_run_it_from_the_chat(qapp, gui, runtime, tmp_path, monkeypatch):  # noqa: F811
+    """'allow to do the procedure stuff directly': Tools > Save the last chat as a
+    procedure… in one step, and the live chat's run_procedure_here on the open figure."""
+    from pyfigures.assistant import live_mcp
+    from pyfigures.gui.replay_dialog import run_in_thread
+    chat = _chat(tmp_path)
+    monkeypatch.setattr(R, 'recent_chats', lambda limit=30: [chat])
+    g, panels = _live_window(qapp, gui, tmp_path)
+    saved = g.save_last_chat_procedure_action(str(tmp_path / 'last.json'))
+    assert [s.tool for s in R.load_procedure(saved)] == ['transform_image', 'set_image_property', 'export_pptx']
+    out = run_in_thread(lambda: live_mcp.run_procedure_here(str(_rotate_and_black(tmp_path))))
+    assert (out['done'], out['total'], out['failed']) == (2, 2, [])
+    assert [(p.theta, p.fill_color) for p in panels()] == [(25, 0), (25, 0)]
+    with pytest.raises(ValueError, match='Cannot read'):
+        live_mcp.run_procedure_here(str(tmp_path / 'missing.json'))
+
+
 def test_mcp_and_recipe_run_a_procedure_on_files(qapp, runtime, tmp_path):  # noqa: F811
     from pyfigures.mcp_server import run_procedure, list_chat_steps, save_chat_procedure
     chat = _chat(tmp_path)
     assert '3 step(s) of 7' in list_chat_steps(str(chat))
-    assert save_chat_procedure(str(chat), str(tmp_path / 's.json')).startswith('Saved 3')
+    assert save_chat_procedure(str(tmp_path / 's.json'), chat_path=str(chat)).startswith('Saved 3')
     figure = _figure(tmp_path)
     out = run_procedure(str(_rotate_and_black(tmp_path)), figure)
     assert out.startswith('2 of 2 step(s) done'), out

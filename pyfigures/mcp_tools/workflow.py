@@ -1129,12 +1129,21 @@ def list_chat_steps(chat_path: str = "", include_reads: bool = False) -> str:
 
 
 @mcp.tool()
-def save_chat_procedure(chat_path: str, procedure_path: str) -> str:
-    """Save the steps of a recorded chat that changed the figure as a procedure file
-    (.json), to repeat the same changes on other figures with run_procedure. Paths
-    under the chat figure's folder / with its name become {folder} / {name} (the
-    figure the procedure runs on). GUI: Tools > Replay a chat… > Save as procedure…"""
+def save_chat_procedure(procedure_path: str, chat_path: str = "") -> str:
+    """Save the steps of a chat that changed the figure as a procedure file (.json), to
+    repeat the same changes on other figures ("save what we did as a procedure / macro",
+    "I want to do the same on my other figures"). Without *chat_path*: the current chat
+    (the newest log of the chat sidebar). In the live chat put it next to the figure:
+    procedure_path = document.folder + "/" + document.name + "_procedure.json". Paths
+    under the chat figure's folder / with its name become {folder} / {name} (the figure
+    the procedure runs on). Run it with Tools > Run a procedure… or drop it on a figure.
+    GUI: Tools > Replay a chat… > Save as procedure…"""
     from ..assistant import chat_replay as R
+    if not chat_path:
+        chats = R.recent_chats(1)
+        if not chats:
+            return f"ERROR: no chat log in {R.chats_folder()}."
+        chat_path = str(chats[0])
     try:
         steps = R.procedure_steps(R.load_steps(chat_path))
     except (OSError, ValueError) as e:

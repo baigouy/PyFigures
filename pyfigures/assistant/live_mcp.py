@@ -239,6 +239,44 @@ def remove_scale_bar_all() -> dict:
 
 
 @mcp.tool()
+def run_procedure_here(procedure_path: str, keep_going: bool = False) -> dict:
+    """Run every step of a saved procedure (a .json saved from a chat: save_chat_procedure,
+    Tools > Replay a chat… > Save as procedure…) on the OPEN figure: "do the same as in
+    wing_procedure.json", "apply my procedure to this figure". Stops at the first failed
+    step unless keep_going; the steps done stay (each is undoable). Panels are named by
+    their letters as in the recorded chat. Returns done / total / failed steps."""
+    import threading
+    from .chat_replay import Runner, load_procedure
+    try:
+        steps = load_procedure(procedure_path)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'Cannot read the procedure: {exc}') from exc
+    document = (request('inspect').get('document') or {})
+    runner = Runner((document.get('folder'), document.get('name')))
+    done, failed = 0, []
+    for number, step in enumerate(steps, 1):
+        box = {}
+
+        def work(step=step):
+            try:
+                box['out'] = runner.run(step)
+            except Exception as exc:        # reported per step
+                box['error'] = exc
+        worker = threading.Thread(target=work)  # the dispatcher runs its own event loop
+        worker.start()
+        worker.join()
+        if 'error' in box:
+            failed.append({'step': number, 'request': step.request, 'operation': step.tool,
+                           'error': str(box['error'])[:400]})
+            if not keep_going:
+                break
+        else:
+            done += 1
+    return {'done': done, 'total': len(steps), 'failed': failed, 'document_changed': done > 0,
+            'note': 'Ctrl+Z undoes the steps one by one.' if done else 'Nothing was changed.'}
+
+
+@mcp.tool()
 def save_live_figure(path: str | None = None, overwrite: bool = False) -> dict:
     """Save the live figure and staged metadata as a .pyf COPY. Omit path for a timestamped file in saved_figures. Does not overwrite the original source. Recovery snapshots happen automatically; this operation is an explicit save. Existing files require overwrite=true."""
     return call_live('save_copy', {'path': path, 'overwrite': overwrite})

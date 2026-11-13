@@ -33,7 +33,9 @@ _READ_PREFIXES = ('get_', 'list_', 'inspect_', 'describe_', 'check_', 'preview_'
 _READ_NAMES = {'find_pyfigures_tools', 'list_pyfigures_categories', 'inspect_figure', 'preview_figure',
                'preview_panel', 'preview_luts', 'readability', 'list_fonts', 'list_colors', 'list_luts',
                'show_me_where', 'close_guidance', 'explain_live_interaction', 'select_live_objects',
-               'open_annotation_editor', 'open_annotation_properties', 'list_how_to_guides', 'explain_how'}
+               'open_annotation_editor', 'open_annotation_properties', 'list_how_to_guides', 'explain_how',
+               # the replay tools themselves: a saved procedure does not save procedures again
+               'save_chat_procedure', 'run_procedure', 'list_chat_steps'}
 
 
 @dataclass
@@ -135,10 +137,25 @@ def load_steps(path) -> list[Step]:
 
 
 def procedure_steps(steps) -> list[Step]:
-    """The steps a procedure keeps: the ones that changed the figure (not the reads,
-    not the failed calls, not the requests undone afterwards)."""
-    return [s for s in steps if not s.reads_only and not s.recorded_error and not s.turn_undone
-            and s.tool not in ('undo_redo',)]
+    """The steps a procedure keeps: the ones that changed the figure and stayed (not the
+    reads, not the failed calls, not a reply undone with its Undo button, not an edit the
+    chat undid itself with undo_redo, which a redo puts back)."""
+    kept, undone = [], []
+    for s in steps:
+        if s.tool == 'undo_redo':
+            if s.recorded_error:
+                continue
+            if str(s.arguments.get('action', 'undo')) == 'redo':
+                if undone:
+                    kept.append(undone.pop())
+            elif kept:
+                undone.append(kept.pop())       # one call (a batch included) = one undo step
+            continue
+        if s.reads_only or s.recorded_error or s.turn_undone:
+            continue
+        kept.append(s)
+        undone.clear()                          # a new edit ends the redo history
+    return kept
 
 
 def _document(path):

@@ -1827,6 +1827,11 @@ class EZFIG_GUI(QMainWindow):
                                  "(to debug them), and save them as a procedure")
         tools_menu.addAction(replay_action)
         replay_action.triggered.connect(lambda _checked=False: self.replay_chat_action())
+        save_proc_action = QAction("Save the last chat as a procedure…", self)
+        save_proc_action.setToolTip("The edits of the latest chat (not its reads, failed or undone steps) "
+                                    "saved as a procedure, to repeat them on other figures")
+        tools_menu.addAction(save_proc_action)
+        save_proc_action.triggered.connect(lambda _checked=False: self.save_last_chat_procedure_action())
         procedure_action = QAction("Run a procedure…", self)
         procedure_action.setToolTip("Run every step of a saved procedure (made with Replay a chat…) on this "
                                     "figure: the same changes on each figure")
@@ -6547,6 +6552,27 @@ class EZFIG_GUI(QMainWindow):
         if answer == 'step':
             return self.replay_chat_action(path)
         return None
+
+    def save_last_chat_procedure_action(self, path=None):
+        """Tools > Save the last chat as a procedure…: the newest chat's edits, saved next
+        to the figure by default (MCP save_chat_procedure). Returns the path, or None."""
+        from pyfigures.assistant import chat_replay as R
+        from qtpy.QtWidgets import QFileDialog
+        chats = R.recent_chats(1)
+        steps = R.procedure_steps(R.load_steps(chats[0])) if chats else []
+        if not steps:
+            QMessageBox.information(self, 'Save the last chat as a procedure',
+                                    'The last chat changed nothing in a figure: no procedure to save.')
+            return None
+        if path is None:
+            base = os.path.splitext(self.current_file)[0] if getattr(self, 'current_file', None) else 'figure'
+            path, _ = QFileDialog.getSaveFileName(self, f'Save the {len(steps)} step(s) of the last chat',
+                                                  base + '_procedure.json', 'PyFigures procedure (*.json)')
+            if not path:
+                return None
+        R.save_procedure(steps, path, source=chats[0])
+        self.statusBar().showMessage(f'{len(steps)} step(s) saved to {path}', 8000)
+        return path
 
     def replay_chat_action(self, source=None):
         """Tools > Replay a chat…: a recorded chat's operations, step by step, on this

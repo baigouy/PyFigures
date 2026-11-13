@@ -112,7 +112,8 @@ def build_server(full_server, send):
     originals = set(registry())
     names = originals | {'arrange_live_images', 'set_panel_letter_position', 'edit_live_label',
         'edit_panel_letters', 'inspect_panel_letters', 'swap_live_panels', 'swap_rows', 'select_live_objects', 'open_annotation_editor', 'show_me_where', 'roi_to_inset', 'preview_panel', 'explain_live_interaction', 'save_live_figure',
-        'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row'}
+        'list_recovery_snapshots', 'restore_recovery_snapshot', 'remove_scale_bar_all', 'ungroup_all_images', 'delete_last_rows', 'reverse_selected_row',
+        'run_procedure_here'}
     names.discard('preview_panel_source')   # the live preview_panel shows the open figure's panel
     names.update({'open_annotation_properties','inspect_annotation_objects','edit_annotation_properties','review_submission_readiness','inspect_native_gui','use_native_gui','open_native_menu','native_gui_keys','native_gui_gesture','native_gui_drop_files'})
     available = {n: t for n, t in full_server._tool_manager._tools.items() if n in names}
@@ -213,6 +214,10 @@ def build_server(full_server, send):
         'A panel\'s background (fill_color, seen around a rotated image) in the colour of the image\'s OWN background '
         '("fit / match the bg of each image"): set_image_property(property_name="fill_color", value="auto") reads it '
         'from the image\'s edge pixels; all panels = one call with batch. There is no pixel-sampling tool: never search for one. '
+        '"Save what we did as a procedure / macro", "I want to do the same on my other figures": '
+        'save_chat_procedure(procedure_path=document.folder + "/" + document.name + "_procedure.json") saves this chat\'s '
+        'edits (not the reads, failed or undone ones) in one call; say it runs with Tools > Run a procedure… or by dropping the file on a figure. '
+        '"Apply / run my procedure (file) to this figure": run_procedure_here(procedure_path) runs all its steps on the open figure. '
         'The open figure\'s file is document in the state: "export it with the same name as the pyf" = '
         'document.folder + document.name + the extension; no search needed. '
         '"Move the box / ROI / arrow 100 px to the right": move_annotations(panel_ref, dx=100, annotation_indexes=[...]) '
@@ -353,6 +358,12 @@ def build_server(full_server, send):
             if name=='set_inset_property' and any(w in ('inset','insets') for w in words) and any(w in ('corner','bottom','top','left','right','placement') for w in words):score+=580   # resizing: edit_annotation_properties
             if name=='transform_image' and any(w in ('uncrop','uncropped') for w in words):score+=450
             if name=='export_pptx' and any(w in ('ppt','pptx','powerpoint','slide','slides') for w in words):score+=650
+            # "save what we did as a procedure", "a macro to do the same on my other figures" (2026-11-13)
+            # "apply my procedure to this figure", "run wing_procedure.json here"
+            if name=='run_procedure_here' and any(w in ('procedure','procedures','macro','macros') for w in words) and any(w in ('run','apply','play','replay','execute','use','do') for w in words):score+=700
+            if name=='save_chat_procedure' and not any(w in ('run','apply','play','replay','execute') for w in words) and (any(w in ('procedure','procedures','macro','macros','recipe','workflow') for w in words)
+                                                or ('same' in words and any(w in ('other','figures','figs') for w in words))
+                                                or ('repeat' in words and any(w in ('steps','this','these','what','did','done') for w in words))):score+=650
             if name=='remove_rois' and 'instead' in words and any(w in shape_words for w in words):score+=500
             if name=='set_image_property' and (any(w in ('bg','background','backgrounds','bgs','fill') for w in words) and any(w in ('image','images','match','matching','fit','same','own','its','picture','pictures','each','auto','panel','panels') for w in words)
                                                or any(w in ('pixel','pixels','corner','border','edge','edges') for w in words) and any(w in ('colour','color','sample','value','rgb','average') for w in words)):score+=560

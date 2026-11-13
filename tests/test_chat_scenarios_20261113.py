@@ -51,6 +51,11 @@ DISCOVERY = [
     ('connect the ROI to the inset', 'connect_roi_to_inset', '2026-11-12'),
     ('join these two boxes with a line', 'add_connector', '2026-11-12'),
     ('crop the burnt in scale bar of e', 'preview_panel', '2026-11-13 (cropped blind)'),
+    ('save what we did as a procedure', 'save_chat_procedure', '2026-11-13 (asked for)'),
+    ('I want to do the same on my other figures', 'save_chat_procedure', '2026-11-13 (asked for)'),
+    ('make a macro of these steps', 'save_chat_procedure', '2026-11-13 (asked for)'),
+    ('apply my procedure wing_procedure.json to this figure', 'run_procedure_here', '2026-11-13 (asked for)'),
+    ('run the procedure here', 'run_procedure_here', '2026-11-13 (asked for)'),
 ]
 
 

@@ -60,6 +60,8 @@ LINKED = {
         "test_web_chat_20261109.py::test_launch_flag_docks_the_web_chat"],
     # steps of a recorded chat on the open figure (a recorded log is written there)
     "menu: Tools > Replay a chat…": ["test_chat_replay_20261113.py::test_the_dialog_steps_through_a_chat_and_resets"],
+    "menu: Tools > Save the last chat as a procedure…": [
+        "test_chat_replay_20261113.py::test_save_the_last_chat_and_run_it_from_the_chat"],
     "menu: Tools > Run a procedure…": ["test_chat_replay_20261113.py::test_run_a_procedure_on_the_open_figure"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
