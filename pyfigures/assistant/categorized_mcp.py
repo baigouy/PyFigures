@@ -210,6 +210,9 @@ def build_server(full_server, send):
         '(shapes=["ellipse"] for only the ellipses), never one remove_annotation per ROI; then detect_objects again with the new shape. '
         'Only some of them, still one call: remove_rois(panel_ref, annotation_indexes=[...]) or, for "remove the tiny ROIs", '
         'max_size=<longest side in px> chosen from the sizes in inspect_annotation_objects. '
+        'A panel\'s background (fill_color, seen around a rotated image) in the colour of the image\'s OWN background '
+        '("fit / match the bg of each image"): set_image_property(property_name="fill_color", value="auto") reads it '
+        'from the image\'s edge pixels; all panels = one call with batch. There is no pixel-sampling tool: never search for one. '
         'The open figure\'s file is document in the state: "export it with the same name as the pyf" = '
         'document.folder + document.name + the extension; no search needed. '
         '"Move the box / ROI / arrow 100 px to the right": move_annotations(panel_ref, dx=100, annotation_indexes=[...]) '
@@ -340,6 +343,19 @@ def build_server(full_server, send):
             # "draw ROIs over every cell in e": the model guessed from the whole figure (2026-11-13)
             if name=='preview_panel' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','around','over','each','every') for w in words) and any(w in ('roi','rois','box','boxes','rectangle','rectangles','circle','circles','ellipse','ellipses','arrow','arrows','outline','outlines') for w in words):score+=380
             if name=='transform_image' and any(w in ('crop','cropping','rotate','rotation','flip') for w in words):score+=200
+            # "fit each panel's bg to the bg of its image", "sample the corner pixel colour": fill_color="auto"
+            # (thirteen searches for a pixel sampler, then gave up, 2026-11-13)
+            # the words of real chat requests that found nothing (regression table:
+            # tests/test_chat_scenarios_20261113.py)
+            shape_words=('roi','rois','line','lines','triangle','triangles','box','boxes','ellipse','ellipses','circle','circles',
+                         'rectangle','rectangles','square','squares','polygon','polygons','outline','outlines','shapes','arrow','arrows')
+            if name=='set_roi_properties' and any(w in shape_words for w in words) and any(w in ('stroke','strokes','thickness','thicker','thinner','width','colour','color','red','green','blue','yellow','white','black','magenta','cyan','dashed','dotted','opacity','fill','filled') for w in words):score+=600
+            if name=='set_inset_property' and any(w in ('inset','insets') for w in words) and any(w in ('corner','bottom','top','left','right','placement') for w in words):score+=580   # resizing: edit_annotation_properties
+            if name=='transform_image' and any(w in ('uncrop','uncropped') for w in words):score+=450
+            if name=='export_pptx' and any(w in ('ppt','pptx','powerpoint','slide','slides') for w in words):score+=650
+            if name=='remove_rois' and 'instead' in words and any(w in shape_words for w in words):score+=500
+            if name=='set_image_property' and (any(w in ('bg','background','backgrounds','bgs','fill') for w in words) and any(w in ('image','images','match','matching','fit','same','own','its','picture','pictures','each','auto','panel','panels') for w in words)
+                                               or any(w in ('pixel','pixels','corner','border','edge','edges') for w in words) and any(w in ('colour','color','sample','value','rgb','average') for w in words)):score+=560
             if name=='restyle_texts' and any(w in ('bold','italic','underline') for w in words):score+=250
             # "brighter", "increase the contrast in d": the display range (four searches each, 2026-11-12)
             if name=='configure_image' and any(w in ('brightness','brighter','bright','contrast','darker','dim','dimmer','intensity','normalization','normalisation','saturated','window','gamma') for w in words):score+=420

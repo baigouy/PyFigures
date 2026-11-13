@@ -2306,6 +2306,9 @@ def get_image_property(
     return repr(val)
 
 
+_AUTO_FILL = ("auto", "image", "match", "match image", "image background", "from image")
+
+
 @mcp.tool()
 def set_image_property(
     pyf_path: str,
@@ -2361,6 +2364,10 @@ def set_image_property(
       # Rotate 45 degrees
       set_image_property(f, [0], 2, "theta", "45")
 
+      # The panel's background (seen around a rotated image) in the colour of the
+      # image's own background, read from its edge pixels: "auto"
+      set_image_property(f, [0], 2, "fill_color", "auto")
+
     The change is saved immediately; reopen in PyFigures to see the result.
     """
     property_name = _PROPERTY_ALIASES.get(str(property_name).strip().lower(), property_name)
@@ -2401,6 +2408,28 @@ def set_image_property(
 
     # placement is a Position object — serialised as plain text by PyFigures,
     # no ""..."" wrapping.  Everything else uses the smart encoder.
+    if property_name == "fill_color" and str(value).strip().lower() in _AUTO_FILL:
+        # the image's own background colour, read from its edge pixels as displayed
+        from batoolset.serializations.tools import element_to_dict, create_object
+        from batoolset.settings.global_settings import set_UI
+        from .core import _ensure_qapp
+        from ..panel_source_preview import border_colour
+        set_UI()
+        _ensure_qapp()
+        props = element_to_dict(imgs[image_index])
+        try:
+            value = border_colour(create_object("Image2D", props.get("Image2D", props)))
+        except ValueError as e:
+            return f"ERROR: {e}"
+    elif property_name in ("fill_color", "border_color") and isinstance(value, str) \
+            and value.strip().lower() not in ("none", "null", "") and not value.strip().lstrip("-").isdigit():
+        # "white", "#d2b48c": stored as the colour number the panel draws with (the
+        # name itself was stored, 2026-11-13)
+        from .core import _color_to_int
+        try:
+            value = _color_to_int(value)
+        except (ValueError, TypeError, KeyError):
+            return f"ERROR: {value!r} is not a colour (a name such as white, or #RRGGBB)."
     if property_name == "placement":
         raw = str(value).strip()
     elif property_name == "normalization" and value not in (None, "None", "null", ""):

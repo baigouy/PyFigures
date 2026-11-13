@@ -96,6 +96,8 @@ Every action reachable in the figure editor and the tests that run it and check 
 | Tools > Photo album designer… | `test_gui_e2e_menus.py::test_menu_action` |
 | Tools > MCP server… | `test_mcp_control.py::test_gui_menu_opens_the_dialog`, `test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server` |
 | Tools > MCP call history / undo… | `test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change` |
+| Tools > Replay a chat… | `test_chat_replay_20261113.py::test_the_dialog_steps_through_a_chat_and_resets` |
+| Tools > Run a procedure… | `test_chat_replay_20261113.py::test_run_a_procedure_on_the_open_figure` |
 | Tools > Vector PDF panels (PyMuPDF)… | `test_gui_e2e_menus.py::test_vector_pdf_entry_offers_pymupdf_and_installs_nothing_on_not_now` |
 | View > Show the 'double-click to edit' hint | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_view_toggles_change_what_they_say` |
 | View > Show new Z stacks as max projection | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_view_toggles_change_what_they_say` |

@@ -37,6 +37,22 @@ def panel_crop(panel):
                  for side in ('left', 'top', 'right', 'bottom'))
 
 
+def border_colour(panel, width=4):
+    """The colour of the image's own background, as shown: the median of the pixels
+    along the edges of its visible (cropped) part. An int 0xRRGGBB. ("fit the panel's
+    background to the image's background", 2026-11-13: the chat had no way to read it.)"""
+    import numpy as np
+    rgb = panel_rgb(panel)
+    h, w = rgb.shape[:2]
+    left, top, right, bottom = panel_crop(panel)
+    view = rgb[top:max(top + 1, h - bottom), left:max(left + 1, w - right)]
+    k = max(1, min(width, view.shape[0] // 4, view.shape[1] // 4))
+    edges = np.concatenate([view[:k].reshape(-1, 3), view[-k:].reshape(-1, 3),
+                            view[:, :k].reshape(-1, 3), view[:, -k:].reshape(-1, 3)])
+    r, g, b = (int(v) for v in np.median(edges, axis=0))
+    return (r << 16) | (g << 8) | b
+
+
 def stretch(rgb):
     """*rgb* with its 0.5-99.8 percentile range spread over 0-255: dim
     fluorescence (nuclei barely above black) becomes visible. Display only."""

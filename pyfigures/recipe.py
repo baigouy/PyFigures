@@ -104,12 +104,14 @@ _TOP_KEYS = {"output", "journal", "column", "letter_panels", "caption", "title",
              # checks, bundling, templates
              "checks", "consolidate", "download_remote", "template", "fill",
              # empty panels to fill later (Insert → Empty panel grid…)
-             "placeholder_grid"}
+             "placeholder_grid",
+             # the steps of a recorded chat, run on the built figure (Tools > Replay a chat…)
+             "procedure"}
 _IMAGE_KEYS = {"lut", "crop", "scale_bar", "px_to_unit", "label", "projection",
                "arrows", "kymograph", "orthogonal",
                "rotate", "flip", "channels", "z_range", "display_range", "text",
                "corner_labels", "rois", "connectors", "inset", "zoom", "brackets", "properties",
-               "page", "detect_objects"}
+               "page", "detect_objects", "panel_background"}
 # detect_objects: true, or these options (an ROI around every object, by thresholding)
 _DETECT_KEYS = {"shape", "polarity", "min_area", "max_area", "split", "padding", "color", "stroke", "channel"}
 # a connector joins two of the panel's rois (numbered from 1) and stays attached to them
@@ -621,6 +623,8 @@ def _check_extras(opts, where, base):
         _check_point(opts["orthogonal"]["at"], 2, where, "orthogonal 'at'")
     if "rotate" in opts and not _is_num(opts["rotate"]):
         raise RecipeError(f"{where}: rotate must be a number of degrees")
+    if "panel_background" in opts and not isinstance(opts["panel_background"], (str, int)):
+        raise RecipeError(f"{where}: panel_background is a colour (white, '#d2b48c') or auto")
     if "flip" in opts and opts["flip"] not in _FLIPS:
         raise RecipeError(f"{where}: flip must be one of {sorted(_FLIPS)}")
     if "channels" in opts and not (isinstance(opts["channels"], list) and opts["channels"]
@@ -949,6 +953,8 @@ def _check_top(recipe, base):
         ok = {"fonts", "letters", "scale_bars", "spacing", "plots"}
         if not isinstance(asp, list) or not asp or set(asp) - ok:
             raise RecipeError(f"'copy_style_aspects' must be a list of {sorted(ok)}")
+    if "procedure" in recipe and not isinstance(recipe["procedure"], str):
+        raise RecipeError("'procedure' is the path of a procedure file (.json, saved by Tools > Replay a chat…)")
     if "exports" in recipe:
         exps = recipe["exports"]
         if not isinstance(exps, list):
@@ -1264,6 +1270,7 @@ def _plan(recipe: dict, recipe_path: str) -> dict:
                             if "copy_style_from" in recipe else None),
         "copy_style_aspects": recipe.get("copy_style_aspects"),
         "exports": recipe.get("exports") or [],
+        "procedure": _resolve(base, recipe["procedure"]) if recipe.get("procedure") else None,
         "checks": recipe.get("checks") or [],
         "consolidate": recipe.get("consolidate", False),
         "download_remote": recipe.get("download_remote", False),
@@ -1434,6 +1441,9 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
         tf["flip_h"], tf["flip_v"] = _FLIPS[opts["flip"]]
     if tf:
         w += _check(M.transform_image(out, gp, i, **tf), step + " crop / rotation")
+    if "panel_background" in opts:
+        w += _check(M.set_image_property(out, gp, i, "fill_color", opts["panel_background"]),
+                    step + " panel background")
     sb = opts.get("scale_bar")
     if sb:
         w += scale_bar(gp, i, sb, opts.get("px_to_unit"), step)
@@ -2224,6 +2234,13 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             warnings += _check(M.generate_alt_text(out, save=True), "alt_text")
         else:
             warnings += _check(M.set_alt_text(out, plan["alt_text"]), "alt_text")
+
+    if plan["procedure"]:
+        # the steps of a chat, saved as a procedure (Tools > Replay a chat…), on this figure
+        from pyfigures.assistant.chat_replay import run_procedure_on_file
+        ran = run_procedure_on_file(plan["procedure"], out)
+        for number, error in ran["failed"]:
+            raise RecipeError(f"procedure step {number} failed: {error} (the figure was saved to {out})")
 
     # checks: before the exports, so a failing figure is never exported
     checks, failed = {}, []

@@ -1101,3 +1101,67 @@ def _recipe_object_text(recipe: dict, recipe_path: str) -> str:
         except ImportError:
             pass
     return json.dumps(recipe, ensure_ascii=False, indent=1)
+
+
+# -- chats replayed as procedures (pyfigures.assistant.chat_replay) -------------------------
+@mcp.tool()
+def list_chat_steps(chat_path: str = "", include_reads: bool = False) -> str:
+    """The operations a recorded chat ran (the chat sidebar's log, a .jsonl, or the
+    "sidecar-debug" zip of its Debug export), one per line with the request each answered.
+    Without *chat_path*: the most recent chats. By default only the steps that changed
+    the figure (not the reads, failed calls or requests undone afterwards).
+    GUI: Tools > Replay a chat…"""
+    from ..assistant import chat_replay as R
+    if not chat_path:
+        chats = R.recent_chats(15)
+        if not chats:
+            return f"No chat log in {R.chats_folder()}."
+        return "Recent chats (newest first):\n" + "\n".join(str(p) for p in chats)
+    try:
+        steps = R.load_steps(chat_path)
+    except (OSError, ValueError) as e:
+        return f"ERROR: {e}"
+    shown = steps if include_reads else R.procedure_steps(steps)
+    lines = [f"{k}. [request {s.turn}: {s.request[:60]!r}] {s.describe()[:200]}"
+             + (" (read)" if s.reads_only else " (failed)" if s.recorded_error else
+                " (undone)" if s.turn_undone else "") for k, s in enumerate(shown, 1)]
+    return f"{len(shown)} step(s) of {len(steps)}:\n" + "\n".join(lines)
+
+
+@mcp.tool()
+def save_chat_procedure(chat_path: str, procedure_path: str) -> str:
+    """Save the steps of a recorded chat that changed the figure as a procedure file
+    (.json), to repeat the same changes on other figures with run_procedure. Paths
+    under the chat figure's folder / with its name become {folder} / {name} (the
+    figure the procedure runs on). GUI: Tools > Replay a chat… > Save as procedure…"""
+    from ..assistant import chat_replay as R
+    try:
+        steps = R.procedure_steps(R.load_steps(chat_path))
+    except (OSError, ValueError) as e:
+        return f"ERROR: {e}"
+    if not steps:
+        return "ERROR: this chat changed nothing in the figure: no procedure to save."
+    R.save_procedure(steps, procedure_path, source=chat_path)
+    return f"Saved {len(steps)} step(s) to {procedure_path}."
+
+
+@mcp.tool()
+def run_procedure(procedure_path: str, figure_path: str, output_path: str = "",
+                  keep_going: bool = False) -> str:
+    """Run every step of a procedure (saved from a chat: save_chat_procedure, or Tools >
+    Replay a chat…) on the figure *figure_path*, saved to *output_path* (default: in
+    place). Panels are named by their letters, as in the chat it was recorded from, so
+    the figure should be laid out alike. Stops at the first failed step unless
+    *keep_going*. GUI: Tools > Run a procedure…; recipe key procedure:."""
+    from ..assistant import chat_replay as R
+    if not os.path.isfile(figure_path):
+        return f"ERROR: no such figure: {figure_path}"
+    try:
+        result = R.run_procedure_on_file(procedure_path, figure_path, output_path or None,
+                                         stop_on_error=not keep_going)
+    except (OSError, ValueError, RuntimeError) as e:
+        return f"ERROR: {e}"
+    text = f"{result['done']} of {result['total']} step(s) done; saved to {result['output']}."
+    if result["failed"]:
+        text += " Failed: " + "; ".join(f"step {n}: {err}" for n, err in result["failed"])
+    return text

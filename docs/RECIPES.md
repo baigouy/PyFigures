@@ -186,6 +186,7 @@ created as needed. Forward slashes work on every OS.
 | `download_remote` | `false` | With `consolidate`: also save remote images (web links, OME-Zarr URLs, OMERO links) into the bundle instead of keeping their links. §20. |
 | `template` + `fill` | none | Build from a template `.pyf` (instead of `rows`): `fill` lists the image files (or globs) for its slots, in order. §20. |
 | `placeholder_grid` | none | Empty grey panels to fill later: `{rows, columns, aspect_ratio}`; alone or below `rows`. §20. |
+| `procedure` | none | A procedure file (`.json`, saved from a chat with Tools → Replay a chat… → Save as procedure…, or MCP `save_chat_procedure`) whose steps run on the built figure, before the checks and exports: the same chat edits on every figure. A failed step stops the build. |
 
 Multi-line captions — use YAML's folded style:
 
@@ -773,6 +774,7 @@ that region in a corner, and leader lines joining them (or a list of them).
 | Key | Values | Meaning |
 |---|---|---|
 | `rotate` | degrees | Rotation of the image inside its panel. |
+| `panel_background` | a colour, or `auto` | The panel's background, seen around a rotated image. `auto` takes the image's own background colour (the median of its edge pixels). MCP `set_image_property(fill_color="auto")`; GUI: panel editor → Fill → From image. |
 | `flip` | `h`, `v`, `hv` / `both` | Mirror left↔right, top↔bottom, or both. |
 | `channels` | list of `true`/`false` | Which channels are shown, one entry per channel. |
 | `z_range` | `[first, last)` | Slices included in the projection (first included, last excluded, from 0). |

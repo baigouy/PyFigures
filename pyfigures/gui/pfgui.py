@@ -1822,6 +1822,16 @@ class EZFIG_GUI(QMainWindow):
                                    "Check the chat site's terms of service first; the chat sidebar works better")
         tools_menu.addAction(web_chat_action)
         web_chat_action.triggered.connect(lambda _checked=False: self.open_web_chat())
+        replay_action = QAction("Replay a chat…", self)
+        replay_action.setToolTip("Run the operations of a recorded chat again, one by one, on this figure "
+                                 "(to debug them), and save them as a procedure")
+        tools_menu.addAction(replay_action)
+        replay_action.triggered.connect(lambda _checked=False: self.replay_chat_action())
+        procedure_action = QAction("Run a procedure…", self)
+        procedure_action.setToolTip("Run every step of a saved procedure (made with Replay a chat…) on this "
+                                    "figure: the same changes on each figure")
+        tools_menu.addAction(procedure_action)
+        procedure_action.triggered.connect(lambda _checked=False: self.run_procedure_action())
         self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
         tools_menu.addAction(self.pdf_vector_action)
         self.pdf_vector_action.triggered.connect(lambda *_: (self._offer_vector_pdf('menu'),
@@ -2458,6 +2468,7 @@ class EZFIG_GUI(QMainWindow):
             rejected = []
             unsupported = []
             empty_folders = []
+            replays = []
             for url in event.mimeData().urls():
                 url = url.toLocalFile()
                 if os.path.isdir(url):
@@ -2478,6 +2489,10 @@ class EZFIG_GUI(QMainWindow):
                         if eq:
                             self.list.append(eq)
                         continue
+                    if url.lower().endswith(('.json', '.jsonl', '.zip')) and self._replayable(url):
+                        # a procedure, a chat log or a chat debug zip: replayed on this figure
+                        replays.append(url)
+                        continue
                     if not (url.lower().endswith('.pyf') or is_image_file(url)):
                         # a .txt/.csv/.docx... used to be added as a broken panel
                         unsupported.append(url)
@@ -2485,6 +2500,8 @@ class EZFIG_GUI(QMainWindow):
                     self.list.append(url)
 
             event.accept()
+            for path in replays:
+                self.replay_drop(path)
 
             if rejected:
                 names = ', '.join(os.path.basename(r) for r in rejected)
@@ -6482,6 +6499,87 @@ class EZFIG_GUI(QMainWindow):
                                     "(OpenAI, Anthropic, OpenRouter) or another OpenAI-compatible "
                                     "server.\n\nHelp → Chat & MCP Tutorial walks you through it.")
         return dock
+
+    @staticmethod
+    def _replayable(path):
+        """A procedure (.json), a chat log (.jsonl) or a chat debug zip (events.jsonl inside)."""
+        from pyfigures.assistant import chat_replay as R
+        try:
+            if path.lower().endswith('.json'):
+                R.load_procedure(path)
+            else:
+                R.load_steps(path)
+            return True
+        except Exception:
+            pass
+        try:          # a zip of procedures (one per past chat)
+            return path.lower().endswith('.zip') and bool(R.procedures_in_zip(path))
+        except Exception:
+            return False
+
+    def replay_drop(self, path, answer=None):
+        """A dropped procedure: step through it (Replay a chat…) or run it all now; a
+        dropped chat log / debug zip: Replay a chat… on it. *answer* (tests): 'step',
+        'run' or 'cancel' instead of asking."""
+        if path.lower().endswith('.zip'):
+            from pyfigures.assistant import chat_replay as R
+            try:
+                R.load_steps(path)                    # a chat debug zip
+            except ValueError:
+                inside = R.procedures_in_zip(path)    # a zip of procedures: all listed in the dialog
+                dialog = self.replay_chat_action(str(inside[0]))
+                dialog.add_sources(inside)
+                return dialog
+        if not path.lower().endswith('.json'):
+            return self.replay_chat_action(path)
+        if answer is None:
+            box = QMessageBox(self)
+            box.setWindowTitle('Procedure dropped')
+            box.setText(f'{os.path.basename(path)} is a procedure (steps saved from a chat).\n\n'
+                        'Run all its steps on this figure now, or go through them one by one?')
+            run = box.addButton('Run all now', QMessageBox.ButtonRole.AcceptRole)
+            step = box.addButton('One by one…', QMessageBox.ButtonRole.ActionRole)
+            box.addButton(QMessageBox.StandardButton.Cancel)
+            box.exec()
+            answer = 'run' if box.clickedButton() is run else 'step' if box.clickedButton() is step else 'cancel'
+        if answer == 'run':
+            return self.run_procedure_action(path)
+        if answer == 'step':
+            return self.replay_chat_action(path)
+        return None
+
+    def replay_chat_action(self, source=None):
+        """Tools > Replay a chat…: a recorded chat's operations, step by step, on this
+        figure (pyfigures.assistant.chat_replay). Returns the dialog (non-modal)."""
+        from pyfigures.gui.replay_dialog import ReplayDialog
+        dialog = ReplayDialog(self, source)
+        self._replay_dialog = dialog
+        dialog.show()
+        return dialog
+
+    def run_procedure_action(self, path=None):
+        """Tools > Run a procedure…: every step of a procedure file on this figure at once
+        (MCP run_procedure; recipe procedure:). Returns (done, total, failed)."""
+        from pyfigures.gui.replay_dialog import run_procedure_on_window
+        from qtpy.QtWidgets import QFileDialog
+        if path is None:
+            path, _ = QFileDialog.getOpenFileName(self, 'Run a procedure on this figure', '',
+                                                  'PyFigures procedure (*.json)')
+            if not path:
+                return None
+        try:
+            done, total, failed = run_procedure_on_window(self, path)
+        except Exception as e:
+            QMessageBox.warning(self, 'Run a procedure', f'Could not run it: {e}')
+            return None
+        self._last_procedure = (done, total, failed)
+        text = f'{done} of {total} step(s) done.'
+        if failed:
+            text += '\n\nStopped at step {}: {}\n\nCtrl+Z undoes the steps done.'.format(*failed[0])
+            QMessageBox.warning(self, 'Run a procedure', text)
+        else:
+            self.statusBar().showMessage(text, 8000)
+        return done, total, failed
 
     def open_web_chat(self, use_web=True):
         """Tools > Chat in a web page (CLI: --web-chat): dock an online chat

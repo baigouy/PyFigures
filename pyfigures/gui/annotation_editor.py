@@ -2114,6 +2114,14 @@ class MainWindow(QWidget):
             self.removeFillColor.setFocusPolicy(Qt.NoFocus)
             self.removeFillColor.clicked.connect(self.reset_fill_color)
             shapes_toolbox_layout.addWidget(self.removeFillColor, 7, 2, 1, 1)
+            # the panel's background in the colour of the image's own background (MCP:
+            # set_image_property fill_color="auto")
+            self.matchFillColor = QPushButton('From image')
+            self.matchFillColor.setToolTip("Panel background (seen around a rotated image) in the colour of "
+                                           "the image's own background, read from its edge pixels")
+            self.matchFillColor.setFocusPolicy(Qt.NoFocus)
+            self.matchFillColor.clicked.connect(self.match_image_background)
+            shapes_toolbox_layout.addWidget(self.matchFillColor, 7, 3, 1, 1)
             jLabel17 = QLabel('Opacity')
             shapes_toolbox_layout.addWidget(jLabel17, 8, 0)
             self.opacity_spinner = QDoubleSpinBox()
@@ -3584,6 +3592,25 @@ class MainWindow(QWidget):
                 bg.publication_font = None
             bg.publication_svg_stroke_width = (self.publication_svg_stroke_spinbox.value()
                                                if self.publication_svg_stroke_check.isChecked() else None)
+
+    def match_image_background(self):
+        """'From image': the panel's background colour = the median colour of the
+        image's edge pixels, as shown (2026-11-13, "fit the bg to the bg of each image")."""
+        from pyfigures.panel_source_preview import border_colour
+        bg = self.qt_viewer.background
+        if bg is None:
+            return None
+        try:
+            colour = border_colour(bg)
+        except ValueError as e:
+            self.show_warning(str(e))
+            return None
+        bg.fill_color = colour
+        self.set_button_color(self.fillColor, colour)
+        self.set_scroll_area_bg_color()
+        self.qt_viewer.update()
+        self.qt_viewer.shapeChanged.emit()
+        return colour
 
     def reset_fill_color(self):
         self.qt_viewer.set_fill_color(None, self.ignore_changes)
