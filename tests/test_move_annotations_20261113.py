@@ -30,7 +30,8 @@ import pytest
 
 
 @pytest.mark.parametrize('query', ['move the smallest inset in b by 100px to the right',
-                                   'shift the ROI up by 20 pixels', 'move_inset'])
+                                   'shift the ROI up by 20 pixels', 'move_inset',
+                                   'Move the ROI of the smallest inset in b by 100 px to the right'])
 def test_the_chat_finds_move_annotations(query):
     from pyfigures.assistant import live_mcp
     from pyfigures.assistant.categorized_mcp import build_server

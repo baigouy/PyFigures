@@ -209,6 +209,8 @@ def build_server(full_server, send):
         '"Move the box / ROI / arrow 100 px to the right": move_annotations(panel_ref, dx=100, annotation_indexes=[...]) '
         '(dy negative = up; all of them when no index). An INSET cannot be moved freely: it sits in a corner of its panel; '
         'say so and offer another corner (set_inset_property placement) or moving the ROI it shows (the inset follows). '
+        '"Move the ROI of the (smallest) inset": the state lists each inset with roi_annotation_index and shows_region '
+        '(the smallest inset shows the smallest region); move_annotations(panel_ref, annotation_indexes=[that index], dx, dy). '
         'When you must ask which object or what change, give choices and always include "open the panel editor so you do it yourself" among them. '
         'In replies, call a panel by its name in the panel state: its visible letter, else its canvas number "#3" (shown when the panel is selected). Never by a panel_id such as "1/1"; a letter it no longer has may only be added ("#5, formerly E"). '
         'Colours that look unnatural, weird, wrong, or "back to normal / the original / default colours", with no colour named: the FIRST option to offer (or to apply when the user asks to restore) is the image file\'s own colours, file_colours in the panel state: set_lut with "NONE" for each channel. Name those colours in the offer; other LUTs come after it. '
