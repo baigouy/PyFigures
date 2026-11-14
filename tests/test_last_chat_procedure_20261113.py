@@ -20,6 +20,9 @@ os.environ.setdefault("QT_API", "pyqt6")
 from test_assistant_live import gui, runtime  # noqa: E402,F401  (fixtures)
 from pyfigures.assistant import chat_replay as R  # noqa: E402
 
+# chat replays run on the user's machine only (user, 2026-11-14), not on GitHub
+pytestmark = pytest.mark.skipif(os.environ.get("GITHUB_ACTIONS") == "true", reason="chat replay: local only")
+
 CHAT = Path(__file__).parent / 'data' / 'chats' / 'chat_20261113_1415.jsonl'
 
 

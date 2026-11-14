@@ -17,6 +17,9 @@ os.environ.setdefault("QT_API", "pyqt6")
 from test_assistant_live import _figure, gui, runtime  # noqa: E402,F401  (fixtures)
 from pyfigures.assistant import chat_replay as R  # noqa: E402
 
+# chat replays run on the user's machine only (user, 2026-11-14), not on GitHub
+pytestmark = pytest.mark.skipif(os.environ.get("GITHUB_ACTIONS") == "true", reason="chat replay: local only")
+
 
 def _ev(kind, value):
     return json.dumps({'time': '2026-11-13T13:15:34+00:00', 'kind': kind, 'value': value})
@@ -133,6 +136,8 @@ def _live_window(qapp, gui, tmp_path):  # noqa: F811
     from pyfigures.assistant.partner_gui import panels
     g = gui(shareable=True)
     g.reload_state(_figure(tmp_path), append=False)
+    g.auto_lettering_checkbox.setChecked(True)      # the chat names panels a, b
+    g.update_letters()
     launch.start_live_session(g)
     return g, lambda: [p for _, _, p in panels(g.paint.EZFIG_panel.shapes_to_draw)]
 
@@ -220,12 +225,18 @@ def test_save_the_last_chat_and_run_it_from_the_chat(qapp, gui, runtime, tmp_pat
         live_mcp.run_procedure_here(str(tmp_path / 'missing.json'))
 
 
-def test_mcp_and_recipe_run_a_procedure_on_files(qapp, runtime, tmp_path):  # noqa: F811
+def test_mcp_and_recipe_run_a_procedure_on_files(qapp, gui, runtime, tmp_path):  # noqa: F811
     from pyfigures.mcp_server import run_procedure, list_chat_steps, save_chat_procedure
     chat = _chat(tmp_path)
     assert '3 step(s) of 7' in list_chat_steps(str(chat))
     assert save_chat_procedure(str(tmp_path / 's.json'), chat_path=str(chat)).startswith('Saved 3')
     figure = _figure(tmp_path)
+    g = gui()                                       # lettered a, b: the chat names panels so
+    g.reload_state(figure, append=False)
+    g.auto_lettering_checkbox.setChecked(True)
+    g.update_letters()
+    g._save_state_to_file(figure)
+    g._dirty = False
     out = run_procedure(str(_rotate_and_black(tmp_path)), figure)
     assert out.startswith('2 of 2 step(s) done'), out
     import xml.etree.ElementTree as ET

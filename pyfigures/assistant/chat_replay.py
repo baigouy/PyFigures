@@ -324,6 +324,9 @@ def run_procedure_on_file(procedure, pyf_path, out_path=None, stop_on_error=True
         window._save_state_to_file(str(out_path or pyf_path))
     finally:
         launch.stop_live_session(window)
+        # saved above (or failed before any step): closing the off-screen window must not
+        # ask to save (the MCP run_procedure / command line waited on that question)
+        window._dirty = False
         window.close()
         if saved_runtime is None:
             os.environ.pop('PYFIGURES_LIVE_RUNTIME', None)
