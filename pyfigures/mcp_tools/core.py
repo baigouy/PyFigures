@@ -1190,6 +1190,28 @@ def _nice_bar_length(max_units: float) -> float:
     return float(10 ** k)
 
 
+def _default_bar_length(width_units: float, unit: str = "µm") -> tuple[float, str] | None:
+    """A scale-bar length for a request that gives none: a whole number from
+    1, 1.5, 2, 2.5, 3, 5 x 10^k (10, 15, 20, 25, 50, 100, never 12 or 14) taking
+    10-25 % of the shown image width, nearest 15 %. An image under ~4 µm wide
+    gets a bar in nm. None when the width is unknown."""
+    import math
+    if not width_units or width_units <= 0:
+        return None
+    if unit in ("µm", "um", "μm") and width_units * 0.25 < 1:
+        width_units, unit = width_units * 1000, "nm"
+    picks = []
+    for k in range(0, 12):
+        for m in (1, 1.5, 2, 2.5, 3, 5):
+            v = m * 10 ** k
+            if v == int(v) and 0.10 <= v / width_units <= 0.25:
+                picks.append(v)
+    if not picks:                              # an image under 4 units wide: the smallest bar
+        return 1.0, unit
+    best = min(picks, key=lambda v: (abs(math.log(v / width_units / 0.15)), v))
+    return float(best), unit
+
+
 # formats whose header may carry a pixel size (PNG / JPEG never do)
 _CALIBRATED_FORMATS = (".tif", ".tiff", ".lsm", ".czi", ".lif", ".nd2", ".oib", ".oif", ".ims",
                        ".zarr", ".ome.zarr", ".vsi", ".lei")

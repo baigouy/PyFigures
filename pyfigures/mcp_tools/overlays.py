@@ -230,7 +230,9 @@ def set_scale_bar(
     To change ONE thing of an existing bar, pass only that: "too thick" is
     bar_height_px alone, "move it to the left" placement alone, "no text"
     label="" alone, "black bar" bar_color alone. What is not passed is kept
-    (length, text, corner, colours). A new bar needs *bar_width_in_units*.
+    (length, text, corner, colours). A new bar without *bar_width_in_units*
+    gets a round length of about 15 % of the image width (10, 15, 20, 50 ...):
+    when the user gave no length, do not ask, leave it out.
 
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *image_index*: 0-based index among Image2D elements at that location.
@@ -284,9 +286,27 @@ def set_scale_bar(
     factor = _stored_units_per(unit) if calibrated else 1.0
     annotations = imgs[image_index].find("annotations")
     existing = annotations.find("ScaleBar") if annotations is not None else None
+    chosen = ""
     if bar_width_in_units is None and existing is None:
-        return ("ERROR: this image has no scale bar yet: give its length in bar_width_in_units "
-                "(ask the user for it when they gave none). Nothing was changed.")
+        # no length asked: a round one of about 15 % of the shown width (do not ask the user)
+        from .core import _default_bar_length, _raw_size_from_file
+        size = _raw_size_from_file(_first_filename(imgs[image_index]))
+        px = px_to_unit if px_to_unit is not None else (_pixel_size(imgs[image_index])[0] if calibrated else 1.0)
+
+        def _crop(name):
+            try:
+                return max(0, int(float(_child_text(imgs[image_index], name) or 0)))
+            except (TypeError, ValueError):
+                return 0
+        visible = (size[0] - _crop("crop_left") - _crop("crop_right")) if size else 0
+        pick = _default_bar_length(visible * px, unit if calibrated else "px") if visible > 0 and px else None
+        if pick is None:
+            return ("ERROR: this image has no scale bar yet and its width is unknown: give its length in "
+                    "bar_width_in_units. Nothing was changed.")
+        bar_width_in_units, picked_unit = pick
+        if calibrated and picked_unit != unit:
+            unit, factor = picked_unit, _stored_units_per(picked_unit)
+        chosen = f" No length was given: {bar_width_in_units:g} {picked_unit} (about 15 % of the image width) was chosen."
     uncal = []
     stored_width = None
     if bar_width_in_units is not None:
@@ -335,7 +355,7 @@ def set_scale_bar(
     thick = f", {float(bar.findtext('bar_height_in_px') or 3):g} px thick" if bar is not None else ""
     return (
         f"Scale bar {action} on image {image_index} in {loc}: "
-        f"{text}, {where}{thick}{px_note}." + _uncalibrated_warning(uncal, unit) + small
+        f"{text}, {where}{thick}{px_note}." + chosen + _uncalibrated_warning(uncal, unit) + small
     )
 
 

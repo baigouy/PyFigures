@@ -485,7 +485,7 @@ Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent)
 | Tool | Description |
 |------|-------------|
 | `get_scale_bar(pyf_path, group_path, image_index)` | Read scale bar settings |
-| `set_scale_bar(pyf_path, group_path, image_index, bar_width_in_units, ...)` | Add/update scale bar on one image (`bar_color` is drawn — stored as `bar_color`; files without it draw white) |
+| `set_scale_bar(pyf_path, group_path, image_index, bar_width_in_units, ...)` | Add/update scale bar on one image (`bar_color` is drawn — stored as `bar_color`; files without it draw white). A new bar without `bar_width_in_units` gets a round length (1, 1.5, 2, 2.5, 3, 5 × 10ⁿ: 10, 15, 20, 50…) of 10–25 % of the shown width, nearest 15 % (nm for images under ~4 µm wide) |
 | `remove_scale_bar(pyf_path, group_path, image_index)` | Remove scale bar |
 | `set_scale_bar_all(pyf_path, bar_width_in_units, ...)` | Apply the same scale bar to every image |
 

@@ -116,12 +116,16 @@ def test_recipe_thickness_and_bar_only(tmp_path, qapp):
     assert bar["bar_height_px"] == 1.5 and not bar["has_text"] and float(bar["bar_width_in_units"]) == 10
 
 
-def test_a_new_bar_needs_a_length_and_a_sane_thickness(fig):
-    from pyfigures.mcp_server import set_scale_bar
-    reply = set_scale_bar(fig, [0], 1, placement="bottom left")
-    assert reply.startswith("ERROR") and "bar_width_in_units" in reply
+def test_a_new_bar_without_length_gets_a_round_one_and_a_sane_thickness(fig):
+    """A new bar used to need a length (local models then asked for it again and
+    again); it now gets a round one (2026-11-15). The thickness is still checked."""
+    import json
+    from pyfigures.mcp_server import set_scale_bar, get_scale_bar
     assert set_scale_bar(fig, [0], 1, 10, bar_height_px=0).startswith("ERROR")
-    assert "No scale bar" in __import__("pyfigures.mcp_server", fromlist=["x"]).get_scale_bar(fig, [0], 1)
+    assert "No scale bar" in get_scale_bar(fig, [0], 1)
+    reply = set_scale_bar(fig, [0], 1, placement="bottom left")
+    assert not reply.startswith("ERROR") and "No length was given" in reply
+    assert json.loads(get_scale_bar(fig, [0], 1))["placement"] == "bottom left"
 
 
 def test_the_figure_draws_the_thickness_and_no_text(fig, qapp, tmp_path):
