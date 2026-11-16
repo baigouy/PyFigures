@@ -101,7 +101,7 @@ def test_montage_time_native_panels_stamps_and_one_letter(tmp_path):
     stack = _hyperstack(str(tmp_path / "h.tif"))
     pyf = str(tmp_path / "f.pyf")
     M.create_figure(pyf)
-    res = M.add_stack_montage(pyf, stack, axis="t", frames=3, channel=1)
+    res = M.add_stack_montage(pyf, stack, axis="t", frames=3, channel=2)   # 2nd channel, counted from 1
     assert "3 time points" in res and "0 min" in res and "8 min" in res
     imgs = _panels(pyf)
     assert len(imgs) == 3

@@ -1007,7 +1007,8 @@ def invert_lut(
     MATPLOTLIB_viridis <-> MATPLOTLIB_viridis_r. A one-channel image still on
     its acquisition colour becomes GRAY_INVERTED. preview_luts shows the result.
 
-    *channels*: 0-based channel indices to invert; None inverts every channel.
+    *channels*: channel numbers to invert, counted from 1 (1 = the first
+      channel, as the GUI shows it); None inverts every channel.
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *image_index*: 0-based index among Image2D elements at that location.
     """
@@ -1030,24 +1031,30 @@ def invert_lut(
         current = []
     n_file = _channel_count_from_file(_first_filename(img)) or max(len(current), 1)
     current += [None] * (n_file - len(current))
-    wanted = list(range(n_file)) if channels is None else channels
-    bad = [c for c in wanted if not isinstance(c, int) or not 0 <= c < n_file]
-    if bad:
-        return f"ERROR: channel {bad[0]} does not exist (the image has {n_file}). Nothing was changed."
+    if channels is None:
+        wanted = list(range(n_file))
+    else:
+        from .stacks import _channel_index
+        wanted = []
+        for ch in (channels if isinstance(channels, (list, tuple)) else [channels]):
+            idx, cerr = _channel_index(ch, n_file)
+            if cerr:
+                return f"ERROR: {cerr}"
+            wanted.append(idx)
     available = list_available_luts()
     new, done = list(current), []
     for c in wanted:
         lut = current[c]
         if lut in (None, "DEFAULT"):
             if n_file != 1:
-                return (f"ERROR: channel {c} shows its acquisition colour, which has no inverted twin. "
+                return (f"ERROR: channel {c + 1} shows its acquisition colour, which has no inverted twin. "
                         f"Which LUT should it get (e.g. GRAY_INVERTED, GREEN_INVERTED)? Nothing was changed.")
             lut = "GRAY"
         twin = invert_lut_name(lut, available)
         if twin is None:
-            return f"ERROR: the LUT {lut} of channel {c} cannot be inverted. Nothing was changed."
+            return f"ERROR: the LUT {lut} of channel {c + 1} cannot be inverted. Nothing was changed."
         new[c] = twin
-        done.append(f"channel {c}: {current[c] or 'acquisition colour'} -> {twin}")
+        done.append(f"channel {c + 1}: {current[c] or 'acquisition colour'} -> {twin}")
     _set_child_text(img, "LUTs", repr(new))
     from .stacks import _sync_split_colours
     _sync_split_colours(container, img, new)

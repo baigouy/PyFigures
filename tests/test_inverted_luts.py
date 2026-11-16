@@ -62,9 +62,13 @@ def test_invert_lut_toggles_and_is_stored(gray_and_rgb):
     # an RGB image on its acquisition colours: which LUT is not guessed
     assert invert_lut(gray_and_rgb, [0], 1).startswith("ERROR")
     set_lut(gray_and_rgb, [0], 1, ["MAGENTA", "GREEN", "MATPLOTLIB_viridis"])
-    invert_lut(gray_and_rgb, [0], 1, channels=[0, 2])
+    out = invert_lut(gray_and_rgb, [0], 1, channels=[1, 3])          # counted from 1, as people do
     assert _luts(gray_and_rgb, 1) == repr(["MAGENTA_INVERTED", "GREEN", "MATPLOTLIB_viridis_r"])
+    assert "channel 1: MAGENTA" in out and "channel 3: MATPLOTLIB_viridis" in out
     assert invert_lut(gray_and_rgb, [0], 1, channels=[5]).startswith("ERROR")
+    zero = invert_lut(gray_and_rgb, [0], 1, channels=[0])
+    assert zero.startswith("ERROR") and "counted from 1" in zero
+    assert _luts(gray_and_rgb, 1) == repr(["MAGENTA_INVERTED", "GREEN", "MATPLOTLIB_viridis_r"])
 
 
 def test_a_plot_script_panel_refuses_a_lut_and_says_why(tmp_path):

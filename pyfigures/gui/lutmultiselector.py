@@ -51,7 +51,7 @@ class LutWidget(QWidget):
         self.lutcreator = PaletteCreator()
 
         for ch in range(nb_channels):
-            channel_box = QGroupBox(f"Channel {ch}")
+            channel_box = QGroupBox(f"Channel {ch + 1}")  # counted from 1, as everywhere else
             channel_layout = QVBoxLayout()
 
             lut_combo = QComboBox()

@@ -481,7 +481,7 @@ metadata when present — ImageJ TIFF, OME-TIFF, LSM, and the Bio-Formats reader
     frames: 5
     columns: 5
     projection: max
-    channel: 1
+    channel: 2
     lut: gray
     interval: 2
     unit: min
@@ -506,7 +506,7 @@ one letter.
 | `projection` | `max` (default), `min`, `avg`, `none` | For a time montage of a 3-D stack: how each time point's Z is shown (`none` = one slice, see `z_slice`). |
 | `z_range` | `[first, last)` slice numbers (all) | Z slices the projection uses, e.g. `[5, 20]`. |
 | `z_slice` | slice number (0) | Z slice shown when `projection: none`. |
-| `channel` | channel number (from 0) | Show only this channel. Default: all channels. |
+| `channel` | channel number, counted from 1 | Show only this channel (`1` = the first, as the GUI shows it). Default: all channels. |
 | `lut` | name or list per channel | Colours. |
 | `interval` | number | Time (or Z step) per frame; overrides the file's value. |
 | `unit` | text, e.g. `s`, `min`, `h`, `µm` | Unit for the stamps; overrides the file's. |
@@ -617,7 +617,7 @@ or a bigger panel.
     kymograph:
       line: [40, 150, 200, 150]
       width: 3
-      channel: 0
+      channel: 1
       projection: max
       frame_height: 2
       cmap: gray
@@ -633,7 +633,7 @@ Adds, right after the image, a panel showing **position along a line vs time**
 |---|---|---|
 | `line` | `[x1, y1, x2, y2]` — **required** | The line, in image pixels. |
 | `width` | `3` | Pixels averaged across the line (odd numbers centre on it). |
-| `channel` | `0` | Channel for multi-channel stacks. |
+| `channel` | `1` (the first) | Channel for multi-channel stacks, counted from 1. |
 | `projection` | `max` (default), `avg`, `min` | How a 3-D stack's Z is collapsed at each time point. |
 | `frame_height` | automatic | Rows per time point (frames are repeated, not interpolated). Default: the kymograph comes out about half as tall as wide. |
 | `cmap` | `gray` | Matplotlib colour map, e.g. `magma`, `viridis`. |
@@ -656,7 +656,7 @@ output.
       at: [200, 180]
       z: 12
       time_point: 0
-      channel: 1
+      channel: 2
       colors: [green, magenta]
       z_scale: 3.2
       gap: 4
@@ -675,7 +675,7 @@ a **Z stack**.
 | `at` | `[x, y]` — **required** | The voxel the side views cut through (image pixels). |
 | `z` | maximum projection | XY slice shown; also marked in the side views. |
 | `time_point` | `0` | Frame used for a time series. |
-| `channel` | all channels | Show one channel in grayscale. |
+| `channel` | all channels | Show one channel in grayscale, counted from 1. |
 | `colors` | green+magenta / RGB | Channel tints when all channels are shown. |
 | `z_scale` | from the file's voxel size | Z step ÷ pixel size, so the side views have true proportions. **Required** if the file has no voxel depth. |
 | `gap` | `4` | Pixels between the views. |

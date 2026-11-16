@@ -203,6 +203,25 @@ def _placeholder_panel(info):
     return img
 
 
+def _channel_index(channel, n_channels):
+    """(0-based index, error) of a channel numbered from 1, as people count
+    (and as the GUI shows it: Channel 1, Ch1). None stays None."""
+    if channel is None:
+        return None, None
+    if isinstance(channel, bool) or not isinstance(channel, int):
+        try:
+            channel = int(str(channel).strip())
+        except ValueError:
+            return None, f"channel must be a number counted from 1 (got {channel!r})."
+    if channel == 0:
+        return None, (f"channels are counted from 1: the first channel is 1 (got 0; this image has "
+                      f"{n_channels} channel(s), 1 to {n_channels}). Nothing was changed.")
+    if not 1 <= channel <= n_channels:
+        return None, (f"channel {channel} does not exist: the image has {n_channels} channel(s), "
+                      f"numbered 1 to {n_channels}. Nothing was changed.")
+    return channel - 1, None
+
+
 def _lut_list(lut, n_channels):
     """LUTs field for a panel: one name for every channel, or a per-channel list."""
     if lut is None:
@@ -263,7 +282,8 @@ def add_stack_montage(
       stack is shown ("max", "min", "avg", or "none" = one slice, *z_slice*).
     *z_range*: [first, last) Z slices the projection uses (default all).
     *z_slice*: Z slice shown when projection is "none" (default 0).
-    *channel*: show only this channel (0-based) of a multi-channel stack.
+    *channel*: show only this channel of a multi-channel stack, counted from 1
+      (1 = the first channel, as the GUI shows it).
     *lut*: LUT for the panels (e.g. "GRAY", "MATPLOTLIB_magma"), or a list per
       channel.
     *interval* / *unit*: time (or Z step) per frame; default from the file
@@ -321,9 +341,10 @@ def add_stack_montage(
         nch = sizes.get("c", 1)
         chans = None
         if channel is not None:
-            if "c" not in order or not 0 <= channel < nch:
-                return f"ERROR: channel {channel} out of range (stack has {nch} channel(s))."
-            chans = [i == channel for i in range(nch)]
+            ch_idx, cerr = _channel_index(channel, nch if "c" in order else 1)
+            if cerr:
+                return f"ERROR: {cerr}"
+            chans = [i == ch_idx for i in range(nch)]
         luts = _lut_list(lut, nch)
         scol = _color_to_int(stamp_color)
     except ValueError as e:
@@ -758,7 +779,8 @@ def add_kymograph(
 
     (*x1*, *y1*) → (*x2*, *y2*): the line, in the source image's pixels.
     *line_width*: pixels averaged across the line (odd numbers centre on it).
-    *channel*: channel to use for multi-channel stacks (default 0).
+    *channel*: channel to use for multi-channel stacks, counted from 1
+      (default: the first channel).
     *projection*: how a 3-D stack's Z is collapsed per time point (max/avg/min).
     *frame_height*: rows per frame (default: enough for the kymograph to be
       about half as tall as wide). Frames are repeated, not interpolated.
@@ -788,8 +810,9 @@ def add_kymograph(
     if length < 2:
         return "ERROR: the line is too short."
     nch = info["sizes"].get("c", 1)
-    if channel is not None and not 0 <= channel < nch:
-        return f"ERROR: channel {channel} out of range ({nch} channel(s))."
+    channel, cerr = _channel_index(channel, nch)   # 0-based from here on
+    if cerr:
+        return f"ERROR: {cerr}"
     if projection not in ("max", "avg", "min"):
         return "ERROR: projection must be 'max', 'avg' or 'min'."
     # both were stored as given: a 0 px line, or a colour map the panel
@@ -931,7 +954,7 @@ def add_orthogonal_views(
     *z*: the XY slice shown (default: maximum projection); also marks the
       slice in the side views.
     *time_point*: frame used for a time series.
-    *channel*: one channel (grayscale); default all channels, tinted with
+    *channel*: one channel (grayscale), counted from 1; default all channels, tinted with
       *colors* (default green+magenta / RGB).
     *z_scale*: Z step / pixel size, so the side views have true proportions —
       read from the file's voxel size when omitted.
@@ -959,8 +982,9 @@ def add_orthogonal_views(
     if not 0 <= time_point < sz.get("t", 1):
         return f"ERROR: time_point {time_point} out of range."
     nch = sz.get("c", 1)
-    if channel is not None and not 0 <= channel < nch:
-        return f"ERROR: channel {channel} out of range ({nch} channel(s))."
+    channel, cerr = _channel_index(channel, nch)   # 0-based from here on
+    if cerr:
+        return f"ERROR: {cerr}"
     if z_scale is None:
         if info.get("vz") and info.get("vx"):
             z_scale = info["vz"] / info["vx"]

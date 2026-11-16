@@ -2370,7 +2370,7 @@ class MainWindow(QWidget):
         if self.qt_viewer.background and isinstance(self.qt_viewer.background.img, np.ndarray) and 'c' in guess_dimensions(self.qt_viewer.background.img): # if no c we must not do anything with the last channel as this is not a 'c'
             for i in range(self.qt_viewer.background.img.shape[-1]):
                 # Create a new QCheckBox for this channel
-                check_box = QCheckBox(f"{i}")
+                check_box = QCheckBox(f"{i + 1}")  # channels counted from 1, as everywhere else
                 if self.qt_viewer.background.channels and len(self.qt_viewer.background.channels)==self.qt_viewer.background.img.shape[-1]:
                     # we try to reload the previously loaded channels
                     check_box.setChecked(self.qt_viewer.background.channels[i])

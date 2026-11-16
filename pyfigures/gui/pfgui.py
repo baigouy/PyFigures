@@ -5960,7 +5960,7 @@ class EZFIG_GUI(QMainWindow):
         grid.addWidget(QLabel('Line width (px averaged):', frame), 4, 0)
         grid.addWidget(width, 4, 1)
         nch = info['sizes'].get('c', 1)
-        channel = self._spin(frame, 0, max(0, nch - 1), 0)
+        channel = self._spin(frame, 1, max(1, nch), 1)       # counted from 1, as everywhere
         grid.addWidget(QLabel('Channel:', frame), 5, 0)
         grid.addWidget(channel, 5, 1)
         cd = CustomDialog(title="Kymograph",
