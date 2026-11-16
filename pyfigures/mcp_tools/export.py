@@ -300,6 +300,55 @@ def shared_channel_luts(img) -> dict | None:
 SCALE_BAR_MIN_FRACTION = 0.05
 
 
+TINY_ROI_FRACTION = 0.01      # of the image's larger side
+
+
+def _tiny_rois(img) -> list[dict]:
+    """ROIs of the panel under 1 % of its image's larger side in both directions:
+    possibly a slip of the mouse (the panel editor now keeps small ROIs, to draw
+    around dots: the audit asks the user to check them). Arrowheads alone are
+    small on purpose and never listed."""
+    import ast
+    from .core import _first_filename, _raw_size_from_file
+    from ..arrowheads import is_head_only
+    annots = img.find("annotations")
+    size = _raw_size_from_file(_first_filename(img))
+    if annots is None or not size:
+        return []
+    limit = TINY_ROI_FRACTION * max(size[0], size[1])
+    out = []
+    for index, el in enumerate(list(annots)):
+        def num(name):
+            try:
+                return float(el.findtext(name))
+            except (TypeError, ValueError):
+                return None
+        if el.tag in ("Rectangle2D", "Ellipse2D"):
+            w, h = num("width"), num("height")
+        elif el.tag == "Line2D":
+            ends = [num(k) for k in ("x1", "y1", "x2", "y2")]
+            if None in ends or is_head_only(*ends, str(el.findtext("arrow")) == "True"):
+                continue
+            w, h = abs(ends[2] - ends[0]), abs(ends[3] - ends[1])
+        elif el.tag in ("Polygon2D", "PolyLine2D", "Freehand2D"):
+            try:
+                flat = ast.literal_eval(el.findtext("coords_as_list") or "[]")
+                if flat and isinstance(flat[0], (list, tuple)):
+                    flat = [v for xy in flat for v in xy]
+                xs, ys = flat[0::2], flat[1::2]
+                w, h = max(xs) - min(xs), max(ys) - min(ys)
+            except Exception:
+                continue
+        else:
+            continue
+        if w is None or h is None:
+            continue
+        if abs(w) < limit and abs(h) < limit:
+            out.append({"annotation_index": index, "type": el.tag,
+                        "size_px": [round(abs(w), 1), round(abs(h), 1)]})
+    return out
+
+
 def _scale_bar_too_small(img) -> dict | None:
     """{percent, suggested} when the panel's scale bar is under 5 % of the shown
     image width, else None (also when the width is unknown)."""
@@ -356,6 +405,9 @@ def audit_figure(pyf_path: str) -> str:
     files (SVG/PDF) and scripted panels (plots, colour bars) are not listed.
     ``scale_bars_too_small`` lists bars under 5 % of the shown image width
     (hard to see) with a round length of about 15 % (``suggested``).
+    ``panels_with_tiny_rois`` lists ROIs under 1 % of their image's larger side
+    in both directions (``size_px``): possibly a slip of the mouse — ask the user
+    whether they are wanted (arrowheads alone are not listed).
     ``panels_constant`` lists panels showing a single value everywhere (all
     black / white, an empty channel): usually a mistake to remove.
     ``panels_channels_share_a_lut`` lists images whose shown channels have the
@@ -478,8 +530,15 @@ def audit_figure(pyf_path: str) -> str:
             continue
         if _pixel_size(el)[0] is None:
             no_px.append(_where(p))
+    # ROIs so small they may be a slip of the mouse: listed for the user to check
+    tiny = []
+    for p, el in zip(panels, elems):
+        rois = _tiny_rois(el)
+        if rois:
+            tiny.append(dict(_where(p), rois=rois))
     return json.dumps({
         "n_panels": len(panels),
+        "panels_with_tiny_rois": tiny,
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
         "scale_bars_too_small": too_small,
         "images_without_pixel_size": no_px,

@@ -100,6 +100,14 @@ def audit_report(raw):
                               + (f"; about {e['suggested']} would be ~15 %" if e.get("suggested") else "") + ")"
                               for e in small),
                   "   Make it longer in the panel's editor, unless that length was asked for.", ""]
+    tiny = d.get("panels_with_tiny_rois") or []
+    if tiny:
+        n = sum(len(e["rois"]) for e in tiny)
+        lines += [f"! {n} very small ROI{'s' if n > 1 else ''} (under 1 % of the image): "
+                  + ", ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} "
+                              f"({len(e['rois'])})" for e in tiny),
+                  "   Wanted (around small dots)? Then keep them; a slip of the mouse? Delete it in the "
+                  "panel's editor.", ""]
     by_hand = d.get("scale_bars_calibrated_by_hand") or []
     if by_hand:
         lines += [f"! {len(by_hand)} scale bar{'s use' if len(by_hand) > 1 else ' uses'} a pixel size "
