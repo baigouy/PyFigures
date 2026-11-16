@@ -633,6 +633,9 @@ ACTIONS = {
     # ── View ──
     "menu: View > Show the 'double-click to edit' hint": spec(unchanged, inv=False),
     "menu: View > Show new Z stacks as max projection": spec(unchanged, inv=False),
+    "menu: View > Fit new layouts to the page": spec(unchanged, inv=False),
+    "menu: View > Page for new layouts > A4 (180 × 247 mm printable)": spec(unchanged, inv=False),
+    "menu: View > Page for new layouts > Letter (186 × 229 mm printable)": spec(unchanged, inv=False),
     "menu: View > Theme > System (auto)": spec(unchanged, inv=False),
     "menu: View > Theme > Light": spec(unchanged, inv=False),
     "menu: View > Theme > Dark": spec(unchanged, inv=False),
@@ -668,6 +671,13 @@ ELSEWHERE = {
         "test_gui_e2e_menus.py::test_view_toggles_change_what_they_say"],
     "menu: View > Show new Z stacks as max projection": [
         "test_gui_e2e_menus.py::test_view_toggles_change_what_they_say"],
+    "menu: View > Fit new layouts to the page": [
+        "test_page_fit_20261116.py::test_ten_images_added_go_into_rows_within_the_page",
+        "test_page_fit_20261116.py::test_off_keeps_the_images_one_below_the_other"],
+    "menu: View > Page for new layouts > A4 (180 × 247 mm printable)": [
+        "test_page_fit_20261116.py::test_page_sizes_and_menu"],
+    "menu: View > Page for new layouts > Letter (186 × 229 mm printable)": [
+        "test_page_fit_20261116.py::test_page_sizes_and_menu"],
     "menu: View > Theme > System (auto)": ["test_gui_e2e_menus.py::test_theme_entries_switch_the_palette"],
     "menu: View > Theme > Light": ["test_gui_e2e_menus.py::test_theme_entries_switch_the_palette"],
     "menu: View > Theme > Dark": ["test_gui_e2e_menus.py::test_theme_entries_switch_the_palette"],

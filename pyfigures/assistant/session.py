@@ -162,9 +162,13 @@ class Session:
                        # the number the canvas shows on a selected panel; panel_ref "#3" names it
                        'number': number}
                       for number, (gp, ix, p) in enumerate(panels(self.window.paint.EZFIG_panel.shapes_to_draw), 1)]
-        for r in references:
+        for r, (_gp, _ix, p) in zip(references, panels(self.window.paint.EZFIG_panel.shapes_to_draw)):
             # what to call it in a reply: its letter, else "#N" (never the panel_id)
             r['name'] = panel_name(r)
+            # "list image dimensions": the numpy shape with its axes, tzyxc (user 2026-11-16:
+            # the answer gave width x height only, the axes were meant)
+            if r.get('kind') == 'image':
+                r['dimensions'] = numpy_dimensions(p, (r.get('geometry') or {}).get('source_size'), r.get('stack'))
         from .advanced_annotations import describe, text_inspection_record
         annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,
                         index, sum(isinstance(v, TAText2D) for v in p.annotations[:index]))
@@ -372,6 +376,11 @@ class Session:
                         try:
                             w.reload_state(path, append=False, skip_add_to_stack=True)
                             panel.repaint()
+                            page_fit = ''
+                            if op == 'arrange_rows':
+                                # the rows asked for are kept; too tall for the page: narrower
+                                from ..gui.page_fit import fit_to_page
+                                page_fit = fit_to_page(w)
                             if w.save_state(show_popup=False) is None:
                                 raise RuntimeError('Could not checkpoint edit')
                             w._mark_dirty()
@@ -384,6 +393,8 @@ class Session:
                             raise
                         w.current_file = old_path
                         result = {'operation_result': response, **self.snapshot()}
+                        if op == 'arrange_rows' and page_fit:
+                            result['page_fit'] = page_fit
             elif op == 'preview':
                 # Captures the visible canvas, including its current zoom.
                 output = STATE / 'canvas.png'
@@ -450,6 +461,10 @@ class Session:
                 from .partner_gui import panels as _image_panels
                 had_images = op == 'undo' and any(True for _ in _image_panels(panel.shapes_to_draw)) \
                     and not self._is_last_chat_result()
+                try:
+                    before = self.snapshot().get('figure_summary', {}).get('answer')
+                except Exception:
+                    before = None
                 getattr(w, op)()
                 if had_images and not panel.shapes_to_draw:
                     # the step undone was opening / building the whole figure (user chat
@@ -459,6 +474,15 @@ class Session:
                                      'figure being opened or built), so it was put back: nothing changed. There is no '
                                      'edit of yours left to undo; tell the user so.')
                 result = self.snapshot()
+                # which step went: a model undid its layout twice believing it removed an
+                # extra image, and the figure ended as one column of loose images (2026-11-16)
+                after = result.get('figure_summary', {}).get('answer')
+                result['undo_redo_effect'] = {
+                    'action': op, 'before': before, 'after': after,
+                    'note': ('Undo takes back the LAST step first, one step per call (a layout or '
+                             'arrangement is a step of its own, after the images it arranges). Compare '
+                             'before/after to see which step went; redo puts it back.' if op == 'undo' else
+                             'Redo put back the step undone last; another redo puts back the next one.')}
             elif op in ('add_label', 'set_label'):
                 text = args['text']
                 if not isinstance(text, str) or len(text) > 10000:
@@ -684,6 +708,7 @@ class Session:
         w = self.window
         from .partner_gui import state as letter_state, panels as image_panels
         letters_before = letter_state(w)
+        page_fit = ''
         folder = STATE / ('original_' + self.id)
         folder.mkdir(exist_ok=True)
         path = folder / 'current.pyf'
@@ -816,6 +841,10 @@ class Session:
                                 for text in (supplied.get(corner) or [])]
                     if not targets or any(text not in actual_texts for text in expected):
                         raise ValueError('VERIFICATION_FAILED: Native add_corner_labels reported success, but requested text is absent after GUI refresh. Edit rolled back. Use swap_live_panels for swaps; do not remove/recreate panel letters.')
+                if len(list(image_panels(w.paint.EZFIG_panel.shapes_to_draw))) > len(letters_before['panels']):
+                    # images added: kept within one printed page (rows, then narrower), as in the GUI
+                    from ..gui.page_fit import fit_to_page
+                    page_fit = fit_to_page(w)
                 if w.save_state(show_popup=False) is None:
                     raise RuntimeError('Could not checkpoint changed document')
                 w._mark_dirty()
@@ -837,6 +866,8 @@ class Session:
         from .figure_state import movement_changes
         from .result_evidence import caption_evidence
         caption_result = caption_evidence(path.with_suffix('.caption.json')) if name == 'set_figure_caption' else {}
+        if page_fit:
+            caption_result['page_fit'] = page_fit
         return {**caption_result, 'tool_result': encoded, 'document_changed': changed, 'metadata_changed': sidecar_changed,
                 'verified_changes': movement_changes(letters_before, letters_after) if name == 'move_image' else changes(letters_before, letters_after),
                 'verified_specification': specification(letters_after),
@@ -921,6 +952,39 @@ def stack_summary(panel):
         span = f'z {start or 0}-{end if end is not None else z}'
         out['shown'] = f'{projection} projection of {span}' if projection else 'one z slice (no projection)'
     return out
+
+
+def numpy_dimensions(panel, source_size, stack):
+    """{'axes': 'tzyxc', 'shape': [19, 21, 300, 400, 2], 'text': 'tzyxc 19 × 21 × 300 × 400 × 2'}:
+    the source image as a numpy array, axes of size 1 left out (y and x always kept).
+    From the file header (the stack sizes) and the source width / height; None when
+    unknown. Colour images (RGB) count their samples as c."""
+    try:
+        w, h = int(source_size['width']), int(source_size['height'])
+    except (TypeError, KeyError, ValueError):
+        return None
+    if isinstance(stack, dict) and 'unknown' in stack:
+        return None
+    z = t = 1
+    c = None
+    if isinstance(stack, dict):
+        z, t, c = stack.get('z', 1), stack.get('t', 1), stack.get('channels', 1)
+    if c is None:
+        from pyfigures.stack_info import header_sizes
+        sizes = header_sizes(getattr(panel, 'filename', None), getattr(panel, 'serie_to_open', None))
+        if isinstance(sizes, dict):
+            c = sizes.get('c', 1)
+        else:
+            try:                                   # jpg / png: the header gives the bands
+                from PIL import Image
+                with Image.open(panel.filename) as im:
+                    c = len(im.getbands())
+            except Exception:
+                c = 1
+    axes = [(a, n) for a, n in (('t', t), ('z', z), ('y', h), ('x', w), ('c', c)) if a in 'yx' or (n or 1) > 1]
+    shape = [int(n) for _, n in axes]
+    letters = ''.join(a for a, _ in axes)
+    return {'axes': letters, 'shape': shape, 'text': letters + ' ' + ' × '.join(map(str, shape))}
 
 
 def channel_colours(panel):

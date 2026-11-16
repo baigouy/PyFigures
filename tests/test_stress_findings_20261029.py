@@ -432,6 +432,38 @@ def test_new_z_stack_follows_the_max_projection_preference(tmp_path, zstack, mon
     assert M.get_image_property(pyf, [0], 2, "projection") == "None"
 
 
+def test_a_zeiss_lsm_z_stack_is_max_projected_too(tmp_path, monkeypatch):
+    """Chat 2026-11-16: of ten random images the .lsm stack (18 z, 3 channels)
+    was the only Z stack shown as its first slice: only .tif/.tiff were read.
+    An LSM is a TIFF; tifffile reads it by content, so a .lsm name is enough."""
+    import tifffile
+    from pyfigures.gui import user_prefs
+    lsm = tmp_path / "stack.lsm"
+    tifffile.imwrite(lsm, np.zeros((5, 3, 8, 8), np.uint8), imagej=True, metadata={"axes": "ZCYX"})
+    pyf = str(tmp_path / "lsm.pyf")
+    M.create_figure(pyf, num_groups=1)
+    monkeypatch.setattr(user_prefs, "load_max_project_z_stacks", lambda: True)
+    r = M.add_image(pyf, [0], str(lsm))
+    assert "shown as its max projection" in r, r
+    assert "max" in M.get_image_property(pyf, [0], 0, "projection")
+
+
+def test_projection_depends_on_dimensions_not_on_the_format(tmp_path, monkeypatch):
+    """Only the numpy dimensions count, never the file format: every file
+    is read through the image reader and follows the same rule."""
+    from pyfigures import stack_info
+    from pyfigures.mcp_tools.core import _z_stack_depth
+    f = tmp_path / "x.czi"
+    f.write_bytes(b"0")
+    monkeypatch.setattr(stack_info, "stack_info", lambda p, s=None: {
+        "order": "dhwc", "sizes": {"d": 7, "h": 8, "w": 8, "c": 2}})
+    assert _z_stack_depth(str(f)) == 7
+    monkeypatch.setattr(stack_info, "stack_info", lambda p, s=None: {   # Z then time: a movie
+        "order": "dthw", "sizes": {"d": 7, "t": 3, "h": 8, "w": 8}})
+    assert _z_stack_depth(str(f)) == 0
+    assert _z_stack_depth(str(tmp_path / "a.png")) == 0
+
+
 def test_alt_text_names_unlettered_panels_after_their_letter(fig):
     """Letters per row gave 'Panel a … Panel 2 … Panel b' (two numberings)."""
     import json
@@ -498,3 +530,24 @@ def test_print_ready_spread_has_no_fold_line_or_page_border(tmp_path):
     h, w = a.shape
     assert a[:, w // 2 - 2:w // 2 + 3].min() == 255, "fold line printed"
     assert min(a[0].min(), a[-1].min(), a[:, 0].min(), a[:, -1].min()) == 255, "page border printed"
+
+
+def test_the_image_store_rereads_a_file_changed_on_disk(tmp_path):
+    """batoolset's ImageCentralStore served a file from memory by its name
+    only: a file edited elsewhere (or damaged) kept its old pixels until
+    restart. Found 2026-11-16 when add_image started reading each image."""
+    from PIL import Image
+    from batoolset.img import Img
+    from batoolset.images.centralstore import ImageCentralStore as S
+    saved = S.get_store()
+    S.init()
+    try:
+        f = tmp_path / "x.png"
+        Image.fromarray(np.full((10, 10), 50, np.uint8)).save(f)
+        assert int(Img(str(f)).max()) == 50
+        assert int(Img(str(f)).max()) == 50              # served from the store
+        Image.fromarray(np.full((10, 12), 200, np.uint8)).save(f)
+        again = Img(str(f))
+        assert int(again.max()) == 200 and again.shape == (10, 12)
+    finally:
+        S.set_store(saved)

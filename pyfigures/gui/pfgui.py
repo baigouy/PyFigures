@@ -920,6 +920,7 @@ class EZFIG_GUI(QMainWindow):
             self.paint.scroll_to_item)  # REALLY NO CLUE WHY THAT DOES NOT WORK UNLESS I PRESS CTRL T --> and REALLY NO CLUE HOW TO FIX THAT but low priority bug!!!
         self.paint.EZFIG_panel.update_letters_required.connect(self.update_letters)
         self.paint.EZFIG_panel.force_update_size_of_parent.connect(self.update_size_of_object)
+        self.paint.EZFIG_panel.page_fit_required.connect(self.fit_new_layout_to_page)
         self.paint.EZFIG_panel.open_lettering_parameters.connect(self.change_lettering_parameters)
         self.paint.EZFIG_panel.force_update_store.connect(self.force_update_store)
         self.paint.EZFIG_panel.force_silent_spinner_update_in_parent.connect(self.force_silent_spinner_update_in_parent)
@@ -1861,6 +1862,27 @@ class EZFIG_GUI(QMainWindow):
                                         "image editor changes the projection of one panel)")
         self.max_proj_action.toggled.connect(self._set_max_project_z)
         view_menu.addAction(self.max_proj_action)
+        from pyfigures.gui.user_prefs import load_fit_to_page
+        self.fit_page_action = QAction("Fit new layouts to the page", self)
+        self.fit_page_action.setCheckable(True)
+        self.fit_page_action.setChecked(load_fit_to_page())
+        self.fit_page_action.setToolTip("Images added (here or by the chat) keep the figure within one "
+                                        "printed page: images lying one below the other go into rows, "
+                                        "then the figure is narrowed until its height fits. A width you "
+                                        "set yourself is never changed.")
+        self.fit_page_action.toggled.connect(self._set_fit_to_page)
+        view_menu.addAction(self.fit_page_action)
+        page_menu = view_menu.addMenu("Page for new layouts")
+        from pyfigures.gui.user_prefs import load_page_size
+        from pyfigures.gui.page_fit import PAGES_MM
+        self.page_size_actions = {}
+        for name, (pw, ph) in PAGES_MM.items():
+            act = QAction(f"{name} ({pw:.0f} × {ph:.0f} mm printable)", self)
+            act.setCheckable(True)
+            act.setChecked(load_page_size() == name)
+            act.triggered.connect(lambda _c=False, n=name: self._set_page_size(n))
+            page_menu.addAction(act)
+            self.page_size_actions[name] = act
         from pyfigures.gui.user_prefs import load_chat_at_start, save_chat_at_start
         self.chat_at_start_action = QAction("Open the chat at start-up", self)
         self.chat_at_start_action.setCheckable(True)
@@ -3124,7 +3146,26 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.focus_required.emit()
         if self.paint.EZFIG_panel.shapes_to_draw:
             self.paint.EZFIG_panel.set_current_selection(self.paint.EZFIG_panel.shapes_to_draw[-1])
+        self.fit_new_layout_to_page()            # before the undo step: one step for both
         self.paint.EZFIG_panel.undo_redo_save_required.emit()
+
+    def fit_new_layout_to_page(self):
+        """Images were added: a figure taller than one printed page gets rows
+        (images lying one below the other), then a narrower width (gui/page_fit.py;
+        View → Fit new layouts to the page). Returns what was done, or ''."""
+        from pyfigures.gui.page_fit import fit_to_page
+        try:
+            note = fit_to_page(self)
+        except Exception:
+            traceback.print_exc()
+            return ''
+        if note:
+            panel = self.paint.EZFIG_panel
+            panel.set_current_selection(None)
+            panel.update_letters_required.emit()
+            panel.update_text_rows.emit()
+            self.statusBar().showMessage(note, 20000)
+        return note
 
     def create_panel(self, lst):
         # Pre-load Image2D objects one per event-loop tick; once all are ready,
@@ -3549,6 +3590,16 @@ class EZFIG_GUI(QMainWindow):
     def _set_show_edit_hint(self, on):
         from pyfigures.gui.user_prefs import save_show_edit_hint
         save_show_edit_hint(on)
+
+    def _set_fit_to_page(self, on):
+        from pyfigures.gui.user_prefs import save_fit_to_page
+        save_fit_to_page(on)
+
+    def _set_page_size(self, name):
+        from pyfigures.gui.user_prefs import save_page_size
+        save_page_size(name)
+        for n, act in self.page_size_actions.items():
+            act.setChecked(n == name)
 
     def _set_max_project_z(self, on):
         from pyfigures.gui.user_prefs import save_max_project_z_stacks

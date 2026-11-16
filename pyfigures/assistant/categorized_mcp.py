@@ -93,6 +93,16 @@ def topic_note(words):
     took thirty calls and ended in a row wider than the figure; "show the next z" was
     searched eight times)."""
     words = set(words)
+    if (words & {'same', 'equal', 'uniform', 'equalize', 'equalise', 'consistent'}
+            and words & {'size', 'sizes', 'width', 'widths', 'scale'}
+            and words & {'all', 'images', 'panels', 'every', 'each', 'batch'}) \
+            or words & {'stacked', 'grid', 'tidy', 'ugly', 'messy'}:
+        # 2026-11-16: "they are all stacked and don't have the same size": eight searches
+        # for a "same size" tool, arrange_live_images found four times and never called
+        return ('IMAGES STACKED / OF DIFFERENT SIZES: call arrange_live_images (columns=N, or row_counts) now. It '
+                'puts every image in rows; the images of a row share one height and every row spans the figure '
+                'width, which is what evens out their sizes. There is no separate "same size" tool: do not search '
+                'further. ')
     if words & {'row', 'rows'} and words & {'height', 'taller', 'shorter', 'tall', 'heights', 'equal', 'same'} \
             or words & {'image', 'panel', 'picture'} and words & {'bigger', 'larger', 'smaller', 'resize'} and 'figure' not in words:
         return ('ROW HEIGHT / SIZE OF ONE IMAGE: there is no such property. Every row spans the figure width and the '
@@ -257,7 +267,10 @@ def build_server(full_server, send):
 
         "Restore it as it was", "put it back", "revert that", "cancel that", "go back" right
         after your edit: call undo once per edit you made for that request (one set_lut =
-        one undo), instead of re-creating the old state with a new edit."""
+        one undo), instead of re-creating the old state with a new edit.
+        Undo takes back the LAST step first (an arrangement is a step of its own, after
+        the images it arranges): undo_redo_effect gives the figure before and after, so
+        check which step went. To remove one extra panel use remove_image, not undo."""
         if action not in ('undo', 'redo'):
             raise ValueError('Use undo or redo')
         from .live_mcp import call_live
@@ -523,6 +536,7 @@ def build_server(full_server, send):
                 batch = sorted(batch, key=lambda i: i['annotation_index'], reverse=True)
             done, errors, results = 0, [], []
             outcomes = []           # (item number, item, result or exception)
+            page_fit = ''           # the open figure fitted to the page after the batch
             from .original_registry import batchable_original, collect_batch, stop_collecting, decode
             if batchable_original(tool_name):
                 # figure edits: collected, then run by the open figure as ONE batch and one reload
@@ -551,6 +565,7 @@ def build_server(full_server, send):
                         except ValueError as exc:
                             if attempt or getattr(exc, 'code', '') not in ('REVISION_CONFLICT', 'SESSION_CHANGED'):
                                 raise
+                    page_fit = (reply or {}).get('page_fit') or ''
                     for (number, item), each in zip(numbers, decode(reply['tool_result'])):
                         outcomes.append((number, item, each.get('result') if each.get('ok') else ValueError(each.get('error'))))
                     outcomes.sort(key=lambda o: o[0])
@@ -577,6 +592,9 @@ def build_server(full_server, send):
             reading = tool_name.startswith(('get_', 'list_', 'inspect_', 'describe_', 'check_', 'find_'))
             out = {'result': summary, 'batch_done': done, 'batch_total': len(batch),
                    'document_changed': done > 0 and not reading, 'first_results': results, 'errors': errors[:20]}
+            if page_fit:
+                # the figure was fitted to the page after the batch: the model says so
+                out['page_fit'] = page_fit
             if done and not reading and batchable_original(tool_name):
                 # each item's result is the figure's own readback after the one reload: a
                 # second inspect + re-read cost 40 s before the answer (2026-11-13)

@@ -102,6 +102,8 @@ Every action reachable in the figure editor and the tests that run it and check 
 | Tools > Vector PDF panels (PyMuPDF)… | `test_gui_e2e_menus.py::test_vector_pdf_entry_offers_pymupdf_and_installs_nothing_on_not_now` |
 | View > Show the 'double-click to edit' hint | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_view_toggles_change_what_they_say` |
 | View > Show new Z stacks as max projection | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_view_toggles_change_what_they_say` |
+| View > Fit new layouts to the page | `test_page_fit_20261116.py` |
+| View > Page for new layouts > A4 / Letter (printable size) | `test_page_fit_20261116.py::test_page_sizes_and_menu` |
 | View > Theme > System (auto) | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_theme_entries_switch_the_palette` |
 | View > Theme > Light | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_theme_entries_switch_the_palette` |
 | View > Theme > Dark | `test_gui_e2e_menus.py::test_menu_action`, `test_gui_e2e_menus.py::test_theme_entries_switch_the_palette` |

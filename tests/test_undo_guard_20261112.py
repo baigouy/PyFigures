@@ -106,6 +106,26 @@ def test_the_user_ctrl_z_counts_against_the_chat_undos(live):
     assert len(g.paint.EZFIG_panel.shapes_to_draw) == n
 
 
+def test_undo_and_redo_say_what_changed(live):
+    """A model undid its own layout twice, believing it removed an extra image
+    (2026-11-16): each undo / redo now says the figure before and after."""
+    g, session, cmd, panel = live
+    n = len(g.paint.EZFIG_panel.shapes_to_draw)
+    cmd("action_begin", text="add a label")
+    cmd("add_label", text="one")
+    cmd("action_finish")
+    cmd("action_begin", text="undo that")
+    out = cmd("undo")
+    cmd("action_finish")
+    effect = out["undo_redo_effect"]
+    assert effect["action"] == "undo" and effect["before"] and effect["after"]
+    assert "LAST step first" in effect["note"]
+    assert len(g.paint.EZFIG_panel.shapes_to_draw) == n
+    out = cmd("redo")
+    assert out["undo_redo_effect"]["action"] == "redo"
+    assert len(g.paint.EZFIG_panel.shapes_to_draw) == n + 1
+
+
 def test_i_wanna_edit_it_myself_opens_the_editor_through_the_bridge(qapp, gui, runtime, tmp_path):  # noqa: F811
     """The chat opens the panel's editor itself for "I wanna edit the ROI of the inset in
     b" (two questions came first, user chat 2026-11-12)."""

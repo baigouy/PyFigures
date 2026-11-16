@@ -72,6 +72,23 @@ def save_max_project_z_stacks(value):
     _s().setValue('images/max_project_z', bool(value))
 
 
+def load_fit_to_page():
+    """Automatic layouts (images added, rows arranged) keep the figure within
+    one printed page (View → Fit new layouts to the page)."""
+    return _s().value('layout/fit_to_page', True, type=bool)
+
+def save_fit_to_page(value):
+    _s().setValue('layout/fit_to_page', bool(value))
+
+def load_page_size():
+    """Page that automatic layouts fit: 'A4' (default) or 'Letter'."""
+    value = _s().value('layout/page_size', 'A4', type=str)
+    return value if value in ('A4', 'Letter') else 'A4'
+
+def save_page_size(value):
+    _s().setValue('layout/page_size', value if value in ('A4', 'Letter') else 'A4')
+
+
 # ── Optional extras ──────────────────────────────────────────────────
 def load_offer_pymupdf():
     """Offer to install PyMuPDF (vector PDF panels) when a PDF needs it."""

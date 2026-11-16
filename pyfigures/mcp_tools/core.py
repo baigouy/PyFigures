@@ -389,28 +389,50 @@ def _raw_size_from_file(filename) -> tuple[int, int] | None:
 
 
 def _channel_count_from_file(filename) -> int | None:
-    """Number of colour channels of an image file (3 for RGB, the C axis of a
-    TIFF), read from the header; None when unknown."""
-    if not isinstance(filename, str) or not os.path.isfile(filename):
+    """Number of colour channels of an image (3 for RGB, the C axis of a
+    stack); None when unknown. Never format dependent: the image is read as
+    the numpy array the panel shows (stack_info, cached) and only its
+    dimensions count."""
+    if not _pixel_file(filename):
         return None
-    if filename.lower().endswith((".tif", ".tiff")):
-        try:
-            import tifffile as _tf
-            with _tf.TiffFile(filename) as t:
-                s = t.series[0]
-                for ax in ("C", "S"):
-                    if ax in s.axes:
-                        return int(s.shape[s.axes.index(ax)])
-                # 'Q': an axis tifffile could not name (it may hold the channels)
-                return None if "Q" in s.axes else 1
-        except Exception:
-            return None
     try:
-        from PIL import Image as _PI
-        with _PI.open(filename) as im:
-            return len([b for b in im.getbands() if b != "A"])
+        from pyfigures.stack_info import stack_info
+        return int(stack_info(filename)["sizes"].get("c", 1))
     except Exception:
         return None
+
+
+def _pixel_file(filename) -> bool:
+    """A local file holding a pixel array. Vector panels (SVG, PDF: the GUI's
+    own is_vector_file) have none, and reading one started Fiji; remote images
+    (OMERO, http, OME-Zarr) are described by their own readers, never
+    downloaded whole for this."""
+    if not isinstance(filename, str) or not os.path.isfile(filename):
+        return False
+    try:
+        from batoolset.drawings.shapes.image2d import is_vector_file
+        return not is_vector_file(filename)
+    except Exception:
+        return True
+
+
+def _z_stack_depth(filename, series=None) -> int:
+    """Number of Z slices when the last extra (non-YXC) axis of the image is
+    Z, else 0. Never format dependent: the image is read as the numpy array
+    the GUI shows (stack_info) and only its dimensions count."""
+    if not _pixel_file(filename):
+        return 0
+    try:
+        series = int(series) if series not in (None, "", "None") else None
+    except (TypeError, ValueError):
+        series = None
+    try:
+        from pyfigures.stack_info import stack_info
+        info = stack_info(filename, series)
+    except Exception:
+        return 0
+    extra = [a for a in info["order"] if a not in "hwc"]
+    return int(info["sizes"]["d"]) if extra and extra[-1] == "d" else 0
 
 
 def _z_stack_projection(img: ET.Element, filename) -> str:
@@ -418,21 +440,12 @@ def _z_stack_projection(img: ET.Element, filename) -> str:
     so (View → Show new Z stacks as max projection, on by default), as in the
     GUI: added through the MCP server it always showed its first slice, often
     nearly black. Sets the projection on *img* and returns a note, or ''.
-    Only TIFFs are checked (from the header); only stacks whose last extra
-    axis is Z, so a time series keeps its first frame — the GUI's rule."""
-    if not isinstance(filename, str) or not filename.lower().endswith((".tif", ".tiff")) \
-            or not os.path.isfile(filename):
+    Only the numpy dimensions count, never the file format (an .lsm stack
+    was once left out). Only stacks whose last extra axis is Z, so a time
+    series keeps its first frame — the GUI's rule."""
+    n_z = _z_stack_depth(filename, img.findtext("serie_to_open"))
+    if n_z < 2:
         return ""
-    try:
-        import tifffile as _tf
-        with _tf.TiffFile(filename) as t:
-            axes, shape = t.series[0].axes, t.series[0].shape
-    except Exception:
-        return ""
-    extra = [a for a in axes if a not in "YXCS"]
-    if not extra or extra[-1] != "Z" or shape[axes.index("Z")] < 2:
-        return ""
-    n_z = shape[axes.index("Z")]
     try:
         from pyfigures.gui.user_prefs import load_max_project_z_stacks
         project = load_max_project_z_stacks()

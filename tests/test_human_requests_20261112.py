@@ -795,7 +795,69 @@ def test_bigger_needs_no_number():
     assert "RELATIVE requests" in rules and "Never ask for a number first" in rules and "Misspelt" in rules
 
 
+def test_list_image_dimensions_gives_the_numpy_axes(tmp_path):
+    """'list image dimensions please' (user, 2026-11-16): the reply gave width x height;
+    the numpy dimensions were meant (tzyxc and the shape)."""
+    from types import SimpleNamespace
+    import numpy as np
+    import tifffile
+    from PIL import Image
+    from pyfigures.assistant.session import numpy_dimensions, stack_summary
+    stack = tmp_path / "s.tif"
+    tifffile.imwrite(stack, np.zeros((3, 4, 2, 30, 40), np.uint8), imagej=True, metadata={"axes": "TZCYX"})
+    p = SimpleNamespace(filename=str(stack), serie_to_open=None)
+    d = numpy_dimensions(p, {"width": 40, "height": 30}, stack_summary(p))
+    assert d["axes"] == "tzyxc" and d["shape"] == [3, 4, 30, 40, 2]
+    assert d["text"] == "tzyxc 3 × 4 × 30 × 40 × 2"
+    rgb = tmp_path / "c.jpg"
+    Image.new("RGB", (50, 20)).save(rgb)
+    p = SimpleNamespace(filename=str(rgb), serie_to_open=None)
+    assert numpy_dimensions(p, {"width": 50, "height": 20}, stack_summary(p))["text"] == "yxc 20 × 50 × 3"
+    grey = tmp_path / "g.png"
+    Image.new("L", (50, 20)).save(grey)
+    p = SimpleNamespace(filename=str(grey), serie_to_open=None)
+    assert numpy_dimensions(p, {"width": 50, "height": 20}, None)["axes"] == "yx"
+
+
+def test_ten_random_images_from_a_folder(tmp_path):
+    """'build an image from 10 randomly selected images from: <folder>' (user, 2026-11-16):
+    "it really sounded like a simple one". The model took the first files of the sorted
+    list; scan_folder(sample=10) draws 10 at random, and they are added as 10 panels."""
+    import json
+    from PIL import Image
+    from pyfigures.mcp_server import scan_folder, create_figure, add_image, audit_figure
+    folder = tmp_path / "images"
+    folder.mkdir()
+    for i in range(25):
+        Image.new("L", (16, 12), i * 10).save(folder / f"img_{i:02d}.png")
+    picked = json.loads(scan_folder(str(folder), sample=10))["random_sample"]
+    assert len(set(picked)) == 10
+    pyf = str(tmp_path / "f.pyf")
+    create_figure(pyf, num_groups=1)
+    for f in picked:
+        add_image(pyf, [0], f)
+    assert json.loads(audit_figure(pyf))["n_panels"] == 10
+
+
 def test_the_letters_tool_says_what_it_cannot_do():
     from pyfigures.assistant import live_mcp
     doc = live_mcp.edit_panel_letters.__doc__
     assert 'text="G\'"' in doc and "OUTSIDE each image are not available" in doc and "alphabetic only" in doc
+
+
+def test_stacked_images_of_different_sizes_point_to_arrange_live_images():
+    """"burp it really looks ugly and they are all stacked and don't have the same
+    size" (Mistral Large 4, 2026-11-16): eight searches for a "same size" tool,
+    arrange_live_images found four times and never called; the turn was stopped."""
+    from pyfigures.assistant.categorized_mcp import topic_note
+    for query in ("arrange images into grid rows columns regular layout",
+                  "make all images same display size scale uniform equal width batch all panels",
+                  "same display size all images equal width height uniform panel size set_image_property"):
+        note = topic_note(query.split())
+        assert note.startswith("IMAGES STACKED") and "arrange_live_images" in note, query
+    assert topic_note("make the second row taller".split()).startswith("ROW HEIGHT")
+    # the tool itself says so, and the poster grid that competed with it says it is for posters
+    from pyfigures.assistant import live_mcp
+    from pyfigures.mcp_tools import poster
+    assert "different sizes" in live_mcp.arrange_live_images.__doc__.split("\n")[0]
+    assert poster.arrange_poster_grid.__doc__.lstrip().startswith("POSTER PAGES ONLY")

@@ -506,7 +506,9 @@ def arrange_poster_arc(poster_path: str, center_x_mm: float, center_y_mm: float,
 def arrange_poster_grid(poster_path: str, indices: str | None = None, columns: int | None = None,
                         margin_mm: float = 15.0, gap_mm: float = 6.0, fit_to_page: bool = True,
                         page: int | None = None) -> str:
-    """Lay images out in a tidy grid: rotation reset to 0, each image resized
+    """POSTER PAGES ONLY (a *poster_path* made with the poster tools); the
+    panels of a figure are laid out with arrange_live_images instead.
+    Lay images out in a tidy grid: rotation reset to 0, each image resized
     (aspect ratio preserved) to fill its cell. The sane, orderly baseline —
     good as a starting point, or to recover from an arrangement that scattered
     or fanned too chaotically.

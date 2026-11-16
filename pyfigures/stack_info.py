@@ -9,6 +9,7 @@ will see. Timing comes from the file's own metadata when present (ImageJ
 """
 from __future__ import annotations
 
+import copy
 import os
 import re
 
@@ -79,6 +80,25 @@ def stack_info(path: str, series: int | None = None) -> dict:
     from pyfigures.path_resolution import source_exists
     if not path or not source_exists(path):
         raise StackInfoError(f"no such file: {path}")
+    try:                                # cached per file version: reading costs every pixel
+        st = os.stat(path)
+        key = (os.path.abspath(path), st.st_size, st.st_mtime, series)
+    except (OSError, TypeError, ValueError):
+        key = None                      # a URL (OMERO, http): read each time
+    if key is not None and key in _INFO_CACHE:
+        return copy.deepcopy(_INFO_CACHE[key])
+    info = _read_stack_info(path, series)
+    if key is not None:
+        if len(_INFO_CACHE) > 256:
+            _INFO_CACHE.clear()
+        _INFO_CACHE[key] = copy.deepcopy(info)
+    return info
+
+
+_INFO_CACHE = {}
+
+
+def _read_stack_info(path, series):
     try:
         from batoolset.img import Img, guess_dimensions
         img = Img(path, serie_to_open=series) if series is not None else Img(path)

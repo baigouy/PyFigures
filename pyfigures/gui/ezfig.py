@@ -214,6 +214,8 @@ class MyWidget(QWidget):
     update_text_rows = Signal() # this is called when a change has been made to the figure and a save is required
     focus_required = Signal() # is called when the GUI should autoscroll to a position --> TODO
     update_letters_required = Signal()
+    # images added: the window keeps the figure within one printed page (gui/page_fit.py)
+    page_fit_required = Signal()
     force_update_size_of_parent = Signal(object) #  should be called every time the parent must be set to the desired GUI size # the object here is the parent that should be draw at desired width --> TODO
     open_lettering_parameters = Signal() #  should be called when the user requests to change the parameters
     # templatify_figure = Signal(object) # send back to parents stuff that needs to be converted to templates
@@ -3252,6 +3254,7 @@ class MyWidget(QWidget):
             self.update_text_rows.emit()
             self.focus_required.emit()
             self.set_current_selection(grp)
+            self.page_fit_required.emit()       # before the undo step: one step for both
             self.undo_redo_save_required.emit()
 
 

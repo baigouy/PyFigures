@@ -270,6 +270,19 @@ def no_fiji_jvm_in_the_test_process(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True, scope="session")
+def page_fit_off():
+    """Fitting new layouts to the page (gui/page_fit.py, on by default for the
+    user) regroups images added to a tall figure; the tests written before it
+    expect them where they were put, and the user's own setting must not
+    change a test. test_page_fit_20261116.py turns it on."""
+    import pyfigures.gui.page_fit as page_fit
+    # session-wide: module fixtures (the GUI e2e harness) build figures before any test
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(page_fit, "enabled", lambda: False)
+        yield
+
+
 @pytest.fixture(autouse=True)
 def close_matplotlib_figures():
     yield
