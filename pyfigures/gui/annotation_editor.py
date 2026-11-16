@@ -1152,13 +1152,28 @@ class VectorialDrawPane2(QWidget):
                 self.push_undo(snap)
         QTimer.singleShot(0, record)
 
+    ACCIDENTAL_DRAG_FRACTION = 0.01     # of the visible editor area
+    ACCIDENTAL_DRAG_MIN_PX = 4
+
+    def accidental_drag_limit(self):
+        """Screen pixels under which a drawn shape (both sides) counts as a slip."""
+        visible = self.visibleRegion().boundingRect()
+        side = min(visible.width(), visible.height())
+        if side <= 0:
+            side = min(self.width(), self.height())
+        return max(self.ACCIDENTAL_DRAG_MIN_PX, self.ACCIDENTAL_DRAG_FRACTION * side)
+
     def check_shape_size_before_adding_it(self):
         if self.filter_out_unwanted_shapes_based_on_distance:  # TODO maybe allow arrowheads to be drawn and stay small, allow lines only if they are in arrwohed only mode (if so do not allow the body of the li,ne to be drawn)
             rect = self.currently_drawn_shape.getRect()
 
             # print('checking drawn rect', rect)
 
-            if not isinstance(self.currently_drawn_shape,(Point2D, TAText2D, ScaleBar)) and (abs(rect.width())* self.scale < 40 and abs(rect.height())* self.scale<40):
+            # only a slip of the mouse is dropped: under 1 % of the visible editor area
+            # (at least 4 screen px). It was 40 screen px whatever the window, so ROIs
+            # around small dots could not be drawn (the user, 2026-11-16)
+            limit = self.accidental_drag_limit()
+            if not isinstance(self.currently_drawn_shape,(Point2D, TAText2D, ScaleBar)) and (abs(rect.width())* self.scale < limit and abs(rect.height())* self.scale < limit):
                 logger.warning(str(self.currently_drawn_shape) + '-->' +
                                'distance between first and last clicks too small, drawing is ignored, the software assumes unintended drawing, zoom more (' + self.ctrl_key + ' +) and redraw the shape if wanted')
                 self.currently_drawn_shape = None
