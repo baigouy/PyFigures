@@ -385,6 +385,20 @@ def _raw_size_from_file(filename) -> tuple[int, int] | None:
         with _PI.open(filename) as im:
             return int(im.size[0]), int(im.size[1])
     except Exception:
+        pass
+    # any other format (.IPL, DICOM, .lsm ...): the array the panel shows
+    # (stack_info, cached at add time). A scale bar without a length on
+    # CT.dcm / Blend_Final.IPL was refused as "width unknown" (2026-11-16).
+    if not _pixel_file(filename):
+        return None
+    try:
+        from batoolset.img import is_video_file
+        if is_video_file(filename):        # never decoded whole for its size
+            return None
+        from pyfigures.stack_info import stack_info
+        sizes = stack_info(filename)["sizes"]
+        return int(sizes["w"]), int(sizes["h"])
+    except Exception:
         return None
 
 
@@ -1256,7 +1270,17 @@ def _file_pixel_size(path) -> float | None:
         return None
     low = path.lower()
     if not low.endswith(_CALIBRATED_FORMATS):
-        return None
+        # not format dependent: any local pixel file the reader gives a pixel
+        # size for (CT.dcm records 597 µm/px and got a bar in px, 2026-11-16);
+        # only the formats that never carry one are skipped
+        if low.endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")) or not _pixel_file(path):
+            return None
+        try:
+            from batoolset.img import is_video_file
+            if is_video_file(path):
+                return None
+        except Exception:
+            return None
     try:
         if low.endswith((".tif", ".tiff")):
             from .workflow import _try_read_image_info

@@ -1328,7 +1328,9 @@
       In the chat, one thing of an existing bar can be asked for on its own: <em>the bar in d is too thick</em>,
       <em>no text on the bars</em>, <em>bars in black</em>, <em>move it to the left</em>. The length and the rest are kept.
       From a script or the MCP server: <code>set_scale_bar(..., bar_height_px=2)</code>, <code>label=""</code> for no text;
-      <code>set_scale_bar_all</code> without a length restyles the bars that exist.
+      <code>set_scale_bar_all</code> without a length restyles the bars that exist; on a figure with no bar yet
+      (<em>add scale bars to all</em>) it adds one to every image, each with its own round length of about 15 % of
+      its width (in µm, mm or cm when the file records a pixel size, whatever its format, otherwise in px).
     </p>
     <p>
       A scale bar, a text and an inset in the same corner are stacked from the corner inward, in the order of the

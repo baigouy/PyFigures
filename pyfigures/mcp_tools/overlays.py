@@ -420,10 +420,15 @@ def set_scale_bar_all(
 ) -> str:
     """Add or update the scale bar on EVERY image in the figure at once.
 
-    WITHOUT *bar_width_in_units* nothing is added: the bars that exist are
-    restyled with what is passed, the rest kept ("no text on the bars":
-    label="" alone; "bars in black": bar_color alone; "thinner bars":
-    bar_height_px alone; "bars on the left": placement alone).
+    "Add scale bars to all" with no length: call it with NO
+    *bar_width_in_units*, ONE call: when no image has a bar yet, every image
+    gets one with its own round length of about 15 % of its width (in µm for
+    a calibrated image, in px otherwise). Do not ask for a length, do not add
+    them one panel at a time.
+    Once bars exist, WITHOUT *bar_width_in_units* nothing is added: the bars
+    that exist are restyled with what is passed, the rest kept ("no text on
+    the bars": label="" alone; "bars in black": bar_color alone; "thinner
+    bars": bar_height_px alone; "bars on the left": placement alone).
 
     When the user gives ONE pixel size for the figure, pass it as *px_to_unit*
     and leave *px_to_unit_scope* at "all" (the default): every image then uses
@@ -493,6 +498,13 @@ def set_scale_bar_all(
     too_long: list[str] = []
     uncalibrated: list[str] = []
     used: list[str] = []         # the pixel size each bar was drawn with
+    chosen: list[str] = []       # the length picked per image (no length given)
+    no_width: list[str] = []
+    # no length and no bar anywhere yet: a new bar on every image, each with
+    # its own round length (restyling bars that do not exist would do nothing)
+    # ("no text on the bars" with no bar anywhere still adds nothing: it asks about bars)
+    auto_length = bar_width_in_units is None and not no_text and not any(
+        _find_scale_bar(i) is not None for i in root.iter("Image2D"))
 
     def _process_img(img: ET.Element):
         nonlocal added, updated, skipped, kept_own
@@ -514,6 +526,35 @@ def set_scale_bar_all(
             px = None                    # a calibrated image keeps its own pixel size
             kept_own += 1
         factor = _stored_units_per(unit) if (px is not None or own is not None) else 1.0
+        if auto_length:
+            # "add scale bars to all": each image its own round length, about
+            # 15 % of its shown width (a chat model gave up after the old
+            # refusal and added the 9 bars one call at a time, 4 minutes)
+            name = os.path.basename(str(_first_filename(img)))
+            px_um = px * factor if px is not None else own
+            pick = _auto_bar_length(img, px_um)
+            if pick is None:
+                no_width.append(name)
+                return
+            length, picked_unit = pick
+            if px_um is None:
+                uncalibrated.append(name)
+            else:
+                used.append(f"{name} {px_um:g} µm")
+            chosen.append(f"{name} {_default_bar_label(length, picked_unit)}")
+            action = _apply_scalebar_to_img(
+                img, length * (_stored_units_per(picked_unit) if px_um is not None else 1.0),
+                "" if no_text else (_scale_bar_legend_html(label, text_colour) if label is not None
+                                    else _scale_bar_legend_html(_default_bar_label(length, picked_unit),
+                                                                text_colour)),
+                placement or "bottom right", 16777215 if bar_color_int is None else bar_color_int,
+                None if px is None else px * factor, bar_height_px=bar_height_px,
+            )
+            if action == "added":
+                added += 1
+            else:
+                updated += 1
+            return
         if bar_width_in_units is None:
             # "no text on the bars", "bars in black", "thinner bars": the bars that exist, restyled
             bar = _find_scale_bar(img)
@@ -580,6 +621,19 @@ def set_scale_bar_all(
     if too_long:
         return "ERROR: " + " | ".join(too_long[:3]) + " Nothing was changed."
     total = added + updated
+    if auto_length:
+        if not total:
+            return ("ERROR: no image width could be read for a scale bar: give the length in "
+                    "bar_width_in_units. Nothing was changed.")
+        _scale_bars_in_text_font(tree.getroot())
+        _save(tree, pyf_path)
+        return (f"Scale bar added to {total} image(s), {placement or 'bottom right'}. No length was "
+                f"given: each image got a round one of about 15 % of its width: " + "; ".join(chosen[:12])
+                + (f"; and {len(chosen) - 12} more" if len(chosen) > 12 else "") + "."
+                + (f" Skipped {skipped} data-plot / colour-bar / vector panel(s)." if skipped else "")
+                + (f"\nWidth unknown, NO bar added (give a length): {', '.join(no_width)}." if no_width else "")
+                + (f"\nPixel size per image: " + "; ".join(used[:12]) + "." if used else "")
+                + _uncalibrated_warning(uncalibrated, unit))
     if bar_width_in_units is None:
         if not updated:
             return ("ERROR: no image has a scale bar yet: give the length in bar_width_in_units "
@@ -614,6 +668,26 @@ def set_scale_bar_all(
            f"call again with px_to_unit_scope='all'." if px_to_unit is not None and kept_own else "")
         + _uncalibrated_warning(uncalibrated, unit)
     )
+
+
+def _auto_bar_length(img: ET.Element, px_um: float | None) -> tuple[float, str] | None:
+    """A round bar length of about 15 % of the image's shown width (crops
+    removed): in µm/nm/mm/cm when *px_um* (µm per pixel) is known, else in
+    px. None when the width cannot be read."""
+    from .core import _default_bar_length, _raw_size_from_file
+    size = _raw_size_from_file(_first_filename(img))
+
+    def _crop(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+    visible = (size[0] - _crop("crop_left") - _crop("crop_right")) if size else 0
+    if visible <= 0:
+        return None
+    if px_um is None:
+        return _default_bar_length(visible, "px")
+    return _default_bar_length(visible * px_um, "µm") if px_um > 0 else None
 
 
 def _uncalibrated_warning(names: list, unit: str) -> str:

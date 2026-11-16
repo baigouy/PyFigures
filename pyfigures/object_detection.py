@@ -62,12 +62,16 @@ def channel_plane(rgb, channel='all'):
 
 
 def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smooth=1.5,
-           exclude_border=True, max_elongation=5.0, split_touching=True, channel='all'):
+           exclude_border=True, max_elongation=5.0, split_touching=True, channel='all',
+           edge=None):
     """Objects of *rgb* (h, w, 3 or h, w) inside *region* (x0, y0, x1, y1; None =
     whole image) as dicts x, y, width, height, area, in image pixels, top to
     bottom then left to right. *polarity*: 'auto', 'dark' (darker than the
     background) or 'bright'. *min_area* / *max_area* in pixels (None = 0.02 % /
-    25 % of the region). Returns (objects, info) where info says what was used."""
+    25 % of the region). *edge*: the box whose sides cut objects off (the
+    visible image; None = *region*): an object reaching a side of *region*
+    that is not one of *edge* is kept, cut where the region ends.
+    Returns (objects, info) where info says what was used."""
     import numpy as np
     from scipy import ndimage as ndi
     from skimage.filters import threshold_otsu, gaussian
@@ -84,6 +88,9 @@ def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smoo
     if x1 - x0 < 8 or y1 - y0 < 8:
         raise ValueError('the region to search is (almost) empty')
     part = gray[y0:y1, x0:x1]
+    # which sides of the searched part are the image's own edges (left, top, right, bottom)
+    ex0, ey0, ex1, ey1 = edge if edge is not None else (x0, y0, x1, y1)
+    cuts = (x0 <= ex0, y0 <= ey0, x1 >= ex1, y1 >= ey1)
     if smooth:
         part = gaussian(part, sigma=smooth, preserve_range=True)
     if float(part.max()) - float(part.min()) < 1e-6:
@@ -113,7 +120,8 @@ def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smoo
         if minor <= 0 or major / minor > max_elongation:
             dropped['elongated'] += 1        # a burnt-in scale bar, a scratch, a border line
             continue
-        if exclude_border and (r0 == 0 or c0 == 0 or r1 == mask.shape[0] or c1 == mask.shape[1]):
+        if exclude_border and ((r0 == 0 and cuts[1]) or (c0 == 0 and cuts[0])
+                               or (r1 == mask.shape[0] and cuts[3]) or (c1 == mask.shape[1] and cuts[2])):
             dropped['touching the edge'] += 1
             continue
         objects.append({'x': c0 + x0, 'y': r0 + y0, 'width': c1 - c0, 'height': r1 - r0, 'area': int(prop.area)})

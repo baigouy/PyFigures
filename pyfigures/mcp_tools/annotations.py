@@ -724,6 +724,7 @@ def detect_objects(
     stroke: float = 0.65,
     dry_run: bool = False,
     max_objects: int = 300,
+    region: list | None = None,
 ) -> str:
     """Find the objects of one image panel (cells, nuclei, embryos, blobs) by
     thresholding and put an ROI around each, all in one call: "draw ROIs over
@@ -754,6 +755,11 @@ def detect_objects(
     (default 0.65 pt, the usual paper line).
     *dry_run*: true only reports what was found (count, boxes); nothing is added.
     *max_objects*: refuse to add more ROIs than this (likely a bad threshold).
+    *region*: [x0, y0, x1, y1] in source pixels (as preview_panel's region):
+    search only there, threshold computed there ("the white stuff in the
+    mouth", "the dots in the top left"). Never crop the panel to aim the
+    search: the crop is the user's figure. An object cut by a side of the
+    region is kept (cut there); only the image's visible edge drops objects.
     *group_path* / *image_index*: the panel, as for add_roi_rect.
 
     Returns JSON: found, added, the boxes (x, y, width, height in image pixels),
@@ -781,9 +787,18 @@ def detect_objects(
     try:
         plane, rgb, what = detection_plane(panel, channel)
         h, w = rgb.shape[:2]
-        objects, info = detect(rgb if plane is None else plane, visible_region(panel_crop(panel), w, h),
+        shown = visible_region(panel_crop(panel), w, h)
+        search = shown
+        if region is not None:
+            try:
+                rx0, ry0, rx1, ry1 = (int(round(float(v))) for v in region)
+            except (TypeError, ValueError):
+                return "ERROR: region is [x0, y0, x1, y1] in source pixels."
+            # inside what the panel shows
+            search = (max(rx0, shown[0]), max(ry0, shown[1]), min(rx1, shown[2]), min(ry1, shown[3]))
+        objects, info = detect(rgb if plane is None else plane, search,
                                polarity=polarity, min_area=min_area, max_area=max_area,
-                               split_touching=split_touching)
+                               split_touching=split_touching, edge=shown)
     except ValueError as e:
         return f"ERROR: {e}"
     info["channel"] = what
