@@ -191,7 +191,7 @@ def _auto_grid(n: int) -> tuple[int, int]:
 
 
 @mcp.tool()
-def scan_folder(folder: str, pattern: str = "*") -> str:
+def scan_folder(folder: str, pattern: str = "*", sample: int = 0, seed: int | None = None) -> str:
     """Scan a folder for image files and return layout suggestions as JSON.
 
     The returned object contains:
@@ -207,6 +207,11 @@ def scan_folder(folder: str, pattern: str = "*") -> str:
     *pattern*: shell glob to filter filenames.  Default ``"*"`` restricts to
     known image extensions (.tif, .tiff, .lif, .czi, .nd2, .jpg, .png, …).
     Use ``"*.tif"`` or ``"MAX_*.tif"`` for tighter control.
+
+    *sample*: for "N random images from this folder", N: ``random_sample``
+    then lists N files drawn at random (really random, not the first N of
+    the sorted list); add exactly those, all in one add_image batch.
+    *seed* makes the draw repeatable.
 
     **Typical workflow**::
 
@@ -271,11 +276,16 @@ def scan_folder(folder: str, pattern: str = "*") -> str:
                 "groups": {k: len(v) for k, v in subfolders.items()},
             })
 
-    return json.dumps(
-        {"folder": folder, "count": n, "files": files,
-         "subfolders": subfolders, "layout_suggestions": suggestions},
-        ensure_ascii=False, indent=2,
-    )
+    out = {"folder": folder, "count": n, "files": files,
+           "subfolders": subfolders, "layout_suggestions": suggestions}
+    if sample and sample > 0:
+        # "10 randomly selected images": a model took the first files of the sorted list
+        import random
+        out["random_sample"] = random.Random(seed).sample(files, min(int(sample), n))
+        out["random_sample_note"] = (f"{len(out['random_sample'])} of {n} files drawn at random"
+                                     + (f" (seed {seed})" if seed is not None else "")
+                                     + ": add exactly these, in one add_image batch.")
+    return json.dumps(out, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
