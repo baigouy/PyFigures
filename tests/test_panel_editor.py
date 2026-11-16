@@ -367,12 +367,21 @@ def test_draw_rectangle_with_mouse(fig, ui):
     def do(ed):
         tool(ed, "Rectangle")
         draw(ed, 20, 20, 150, 120)
-        draw(ed, 200, 150, 205, 152)            # 5 px drag: treated as an accidental click
+        # a slip of the mouse (both sides under the editor's limit: 1 % of the
+        # visible area, at least 4 screen px) is dropped; a small ROI around a dot
+        # is kept (since 2026-11-16 the limit is no longer a fixed 40 px)
+        v = ed.qt_viewer
+        slip = 0.4 * v.accidental_drag_limit() / v.scale
+        draw(ed, 200, 150, 200 + slip, 150 + slip)
+        dot = 3 * v.accidental_drag_limit() / v.scale
+        draw(ed, 60, 160, 60 + dot, 160 + dot)
     img = edit(fig, ui, "gray", do)
-    rects = [a for a in img.annotations if type(a).__name__ == "Rectangle2D"]
-    assert len(rects) == 1
+    rects = sorted((a for a in img.annotations if type(a).__name__ == "Rectangle2D"),
+                   key=lambda a: -a.getRect().width())
+    assert len(rects) == 2                       # the big one and the small one, not the slip
     r = rects[0].getRect()
     assert abs(r.width() - 130) < 2 and abs(r.height() - 100) < 2
+    assert rects[1].getRect().x() == pytest.approx(60, abs=2)
 
 
 @pytest.mark.parametrize("tip,cls", [
