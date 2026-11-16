@@ -1209,7 +1209,25 @@ def _default_bar_length(width_units: float, unit: str = "µm") -> tuple[float, s
     if not picks:                              # an image under 4 units wide: the smallest bar
         return 1.0, unit
     best = min(picks, key=lambda v: (abs(math.log(v / width_units / 0.15)), v))
-    return float(best), unit
+    return _readable_length(float(best), unit, rounder=True)
+
+
+# the next larger unit and how many of the smaller one it holds
+_UNIT_UP = {"nm": ("µm", 1000), "µm": ("mm", 1000), "um": ("mm", 1000), "μm": ("mm", 1000),
+            "mm": ("cm", 10), "cm": ("m", 100)}
+
+
+def _readable_length(value: float, unit: str, rounder: bool = False) -> tuple[float, str]:
+    """The same length with at most 3 digits before the point: 50000 µm is
+    50 mm, 1500 µm is 1.5 mm; a length the user gave (100 mm) is kept as they
+    wrote it. *rounder* (a length chosen by the tool): 200 mm is 20 cm.
+    px and unknown units are kept."""
+    while value >= 1000 and unit in _UNIT_UP:
+        up, n = _UNIT_UP[unit]
+        value, unit = value / n, up
+    if rounder and unit == "mm" and value >= 100 and value % 10 == 0:
+        value, unit = value / 10, "cm"          # 150 mm reads better as 15 cm
+    return float(f"{value:.6g}"), unit
 
 
 # formats whose header may carry a pixel size (PNG / JPEG never do)

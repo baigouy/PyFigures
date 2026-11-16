@@ -400,7 +400,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `get_figure_properties(pyf_path)` | Figure-level font, background colour, default spacing |
 | `list_image_properties(pyf_path, group_path, image_index)` | All XML fields on an image |
 | `get_image_property(pyf_path, group_path, image_index, property_name)` | Single image field |
-| `audit_figure(pyf_path)` | Inventory every panel and flag what's missing — a quick QC pass |
+| `audit_figure(pyf_path)` | Inventory every panel and flag what's missing — a quick QC pass (also scale bars under 5 % of the image width, with a ~15 % suggestion, and image panels with no pixel size — vector files and scripted panels excluded) |
 | `figure_review_brief(pyf_path, journal, column)` | **Pre-submission reviewer brief**: all mechanical checks + caption + a visual-critique rubric, for an AI/human referee (pair with render_preview + simulate_color_blindness) |
 
 ### Creating tools
@@ -485,7 +485,7 @@ Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent)
 | Tool | Description |
 |------|-------------|
 | `get_scale_bar(pyf_path, group_path, image_index)` | Read scale bar settings |
-| `set_scale_bar(pyf_path, group_path, image_index, bar_width_in_units, ...)` | Add/update scale bar on one image (`bar_color` is drawn — stored as `bar_color`; files without it draw white). A new bar without `bar_width_in_units` gets a round length (1, 1.5, 2, 2.5, 3, 5 × 10ⁿ: 10, 15, 20, 50…) of 10–25 % of the shown width, nearest 15 % (nm for images under ~4 µm wide) |
+| `set_scale_bar(pyf_path, group_path, image_index, bar_width_in_units, ...)` | Add/update scale bar on one image (`bar_color` is drawn — stored as `bar_color`; files without it draw white). A new bar without `bar_width_in_units` gets a round length (1, 1.5, 2, 2.5, 3, 5 × 10ⁿ: 10, 15, 20, 50…) of 10–25 % of the shown width, nearest 15 % (nm for images under ~4 µm wide). The automatic text has at most 3 digits (50000 µm reads 50 mm, the same length). A length or `label` the user gives is used exactly, even a tiny bar (a warning, not a refusal) |
 | `remove_scale_bar(pyf_path, group_path, image_index)` | Remove scale bar |
 | `set_scale_bar_all(pyf_path, bar_width_in_units, ...)` | Apply the same scale bar to every image |
 

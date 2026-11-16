@@ -297,6 +297,44 @@ def shared_channel_luts(img) -> dict | None:
     return None
 
 
+SCALE_BAR_MIN_FRACTION = 0.05
+
+
+def _scale_bar_too_small(img) -> dict | None:
+    """{percent, suggested} when the panel's scale bar is under 5 % of the shown
+    image width, else None (also when the width is unknown)."""
+    from .core import (_child_text, _default_bar_length, _first_filename, _pixel_size,
+                       _raw_size_from_file, _readable_length)
+    bar = img.find("annotations/ScaleBar")
+    size = _raw_size_from_file(_first_filename(img))
+    if bar is None or not size:
+        return None
+    try:
+        length = float(bar.findtext("bar_width_in_units") or 0)
+    except ValueError:
+        return None
+    px, _source = _pixel_size(img)
+    calibrated = px is not None
+    px = px or 1.0
+
+    def _crop(name):
+        try:
+            return max(0, int(float(_child_text(img, name) or 0)))
+        except (TypeError, ValueError):
+            return 0
+    visible = size[0] - _crop("crop_left") - _crop("crop_right")
+    if length <= 0 or visible <= 0:
+        return None
+    fraction = length / px / visible
+    if fraction >= SCALE_BAR_MIN_FRACTION:
+        return None
+    unit = "µm" if calibrated else "px"
+    shown, shown_unit = _readable_length(length, unit)
+    pick = _default_bar_length(visible * px, unit)
+    return {"percent": round(100 * fraction, 1), "length": f"{shown:g} {shown_unit}",
+            "suggested": f"{pick[0]:g} {pick[1]}" if pick else None}
+
+
 def audit_figure(pyf_path: str) -> str:
     """Inventory every panel and flag what's missing — a quick QC pass.
 
@@ -313,6 +351,11 @@ def audit_figure(pyf_path: str) -> str:
     whose pixel size was set in the figure rather than read from the image file
     (check it is the real one); each panel's ``pixel_size_source`` says
     'metadata', 'figure' or 'none'.
+    ``images_without_pixel_size`` lists image panels with no pixel size at all
+    (none in the file, none set in the figure), with or without a bar; vector
+    files (SVG/PDF) and scripted panels (plots, colour bars) are not listed.
+    ``scale_bars_too_small`` lists bars under 5 % of the shown image width
+    (hard to see) with a round length of about 15 % (``suggested``).
     ``panels_constant`` lists panels showing a single value everywhere (all
     black / white, an empty channel): usually a mistake to remove.
     ``panels_channels_share_a_lut`` lists images whose shown channels have the
@@ -416,9 +459,30 @@ def audit_figure(pyf_path: str) -> str:
         dup = shared_channel_luts(el)
         if dup:
             same_lut.append(dict(_where(p), **dup))
+    # a bar of a few % of the image width is hard to see (a 2000 µm bar on a CT
+    # scan was 3 px wide): flagged under 5 %, with a round length of about 15 %
+    too_small = []
+    for p, el in zip(panels, elems):
+        small = _scale_bar_too_small(el) if p["scale_bar"] else None
+        if small:
+            too_small.append(dict(_where(p), **small))
+    # micrographs with no pixel size, with or without a bar: no scale can be shown
+    # (vector files, scripted panels such as plots, text and placeholders need none)
+    from .core import _pixel_size, _is_empty_placeholder as _empty
+    no_px = []
+    for p, el in zip(panels, elems):
+        fn = str(p["filename"] or "")
+        script = _child_text(el, "custom_loading_script")
+        if _child_text(el, "isText") is not False or _empty(el) or fn.lower().endswith((".svg", ".pdf")) \
+                or (isinstance(script, str) and script not in ("", "None")) or fn in ("", "None", "@template@"):
+            continue
+        if _pixel_size(el)[0] is None:
+            no_px.append(_where(p))
     return json.dumps({
         "n_panels": len(panels),
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
+        "scale_bars_too_small": too_small,
+        "images_without_pixel_size": no_px,
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,
         # scale bars with no pixel size at all: a length in pixels, not a scale

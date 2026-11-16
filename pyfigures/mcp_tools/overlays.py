@@ -233,6 +233,10 @@ def set_scale_bar(
     (length, text, corner, colours). A new bar without *bar_width_in_units*
     gets a round length of about 15 % of the image width (10, 15, 20, 50 ...):
     when the user gave no length, do not ask, leave it out.
+    The user has the final word: a length they give is used exactly, however
+    small or large. The automatic text is written with at most 3 digits
+    (50000 µm reads "50 mm", the same length); to keep the user's own wording
+    ("50000 µm"), pass it as *label*.
 
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *image_index*: 0-based index among Image2D elements at that location.
@@ -305,8 +309,18 @@ def set_scale_bar(
                     "bar_width_in_units. Nothing was changed.")
         bar_width_in_units, picked_unit = pick
         if calibrated and picked_unit != unit:
+            if px_to_unit is not None:         # given in the old unit
+                px_to_unit = px_to_unit * factor / _stored_units_per(picked_unit)
             unit, factor = picked_unit, _stored_units_per(picked_unit)
         chosen = f" No length was given: {bar_width_in_units:g} {picked_unit} (about 15 % of the image width) was chosen."
+    elif bar_width_in_units is not None and label is None and calibrated:
+        # the length asked for, exactly, but written with at most 3 digits: 50000 µm reads 50 mm
+        from .core import _readable_length
+        shown, shown_unit = _readable_length(float(bar_width_in_units), unit)
+        if shown_unit != unit:
+            if px_to_unit is not None:         # given in the old unit
+                px_to_unit = px_to_unit * factor / _stored_units_per(shown_unit)
+            bar_width_in_units, unit, factor = shown, shown_unit, _stored_units_per(shown_unit)
     uncal = []
     stored_width = None
     if bar_width_in_units is not None:
@@ -457,6 +471,14 @@ def set_scale_bar_all(
         return f"ERROR: bar_height_px is the bar's thickness in pixels, between 0 and 100 (got {bar_height_px})."
     no_text = label is not None and str(label).strip().lower() in ("", "none", "hidden", "off", "no")
     text_colour = 16777215 if label_color_int is None else label_color_int
+    if bar_width_in_units is not None and label is None:
+        # the length asked for, exactly, written with at most 3 digits: 50000 µm reads 50 mm
+        from .core import _readable_length
+        shown, shown_unit = _readable_length(float(bar_width_in_units), unit)
+        if shown_unit != unit:
+            if px_to_unit is not None:
+                px_to_unit = px_to_unit * _stored_units_per(unit) / _stored_units_per(shown_unit)
+            bar_width_in_units, unit = shown, shown_unit
     width_for_text = 0 if bar_width_in_units is None else bar_width_in_units
     text = label if label is not None else _default_bar_label(width_for_text, unit)
     legend_html = _scale_bar_legend_html(text, text_colour)

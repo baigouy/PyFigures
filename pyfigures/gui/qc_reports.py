@@ -85,6 +85,21 @@ def audit_report(raw):
                   f"(the image has no pixel size, the bar is a length in pixels): {who(uncal)}",
                   "   Set the pixel size: double-click the panel (px to unit), or Annotations → "
                   "Add scale bar to all panels… with a pixel size.", ""]
+    no_px = d.get("images_without_pixel_size") or []
+    if no_px:
+        lines += [f"! {len(no_px)} image{'s have' if len(no_px) > 1 else ' has'} no pixel size (no physical "
+                  f"scale can be shown): {who(no_px)}",
+                  "   Set it in the panel's editor (px to unit) if it is a micrograph; drawings and "
+                  "photos without a scale can stay as they are.", ""]
+    small = d.get("scale_bars_too_small") or []
+    if small:
+        lines += [f"! {len(small)} scale bar{'s are' if len(small) > 1 else ' is'} very small (under 5 % of "
+                  f"the image width, hard to see): "
+                  + ", ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} "
+                              f"({e['length']}, {e['percent']:g} %"
+                              + (f"; about {e['suggested']} would be ~15 %" if e.get("suggested") else "") + ")"
+                              for e in small),
+                  "   Make it longer in the panel's editor, unless that length was asked for.", ""]
     by_hand = d.get("scale_bars_calibrated_by_hand") or []
     if by_hand:
         lines += [f"! {len(by_hand)} scale bar{'s use' if len(by_hand) > 1 else ' uses'} a pixel size "
