@@ -52,6 +52,10 @@ class ZoomBar(QFrame):     # a QFrame, not a plain QWidget (PySide2 crash with p
             layout.addWidget(b)
             return b
         self.fit_button = button('Fit', 'Fit the whole figure in the window', self.fit, 'mdi.fit-to-page-outline')
+        # one button, alternating: fit the width, then the height (the user, 2026-11-16)
+        self._next_fit = 'width'
+        self.fit_side_button = button('↔', '', self.fit_side, 'mdi.arrow-expand-horizontal')
+        self._show_next_fit()
         self.reset_button = button('100 %', 'Actual size (Ctrl 0)', lambda: self.set_scale(1.0),
                                    'mdi.numeric-1-box-outline')
         self.out_button = button('−', 'Zoom out (Ctrl -, or Ctrl + mouse wheel)', lambda: self.zoom_by(1 / 1.1),
@@ -96,6 +100,28 @@ class ZoomBar(QFrame):     # a QFrame, not a plain QWidget (PySide2 crash with p
     def fit(self):
         if self.paint.EZFIG_panel.shapes_to_draw:
             self.paint.fit_to_window()
+
+    def fit_side(self):
+        """Fit the figure's width to the window, next time its height, and so on."""
+        if self.paint.EZFIG_panel.shapes_to_draw:
+            if self._next_fit == 'width':
+                self.paint.fit_to_width()
+            else:
+                self.paint.fit_to_height()
+        self._next_fit = 'height' if self._next_fit == 'width' else 'width'
+        self._show_next_fit()
+
+    def _show_next_fit(self):
+        b = self.fit_side_button
+        width = self._next_fit == 'width'
+        b.setText('↔' if width else '↕')
+        b.setToolTip('Fit the figure to the window width (next click: to its height)' if width else
+                     'Fit the figure to the window height (next click: to its width)')
+        try:
+            from batoolset.icons.tools import get_icon
+            b.setIcon(get_icon('mdi.arrow-expand-horizontal' if width else 'mdi.arrow-expand-vertical'))
+        except Exception:
+            pass
 
     def refresh(self):
         self.label.setText(f'{self.scale() * 100:.0f} %')

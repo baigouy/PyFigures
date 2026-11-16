@@ -64,3 +64,18 @@ def test_ctrl_wheel_zooms_and_the_wheel_alone_does_not(gui, tmp_path, qapp):
     assert gui.paint.EZFIG_panel.scale == 1.0
     wheel(Qt.KeyboardModifier.ControlModifier)
     assert abs(gui.paint.EZFIG_panel.scale - 1.1) < 1e-9
+
+
+def test_fit_width_then_height_alternate(gui, tmp_path):
+    """One button: fit the width, next click the height (the user, 2026-11-16)."""
+    _figure(gui, tmp_path)
+    bar, panel, area = gui.zoom_bar, gui.paint.EZFIG_panel, gui.paint.scrollArea
+    b = panel.updateBounds()
+    assert "width" in bar.fit_side_button.toolTip().split("(")[0]
+    bar.fit_side_button.click()
+    width_scale = panel.scale
+    assert abs(b.width() * width_scale - (area.width() - 2 - area.verticalScrollBar().sizeHint().width())) < 2
+    assert "height" in bar.fit_side_button.toolTip().split("(")[0]
+    bar.fit_side_button.click()
+    assert abs(b.height() * panel.scale - (area.height() - 2 - area.horizontalScrollBar().sizeHint().height())) < 2
+    assert "width" in bar.fit_side_button.toolTip().split("(")[0]
