@@ -551,3 +551,34 @@ def test_the_image_store_rereads_a_file_changed_on_disk(tmp_path):
         assert int(again.max()) == 200 and again.shape == (10, 12)
     finally:
         S.set_store(saved)
+
+
+def test_a_folder_typed_twice_gets_the_right_path_suggested(tmp_path):
+    """The chat copied a path with the Desktop folder typed twice: the panel stayed empty."""
+    from pyfigures.mcp_tools.core import _missing_image_note
+    real = tmp_path / "Desktop" / "imgs" / "a.tif"
+    real.parent.mkdir(parents=True)
+    real.write_bytes(b"x")
+    typo = str(tmp_path / "Desktop" / "Desktop" / "imgs" / "a.tif")
+    note = _missing_image_note(typo)
+    assert "does not exist" in note and f"Did you mean {real}?" in note
+    assert "Did you mean" not in _missing_image_note(str(tmp_path / "nope" / "b.tif"))
+
+
+def test_an_imagej_stack_naming_no_axis_is_a_z_stack(tmp_path, monkeypatch):
+    """bat-cochlea-volume.tif (ImageJ 'images=114', no slices= / frames=) was
+    read as a time series, so it showed one plane instead of its max
+    projection; ImageJ itself shows such a stack as Z slices (2026-11-16)."""
+    import tifffile
+    from batoolset.img import Img
+    from pyfigures.gui import user_prefs
+    f = tmp_path / "plain.tif"
+    tifffile.imwrite(f, np.zeros((5, 8, 9), np.uint8), description="ImageJ=1.20n\nimages=5\n", metadata=None)
+    assert Img(str(f)).metadata["dimensions"] == "dhw"
+    pyf = str(tmp_path / "p.pyf")
+    M.create_figure(pyf, num_groups=1)
+    monkeypatch.setattr(user_prefs, "load_max_project_z_stacks", lambda: True)
+    assert "shown as its max projection" in M.add_image(pyf, [0], str(f))
+    movie = tmp_path / "movie.tif"                     # a real time series stays one frame
+    tifffile.imwrite(movie, np.zeros((4, 8, 8), np.uint8), imagej=True, metadata={"axes": "TYX"})
+    assert Img(str(movie)).metadata["dimensions"] == "thw"

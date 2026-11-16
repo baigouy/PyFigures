@@ -1719,8 +1719,17 @@ def _missing_image_note(filename: str) -> str:
     name = str(filename)
     if name in ("None", "@template@") or name.lower().startswith("omero:") or source_exists(name):
         return ""
+    hint = ""
+    parts = re.split(r"[\\/]", name)
+    for i in range(1, len(parts)):
+        # a folder typed twice (…\Desktop\Desktop\…: a model copying a path, 2026-11-16)
+        if parts[i] and parts[i] == parts[i - 1]:
+            fixed = os.sep.join(parts[:i] + parts[i + 1:])
+            if os.path.isfile(fixed):
+                hint = f" Did you mean {fixed}?"
+                break
     return (f"\nWARNING: {name} does not exist (yet): the panel stays empty until it does — "
-            f"or point the figure at the file with remap_paths / set_image_filename.")
+            f"or point the figure at the file with remap_paths / set_image_filename.{hint}")
 
 
 def _new_image2d(filename: str) -> ET.Element:

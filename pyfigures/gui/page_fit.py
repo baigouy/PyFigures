@@ -17,6 +17,7 @@ Canvas units are points (72 per inch).
 from __future__ import annotations
 
 PAGES_MM = {'A4': (180.0, 247.0), 'Letter': (185.9, 229.4)}
+MAX_PER_ROW = 5              # images per row chosen automatically (more only when asked)
 MIN_WIDTH_MM = 30.0          # narrower: panels too small to read; say so instead
 MM_PER_PT = 25.4 / 72.0
 
@@ -164,7 +165,10 @@ def fit_to_page(window, force=False):
     runs = _lone_runs(shapes)
     if runs:
         longest = max(b - a for a, b in runs)
-        heights = {c: _height_with_columns(shapes, runs, c, width, space) for c in range(1, longest + 1)}
+        # at most 5 per row: a row of more is hard to read (the user, 2026-11-16);
+        # still too tall with 5: narrowed below
+        heights = {c: _height_with_columns(shapes, runs, c, width, space)
+                   for c in range(1, min(longest, MAX_PER_ROW) + 1)}
         fitting = [c for c in sorted(heights) if heights[c] <= limit]
         # the fewest per row that fit; none fits: the shortest, then narrowed below
         columns = fitting[0] if fitting else min(heights, key=heights.get)

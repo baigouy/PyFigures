@@ -522,6 +522,7 @@ def build_server(full_server, send):
     @server.tool(structured_output=False)
     async def use_pyfigures_tool(tool_name: str, arguments: dict, batch: list[dict] | None = None) -> object:
         """Execute a discovered original PyFigures operation or live convenience operation. Pass its exact name and arguments matching the schema from find_pyfigures_tools. Omit pyf_path for the open figure. Session/revision/request fields for prototype operations may be omitted: filled automatically. Errors are returned as MCP tool errors; images remain image content.
+        FREQUENT OPERATIONS, call them directly without searching first (panel_ref = the panel's letter; a wrong argument returns the exact schema): transform_image(panel_ref, rotation=degrees, flip_h, flip_v, crop_left/right/top/bottom=px), configure_image(panel_ref, projection="max"|"none", projection_z_start, projection_z_end, channels=[bool,...]), set_lut(panel_ref, luts=["GREEN", ...]), set_image_property(panel_ref, property_name, value), set_scale_bar(panel_ref, bar_width_in_units, unit), add_image(group_path=[], filename) (batch for several), remove_image(panel_ref), arrange_live_images(columns or row_counts).
         SAME OPERATION ON MANY ITEMS (recolour 26 ROIs, add 20 polygons, move 10 arrows, set 6 panels): ONE call, never one call per item. arguments = the fields shared by all, batch = [{the fields of item 1}, {item 2}, ...]; each item is merged over arguments and run in order. Example: tool_name=set_roi_properties, arguments={panel_ref: "e", color: "red"}, batch=[{annotation_index: 1}, {annotation_index: 2}, ...]."""
         if batch:
             if not isinstance(batch, list) or not all(isinstance(item, dict) for item in batch):
@@ -534,7 +535,7 @@ def build_server(full_server, send):
             if tool_name.startswith('remove_') and all(isinstance(i.get('annotation_index'), int) for i in batch):
                 # removing index 3 shifts every later one: the highest first keeps the others valid
                 batch = sorted(batch, key=lambda i: i['annotation_index'], reverse=True)
-            done, errors, results = 0, [], []
+            done, errors, results, warnings = 0, [], [], []
             outcomes = []           # (item number, item, result or exception)
             page_fit = ''           # the open figure fitted to the page after the batch
             from .original_registry import batchable_original, collect_batch, stop_collecting, decode
@@ -586,12 +587,21 @@ def build_server(full_server, send):
                 done += 1
                 if len(results) < 3:
                     results.append({'item': number, 'result': _short(out)})
+                elif 'WARNING' in text:
+                    # only 3 results are shown: a warning of a later item (a mistyped path,
+                    # "does not exist (yet)") was never seen by the model (2026-11-16)
+                    warnings.append({'item': number, 'arguments': item,
+                                     'warning': _short(text[text.index('WARNING'):], 300)})
             summary = f'{tool_name}: {done} of {len(batch)} item(s) done in one call'
             if errors:
                 summary += f'; {len(errors)} failed (see errors, the others are done: do not redo them)'
             reading = tool_name.startswith(('get_', 'list_', 'inspect_', 'describe_', 'check_', 'find_'))
             out = {'result': summary, 'batch_done': done, 'batch_total': len(batch),
                    'document_changed': done > 0 and not reading, 'first_results': results, 'errors': errors[:20]}
+            if warnings:
+                out['warnings'] = warnings[:20]
+                summary += f'; {len(warnings)} with a WARNING (see warnings: check and fix them)'
+                out['result'] = summary
             if page_fit:
                 # the figure was fitted to the page after the batch: the model says so
                 out['page_fit'] = page_fit

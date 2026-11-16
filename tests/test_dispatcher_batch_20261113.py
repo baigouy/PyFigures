@@ -142,3 +142,20 @@ def test_the_schema_offers_batch(dispatcher):
     _, _, tool = dispatcher
     assert 'batch' in tool.parameters['properties']
     assert 'ONE call' in tool.description
+
+
+def test_a_warning_of_a_later_item_reaches_the_model():
+    """Ten images added in one call (2026-11-16): the model had mistyped one
+    path (Desktop typed twice); add_image warned that it does not exist, but only
+    the first three results were shown, so the empty panel went unnoticed."""
+    full = FastMCP('fake')
+
+    @full.tool()
+    def delete_last_rows(count: int) -> str:
+        note = '\nWARNING: x.tif does not exist (yet): the panel stays empty' if count == 6 else ''
+        return f'deleted {count}' + note
+
+    run = build_server(full, lambda *a, **k: {})._tool_manager._tools['use_pyfigures_tool'].fn
+    out = asyncio.run(run(tool_name='delete_last_rows', arguments={}, batch=[{'count': i} for i in range(1, 11)]))
+    assert out['batch_done'] == 10 and [w['item'] for w in out['warnings']] == [6], out
+    assert 'does not exist' in out['warnings'][0]['warning'] and 'WARNING' in out['result']

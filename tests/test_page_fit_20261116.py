@@ -14,6 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "pyqt6")
 
 from test_dnd_main_editor import ui, gui  # noqa: F401,E402
+from test_assistant_live import runtime  # noqa: F401,E402  (an own live-session folder)
 
 MM = 25.4 / 72.0
 SHAPES = [(100, 100), (80, 120), (120, 60), (100, 100), (90, 140)]
@@ -108,7 +109,7 @@ def test_page_sizes_and_menu(gui):
     assert gui.fit_page_action.isCheckable() and set(gui.page_size_actions) == {"A4", "Letter"}
 
 
-def test_ten_images_added_by_the_chat_fit_the_page(qapp, tmp_path, fit_on):
+def test_ten_images_added_by_the_chat_fit_the_page(qapp, runtime, tmp_path, fit_on):  # noqa: F811
     """The chat's add_image batch (the 2026-11-16 request "a fig with 10 random
     images"): the result says how the figure was fitted."""
     import uuid
@@ -153,3 +154,26 @@ def test_a_figure_wider_than_the_page_is_brought_to_the_page_width(gui, tmp_path
     w, h = _size_mm(gui)
     assert w <= 180.5 and h <= 247.5, (w, h, note)
     assert abs(gui.size_spinbox.value() * MM - w) < 2      # the next layout starts from it
+
+
+def test_never_more_than_five_images_per_row_unless_asked(gui, tmp_path, fit_on):
+    """Twenty small images: rows of 5 at most (the user: a longer row is hard
+    to read), even when more per row would fit the page."""
+    from batoolset.drawings.shapes.group import Group
+    from pyfigures.mcp_tools.workflow import _auto_grid
+    gui._finish_add_single_images(_images(tmp_path, [(60, 100)] * 20))
+    rows = gui.paint.EZFIG_panel.shapes_to_draw
+    assert all(isinstance(r, Group) and len(r.content) <= 5 for r in rows)
+    assert sum(len(r.content) for r in rows) == 20
+    assert all(_auto_grid(n)[0] <= 5 for n in range(1, 60))     # create_figure_from_folder / draft
+
+
+def test_chat_edits_say_they_are_working():
+    """Sixteen images took 7 s on the GUI thread: the window looked frozen
+    (2026-11-16). Edits now show a wait cursor and say what runs."""
+    from pyfigures.assistant.session import busy_message
+    add = {"operation": "original_tool", "arguments": {"tool": "add_image", "batch": [{}] * 16}}
+    assert busy_message(add) == "Chat: adding 16 images…"
+    assert busy_message({"operation": "arrange_rows"}) == "Chat: arranging the images in rows…"
+    assert busy_message({"operation": "original_tool", "arguments": {"tool": "get_image_property"}}) is None
+    assert busy_message({"operation": "inspect"}) is None

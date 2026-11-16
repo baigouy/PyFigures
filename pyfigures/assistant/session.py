@@ -26,6 +26,62 @@ EZFIG_GUI = PartnerGUI
 STATE = runtime_dir()
 
 
+# operations that change the figure (and may read many images) run on the GUI
+# thread: without a sign the window looked frozen for seconds (16 images: 7 s, 2026-11-16)
+_BUSY_OPERATIONS = {'original_tool': None, 'arrange_rows': 'arranging the images in rows',
+                    'existing_batch': 'editing the figure'}
+
+
+def busy_message(req):
+    """What the status bar says while a chat operation runs, or None (quick reads)."""
+    op = req.get('operation')
+    if op not in _BUSY_OPERATIONS:
+        return None
+    if op != 'original_tool':
+        return 'Chat: ' + _BUSY_OPERATIONS[op] + '…'
+    args = req.get('arguments') or {}
+    tool = str(args.get('tool') or 'operation')
+    if tool.startswith(('get_', 'list_', 'inspect_', 'describe_', 'check_', 'find_')):
+        return None
+    n = len(args.get('batch') or [])
+    if tool == 'add_image':
+        what = f'adding {n} images' if n > 1 else 'adding an image'
+    else:
+        what = tool.replace('_', ' ') + (f' ({n} items)' if n > 1 else '')
+    return f'Chat: {what}…'
+
+
+class busy_window:
+    """Wait cursor + status message while a chat operation runs on the GUI thread."""
+
+    def __init__(self, window, req):
+        self.window, self.message = window, busy_message(req)
+
+    def __enter__(self):
+        if self.message:
+            try:
+                from qtpy.QtCore import Qt, QEventLoop
+                from qtpy.QtWidgets import QApplication
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+                self.window.statusBar().showMessage(self.message)
+                # painted now, before the work blocks the event loop (no user input meanwhile)
+                QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+            except Exception:
+                self.message = None
+        return self
+
+    def __exit__(self, *exc):
+        if self.message:
+            try:
+                from qtpy.QtWidgets import QApplication
+                QApplication.restoreOverrideCursor()
+                status = self.window.statusBar()
+                if status.currentMessage() == self.message:
+                    status.clearMessage()
+            except Exception:
+                pass
+        return False
+
 class Session:
     def __init__(self, window, recovery_dir=None):
         self.window = window
@@ -881,12 +937,25 @@ class Session:
                 'workspace': str(folder)}
 
     def drain(self):
+        # busy_window repaints the window (processEvents): a timer firing then must not
+        # run the next request inside this one
+        if getattr(self, '_draining', False):
+            return
+        self._draining = True
+        try:
+            self._drain()
+        finally:
+            self._draining = False
+
+    def _drain(self):
         while not self.requests.empty():
             req, reply = self.requests.get_nowait()
             try:
                 if len(self.results) >= 10000 and req['request_id'] not in self.results:
                     raise RuntimeError('Session request limit reached; restart prototype')
-                reply.put({'result': self.execute(req)})
+                with busy_window(self.window, req):
+                    result = self.execute(req)
+                reply.put({'result': result})
             except Exception as exc:
                 message = str(exc)
                 code = ('SESSION_CHANGED' if message.startswith('Session unavailable') else

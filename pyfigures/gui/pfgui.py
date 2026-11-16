@@ -969,6 +969,12 @@ class EZFIG_GUI(QMainWindow):
         self.pbar.setTextVisible(True)
         self.pbar.hide()
         statusBar.addPermanentWidget(self.pbar)
+        # Fit / 100 % / − / zoom % / + floating over the bottom-left corner of the figure
+        # area (the chat is on the right); Ctrl + wheel zooms (gui/zoom_bar.py)
+        from pyfigures.gui.zoom_bar import ZoomBar
+        self.zoom_bar = ZoomBar(self.paint, self.paint.scrollArea)
+        m = self.paint.layout().contentsMargins()
+        self.paint.layout().setContentsMargins(m.left(), m.top(), m.right(), 2)   # less empty grey at the bottom
 
         # NB: window shortcuts, not application ones: in the image editor (its
         # own dialog) Ctrl+Z / Delete / Ctrl +/- reached the figure, or clashed

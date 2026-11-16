@@ -171,14 +171,20 @@ def _collect_image_files(
     return natsorted(files)
 
 
+MAX_AUTO_COLUMNS = 5          # images per row chosen automatically (more only when asked)
+
+
 def _auto_grid(n: int) -> tuple[int, int]:
-    """Return (num_cols, num_rows) for *n* images in a near-square landscape grid."""
+    """Return (num_cols, num_rows) for *n* images in a near-square landscape grid,
+    never more than MAX_AUTO_COLUMNS per row (a row of more is hard to read;
+    the user's choice, 2026-11-16: an explicit num_cols still gives more)."""
     if n <= 1:
         return (1, 1)
     base = max(1, round(math.sqrt(n)))
-    best: tuple[int, int] = (n, 1)
+    best: tuple[int, int] = (min(n, MAX_AUTO_COLUMNS), math.ceil(n / min(n, MAX_AUTO_COLUMNS)))
     best_score: float = float("inf")
-    for cols in range(max(1, base - 2), min(n, base + 3) + 1):
+    top = min(n, base + 3, MAX_AUTO_COLUMNS)
+    for cols in range(min(max(1, base - 2), top), top + 1):
         rows = math.ceil(n / cols)
         empty = cols * rows - n
         aspect = cols / max(1, rows)
