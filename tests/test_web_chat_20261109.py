@@ -342,6 +342,56 @@ def test_launch_flag_docks_the_web_chat(qapp, gui, runtime, monkeypatch):  # noq
     assert launch.is_sharing(w) and w.web_chat_dock.widget().view is None
 
 
+def test_the_terms_are_accepted_before_anything_is_shared(qapp, gui, runtime, monkeypatch):  # noqa: F811
+    # user, 2026-11-17: "a clear warning so I'm not liable of anything in case the
+    # online chat guidelines would forbid such use"
+    from pyfigures.assistant import launch
+    import pyfigures.gui.web_chat_panel as wcp
+    from qtpy.QtCore import QSettings
+    monkeypatch.setattr(wcp.QDesktopServices, "openUrl", lambda *a: True)
+    asked = []
+    answer = [False]
+    monkeypatch.setattr(wcp, "ask_user", lambda parent, title, html: asked.append(html) or answer[0])
+    g = gui(shareable=True)
+    assert g.open_web_chat(use_web=False) is None                     # declined: nothing opens
+    assert not launch.is_sharing(g) and getattr(g, "web_chat_dock", None) is None
+    assert "you alone are responsible" in asked[0] and "no liability" in asked[0]
+    assert "terms of service" in asked[0]
+    w = launch.apply_launch_flags(g, ["--web-chat"])                  # the start-up flag too
+    assert not launch.is_sharing(w) and len(asked) == 2
+    answer[0] = True
+    dock = g.open_web_chat(use_web=False)
+    assert dock is not None and len(asked) == 3
+    settings = QSettings("PyFigures-tests", "web_chat")
+    assert settings.value("accepted_terms", False, type=bool)        # remembered: asked once
+    panel = dock.widget()
+    assert "You alone are responsible" in panel.warning.text() and "no liability" in panel.warning.text()
+    # Automatic: its own acceptance; declined, the box stays unticked
+    answer[0] = False
+    panel.automatic.setChecked(True)
+    assert not panel.automatic.isChecked() and "scripted use" in asked[-1]
+    assert not settings.value("automatic", False, type=bool)
+    answer[0] = True
+    panel.automatic.setChecked(True)
+    assert panel.automatic.isChecked() and settings.value("accepted_automatic", False, type=bool)
+    n = len(asked)
+    panel.automatic.setChecked(False)
+    panel.automatic.setChecked(True)
+    assert len(asked) == n                                             # not asked again
+    panel.automatic.setChecked(False)
+
+
+def test_automatic_saved_before_its_terms_is_not_ticked_again(qapp, gui, runtime, monkeypatch):  # noqa: F811
+    import pyfigures.gui.web_chat_panel as wcp
+    from qtpy.QtCore import QSettings
+    settings = QSettings("PyFigures-tests", "web_chat")
+    settings.setValue("automatic", True)                               # ticked with an older version
+    g = gui(shareable=True)
+    assert not wcp.WebChatPanel(g, use_web=False).automatic.isChecked()
+    settings.setValue("accepted_automatic", True)
+    assert wcp.WebChatPanel(g, use_web=False).automatic.isChecked()
+
+
 def test_typed_addresses_are_remembered(qapp, gui, runtime, monkeypatch):  # noqa: F811
     import pyfigures.gui.web_chat_panel as wcp
     from qtpy.QtCore import QSettings

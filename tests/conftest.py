@@ -225,6 +225,28 @@ _keep_message_box_titles()
 
 
 @pytest.fixture(autouse=True)
+def web_chat_terms_accepted(monkeypatch):
+    """The web chat asks once for its terms (a modal dialog): tests accept
+    them, in a test-only settings store so the user's own acceptance is
+    neither used nor written. Tests of the dialog patch ask_user themselves."""
+    try:
+        import pyfigures.gui.web_chat_panel as wcp
+        from qtpy.QtCore import QSettings
+    except Exception:
+        yield
+        return
+    monkeypatch.setattr(wcp, "QSettings", lambda org, app: QSettings(org + "-tests", app))
+    monkeypatch.setattr(wcp, "ask_user", lambda *a, **k: True)
+    try:                                   # the chat sidebar's own terms (first message)
+        from qtpy_ai_sidecar import terms
+        monkeypatch.setattr(terms, "accepted", lambda config, parent=None: True)
+    except Exception:
+        pass
+    yield
+    QSettings("PyFigures-tests", "web_chat").clear()
+
+
+@pytest.fixture(autouse=True)
 def no_tinytex_download(monkeypatch):
     """No real TinyTeX download or tlmgr run: a GUI test answering Yes to
     'Install LaTeX?' downloaded TinyTeX on the CI runners, half-installed it

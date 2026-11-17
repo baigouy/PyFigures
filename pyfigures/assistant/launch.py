@@ -217,8 +217,10 @@ def apply_launch_flags(window, argv):
     if not ai_features_enabled():
         return window
     if '--web-chat' in argv:
+        from pyfigures.gui.web_chat_panel import accept_terms, attach
+        if not accept_terms(window):
+            return window
         window = start_live_session(window).window
-        from pyfigures.gui.web_chat_panel import attach
         attach(window)
         return window
     if '--chat' in argv:

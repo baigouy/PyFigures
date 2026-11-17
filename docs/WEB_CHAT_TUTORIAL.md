@@ -7,7 +7,11 @@
 >
 > **Before using it**, make sure it respects the **terms of service of the
 > chat site** and **your institution's rules**: PyFigures types into the page
-> and, with *Automatic* ticked, sends messages for you.
+> and, with *Automatic* ticked, sends messages for you. **You alone are
+> responsible** for this use and for what is sent to the site; the PyFigures
+> authors accept no liability for it. PyFigures asks you to accept this once,
+> before the web chat first opens (nothing is shared before), and once more
+> the first time you tick *Automatic*.
 
 The web chat docks a chat site (Mistral Le Chat, ChatGPT, Claude, Gemini, or
 your institute's chat page) beside the figure. You sign in to that site

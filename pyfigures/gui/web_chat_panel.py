@@ -139,7 +139,51 @@ WARNING = ('<b>Experimental, not recommended: a last resort.</b> Prefer the chat
            'with an API key or a local model): it works far better. Use this only if really nothing else is '
            'possible, and first make sure it respects the <b>terms of service</b> '
            'of the chat site and your institution\'s rules: PyFigures types into the page and, with Automatic, '
-           'sends messages for you.')
+           'sends messages for you. <b>You alone are responsible</b> for complying with them; the PyFigures '
+           'authors accept no liability for this use.')
+
+# asked once (remembered) before the chat page is first opened and before
+# Automatic is first ticked (user, 2026-11-17: "a clear warning so I'm not liable")
+ACK_OPEN = ('<p><b>Chat in a web page: experimental, a last resort.</b></p>'
+            '<p>PyFigures will show a third-party chat site (ChatGPT, Claude, Le Chat, Gemini or the page you '
+            'choose) and type into it for you. Many sites\' terms of service, and some institutions\' rules, '
+            'restrict or forbid automated or scripted use.</p>'
+            '<p><b>By continuing you confirm that</b> you have checked that this use is allowed by the terms of '
+            'the chat site and by your institution, and that <b>you alone are responsible</b> for it and for what '
+            'you send to the site (images, figure descriptions, unpublished data). PyFigures is provided "as is", '
+            'without warranty; its authors accept no liability for this use.</p>'
+            '<p>The chat sidebar (Tools → Chat sidebar, with an API key or a local model) is the recommended way.</p>')
+ACK_AUTOMATIC = ('<p><b>Automatic</b> makes PyFigures press Send on the chat page for you and apply what the model '
+                 'asks for, round after round. This is scripted use of the site, which many sites\' terms do not '
+                 'allow.</p><p><b>By continuing you confirm that</b> the site\'s terms and your institution\'s '
+                 'rules allow it, and that <b>you alone are responsible</b> for this use. The PyFigures authors '
+                 'accept no liability for it.</p>')
+
+
+def ask_user(parent, title, html):
+    """True when the user accepts (a test replaces this)."""
+    box = QMessageBox(QMessageBox.Icon.Warning, title, html, parent=parent)
+    box.setTextFormat(Qt.TextFormat.RichText)
+    accept = box.addButton('I understand and accept', QMessageBox.ButtonRole.AcceptRole)
+    box.addButton('Cancel', QMessageBox.ButtonRole.RejectRole)
+    box.exec()
+    return box.clickedButton() is accept
+
+
+def accept_terms(parent):
+    """Asked before the web chat is first opened (remembered once accepted)."""
+    return acknowledged(parent, 'accepted_terms', 'Chat in a web page: your responsibility', ACK_OPEN)
+
+
+def acknowledged(parent, key, title, html, settings=None):
+    """The user accepted *html* once (remembered under *key*), or accepts it now."""
+    settings = settings or QSettings('PyFigures', 'web_chat')
+    if settings.value(key, False, type=bool):
+        return True
+    if ask_user(parent, title, html):
+        settings.setValue(key, True)
+        return True
+    return False
 
 # presets taken out of the list: a saved choice of one is not brought back
 _DROPPED_PRESETS = frozenset({'https://chat.mistral.ai/login?return_to=%2Fcode'})
@@ -280,7 +324,9 @@ class WebChatPanel(QFrame):
                                    'rounds per request)', self)
         self.automatic.setToolTip('PyFigures presses Send on the page for you and applies what the model asks '
                                   'for without asking (Ctrl+Z undoes each change). Stop pauses it.')
-        self.automatic.setChecked(self.settings.value('automatic', False, type=bool))
+        # ticked again at start-up only once its terms were accepted
+        self.automatic.setChecked(self.settings.value('automatic', False, type=bool)
+                                  and self.settings.value('accepted_automatic', False, type=bool))
         self.automatic.toggled.connect(self._automatic_toggled)
         if self.automatic.isChecked():
             self.rounds_left = MAX_ROUNDS
@@ -526,6 +572,13 @@ class WebChatPanel(QFrame):
         self.view.page().runJavaScript(_HAS_BOX_JS, 0, has_box)
 
     def _automatic_toggled(self, on):
+        if on and not acknowledged(self, 'accepted_automatic', 'Automatic: your responsibility',
+                                   ACK_AUTOMATIC, self.settings):
+            self.automatic.blockSignals(True)
+            self.automatic.setChecked(False)
+            self.automatic.blockSignals(False)
+            self.say('Automatic stays off: its terms were not accepted.')
+            return
         self.settings.setValue('automatic', on)
         self.rounds_left = MAX_ROUNDS if on else 0
         self.stopped = False
@@ -757,6 +810,8 @@ def attach(window, use_web=True):
         dock.show()
         dock.raise_()
         return dock
+    if not accept_terms(window):
+        return None
     dock = QDockWidget('Chat in a web page', window)
     dock.setObjectName('web_chat_dock')
     dock.setWidget(WebChatPanel(window, dock, use_web=use_web))

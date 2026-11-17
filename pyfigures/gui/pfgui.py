@@ -6680,6 +6680,9 @@ class EZFIG_GUI(QMainWindow):
         sidebar, run only when the user clicks Apply
         (pyfigures/gui/web_chat_panel.py)."""
         from pyfigures.assistant import launch
+        from pyfigures.gui.web_chat_panel import accept_terms
+        if getattr(self, 'web_chat_dock', None) is None and not accept_terms(self):
+            return None            # the terms first: nothing is shared before they are accepted
         if not launch.is_sharing(self) and not self._confirm_share_handover():
             return None
         try:
