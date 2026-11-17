@@ -302,9 +302,13 @@ def test_typing_a_z_range_waits_for_a_pause_and_survives_a_style_change(qapp, tm
         ed.show()
         start.setFocus()
         start.lineEdit().selectAll()
+        typed_at = time.monotonic()
         QTest.keyClicks(start, "100")
         QApplication.processEvents()
         seen["while_typing"] = bg.projection_z_start          # nothing applied mid-typing
+        # a slow runner can itself take the 400 ms pause between the keys and this
+        # check (Windows CI, 2026-11-17): only a quick check proves "nothing yet"
+        seen["typing_s"] = time.monotonic() - typed_at
         ed.proj_z_end_spin.setFocus()                         # leaves the box: applied at once
         # an inactive offscreen window gets no focus-out from setFocus(): deliver the one a click sends
         QApplication.sendEvent(start, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason))
@@ -328,7 +332,7 @@ def test_typing_a_z_range_waits_for_a_pause_and_survives_a_style_change(qapp, tm
         time.sleep(0.005)
     try:
         edit(g, ui, "big", do)
-        assert seen["while_typing"] is None, seen
+        assert seen["while_typing"] is None or seen["typing_s"] >= 0.4, seen
         assert seen["after"] == (100, 100, 300), seen
         assert seen["after_avg"] == (100, 300, 100), seen
     finally:

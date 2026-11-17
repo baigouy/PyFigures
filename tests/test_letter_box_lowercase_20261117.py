@@ -108,7 +108,10 @@ def test_the_letter_stays_where_it_was_without_a_box(letter):
 def test_without_a_box_every_letter_top_is_at_the_same_height():
     # the font-metrics lift left "l" and "b" lower than "a" (seen on the same render)
     tops = {c: _draw(c, boxed=False)[0][0] for c in LETTERS}
-    assert max(tops.values()) - min(tops.values()) <= 1, tops
+    # 1 px on Windows; up to 2 px of 40 pt on Linux, where FreeType hints the glyphs
+    # differently at the measuring and the drawing scale (CI, 2026-11-17). The bug was
+    # far larger: "a" sat several pixels below "l".
+    assert max(tops.values()) - min(tops.values()) <= 2, tops
 
 
 def test_a_sits_as_high_as_l_on_a_box():
