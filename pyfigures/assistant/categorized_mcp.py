@@ -1,4 +1,5 @@
 """Small, stable MCP surface backed by the complete original registry."""
+import inspect
 import json
 import os
 import re
@@ -208,6 +209,11 @@ def build_server(full_server, send):
         'All texts of a figure stay coherent: the panel letters alike, the scale-bar labels alike (restyle_texts target="scale_bars" styles them all), every text but the letters in one font (the letters may have their own); check_text_consistency checks it. '
         '"Consistent / the same letters (fonts)": every letter gets the same font, size, bold, italic, underline and background box; if one letter was made different on purpose, ask whether to spread that change to all letters or undo it on that one. '
         'Insets (magnified views) of each panel are listed in the state under insets, with the ROI they show. '
+        'To judge how a panel LOOKS ("the scale bar does not read well", "is the letter visible", "what colour is it now", '
+        'after a colour or overlay change) use preview_panel(panel_ref, view="figure"): the panel as drawn in the figure '
+        'with its letter, texts, scale bar and ROIs, plus a measured line per overlay (place, colour, background, contrast '
+        'ratio) that a model without vision can read; letters/texts/scale_bar/rois=False hide that kind in the preview only. '
+        'Never say what a panel looks like without it. '
         'To see a panel\'s own pixels use preview_panel(panel_ref), never preview_figure (the whole figure, each panel small): '
         'coordinates for crops, ROIs and arrows are read off its source-pixel rulers, region=[x0,y0,x1,y1] zooms, and it draws '
         'the panel\'s ROIs to check where they landed. "ROIs over every cell / each nucleus / all the embryos", "how many cells": '
@@ -245,11 +251,30 @@ def build_server(full_server, send):
 
     @server.tool()
     def inspect_figure() -> dict:
-        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), channel_colours (what each channel shows), file_colours (the file's own colours: what set_lut "NONE" restores), stack (None = a single image; else z, t and channel counts and what is shown: "which images are stacks?" is answered here, no other tool), kind ('image' pixels from a file, 'code' made by a script or plot, 'vector' SVG/PDF), name (what to call it in a reply: its letter, else "#N"), number (shown on the canvas on a selected panel: "#3" or "number 3" from the user is panel_ref "#3"), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
+        """Read the open figure, panel scene geometry, source sizes, current selection and last_canvas_click. Each panel_references entry also gives pixel_size (None = uncalibrated, pixels only), scale_bars (count), luts (channel colour tables), channel_colours (what each channel shows), file_colours (the file's own colours: what set_lut "NONE" restores), stack (None = a single image; else z, t and channel counts and what is shown: "which images are stacks?" is answered here, no other tool), kind ('image' pixels from a file, 'code' made by a script or plot, 'vector' SVG/PDF), name (what to call it in a reply: its letter, else "#N"), number (shown on the canvas on a selected panel: "#3" or "number 3" from the user is panel_ref "#3"), hard_to_see (its letter, texts, scale bar, ROIs or arrows that are hard to read as drawn: colour, colour behind, contrast ratio; None = all read well), source_file and source_missing (its image file is gone: the panel shows an error placeholder; missing_source_files says how to fix it). Valid image_position is raw image pixels for clicked ROI/arrow placement; never use invalid or stale points."""
         state = send('inspect')
         summary = state.get('figure_summary') or {}
         if summary.get('empty'):          # nothing else in the state says anything useful
             return {'figure_summary': summary, 'path': state.get('path'), 'revision': state.get('revision')}
+        # what is hard to see, measured as drawn: a 9B text-only model always called
+        # inspect_figure but never the figure view (benchmark, 2026-11-17)
+        import os
+        if os.environ.get('QTPY_AI_SIDECAR_VISION') == 'none':
+            return state                  # the user keeps everything visual from the model
+        try:
+            from .live_mcp import call_live
+            contrast = call_live('overlay_contrast')
+        except Exception:
+            return state
+        for ref in state.get('panel_references') or []:
+            m = (contrast.get('panels') or {}).get(ref.get('panel_id'))
+            if m is None:
+                continue
+            ref['hard_to_see'] = m['problems'] or None
+            ref['overlays_that_read_well'] = m['read_well']
+        if contrast.get('skipped'):
+            state['hard_to_see_not_measured'] = (f"{len(contrast['skipped'])} panels not measured (time limit): "
+                                                 "use preview_panel(panel_ref, view='figure') for them")
         return state
 
     @server.tool()
@@ -353,6 +378,9 @@ def build_server(full_server, send):
             # "crop g to the nuclei": see the whole source with rulers first (a model cropped/uncropped blind until out of steps)
             # (not "zoom"/"region": those ask for an inset)
             if name=='preview_panel' and any(w in ('crop','cropping','cropped','uncropped','uncrop') for w in words):score+=430
+            # "the scale bar in i does not read well", "is the letter visible": view='figure'
+            # shows the panel as drawn and measures each overlay's contrast (2026-11-17)
+            if name=='preview_panel' and any(w in ('read','reads','readable','readability','legible','visible','contrast','see','look','looks','appearance','shown') for w in words):score+=300
             # "draw ROIs over every cell in e", "how many cells in b": one thresholding call (2026-11-13)
             if name=='detect_objects' and any(w in ('cell','cells','nucleus','nuclei','object','objects','embryo','embryos','blob','blobs','spot','spots','particles','particle','beads','bead') for w in words) and (any(w in ('every','each','all','many','count','detect','find','segment') for w in words) or any(w in ('roi','rois','box','boxes','circle','circles','outline','outlines','ellipses') for w in words)):score+=620
             # "move the box in b 100 px to the right" (eight searches found nothing, 2026-11-13)
@@ -521,10 +549,31 @@ def build_server(full_server, send):
         return text if len(text) <= limit else text[:limit] + '…'
 
     @server.tool(structured_output=False)
-    async def use_pyfigures_tool(tool_name: str, arguments: dict, batch: list[dict] | None = None) -> object:
+    async def use_pyfigures_tool(tool_name: str = '', arguments: dict | None = None,
+                                 batch: list[dict] | None = None) -> object:
         """Execute a discovered original PyFigures operation or live convenience operation. Pass its exact name and arguments matching the schema from find_pyfigures_tools. Omit pyf_path for the open figure. Session/revision/request fields for prototype operations may be omitted: filled automatically. Errors are returned as MCP tool errors; images remain image content.
-        FREQUENT OPERATIONS, call them directly without searching first (panel_ref = the panel's letter; a wrong argument returns the exact schema): transform_image(panel_ref, rotation=degrees, flip_h, flip_v, crop_left/right/top/bottom=px), configure_image(panel_ref, projection="max"|"none", projection_z_start, projection_z_end, channels=[bool,...]), set_lut(panel_ref, luts=["GREEN", ...]), set_image_property(panel_ref, property_name, value), set_scale_bar(panel_ref, bar_width_in_units, unit), add_image(group_path=[], filename) (batch for several), remove_image(panel_ref), arrange_live_images(columns or row_counts).
+        FREQUENT OPERATIONS, call them directly without searching first (panel_ref = the panel's letter; a wrong argument returns the exact schema): transform_image(panel_ref, rotation=degrees: POSITIVE = CLOCKWISE as seen, so "25° clockwise" = 25 and "25° counter-clockwise" = -25 (not the maths convention); the absolute angle, 0 = upright, flip_h, flip_v, crop_left/right/top/bottom=px), configure_image(panel_ref, projection="max"|"none", projection_z_start, projection_z_end, channels=[bool,...]), set_lut(panel_ref, luts=["GREEN", ...]), set_image_property(panel_ref, property_name, value), set_scale_bar(panel_ref, bar_width_in_units, unit), add_image(group_path=[], filename) (batch for several), remove_image(panel_ref) (several panels: ONE call, arguments={panel_refs: ["h", "f", "m"]}; every letter is read before anything is removed, so letters that shift during the removal never pick the wrong panel), arrange_live_images(columns or row_counts).
         SAME OPERATION ON MANY ITEMS (recolour 26 ROIs, add 20 polygons, move 10 arrows, set 6 panels): ONE call, never one call per item. arguments = the fields shared by all, batch = [{the fields of item 1}, {item 2}, ...]; each item is merged over arguments and run in order. Example: tool_name=set_roi_properties, arguments={panel_ref: "e", color: "red"}, batch=[{annotation_index: 1}, {annotation_index: 2}, ...]."""
+        # tool_name put INSIDE arguments: ministral-3b sent {"arguments": {"tool_name":
+        # "remove_image", ...}} 20 times and got only a pydantic "Field required" (chat log
+        # 2026-11-17); the intent is plain, so it is taken from there
+        arguments = dict(arguments or {})
+        if not tool_name and isinstance(arguments.get('tool_name'), str):
+            tool_name = arguments.pop('tool_name')
+            if set(arguments) == {'arguments'} and isinstance(arguments['arguments'], dict):
+                arguments = dict(arguments['arguments'])     # {"tool_name": ..., "arguments": {...}}
+        if not tool_name:
+            raise ValueError('tool_name is missing. It is a top-level field beside arguments, not inside it: '
+                             'use_pyfigures_tool(tool_name="remove_image", arguments={"panel_ref": "h"}).')
+        # several panels for a one-panel tool ("remove h, f, m, r, x"): one batch, its
+        # letters all read before the first edit (chat 2026-11-17: removed one by one)
+        refs = arguments.get('panel_refs')
+        if not batch and isinstance(refs, list) and refs and 'panel_ref' not in arguments:
+            from .original_registry import registry as _originals
+            native = _originals().get(tool_name)
+            if native is not None and 'group_path' in inspect.signature(native.fn).parameters:
+                arguments.pop('panel_refs')
+                batch = [{'panel_ref': str(r)} for r in refs]
         if batch:
             if not isinstance(batch, list) or not all(isinstance(item, dict) for item in batch):
                 raise ValueError('batch is a list of argument objects, e.g. [{"annotation_index": 1}, {"annotation_index": 2}]')

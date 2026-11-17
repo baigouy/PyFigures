@@ -821,9 +821,10 @@ class MyWidget(QWidget):
                     #     print('failed text', text)
                     #     traceback.print_exc()
 
-                pen = QPen(QColor(255, 255, 0), 3)
-                painter.setPen(pen)
-                painter.drawRect(rect)
+                # yellow dashes alternating with black: a plain yellow frame vanished
+                # on yellow images (user, 2026-11-17)
+                from pyfigures.gui.selection_style import draw_two_tone_rect
+                draw_two_tone_rect(painter, rect, QColor(255, 255, 0), 3)
             else:
                 print('shape not supported yet for drawing selection')
 

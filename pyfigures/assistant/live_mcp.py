@@ -340,10 +340,16 @@ def show_me_where(routes: list[list[str]] | None = None, where: str = 'menu', pa
 
 
 @mcp.tool()
-def preview_panel(panel_ref: str, brighten: bool = True, region: list[float] | None = None) -> list:
-    """See ONE panel's own pixels: its whole source image, uncropped, with pixel rulers, its current crop as a dashed yellow box and its ROIs in magenta (labelled with their annotation_index). The rulers are the source pixels that crops, ROIs and arrows use. Use it, NOT preview_figure (the whole figure, each panel small, rulers in figure units), whenever coordinates come from what the image shows: BEFORE transform_image crops ("crop to the nuclei", "hide the burnt-in scale bar"), BEFORE add_roi_rect / add_roi_ellipse / add_arrow on objects ("a box around each cell", "point at the nucleus"), and AFTER them to check where they landed. region=[x0, y0, x1, y1] in source pixels shows only that part, magnified: look closer at small objects or at the ROIs you placed. Crop once: crop_left=x0, crop_top=y0, crop_right=width-x1, crop_bottom=height-y1. Never remove a crop just to look at the whole image: this shows it. brighten stretches the contrast of this preview only (dim fluorescence); the figure is unchanged. Read-only."""
+def preview_panel(panel_ref: str, brighten: bool = True, region: list[float] | None = None,
+                  view: str = 'source', letters: bool = True, texts: bool = True, scale_bar: bool = True,
+                  rois: bool = True, insets: bool = True) -> list:
+    """See ONE panel, magnified, in one of two views.
+    view='figure': the panel AS THE READER SEES IT in the figure (crop, colours, and its panel letter, text labels, scale bar, ROIs/arrows, insets drawn as they are), so judge appearance there: "the scale bar does not read well", "is the letter visible", "is the label readable", "does the arrow point at the cell", "what colour is it now". letters/texts/scale_bar/rois/insets=False leave that kind out of THIS preview only (the figure is unchanged): e.g. rois=False to see the image under the boxes, or the plain picture with every overlay off. region works here too. No rulers in this view.
+    view='source' (default): its own pixels: its whole source image, uncropped, with pixel rulers, its current crop as a dashed yellow box and its ROIs in magenta (labelled with their annotation_index). The rulers are the source pixels that crops, ROIs and arrows use. Use it, NOT preview_figure (the whole figure, each panel small, rulers in figure units), whenever coordinates come from what the image shows: BEFORE transform_image crops ("crop to the nuclei", "hide the burnt-in scale bar"), BEFORE add_roi_rect / add_roi_ellipse / add_arrow on objects ("a box around each cell", "point at the nucleus"), and AFTER them to check where they landed. region=[x0, y0, x1, y1] in source pixels shows only that part, magnified: look closer at small objects or at the ROIs you placed. Crop once: crop_left=x0, crop_top=y0, crop_right=width-x1, crop_bottom=height-y1. Never remove a crop just to look at the whole image: this shows it. brighten stretches the contrast of this preview only (dim fluorescence); the figure is unchanged. Read-only."""
     from mcp.server.fastmcp import Image
-    result = call_live('panel_source', dict(panel_ref=panel_ref, brighten=brighten, region=region))
+    result = call_live('panel_source', dict(panel_ref=panel_ref, brighten=brighten, region=region, view=view,
+                                            letters=letters, texts=texts, scale_bar=scale_bar, rois=rois,
+                                            insets=insets))
     return [result['description'], Image(path=result['path'])]
 
 

@@ -58,6 +58,17 @@ def test_failed_items_are_listed_and_the_others_still_run(dispatcher):
     assert 'do not redo' in out['result']
 
 
+def test_tool_name_inside_arguments_is_understood(dispatcher):
+    # chat log 2026-11-17: ministral-3b put tool_name inside arguments 20 times and got
+    # only a pydantic "Field required"; nothing was removed
+    run, calls, _ = dispatcher
+    run(arguments={'tool_name': 'delete_last_rows', 'count': 1})
+    run(arguments={'tool_name': 'delete_last_rows', 'arguments': {'count': 2, 'label': 'y'}})
+    assert calls == [(1, ''), (2, 'y')]
+    with pytest.raises(ValueError, match='top-level field beside arguments'):
+        run(arguments={'count': 3})
+
+
 def test_bad_batches_are_refused(dispatcher):
     run, calls, _ = dispatcher
     with pytest.raises(ValueError):

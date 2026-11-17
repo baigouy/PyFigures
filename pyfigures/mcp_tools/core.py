@@ -2318,6 +2318,18 @@ def _describe_roi(el: ET.Element, idx: int) -> dict:
         style = _child_text(el, "line_style")
         base["line_style"] = {"[4, 4]": "dashed", "[1, 3]": "dotted",
                               "[6, 3, 1, 3]": "dash-dot"}.get(str(style), "solid" if style in (None, "None") else str(style))
+    # the colour in words: a text-only model set color=255 and told the user it was
+    # "bright red" — 255 is 0x0000FF, blue (benchmark, 2026-11-17)
+    for key in ("color", "fill_color"):
+        value = base.get(key)
+        if value in (None, "None", ""):
+            continue
+        try:
+            n = int(float(value))
+            from ..panel_source_preview import _colour_name
+            base[key + "_name"] = f"{_colour_name(((n >> 16) & 255, (n >> 8) & 255, n & 255))} (#{n & 0xFFFFFF:06x})"
+        except (TypeError, ValueError):
+            pass
     return base
 
 

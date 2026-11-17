@@ -634,13 +634,12 @@ class VectorialDrawPane2(QWidget):
 
     def draw_sel(self, sel, painter, col=QColor(0xFF0000)):
         if sel is not None and self.shapes:
-            pen = QPen(col)
-            pen.setWidthF(2)  # makes the sel much more visible --> so really use that!!!
-            pen.setCosmetic(True)   # 2 screen pixels at any zoom: a thick frame hid tiny ROIs
-            pen.setStyle(Qt.DashDotLine)
-            painter.setPen(pen)  # draw red transparent selection
+            # 2 screen pixels at any zoom (a thick frame hid tiny ROIs), in dashes of its
+            # colour alternating with black: a red dash-dot frame vanished on red images
+            # (user, 2026-11-17)
+            from pyfigures.gui.selection_style import draw_two_tone_rect
             painter.setOpacity(1)
-            painter.drawRect(sel)
+            draw_two_tone_rect(painter, sel, col, 2, cosmetic=True)
 
     def group_contains(self, x, y):
         # checks if master rect for group contains click

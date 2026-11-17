@@ -56,3 +56,6 @@ id_ecdsa*
 *token*.txt
 *.kdbx
 client_secret*.json
+
+# personal design notes, kept out of git
+NOTES_*.md

@@ -75,6 +75,22 @@ def test_live_panel_source_is_read_only(qapp, gui, runtime, tmp_path):
     assert session.revision == before and panel.crop_left == 5      # nothing changed
     with pytest.raises(ValueError):
         cmd("panel_source", panel_ref="")
+    # the panel as the reader sees it (2026-11-17), overlays on or off, read-only too
+    n = len(panel.annotations or [])
+    shown = cmd("panel_source", panel_ref="0/0", view="figure")
+    assert os.path.isfile(shown["path"]) and "AS SHOWN IN THE FIGURE" in shown["description"]
+    assert "Image: " in shown["description"]
+    off = cmd("panel_source", panel_ref="0/0", view="figure", letters=False, texts=False, rois=False,
+              scale_bar=False)
+    assert "Drawn: none" in off["description"]
+    assert session.revision == before and len(panel.annotations or []) == n
+    with pytest.raises(ValueError):
+        cmd("panel_source", panel_ref="0/0", view="nice")
+    # the contrast verdicts inspect_figure carries (2026-11-17), read-only too
+    measured = cmd("overlay_contrast")
+    assert "0/0" in measured["panels"] and measured["skipped"] == []
+    assert set(measured["panels"]["0/0"]) == {"problems", "read_well"}
+    assert session.revision == before and len(panel.annotations or []) == n
 
 
 def test_editor_opens_on_the_crop_tab(qapp, gui, runtime, tmp_path):

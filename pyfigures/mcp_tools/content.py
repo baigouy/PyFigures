@@ -556,7 +556,9 @@ def transform_image(
     All parameters are optional — only the ones you supply are changed.
     Call with multiple parameters to apply several transforms at once.
 
-    *rotation*: clockwise rotation in **degrees** (e.g. 90, -90, 45, 180).
+    *rotation*: rotation in **degrees**, POSITIVE = CLOCKWISE as seen (not the
+                maths convention): "25° clockwise" is 25, "25° counter-clockwise"
+                is -25 (e.g. 90, -90, 45, 180). The absolute angle, not a step.
                 ``None`` or ``0`` means no rotation (clears any existing rotation).
     *flip_h*:   horizontal mirror (left ↔ right).  True to enable, False to clear.
     *flip_v*:   vertical mirror   (top ↔ bottom).  True to enable, False to clear.
@@ -612,7 +614,11 @@ def transform_image(
     # --- native PyFigures fields ---
     if rotation is not None:
         _set_child_text(img, "theta", str(float(rotation)) if rotation != 0 else "None")
-        changed.append(f"rotation={rotation}°")
+        # the direction in words: a model asked for "25° clockwise" sent -25 (maths
+        # convention) and reported it as clockwise (chat log 2026-11-17)
+        r = float(rotation)
+        direction = "upright" if r == 0 else ("clockwise" if r > 0 else "counter-clockwise")
+        changed.append(f"rotation={r}° ({direction}" + ("" if r == 0 else f" {abs(r):g}° as seen") + ")")
     if crop_left is not None:
         _set_child_text(img, "crop_left", str(int(crop_left)))
         changed.append(f"crop_left={crop_left}")
@@ -924,6 +930,12 @@ def set_lut(
             kept.append(f"channel {i + 1} ({current[i] if i < len(current) and current[i] else 'its default'})")
     if not any(luts_encoded):
         luts_encoded = None                      # no LUT left: the image's own colours
+    if luts_encoded is None and not any(current or []) and normalization is None:
+        # "LUTs removed" was reported for a panel that had none, and the model then
+        # told the user the colour was back when nothing had changed (2026-11-17)
+        return (f"NO CHANGE: image {image_index} already has no LUT (it shows the image's own "
+                f"colours); nothing was changed. If the panel does not look as the user wants, "
+                f"look at it (render_preview) before saying what colour it is.")
     _set_child_text(img, "LUTs", repr(luts_encoded))
     changed.append(f"LUTs={luts_encoded}" if luts_encoded else "LUTs removed (the image's own colours)")
     from .stacks import _sync_split_colours

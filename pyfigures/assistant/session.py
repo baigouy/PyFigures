@@ -28,6 +28,18 @@ STATE = runtime_dir()
 
 # operations that change the figure (and may read many images) run on the GUI
 # thread: without a sign the window looked frozen for seconds (16 images: 7 s, 2026-11-16)
+# batched removals run last address first (see original_tool)
+REMOVALS_BY_ADDRESS = {'remove_image', 'remove_group', 'remove_annotation'}
+
+
+def _address_key(item):
+    """Where an item points: (group path, image index, annotation index); later = larger."""
+    def number(value):
+        return -1 if value is None else int(value)
+    return (tuple(int(v) for v in (item.get('group_path') or [])), number(item.get('image_index')),
+            number(item.get('annotation_index')))
+
+
 _BUSY_OPERATIONS = {'original_tool': None, 'arrange_rows': 'arranging the images in rows',
                     'existing_batch': 'editing the figure'}
 
@@ -208,6 +220,10 @@ class Session:
                        # what each channel really shows (its LUT, else the file's own colour):
                        # "swap channels 1 and 2" permutes these (user chat 2026-11-05)
                        'channel_colours': channel_colours(p),
+                       # which of them are actually visible: with channel 2 hidden, a model
+                       # read channel_colours ["RED","GREEN"] as "shown in red and green"
+                       # (text-only model benchmark, 2026-11-17)
+                       'visible_channels': visible_channels(p),
                        # the file's own colours: what set_lut "NONE" gives back ("colours look
                        # unnatural" -> offer these first, 2026-11-12)
                        'file_colours': file_colours(p),
@@ -500,6 +516,23 @@ class Session:
             elif op == 'show_me_where_status':
                 guide = getattr(self, 'click_guide', None)
                 result = guide.status() if guide is not None else {'status': 'idle', 'operation_executed': False}
+            elif op == 'overlay_contrast':
+                # per panel: letters, texts, scale bars, ROIs that are hard to see, for
+                # inspect_figure (a 9B text-only model never asked for the figure view)
+                import time
+                from .partner_gui import panels as _image_panels
+                from ..panel_source_preview import overlay_contrast
+                start, measured, skipped = time.monotonic(), {}, []
+                for gp, ix, p in _image_panels(panel.shapes_to_draw):
+                    pid = '/'.join(map(str, (*gp, ix)))
+                    if time.monotonic() - start > 4:
+                        skipped.append(pid)
+                        continue
+                    try:
+                        measured[pid] = overlay_contrast(p)
+                    except Exception as exc:          # never let a measure break inspect
+                        measured[pid] = {'problems': [f'not measured ({type(exc).__name__})'], 'read_well': 0}
+                result = {'panels': measured, 'skipped': skipped, 'revision': self.revision}
             elif op == 'panel_source':
                 # one panel's whole source with pixel rulers, to choose crop values
                 from .gui_selection import resolve_panel
@@ -507,9 +540,22 @@ class Session:
                 ref = args.get('panel_ref')
                 if not isinstance(ref, str) or not ref.strip():
                     raise ValueError('panel_ref must be a current visible letter or panel ID')
-                output = STATE / 'panel_source.png'
-                text = preview_panel(resolve_panel(w, ref), str(output), title='panel ' + ref,
-                                     brighten=bool(args.get('brighten', True)), region=args.get('region'))
+                view = (args.get('view') or 'source').strip().lower()
+                if view not in ('source', 'figure'):
+                    raise ValueError("view must be 'source' (plain pixels with rulers) or 'figure' (as shown, "
+                                     "with letter, texts, scale bar and ROIs)")
+                if view == 'figure':
+                    # the panel as the reader sees it, overlays on or off (user, 2026-11-17: the
+                    # model could only look at plain pixels, never at its scale bar or letter)
+                    from ..panel_source_preview import preview_panel_as_shown
+                    output = STATE / 'panel_as_shown.png'
+                    text = preview_panel_as_shown(
+                        resolve_panel(w, ref), str(output), title='panel ' + ref, region=args.get('region'),
+                        **{k: bool(args.get(k, True)) for k in ('letters', 'texts', 'scale_bar', 'rois', 'insets')})
+                else:
+                    output = STATE / 'panel_source.png'
+                    text = preview_panel(resolve_panel(w, ref), str(output), title='panel ' + ref,
+                                         brighten=bool(args.get('brighten', True)), region=args.get('region'))
                 result = {'path': str(output), 'description': text, 'revision': self.revision}
             elif op in ('undo', 'redo'):
                 if op == 'undo':
@@ -802,13 +848,24 @@ class Session:
             supplied[parameter] = str(output_snapshot)
         try:
             if batch_supplied is not None:
-                response = []
-                for item in batch_supplied:
+                response = [None] * len(batch_supplied)
+                order = list(range(len(batch_supplied)))
+                if name in REMOVALS_BY_ADDRESS:
+                    # every letter was turned into its address above, before any edit; removing
+                    # the LAST address first keeps the others valid (removing image 1 of a row
+                    # makes its image 3 the new image 2; an emptied row may shift later rows)
+                    order.sort(key=lambda i: _address_key(batch_supplied[i]), reverse=True)
+                    keys = [_address_key(batch_supplied[i]) for i in order]
+                    if len(set(keys)) != len(keys):
+                        raise ValueError('The same panel is named twice in this removal; nothing was removed. '
+                                         'Name each panel once.')
+                for i in order:
+                    item = batch_supplied[i]
                     item[parameter] = str(path)
                     try:
-                        response.append({'ok': True, 'result': checked(fn(**item))})
+                        response[i] = {'ok': True, 'result': checked(fn(**item))}
                     except Exception as exc:      # the file tools save atomically: earlier items stay
-                        response.append({'ok': False, 'error': str(exc)})
+                        response[i] = {'ok': False, 'error': str(exc)}
             else:
                 response = checked(fn(**supplied))
             # Some original layout tools deserialize/reserialize with the original
@@ -1077,6 +1134,23 @@ def channel_colours(panel):
         else:
             out.append(None)
     return out if any(out) else None
+
+
+def visible_channels(panel):
+    """None when every channel is shown (or a single-channel image); else what the
+    reader sees: "only channel 1 (RED) is shown; hidden: 2 (GREEN)", counted from 1."""
+    chans = getattr(panel, 'channels', None)
+    if not chans or not isinstance(chans, (list, tuple)) or all(chans) or not any(chans):
+        return None
+    colours = list(channel_colours(panel) or [])
+    colours += [None] * (len(chans) - len(colours))
+
+    def name(i):
+        return f'{i + 1}' + (f' ({colours[i]})' if colours[i] else '')
+    shown = [name(i) for i, on in enumerate(chans) if on]
+    hidden = [name(i) for i, on in enumerate(chans) if not on]
+    return (f"only channel{'s' if len(shown) > 1 else ''} {', '.join(shown)} "
+            f"{'are' if len(shown) > 1 else 'is'} shown; hidden: {', '.join(hidden)}")
 
 
 def panel_name(reference):

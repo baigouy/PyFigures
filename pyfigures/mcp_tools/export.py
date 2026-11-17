@@ -170,8 +170,17 @@ def export_figure(pyf_path: str, out_path: str, dpi: int = 300) -> str:
 
 @mcp.tool()
 def preview_panel_source(pyf_path: str, group_path: list[int], image_index: int,
-                         brighten: bool = True, region: list[float] | None = None) -> list:
-    """See ONE panel's whole source image, uncropped, with pixel rulers, its
+                         brighten: bool = True, region: list[float] | None = None,
+                         view: str = "source", letters: bool = True, texts: bool = True,
+                         scale_bar: bool = True, rois: bool = True, insets: bool = True) -> list:
+    """*view*="figure": the panel AS SHOWN IN THE FIGURE, magnified (crop,
+    colours, panel letter, texts, scale bar, ROIs, insets as drawn), plus a
+    measured description: each overlay's place, colour, the colour behind it
+    and their contrast ratio — judge "the scale bar does not read well" or "is
+    the letter visible" there. *letters* / *texts* / *scale_bar* / *rois* /
+    *insets* = False leave that kind out of this preview only.
+
+    *view*="source" (default): see ONE panel's whole source image, uncropped, with pixel rulers, its
     current crop as a dashed yellow box and its ROIs in magenta (labelled with
     their annotation index). The rulers are the source pixels that crops, ROIs
     and arrows use. Use it before transform_image crops ("crop to the
@@ -201,6 +210,15 @@ def preview_panel_source(pyf_path: str, group_path: list[int], image_index: int,
     _ensure_qapp()
     props = element_to_dict(imgs[image_index])
     panel = create_object("Image2D", props.get("Image2D", props))
+    if view not in ("source", "figure"):
+        raise ValueError("view must be 'source' (plain pixels with rulers) or 'figure' (as shown)")
+    if view == "figure":
+        from ..panel_source_preview import preview_panel_as_shown
+        out = os.path.join(tempfile.mkdtemp(prefix="pyf_panel_"), "panel_as_shown.png")
+        text = preview_panel_as_shown(panel, out, title=f"group {group_path} image {image_index}",
+                                      region=region, letters=letters, texts=texts,
+                                      scale_bar=scale_bar, rois=rois, insets=insets)
+        return [text, Image(path=out)]
     out = os.path.join(tempfile.mkdtemp(prefix="pyf_panel_"), "panel_source.png")
     text = preview_panel(panel, out, title=f"group {group_path} image {image_index}", brighten=brighten,
                          region=region)

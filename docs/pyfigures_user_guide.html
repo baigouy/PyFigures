@@ -1034,6 +1034,14 @@
       frame"). Asked to open the image editor for you, the chat opens it on the right tab:
       Rotate + Crop for a crop or rotation, Texts, File Infos + Scale, Script…
     </p>
+    <p>
+      To check how a panel looks ("the scale bar in i does not read well"), the same tool with
+      <code>view="figure"</code> shows the panel as drawn in the figure, with its letter, texts,
+      scale bar and ROIs (each kind can be left out of the preview), and describes each of them
+      in words: where it is, its colour, the colour behind it and their contrast ratio (4.5:1 or
+      more reads well, under 3:1 poorly). Models that cannot see images judge from that
+      description.
+    </p>
   </section>
 
   <section id="chat">
@@ -1175,11 +1183,19 @@
     <p>
       <strong>Letting the model see the figure.</strong> The previews the chat asks for are shown to
       you, and also to the model when it can read images, so it can check its own edits (a
-      duplicated panel, a magnified region in the wrong place). The chat's settings (gear button,
-      <strong>Show previews to the model</strong>) offer <em>Automatic</em> (the default: on when LM
-      Studio reports a vision model, as it does for Qwen3.5-9B), <em>Always</em> or <em>Never</em>.
-      Only the latest preview is sent, made smaller, so the conversation stays within the context.
-      With a cloud model, these previews are sent to its provider.
+      duplicated panel, a magnified region in the wrong place). The <strong>eye button</strong> beside
+      the model name shows what the current model gets (an eye: real images; a page: text; a crossed
+      eye: nothing visual), and its menu (also in the gear dialog, <strong>Model vision</strong>)
+      offers four choices. The <strong>brain button</strong> next to it does the same for thinking
+      (Default, On, Off, and its strength), and the key icon changes or deletes the API key. The four
+      vision choices: <em>Automatic</em> (the default: real images
+      when the model reads them, as LM Studio reports for Qwen3.5-9B, else text),
+      <em>Real images</em>, <em>Text descriptions only</em> (measured words such as "label 'control':
+      #eeeeee on white, contrast 1.1:1, POOR"; no image is ever sent, so a cloud provider never
+      receives your pixels) or <em>Off</em> (previews are shown to you only; the model gets neither
+      the images nor their descriptions, and <code>inspect_figure</code> leaves out its contrast
+      verdicts). Only the latest preview is sent, made smaller, so the conversation stays within the
+      context. With a cloud model and <em>Real images</em>, these previews are sent to its provider.
     </p>
     <p>
       <strong>Pointing instead of typing coordinates.</strong> Click a spot on an image, then ask

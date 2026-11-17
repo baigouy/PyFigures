@@ -89,7 +89,7 @@ setuptools.setup(
         "Deprecated",
         "Requests",
         "batoolset>=0.2.2",          # 0.2.2: the image store re-reads a file changed on disk
-        "batoolset-gui>=0.2.4",      # Qt layer; 0.2.4: "Loading…" placeholder, empty insets no longer hide annotations
+        "batoolset-gui>=0.2.5",      # Qt layer; 0.2.5: boxed panel letters hug their ink, corner texts stack by their ink
         "staplot>=0.1.0",            # data-plot panels and stats brackets (staplot.api)
         "pyautogui",
         "imagecodecs",
@@ -101,7 +101,7 @@ setuptools.setup(
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
         # the chat sidebar (Tools > Chat sidebar, a core part of PyFigures): a
         # local or API model edits the open figure through the MCP tools (BSD-2)
-        "qtpy-ai-sidecar>=0.1.11",
+        "qtpy-ai-sidecar>=0.1.12",
         "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
     ]),
     extras_require=_extras({
@@ -132,11 +132,11 @@ setuptools.setup(
         # `pip install pyfigures[chat]` from older instructions still works
         'chat': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.11",
+            "qtpy-ai-sidecar>=0.1.12",
         ],
         'all': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.11",
+            "qtpy-ai-sidecar>=0.1.12",
             "av",
             "opencv-python-headless",
             "pyimagej",

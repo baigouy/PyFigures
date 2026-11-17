@@ -262,3 +262,248 @@ def preview_panel(panel, out_path, title='', brighten=True, region=None):
     """Render *panel*'s whole source (or *region* of it) with rulers and its ROIs to
     *out_path*; returns its description."""
     return render(panel_rgb(panel), panel_crop(panel), out_path, title, brighten, region, panel_rois(panel))
+
+
+def _overlay_kind(annotation):
+    """'letter', 'text', 'scale_bar', 'inset' or 'roi' (every other drawn shape)."""
+    name = type(annotation).__name__
+    if name == 'TAText2D':
+        return 'letter' if getattr(annotation, 'is_letter', False) else 'text'
+    if name == 'ScaleBar':
+        return 'scale_bar'
+    if name == 'Image2D':
+        return 'inset'
+    return 'roi'
+
+
+def _draw_panel(panel, view, zoom, size, subset, original):
+    """*panel* drawn with only the overlays in *subset*, the *view* part (scene units)
+    magnified by *zoom* into a QImage of *size*; its annotations are put back."""
+    from qtpy.QtGui import QImage, QPainter, QColor
+    image = QImage(size[0], size[1], QImage.Format.Format_RGBA8888)
+    image.fill(QColor(255, 255, 255))
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.scale(zoom, zoom)
+    painter.translate(-view.x(), -view.y())
+    panel.annotations = subset
+    try:
+        panel.draw(painter)
+    finally:
+        painter.end()
+        panel.annotations = original
+    return image
+
+
+def overlay_contrast(panel, max_side=400, max_overlays=12):
+    """Contrast verdicts of a panel's letter, texts, scale bar, ROIs and arrows as
+    drawn (no image needed). Returns {'problems': [line, ...], 'read_well': n}:
+    only overlays that are weak, poor or not visible get a line.
+
+    Text-only model benchmark, 2026-11-17: a 9B model always called inspect_figure
+    but never the figure view, so it never learnt that a label was #eeeeee on
+    white; inspect_figure now carries these lines."""
+    from qtpy.QtCore import QRectF
+    if getattr(panel, 'qimage', None) is None:
+        try:
+            panel_rgb(panel)
+        except ValueError:
+            pass
+    original = getattr(panel, 'annotations', None)
+    overlays = [a for a in (original or []) if _overlay_kind(a) != 'inset'][:max_overlays]
+    if not overlays:
+        return {'problems': [], 'read_well': 0}
+    view = QRectF(panel.getRect(all=True))
+    zoom = max_side / max(view.width(), view.height(), 1e-6)
+    size = (max(1, int(round(view.width() * zoom))), max(1, int(round(view.height() * zoom))))
+    plain = qimage_to_rgb(_draw_panel(panel, view, zoom, size, [], original))
+    problems, good = [], 0
+    for a in overlays:
+        line = describe_overlay(a, plain, qimage_to_rgb(_draw_panel(panel, view, zoom, size, [a], original)))
+        if '(reads well)' in line:
+            good += 1
+        else:
+            problems.append(line[2:])
+    return {'problems': problems, 'read_well': good}
+
+
+def preview_panel_as_shown(panel, out_path, title='', region=None, letters=True, texts=True,
+                           scale_bar=True, rois=True, insets=True, max_side=900):
+    """Render *panel* as it appears in the figure (its crop, LUTs, letter, texts,
+    scale bar, ROIs, insets), alone and magnified, to *out_path*. Each overlay kind
+    can be left out (the figure is unchanged). *region* = [x0, y0, x1, y1] in source
+    pixels shows only that part. Returns its description."""
+    from qtpy.QtCore import QRectF
+    from qtpy.QtGui import QImage, QPainter, QColor
+    wanted = {'letter': letters, 'text': texts, 'scale_bar': scale_bar, 'roi': rois, 'inset': insets}
+    try:
+        panel_rgb(panel)                         # loads the pixels of a panel read from a file
+    except ValueError:
+        pass                                     # a template / plot script: drawn as it is
+    original = getattr(panel, 'annotations', None)   # put back as the SAME object afterwards
+    annotations = list(original or [])
+    counts, hidden = {}, {}
+    for a in annotations:
+        kind = _overlay_kind(a)
+        (counts if wanted[kind] else hidden)[kind] = (counts if wanted[kind] else hidden).get(kind, 0) + 1
+    rect = QRectF(panel.getRect(all=True))       # where draw() paints the panel
+    view = QRectF(rect)
+    if region:
+        x0, y0, x1, y1 = (float(v) for v in region)
+        if not (x1 > x0 and y1 > y0):
+            raise ValueError('region must be [x0, y0, x1, y1] with x1 > x0 and y1 > y0 (source pixels)')
+        left, top, right, bottom = panel_crop(panel)
+        q = getattr(panel, 'qimage', None)
+        src_w = (q.width() if q is not None else rect.width()) - left - right
+        src_h = (q.height() if q is not None else rect.height()) - top - bottom
+        sx, sy = rect.width() / max(src_w, 1), rect.height() / max(src_h, 1)
+        view = QRectF(rect.x() + (x0 - left) * sx, rect.y() + (y0 - top) * sy, (x1 - x0) * sx, (y1 - y0) * sy) \
+            .intersected(rect)
+        if view.isEmpty():
+            raise ValueError('region is outside the visible (cropped) part of the panel')
+    zoom = max_side / max(view.width(), view.height(), 1e-6)
+    size = (max(1, int(round(view.width() * zoom))), max(1, int(round(view.height() * zoom))))
+
+    def draw(subset):
+        return _draw_panel(panel, view, zoom, size, subset, original)
+
+    shown = [a for a in annotations if wanted[_overlay_kind(a)]]
+    export = hasattr(panel, 'enter_export_mode')
+    if export:
+        panel.enter_export_mode()                # full-resolution pixels, not the screen cache
+    try:
+        image = draw(shown)
+        # what each overlay looks like, measured, for models that cannot see images:
+        # the plain panel, then the panel with ONE overlay; the pixels that change
+        # are that overlay, the plain render gives what is behind it
+        plain = qimage_to_rgb(draw([]))
+        measured = []
+        for a in shown[:12]:
+            if _overlay_kind(a) == 'inset':
+                continue
+            measured.append((a, qimage_to_rgb(draw([a]))))
+    finally:
+        if export:
+            panel.exit_export_mode()
+    if not image.save(str(out_path)):
+        raise RuntimeError('could not save the panel preview')
+    names = {'letter': 'panel letter', 'text': 'text label', 'scale_bar': 'scale bar', 'roi': 'ROI/arrow',
+             'inset': 'inset'}
+
+    def _list(d):
+        return ', '.join(f"{n} {names[k]}{'s' if n > 1 else ''}" for k, n in d.items()) or 'none'
+    where = f'source pixels {[round(float(v)) for v in region]}' if region else 'the whole visible panel'
+    lines = [f"{title or 'panel'} AS SHOWN IN THE FIGURE ({where}, magnified x{zoom:.1f}): what the reader sees, "
+             f"crop and colours included. Drawn: {_list(counts)}. Left out of this preview only: {_list(hidden)}. "
+             f"No rulers here: for crop/ROI coordinates use view='source'.",
+             'Image: ' + describe_pixels(plain)]
+    for a, with_one in measured:
+        lines.append(describe_overlay(a, plain, with_one))
+    return '\n'.join(lines)
+
+
+def _hex(rgb):
+    return '#%02x%02x%02x' % tuple(int(round(float(v))) for v in rgb)
+
+
+def _colour_name(rgb):
+    """A plain colour word for an (r, g, b) triple."""
+    import colorsys
+    r, g, b = (float(v) / 255 for v in rgb)
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    if l < 0.12:
+        return 'black'
+    if l > 0.9:
+        return 'white'
+    if s < 0.18:
+        return 'dark gray' if l < 0.4 else 'light gray' if l > 0.7 else 'gray'
+    hue = h * 360
+    for limit, word in ((15, 'red'), (40, 'orange'), (70, 'yellow'), (160, 'green'), (195, 'cyan'),
+                        (255, 'blue'), (290, 'purple'), (335, 'magenta'), (361, 'red')):
+        if hue < limit:
+            return ('dark ' if l < 0.3 else '') + word
+    return 'gray'
+
+
+def _contrast_ratio(fg, bg):
+    def lum(c):
+        v = [float(x) / 255 for x in c]
+        v = [x / 12.92 if x <= .04045 else ((x + .055) / 1.055) ** 2.4 for x in v]
+        return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]
+    a, b = sorted((lum(fg), lum(bg)))
+    return (b + .05) / (a + .05)
+
+
+def describe_pixels(rgb):
+    """One line on what a rendered panel shows: brightness and main colours."""
+    import numpy as np
+    px = rgb.reshape(-1, 3).astype(float)
+    lum = px @ np.array([.2126, .7152, .0722])
+    dark = float((lum < 40).mean())
+    bright = px[lum >= 40]
+    parts = [f"mean colour {_hex(px.mean(0))} ({_colour_name(px.mean(0))}), "
+             f"{dark:.0%} of it near black"]
+    if len(bright):
+        words = {}
+        for p in bright[:: max(1, len(bright) // 4000)]:
+            w = _colour_name(p)
+            words[w] = words.get(w, 0) + 1
+        top = sorted(words.items(), key=lambda kv: -kv[1])[:3]
+        total = sum(words.values())
+        parts.append('signal: ' + ', '.join(f"{w} {n / total:.0%}" for w, n in top))
+    return '; '.join(parts) + '.'
+
+
+def describe_overlay(annotation, plain, with_one):
+    """Where one overlay is, its colour, the colour behind it and their contrast."""
+    import numpy as np
+    kind = _overlay_kind(annotation)
+    shape = type(annotation).__name__.replace('2D', '').replace('Rectangle', 'rectangle').lower()
+    label = {'letter': 'panel letter', 'text': 'text', 'scale_bar': 'scale bar',
+             'roi': 'arrow' if getattr(annotation, 'arrow', None) else f'{shape} ROI'}[kind]
+    text = ''
+    try:
+        if hasattr(annotation, 'getPlainText'):
+            text = annotation.getPlainText().strip()
+        elif kind == 'scale_bar':
+            legend = getattr(annotation, 'legend', None)
+            text = legend.getPlainText().strip() if hasattr(legend, 'getPlainText') else ''
+    except Exception:
+        text = ''
+    diff = np.abs(with_one.astype(int) - plain.astype(int)).sum(-1) > 30
+    if not diff.any():
+        return f"- {label}{f' {text!r}' if text else ''}: not visible here (outside the view, or the same colour as what is behind it)."
+    ys, xs = np.nonzero(diff)
+    h, w = diff.shape
+    cx, cy = xs.mean() / w, ys.mean() / h
+    vert = 'top' if cy < 1 / 3 else 'bottom' if cy > 2 / 3 else 'middle'
+    horiz = 'left' if cx < 1 / 3 else 'right' if cx > 2 / 3 else 'centre'
+    place = 'centre' if (vert, horiz) == ('middle', 'centre') else f'{vert} {horiz}'.replace('middle ', '')
+    fg_px, bg_px = with_one[diff].astype(float), plain[diff].astype(float)
+    # its solid pixels only: anti-aliased edges are blends of it and what is behind
+    sat = fg_px.max(1) - fg_px.min(1)
+    lum0 = fg_px @ np.array([.2126, .7152, .0722])
+    lb0 = bg_px @ np.array([.2126, .7152, .0722])
+    strength = np.abs(lum0 - lb0) + sat
+    core = strength >= np.percentile(strength, 50)
+    if core.sum() >= 5:
+        fg_px, bg_px = fg_px[core], bg_px[core]
+    fg = np.median(fg_px, axis=0)
+    bg = np.median(bg_px, axis=0)
+
+    def lum(c):
+        v = c / 255
+        v = np.where(v <= .04045, v / 12.92, ((v + .055) / 1.055) ** 2.4)
+        return v @ np.array([.2126, .7152, .0722])
+    lf, lb = lum(fg_px), lum(bg_px)
+    ratios = (np.maximum(lf, lb) + .05) / (np.minimum(lf, lb) + .05)   # per pixel: thin lines cross
+    ratio = float(np.median(ratios))                                  # bright AND dark backgrounds
+    weak = float((ratios < 3).mean())
+    verdict = 'reads well' if ratio >= 4.5 else 'readable but weak' if ratio >= 3 else 'POOR contrast, hard to read'
+    if ratio >= 3 and weak >= 0.25:
+        verdict += f', but {weak:.0%} of it lies on a background where it is hard to see'
+    size = f"{(xs.max() - xs.min() + 1) / w:.0%} x {(ys.max() - ys.min() + 1) / h:.0%} of the view"
+    return (f"- {label}{f' {text!r}' if text else ''}: {place}, {size}; drawn {_colour_name(fg)} ({_hex(fg)}) on "
+            f"mostly {_colour_name(bg)} ({_hex(bg)}), contrast {ratio:.1f}:1 ({verdict}).")
