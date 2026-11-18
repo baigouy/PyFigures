@@ -387,3 +387,18 @@ def test_points_side_by_side(pyf, tidy):
     _draw(_scripts(pyf)[-1])
     assert "point_style 'swarm' -> 'line'" in C.edit_data_plot(pyf, [], 0, point_style="column")
     assert C.edit_data_plot(pyf, [], 0, point_style="dots").startswith("ERROR: point_style")
+
+
+def test_a_time_course(pyf, tmp_path):
+    rng = np.random.default_rng(9)
+    rows = [(g, d, 10 + d + ge + rng.normal(0, 1)) for g, ge in (("WT", 0), ("mut", -2)) for d in (0, 2, 4, 8)
+            for _ in range(5)]
+    path = tmp_path / "growth.csv"
+    pd.DataFrame(rows, columns=["genotype", "hours", "length"]).to_csv(path, index=False)
+    out = C.add_data_plot(pyf, [], str(path), kind="line", error="sem", show_points=True)
+    assert out.startswith("Data-plot panel (line)"), out
+    ax = _draw(_scripts(pyf)[-1]).axes[0]
+    assert ax.get_xlabel() == "hours" and ax.get_ylabel() == "length"
+    from pyfigures.assistant.plot_info import parse_data_plot, plot_statistics
+    assert plot_statistics(parse_data_plot(_scripts(pyf)[-1]))["test"] == "Two-way ANOVA"
+    assert "3 columns" in C.edit_data_plot(pyf, [], 0, columns=["genotype", "length"])

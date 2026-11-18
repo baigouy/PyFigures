@@ -19,6 +19,8 @@ PLOT_KINDS = {
     'violin': 'the shape of each group\'s distribution; group comparisons',
     'scatter': 'one numeric column against another, with a regression line and correlation test',
     'grouped': 'bars by two factors (e.g. genotype x treatment); two-way ANOVA (needs a two-factor CSV)',
+    'line': 'a time course / dose response: mean ± error of each group across x (day, dose, time); '
+            'two-way ANOVA (a table: group, x, value)',
     'paired': 'repeated measures (before / after on the same subjects): a line per subject; paired '
               't-test / Wilcoxon, repeated-measures ANOVA / Friedman',
     'split_violin': 'two conditions (e.g. sex) as the two halves of each violin, a legend naming them; '
@@ -186,7 +188,7 @@ def plot_statistics(spec: dict) -> dict | None:
         elif spec['kind'] == 'scatter':
             rec = api.correlation_test(api.table_from_csv(csv, **ckw))
             out = {k: rec.get(k) for k in ('test', 'r', 'r2', 'p', 'n', 'x', 'y')}
-        elif spec['kind'] in ('grouped', 'split_violin'):
+        elif spec['kind'] in ('grouped', 'split_violin', 'line'):
             gt = api.grouped_table_from_csv(csv, **ckw)
             rec = api.two_way_test(gt)
             out = {'test': rec.get('test'), 'effects': rec.get('effects')}
@@ -219,7 +221,7 @@ def _groups(spec: dict) -> dict | None:
 def data_cleaning(spec: dict) -> str | None:
     """staplot's account of the CSV's left-out cells (staplot >= 0.1.1), cached with the
     statistics; None with an older staplot or for a grouped (two-factor) table."""
-    if spec.get('grouped_table') or spec.get('kind') in ('grouped', 'split_violin'):
+    if spec.get('grouped_table') or spec.get('kind') in ('grouped', 'split_violin', 'line'):
         return None
     csv = spec.get('csv')
     try:

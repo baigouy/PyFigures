@@ -562,6 +562,8 @@ ACTIONS = {
     "menu: Insert > Empty panel grid…": spec(panels_added(4, name="@template@"), [("Empty panel grid", ok)]),
     "menu: Insert > Data plot from CSV…": spec(panels_added(1, script=True), [("plot", ok)],
                                                files={"open_many": ["csv"], "open": "csv"}),
+    "menu: Insert > Table from CSV…": spec(panels_added(1, script=True), [("table panel", ok)],
+                                           files={"open_many": ["csv"], "open": "csv"}),
     "menu: Insert > Multi-channel merge…": spec(panels_added(1, script=True), [("merge", ok)],
                                                 files={"open_many": ["tif8", "tif16"]}),
     "menu: Insert > Stack views > Montage of frames (time / Z)…": spec(

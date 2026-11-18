@@ -318,7 +318,7 @@ def _csv_groups(path, kind):
         except ValueError:
             return False
     body = rows[1:]
-    if kind not in ("grouped", "split_violin") and len(header) == 2 and body and not isnum(body[0][0]) and isnum(body[0][1]):
+    if kind not in ("grouped", "split_violin", "line") and len(header) == 2 and body and not isnum(body[0][0]) and isnum(body[0][1]):
         seen = []
         for r in body:
             if r and r[0].strip() and r[0].strip() not in seen:
@@ -393,7 +393,7 @@ def _panel_description(img, stats):
         ylabel = ast.literal_eval(yl.group(1)) if yl else ""
         base = {"bar": "bar chart", "box": "box plot", "violin": "violin plot",
                 "scatter": "scatter plot", "grouped": "grouped bar chart",
-                "split_violin": "split violin plot", "paired": "paired plot"}.get(pk, "chart")
+                "split_violin": "split violin plot", "paired": "paired plot", "line": "line plot"}.get(pk, "chart")
         if ylabel:
             base += f" of {ylabel}"
         if groups and pk != "scatter":

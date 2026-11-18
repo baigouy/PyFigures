@@ -6481,7 +6481,7 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired', 'line'])
         kind_combo.setToolTip('auto: the plot that shows the data best: grouped for two factors, scatter for '
                               'an x / y series, else bar (under 5 points per group), box (5-19) or violin (20+).\n'
                               'split_violin: two conditions (e.g. sex) as the two halves of each violin '
@@ -8015,7 +8015,7 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Data-plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired', 'line'])
         kind_combo.setToolTip('auto: an x-y table (first column increasing) as a scatter, others as bars')
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)

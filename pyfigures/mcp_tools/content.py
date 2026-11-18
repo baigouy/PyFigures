@@ -254,9 +254,9 @@ def add_channel_merge(
     )
 
 
-_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin", "paired")
+_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin", "paired", "line")
 # the kinds drawn from a two-factor table (factor A, factor B, value)
-_TWO_FACTOR_KINDS = ("grouped", "split_violin")
+_TWO_FACTOR_KINDS = ("grouped", "split_violin", "line")
 
 
 # how a plot reads its table: some columns, some rows, lines skipped above the table
@@ -447,8 +447,11 @@ def _plot_columns(csv_abs: str, kind: str, columns, skip_rows=None) -> tuple[lis
     if columns in (None, "", [], 0, False):
         return None, ""
     cols = [columns] if isinstance(columns, str) else [str(c) for c in columns]
-    want = {"grouped": 3, "split_violin": 3}.get(kind)
+    want = {"grouped": 3, "split_violin": 3, "line": 3}.get(kind)
     if want and len(cols) != want:
+        if kind == "line":
+            return None, ("a line plot takes 3 columns: the groups (one line each), x (day, dose, time), "
+                          "the value (e.g. ['genotype', 'day', 'length'])")
         return None, (f"a {kind} plot takes 3 columns: the factor on x, the factor "
                       f"{'split into the two halves' if kind == 'split_violin' else 'in colour'}, "
                       f"the value (e.g. ['genotype', 'sex', 'area'])")
@@ -1280,6 +1283,10 @@ def list_data_plot_kinds() -> str:
               "after, day 1 / 2 / 3): every subject's values joined by a line, the mean and SD beside them; a "
               "paired t-test or Wilcoxon signed-rank (2 conditions), a repeated-measures ANOVA or Friedman "
               "then paired tests (more)."
+            + "\n- line: a time course / dose response: the mean ± error of each group (one line, colour "
+              "and marker each) across x (day, dose, time; spaced as numbers when they read as numbers), "
+              "points optional (show_points), a two-way ANOVA (group, x, interaction) under it. Columns: "
+              "group, x, value (columns=['genotype', 'day', 'length'])."
             + "\n- grouped: bars by two factors with error bars and every point, a two-way ANOVA under them; "
               "legend inside / outside / none."
             + "\n- facets (every kind): facet='day' draws one plot per day side by side, each with its own "
