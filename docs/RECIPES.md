@@ -419,7 +419,7 @@ package (bundled with PyFigures installs; otherwise the panel shows an install
 hint instead of failing).
 
 The table can be a CSV, TSV, TXT (semicolon / decimal-comma files included) or an
-**Excel workbook** (`.xlsx`, `.xlsm`, `.xls`); `sheet:` names the sheet (or its
+**Excel workbook** (`.xlsx`, `.xlsm`, `.xls`) or an **SQLite database** (any name; `sheet:` is then a table, or an SQL query such as `SELECT genotype, area FROM cells`); `sheet:` names the sheet (or its
 number from 1), else the first one is used. Blank margin rows and columns of a
 sheet are ignored and numbers typed as text are read as numbers:
 

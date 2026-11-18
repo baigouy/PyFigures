@@ -6384,7 +6384,8 @@ class EZFIG_GUI(QMainWindow):
         else:
             files = openFileNamesDialog(
                 parent_window=self,
-                extensions="Tables (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls);;All Files (*)")
+                extensions="Tables (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls *.db *.sqlite *.sqlite3 *.db3);;"
+                           "All Files (*)")
             if not files:
                 return
             csv_path = files[0] if isinstance(files, (list, tuple)) else files
@@ -6454,7 +6455,23 @@ class EZFIG_GUI(QMainWindow):
             grid.addWidget(install_btn, 9, 0, 1, 2)
 
         sheet_combo = None
-        if csv_path.lower().endswith(('.xlsx', '.xlsm', '.xls')):
+        from pyfigures.plot_tables import is_sqlite_file
+        if is_sqlite_file(csv_path):
+            # an SQLite database: pick a table, or type an SQL query
+            try:
+                from staplot.api import list_sheets
+                tables = list_sheets(csv_path)
+            except Exception as e:
+                QMessageBox.warning(self, "Cannot read the database", str(e))
+                return
+            grid.addWidget(QLabel('Table or query:', frame), 10, 0)
+            sheet_combo = QComboBox(frame)
+            sheet_combo.setEditable(True)
+            sheet_combo.addItems(tables)
+            sheet_combo.setToolTip('A table or view of the database, or an SQL query, e.g. '
+                                   'SELECT genotype, area FROM cells WHERE day = 3')
+            grid.addWidget(sheet_combo, 10, 1)
+        elif csv_path.lower().endswith(('.xlsx', '.xlsm', '.xls')):
             try:
                 from staplot.api import list_sheets
                 sheets = list_sheets(csv_path)

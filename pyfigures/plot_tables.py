@@ -23,16 +23,28 @@ SEABORN_MARKER = "# pyfigures-seaborn: "
 _DATA_PLOT_HINT = "_api.plot("
 
 
+def is_sqlite_file(path: str) -> bool:
+    """An SQLite database, by its magic header (any name: .db, .sqlite, .sqlite3, or
+    none; a Windows Thumbs.db is not one)."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(16) == b"SQLite format 3\x00"
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def split_sheet(path: str) -> tuple[str, str]:
-    """("book.xlsx", "::counts") for "book.xlsx::counts"; (path, "") otherwise."""
+    """("book.xlsx", "::counts") for "book.xlsx::counts"; (path, "") otherwise. An
+    SQLite database keeps its table or query: ("cells.db", "::SELECT ...")."""
     if isinstance(path, str) and SHEET_SEP in path:
-        file, sheet = path.rsplit(SHEET_SEP, 1)
-        if file.lower().endswith((".xlsx", ".xlsm", ".xls")):
+        file, sheet = path.split(SHEET_SEP, 1)
+        if file.lower().endswith((".xlsx", ".xlsm", ".xls") + SQLITE_EXTENSIONS) or is_sqlite_file(file):
             return file, SHEET_SEP + sheet
     return path, ""
 
 
 TABLE_EXTENSIONS = (".csv", ".tsv", ".xlsx", ".xlsm", ".xls")
+SQLITE_EXTENSIONS = (".sqlite", ".sqlite3", ".db", ".db3")
 
 
 def is_plot_table(path: str) -> bool:
@@ -42,6 +54,10 @@ def is_plot_table(path: str) -> bool:
     if os.path.basename(low).startswith("~$"):      # Excel's lock file of an open workbook
         return False
     if low.endswith(TABLE_EXTENSIONS):
+        return True
+    # an SQLite database, whatever its name (user, 2026-11-18: "I very often use SQLite
+    # DBs"; "the magic sign at the beginning of the file should be checked")
+    if is_sqlite_file(path):
         return True
     if not low.endswith((".txt", ".dat")):
         return False

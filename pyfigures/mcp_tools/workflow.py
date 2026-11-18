@@ -668,8 +668,12 @@ def draft_figure(
 
     def _csvs_in(d):
         # Excel workbooks are tables too (first sheet); "~$book.xlsx" is Excel's lock file
-        return sorted({str(p) for ext in ("*.csv", "*.tsv", "*.xlsx", "*.xlsm", "*.xls")
-                       for p in Path(d).glob(ext) if not p.name.startswith("~$")})
+        from pyfigures.plot_tables import is_sqlite_file
+        found = {str(p) for ext in ("*.csv", "*.tsv", "*.xlsx", "*.xlsm", "*.xls")
+                 for p in Path(d).glob(ext) if not p.name.startswith("~$")}
+        found |= {str(p) for ext in ("*.db", "*.sqlite", "*.sqlite3", "*.db3")
+                  for p in Path(d).glob(ext) if is_sqlite_file(str(p))}
+        return sorted(found)
 
     images = _collect_image_files(folder, pattern)
     csvs = _csvs_in(folder)

@@ -523,13 +523,36 @@ def _table_path(path: str, sheet=None) -> tuple[str, str]:
     the form the panel script and staplot read."""
     path = str(path)
     if "::" in path and sheet in (None, ""):
-        path, sheet = path.rsplit("::", 1)
+        path, sheet = path.split("::", 1)
     if not os.path.isfile(path):
         return "", f"no such table file: {path}"
     path = os.path.abspath(path)
+    from pyfigures.plot_tables import is_sqlite_file
+    if is_sqlite_file(path):
+        # an SQLite database: *sheet* is a table / view (name or number from 1) or a query
+        try:
+            from staplot.api import list_sheets, read_table
+            names = list_sheets(path)
+        except ImportError as e:
+            return "", str(e)
+        except Exception as e:
+            return "", f"cannot read {os.path.basename(path)} ({type(e).__name__}: {e})"
+        if not names and sheet in (None, ""):
+            return "", f"{os.path.basename(path)} holds no table"
+        if sheet in (None, ""):
+            return path, ""
+        table = f"{path}::{sheet}"
+        try:
+            read_table(table)
+        except Exception as e:
+            return "", (f"{e}" if "no table" in str(e) else
+                        f"cannot read {sheet!r} from {os.path.basename(path)} ({type(e).__name__}: {e}); "
+                        f"its tables are {', '.join(names)}")
+        return table, ""
     excel = path.lower().endswith(_EXCEL)
     if sheet not in (None, "") and not excel:
-        return "", f"sheet applies to Excel files (.xlsx, .xls) only, not {os.path.basename(path)}"
+        return "", (f"sheet applies to Excel files (.xlsx, .xls) and SQLite databases only, not "
+                    f"{os.path.basename(path)}")
     if not excel:
         return path, ""
     try:
@@ -551,7 +574,8 @@ def _csv_number_count(path: str) -> int:
     """How many finite numbers a CSV holds (0 for an empty file or a header
     alone: the plot would be an empty frame)."""
     import csv
-    if "::" in str(path) or str(path).lower().endswith(_EXCEL):
+    from pyfigures.plot_tables import is_sqlite_file
+    if "::" in str(path) or str(path).lower().endswith(_EXCEL) or is_sqlite_file(str(path)):
         try:
             import pandas as pd
             from staplot.api import read_table
@@ -625,8 +649,10 @@ def add_data_plot(
     package (a soft dependency); if it isn't installed the panel shows an install
     hint instead of failing.
 
-    *csv_path*: a table of the data: CSV, TSV, TXT, or an Excel workbook (.xlsx, .xls;
-      *sheet* = the sheet's name or number from 1, else the first sheet).
+    *csv_path*: a table of the data: CSV, TSV, TXT, an Excel workbook (.xlsx, .xls;
+      *sheet* = the sheet's name or number from 1, else the first sheet), or an SQLite
+      database (any name; *sheet* = a table or view by name or number from 1, or an
+      SQL query "SELECT genotype, area FROM cells WHERE day = 3"; else the first table).
       - bar/box/violin/scatter: **wide** (one column per group, rows = replicates)
         or **long** (2 columns: group label, value).
       - grouped: **long** with 3 columns: factor_a, factor_b, value.
@@ -722,6 +748,8 @@ def add_data_plot(
                                 "rename": rename, "violin_inner": violin_inner})
     if bad:
         return f"ERROR: {bad}; nothing was added."
+    if show_points is False:
+        layout["show_points"] = False
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
                                     stats_mode, latex=latex, colors=plot_colors, layout=layout)
@@ -908,7 +936,15 @@ def list_data_plot_kinds() -> str:
               "one over the quartiles, a white median dot), 'box' (a mini box plot: quartile box, median line, "
               "whiskers to 1.5 IQR) or 'none' (the shape alone); plus the individual points or not (show_points)."
             + "\n- box: median, quartiles, whiskers to 1.5 IQR and outliers; individual points or not (show_points)."
-            + "\n- bar: mean with error bars; individual points or not (show_points)."
+            + "\n- bar: mean with error bars (sd, sem, ci95, none); individual points or not (show_points)."
+            + "\n- scatter: the points of each y column against the first column, a regression line with R² "
+              "and p; each series its own colour and marker shape; legend inside / outside / none."
+            + "\n- grouped: bars by two factors with error bars and every point, a two-way ANOVA under them; "
+              "legend inside / outside / none."
+            + "\nCombinations in one plot: violin + mini box (violin_inner='box'), violin + range/quartile "
+              "lines (the default), violin / box / bar + the individual points (show_points), scatter + "
+              "regression line. Other combinations (a bar over a violin, two kinds side by side in one "
+              "panel) are not drawn: make two panels, or a seaborn plot."
             + "\n- every kind: group names shown (rename), group order (order), y range (ylim), log y, tilted "
               "names (xtick_rotation), legend place, text size on the page (font_pt), shape and size (aspect, "
               "width, height), axis labels, colours, statistics on / off and which brackets.\n"
@@ -1132,7 +1168,8 @@ def edit_data_plot(
       *legend*: "inside" | "outside" | "none".
     0, "" or [] clears a layout setting (back to the default); only what is asked changes.
     *csv_path*: plot another table (CSV, TXT, Excel) with the same settings.
-    *sheet*: another sheet of the Excel workbook (name or number from 1).
+    *sheet*: another sheet of the Excel workbook (name or number from 1), or another
+      table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
     """
     from pyfigures.assistant.plot_info import parse_data_plot

@@ -385,3 +385,45 @@ def test_what_can_i_put_inside_my_violin_plot():
     for word in ("violin_inner", "'box' (a mini box plot", "'lines' (default", "'none'", "show_points"):
         assert word in text, word
     assert "what can I put inside my violin plot?" in C.list_data_plot_kinds.__doc__
+
+
+@pytest.fixture
+def cells_db(tmp_path):
+    import sqlite3
+    path = tmp_path / "experiment.data"                 # any name: the header says SQLite
+    con = sqlite3.connect(path)
+    rng = np.random.default_rng(5)
+    con.execute("CREATE TABLE cells (genotype TEXT, day INTEGER, area REAL)")
+    con.executemany("INSERT INTO cells VALUES (?,?,?)",
+                    [(g, d, float(rng.normal(m + d, 2))) for g, m in (("WT", 40), ("mutA", 34))
+                     for d in (1, 3) for _ in range(10)])
+    con.execute("CREATE TABLE counts (WT REAL, mutA REAL, mutB REAL)")
+    con.executemany("INSERT INTO counts VALUES (?,?,?)",
+                    [tuple(float(v) for v in rng.normal((42, 35, 41), 2)) for _ in range(8)])
+    con.commit()
+    con.close()
+    return str(path)
+
+
+def test_plots_from_an_sqlite_database_and_a_query(pyf, cells_db, tmp_path):
+    """"sqlite db should also be allowed for plots, I very often use SQLite DBs"; "can
+    the plot be made from an SQL query of the db?"; "the magic sign at the beginning of
+    the file should be checked"."""
+    from pyfigures.plot_tables import is_plot_table
+    assert is_plot_table(cells_db)                      # by its header, not its name
+    fake = tmp_path / "Thumbs.db"
+    fake.write_bytes(b"\x00" * 64)
+    assert not is_plot_table(str(fake))                 # a .db that is no database
+    res = C.add_data_plot(pyf, [], cells_db, sheet="counts")
+    assert "added" in res and "KIND: auto chose box" in res, res
+    res = C.add_data_plot(pyf, [], cells_db, sheet="SELECT genotype, area FROM cells WHERE day = 3")
+    assert "added" in res, res
+    from pyfigures.assistant.plot_info import parse_data_plot, plot_statistics, _groups
+    spec = parse_data_plot(_scripts(pyf)[-1])
+    assert spec["csv"].endswith("::SELECT genotype, area FROM cells WHERE day = 3")
+    assert _groups(spec) == {"WT": 10, "mutA": 10} and plot_statistics(spec)["test"]
+    assert C.add_data_plot(pyf, [], cells_db, sheet="nope").startswith("ERROR: no table 'nope'")
+    from pyfigures.plot_tables import consolidate_plot_tables
+    copied = consolidate_plot_tables(pyf)
+    assert [os.path.basename(c) for _s, c in copied] == ["experiment.data"]
+    assert parse_data_plot(_scripts(pyf)[-1])["csv"].endswith("::SELECT genotype, area FROM cells WHERE day = 3")
