@@ -402,3 +402,17 @@ def test_a_time_course(pyf, tmp_path):
     from pyfigures.assistant.plot_info import parse_data_plot, plot_statistics
     assert plot_statistics(parse_data_plot(_scripts(pyf)[-1]))["test"] == "Two-way ANOVA"
     assert "3 columns" in C.edit_data_plot(pyf, [], 0, columns=["genotype", "length"])
+
+
+def test_colours_given_by_group_name(pyf, tidy):
+    from matplotlib.colors import to_rgba
+    out = C.add_data_plot(pyf, [], tidy, kind="bar", columns=["genotype", "area_um2"],
+                          colors={"mutA": "#ff0000", "wt": "#000000"})
+    assert not out.startswith("ERROR"), out
+    ax = _draw(_scripts(pyf)[-1]).axes[0]
+    bars = [p for p in ax.patches if type(p).__name__ == "Rectangle" and p.get_height() > 0][:3]
+    assert to_rgba(bars[0].get_facecolor())[:3] == to_rgba("#000000")[:3]
+    assert to_rgba(bars[1].get_facecolor())[:3] == to_rgba("#ff0000")[:3]
+    out = C.edit_data_plot(pyf, [], 0, colors={"KO": "blue"})
+    assert out.startswith("ERROR") and "no group" in out
+    assert C.edit_data_plot(pyf, [], 0, colors={"mutB": "blurple"}).startswith("ERROR: unknown colour")

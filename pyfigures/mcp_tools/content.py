@@ -391,7 +391,7 @@ else:
                               annotate={bool(annotate)!r},
                               only_significant={bool(only_significant)!r},
                               stats_mode={stats_mode!r},
-                              colors={list(colors) if colors else None!r},
+                              colors={(dict(colors) if isinstance(colors, dict) else list(colors)) if colors else None!r},
                               title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r},
                               show_title={bool(title)!r}{aspect_kw})
     fig._pyf_rc = _rc
@@ -672,6 +672,15 @@ def _plot_colours(colors) -> tuple[list | None, str]:
         return None, ""
     if isinstance(colors, str):
         colors = [colors]
+    if isinstance(colors, dict):
+        # a colour per group by name ({"WT": "black", "mutA": "red"})
+        fixed = {}
+        for name, c in colors.items():
+            one, bad = _plot_colours([c])
+            if bad:
+                return None, bad
+            fixed[str(name)] = one[0]
+        return fixed, ""
     from .stacks import _COLOR_HEX
     from matplotlib.colors import is_color_like
     out = []
@@ -686,6 +695,22 @@ def _plot_colours(colors) -> tuple[list | None, str]:
             return None, (f"unknown colour {c!r}: use a name (magenta, green, red, blue, cyan, "
                           f"yellow, gray) or #rrggbb")
     return out, ""
+
+
+def _check_colour_names(csv_abs: str, kind: str, colors, sel: dict) -> str:
+    """'' or why colours given by group name do not fit the table's groups."""
+    if not isinstance(colors, dict):
+        return ""
+    try:
+        from staplot import api as _api
+        table = (_api.grouped_table_from_csv(csv_abs, **sel) if kind in _TWO_FACTOR_KINDS
+                 else _api.table_from_csv(csv_abs, **sel))
+        _api._colors_by_name(table, kind, colors)
+    except ImportError:
+        return ""
+    except Exception as e:
+        return str(e)
+    return ""
 
 
 def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
@@ -875,7 +900,7 @@ def add_data_plot(
     xlabel: str = "",
     stats_mode: str = "auto",
     latex: bool = False,
-    colors: list[str] | None = None,
+    colors: list[str] | dict[str, str] | None = None,
     sheet: str | None = None,
     aspect: float | None = None,
     width: float | None = None,
@@ -992,7 +1017,8 @@ def add_data_plot(
       7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
       when the user asks for a size.
     *colors*: one colour per group, in the CSV's order (names such as magenta /
-      green or #rrggbb); groups beyond the list keep the default palette.
+      green or #rrggbb); groups beyond the list keep the default palette. Or by name:
+      {"WT": "black", "mutA": "red"} (the groups not named keep theirs).
       set_figure_colors recolours plots and images together.
 
     For *kind="scatter"* the correlation (r, R^2, p) of the first two columns is
@@ -1055,6 +1081,9 @@ def add_data_plot(
     plot_colors, bad = _plot_colours(colors)
     if bad:
         return f"ERROR: {bad}"
+    bad = _check_colour_names(csv_abs, kind, plot_colors, _ckw)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
     layout, bad = _plot_layout(kind, csv_abs,
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
@@ -1904,7 +1933,7 @@ def edit_data_plot(
     title: str | None = None,
     ylabel: str | None = None,
     xlabel: str | None = None,
-    colors: list[str] | None = None,
+    colors: list[str] | dict[str, str] | None = None,
     csv_path: str | None = None,
     sheet: str | None = None,
     aspect: float | None = None,
@@ -1950,7 +1979,7 @@ def edit_data_plot(
     *stats_mode*: auto | parametric | nonparametric.
     *title* / *ylabel* / *xlabel*: "" removes one (no label at all on that axis);
       "auto" gives back the automatic one ("Value", the column's name).
-    *colors*: one colour per group (names or #rrggbb).
+    *colors*: one colour per group (names or #rrggbb), or by name {"WT": "black", "mutA": "red"}.
     *aspect*: width / height of the plot ("make the plot wider": 1.5 or 2; "narrower": 0.7).
       A plot, unlike an image, can take any shape: in a row it is as tall as its
       neighbours, so a larger aspect gives it more of the row.
@@ -2103,6 +2132,9 @@ def edit_data_plot(
     plot_colors = new.get("colors")
     if colors is not None:
         plot_colors, bad = _plot_colours(colors)
+        if bad:
+            return f"ERROR: {bad}. Nothing was changed."
+        bad = _check_colour_names(new["csv"], new["kind"], plot_colors, _sel(new))
         if bad:
             return f"ERROR: {bad}. Nothing was changed."
     script = _make_data_plot_script(new["csv"], new["kind"], new["error"], new["annotate_stats"],
