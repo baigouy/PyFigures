@@ -447,6 +447,8 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `log_y` | `true` / `false` | A log y axis. |
 | `xtick_rotation` | degrees | Tilted group names when they overlap, anticlockwise: `45` rises "/" (rotated left), `-45` falls "\" (rotated right). |
 | `rename` | mapping | The name a group shows (`{mutA: mutant A}`): axis, legend and statistics; the table is unchanged. |
+| `show_points` | `true` / `false` | `false`: no individual points on bar, box and violin plots. |
+| `violin_inner` | `lines` (default), `box`, `none` | Inside each violin: range, quartiles and median; a mini box plot; or nothing. |
 | `font_pt` | points | The plot's text in the printed figure (default 7 pt, whatever the panel's size). |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 

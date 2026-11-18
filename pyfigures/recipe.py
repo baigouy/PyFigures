@@ -120,7 +120,7 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label", "latex", "colors", "sheet", "aspect",
               # layout and size (only when asked)
               "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend",
-              "rename", "font_pt"}
+              "rename", "font_pt", "show_points", "violin_inner"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",

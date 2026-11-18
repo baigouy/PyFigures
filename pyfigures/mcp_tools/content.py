@@ -295,7 +295,8 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
     aspect_kw = "".join(f", {k}={layout[k]!r}" for k in PLOT_LAYOUT_KEYS
                         if layout.get(k) not in (None, False, [], ""))
     # an axis label removed: none at all, not staplot's automatic "Value"
-    aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel") if layout.get(k) is False)
+    aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel", "show_points")
+                         if layout.get(k) is False)
     return f"""\
 import numpy as np
 _csv = {csv_path!r}
@@ -342,7 +343,7 @@ else:
 
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
-                    "xtick_rotation", "legend", "rename")
+                    "xtick_rotation", "legend", "rename", "violin_inner")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -384,6 +385,13 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 value = [None if v is None else float(v) for v in value]
             except (TypeError, ValueError):
                 return {}, "ylim must be two numbers (or null), e.g. [0, null]"
+        elif key == "violin_inner":
+            value = str(value).strip().lower()
+            if value not in ("lines", "box", "none"):
+                return {}, "violin_inner must be 'box' (a mini box plot), 'lines' (the default) or 'none'"
+            if value == "lines":
+                out.pop(key, None)
+                continue
         elif key == "rename":
             if not isinstance(value, dict):
                 return {}, 'rename must be {"old name": "new name", ...}'
@@ -603,6 +611,8 @@ def add_data_plot(
     legend: str | None = None,
     font_pt: float | None = None,
     rename: dict[str, str] | None = None,
+    show_points: bool | None = None,
+    violin_inner: str | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -651,7 +661,8 @@ def add_data_plot(
       order to draw; groups left out are dropped and not tested), *ylim* [low, high]
       (null keeps an end automatic), *log_y*, *xtick_rotation* (degrees, for long
       group names), *legend* "inside" | "outside" | "none" (scatter, grouped), *rename*
-      {"mutA": "mutant A"} (the name a group shows; the table is unchanged).
+      {"mutA": "mutant A"} (the name a group shows; the table is unchanged),
+      *show_points* False (no individual points), *violin_inner* "box" | "lines" | "none".
     *font_pt*: the size of the plot's text in the printed figure, in points (default
       7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
       when the user asks for a size.
@@ -708,7 +719,7 @@ def add_data_plot(
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
-                                "rename": rename})
+                                "rename": rename, "violin_inner": violin_inner})
     if bad:
         return f"ERROR: {bad}; nothing was added."
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
@@ -884,12 +895,23 @@ def data_plot_code(pyf_path: str, group_path: list[int], image_index: int, out_p
 @mcp.tool()
 def list_data_plot_kinds() -> str:
     """The kinds of data plot PyFigures draws from a CSV (add_data_plot, edit_data_plot),
-    with what each shows. Read-only. Use it for "what plot types are there?", "which plot
-    should I use?"."""
+    with what each shows and what each can hold. Read-only. Use it for "what plot types
+    are there?", "which plot should I use?", "what can I put inside my violin plot?",
+    "what can I change on this plot?"."""
     from pyfigures.assistant.plot_info import PLOT_KINDS
     from pyfigures.seaborn_plot import describe_functions
     return ("Data-plot kinds with statistics (add_data_plot to add one, edit_data_plot to switch an existing plot):\n"
             + "\n".join(f"- {k}: {v}" for k, v in PLOT_KINDS.items())
+            + "\nkind='auto' (the default) picks the one that shows the data best and says why."
+            + "\n\nWhat each can show (edit_data_plot):"
+            + "\n- violin, inside each violin (violin_inner): 'lines' (default: a thin line over the range, a thick "
+              "one over the quartiles, a white median dot), 'box' (a mini box plot: quartile box, median line, "
+              "whiskers to 1.5 IQR) or 'none' (the shape alone); plus the individual points or not (show_points)."
+            + "\n- box: median, quartiles, whiskers to 1.5 IQR and outliers; individual points or not (show_points)."
+            + "\n- bar: mean with error bars; individual points or not (show_points)."
+            + "\n- every kind: group names shown (rename), group order (order), y range (ylim), log y, tilted "
+              "names (xtick_rotation), legend place, text size on the page (font_pt), shape and size (aspect, "
+              "width, height), axis labels, colours, statistics on / off and which brackets.\n"
             + "\nError bars (bar, grouped): sem, sd, ci95 or none. Statistics: automatic test (parametric "
               "or not from a normality check), or stats_mode='parametric' / 'nonparametric'; brackets for "
               "every tested pair or only the significant ones.\n\n" + describe_functions())
@@ -1069,6 +1091,8 @@ def edit_data_plot(
     legend: str | None = None,
     font_pt: float | None = None,
     rename: dict[str, str] | None = None,
+    show_points: bool | None = None,
+    violin_inner: str | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1098,7 +1122,11 @@ def edit_data_plot(
       not tested); *ylim*: [low, high], null for an automatic end ("start the y axis at
       0": [0, null]; on a plot "the scale" / "the scale bar" / "the range from 0 to 50"
       is its y axis: [0, 50]); *rename*: {"mutA": "mutant A"} the name a group shows
-      (axis, legend, statistics; the table is unchanged; {} gives the table's names back); *log_y*; *xtick_rotation*: degrees ANTICLOCKWISE ("the group names overlap": 45; "rotate
+      (axis, legend, statistics; the table is unchanged; {} gives the table's names back);
+      *show_points*: False removes the individual points ("remove the point cloud"),
+      True brings them back; *violin_inner*: inside each violin, "box" (a mini box plot:
+      "a box plot within the violin"), "lines" (default: range, quartiles, median dot)
+      or "none"; *log_y*; *xtick_rotation*: degrees ANTICLOCKWISE ("the group names overlap": 45; "rotate
       left" / "anticlockwise" = positive, the names rising "/"; "rotate right" /
       "clockwise" = negative, "\\");
       *legend*: "inside" | "outside" | "none".
@@ -1170,12 +1198,14 @@ def edit_data_plot(
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
-                                "rename": rename}, current)
+                                "rename": rename, "violin_inner": violin_inner}, current)
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
     for k in PLOT_LAYOUT_KEYS:
         new[k] = layout.get(k)
-    for k in ("show_ylabel", "show_xlabel"):
+    if show_points is not None:
+        new["show_points"] = bool(show_points)
+    for k in ("show_ylabel", "show_xlabel", "show_points"):
         if new.get(k) is False:
             layout[k] = False
     plot_colors = new.get("colors")
@@ -1201,7 +1231,7 @@ def edit_data_plot(
     _save(tree, pyf_path, recompute=True)
     changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
                ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv")
-               + PLOT_LAYOUT_KEYS + ("show_ylabel", "show_xlabel")
+               + PLOT_LAYOUT_KEYS + ("show_ylabel", "show_xlabel", "show_points")
                if spec.get(k) != new.get(k)]
     if colors is not None:
         changed.append(f"colours -> {plot_colors}")

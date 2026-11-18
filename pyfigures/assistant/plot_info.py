@@ -21,7 +21,7 @@ PLOT_KINDS = {
     'grouped': 'bars by two factors (e.g. genotype x treatment); two-way ANOVA (needs a two-factor CSV)',
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
-                'rename')
+                'rename', 'violin_inner')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -76,7 +76,8 @@ def parse_data_plot(script: str) -> dict | None:
             # layout and size (mcp_tools.content.PLOT_LAYOUT_KEYS): None = staplot's default
             **{k: spec.get(k) for k in _LAYOUT_KEYS},
             # False: that axis has no label at all
-            'show_ylabel': spec.get('show_ylabel', True), 'show_xlabel': spec.get('show_xlabel', True)}
+            'show_ylabel': spec.get('show_ylabel', True), 'show_xlabel': spec.get('show_xlabel', True),
+            'show_points': spec.get('show_points', True)}
 
 
 def data_plot_code(spec: dict) -> str | None:
@@ -94,7 +95,7 @@ def data_plot_code(spec: dict) -> str | None:
                      ylabel=spec.get('ylabel', ''), xlabel=spec.get('xlabel', ''),
                      colors=spec.get('colors'), show_title=bool(spec.get('title')),
                      **{k: spec[k] for k in _LAYOUT_KEYS if spec.get(k) not in (None, False, [], '')},
-                     **{k: False for k in ('show_ylabel', 'show_xlabel') if spec.get(k) is False})
+                     **{k: False for k in ('show_ylabel', 'show_xlabel', 'show_points') if spec.get(k) is False})
     except Exception:
         return None
 
@@ -202,7 +203,7 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
     if spec:
         out = {'type': 'data_plot', **{k: v for k, v in spec.items() if v not in (None, '', False) or
                                        k in ('annotate_stats', 'only_significant') or
-                                       (k in ('show_ylabel', 'show_xlabel') and v is False)}}
+                                       (k in ('show_ylabel', 'show_xlabel', 'show_points') and v is False)}}
         groups = _groups(spec)
         if groups:
             out['groups_n'] = groups
@@ -224,7 +225,7 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
             out['full_code_with'] = 'data_plot_code'
         out['change_it_with'] = ('edit_data_plot (kind, error bars, only_significant, stats on/off, stats_mode, '
                                  'labels, colours, csv_path, sheet; text size font_pt; layout and size: aspect, width, height, '
-                                 'order, rename (group names shown), ylim (its "scale" / "range": a plot has no scale bar), '
+                                 'order, rename (group names shown), show_points, violin_inner, ylim (its "scale" / "range": a plot has no scale bar), '
                                  'log_y, xtick_rotation (anticlockwise: left = +), legend) — never set_script on a data plot')
         return out
     if not script:

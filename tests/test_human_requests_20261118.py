@@ -365,3 +365,23 @@ def test_rename_a_group_and_rotate_its_name_left(pyf, book):
     assert '"rotate\n      left" / "anticlockwise" = positive' in doc
     from pyfigures.assistant.categorized_mcp import __file__ as hints_file
     assert '"rotate left" = +45' in open(hints_file, encoding="utf-8").read()
+
+
+def test_remove_the_points_and_box_inside_the_violin(pyf, book):
+    """"remove the point cloud"; "add a mini box plot within the violin plot" (the
+    chat said both needed the plotting code changed outside PyFigures)."""
+    C.add_data_plot(pyf, [], book, kind="violin")
+    assert "show_points True -> False" in C.edit_data_plot(pyf, [], 0, show_points=False)
+    assert "violin_inner None -> 'box'" in C.edit_data_plot(pyf, [], 0, violin_inner="box")
+    from pyfigures.assistant.plot_info import parse_data_plot, staplot_call
+    call = staplot_call(parse_data_plot(_scripts(pyf)[-1]))
+    assert "show_points=False" in call and "violin_inner='box'" in call
+    assert "show_points False -> True" in C.edit_data_plot(pyf, [], 0, show_points=True)
+    assert C.edit_data_plot(pyf, [], 0, violin_inner="dots").startswith("ERROR: violin_inner")
+
+
+def test_what_can_i_put_inside_my_violin_plot():
+    text = C.list_data_plot_kinds()
+    for word in ("violin_inner", "'box' (a mini box plot", "'lines' (default", "'none'", "show_points"):
+        assert word in text, word
+    assert "what can I put inside my violin plot?" in C.list_data_plot_kinds.__doc__
