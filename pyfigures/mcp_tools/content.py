@@ -408,7 +408,7 @@ else:
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
-                    "show_n", "show_mean", "p_format", "hlines")
+                    "show_n", "show_mean", "p_format", "hlines", "control")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -543,6 +543,22 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             value = {**(out.get("rename") or {}), **value}
         elif key in ("show_n", "show_mean"):
             value = bool(value)
+        elif key == "control":
+            if kind not in ("bar", "box", "violin"):
+                return {}, "control (compare every group with one) applies to bar, box and violin plots"
+            try:
+                from staplot import api as _api
+                names = [c.name for c in _api.table_from_csv(csv_abs, **_sel({"columns": columns, "where": where,
+                                                                               "skip_rows": skip_rows})).columns]
+            except ImportError:
+                names = None
+            except Exception as e:
+                return {}, f"cannot read the groups of {csv_abs}: {e}"
+            if names is not None:
+                low = {n.lower(): n for n in names}
+                if str(value).lower() not in low:
+                    return {}, f"no group named {value!r} to compare with; the groups are {names}"
+                value = low[str(value).lower()]
         elif key == "p_format":
             value = {"numbers": "p", "number": "p", "p-value": "p", "p-values": "p", "p value": "p",
                      "p values": "p", "pvalue": "p", "values": "p", "star": "stars", "asterisks": "stars"}.get(
@@ -662,7 +678,7 @@ def _plot_colours(colors) -> tuple[list | None, str]:
 
 def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
                           stats_mode: str = "auto", label=None, columns=None, where=None, skip_rows=None,
-                          facet=None, facet_row=None):
+                          facet=None, facet_row=None, control=None):
     """(the figure's stats-provenance entry or None, a note for the reply, warnings) of a
     data plot: pairwise tests for bar/box/violin, two-way ANOVA for grouped, a
     correlation for scatter. Shared by add_data_plot and the GUI's dropped tables."""
@@ -674,7 +690,7 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
         _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows})
         if facet:
             recs = _api.facet_stats(csv_abs, kind, facet, facet_row, only_significant=only_significant,
-                                    stats_mode=stats_mode, **_ckw)
+                                    stats_mode=stats_mode, **_ckw, **({"control": control} if control else {}))
             entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
                      "facet": facet, "facet_row": facet_row, **_ckw,
                      "facets": {k: {f: r.get(f) for f in ("test", "omnibus", "comparisons", "effects",
@@ -687,6 +703,7 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
                                    parametric=_mode)
         elif kind in ("bar", "box", "violin"):
             rec = _api.auto_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
+                                 **({"control": control} if control else {}),
                                  parametric=_mode)
         elif kind in _TWO_FACTOR_KINDS:
             gt = _api.grouped_table_from_csv(csv_abs, **_ckw)
@@ -873,6 +890,7 @@ def add_data_plot(
     show_mean: bool | None = None,
     p_format: str | None = None,
     hlines: list | None = None,
+    control: str | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -913,6 +931,8 @@ def add_data_plot(
     Journal details: *show_n* the n of each group under its name; *show_mean* a mean
       marker (box, violin); *p_format* "p" writes the p-values on the brackets instead
       of stars; *hlines* reference lines: [1.0] or [{"y": 100, "label": "control"}].
+    *control*: compare every group with this one only ("compare everything to WT"): one-way
+      ANOVA + Dunnett's test, or Mann-Whitney against it (Bonferroni); bar, box, violin.
     The axis labels come from the table when not given: the value column's name on y
       (a long table, or columns=), the factor on x, the split / colour factor as the
       legend title.
@@ -1027,7 +1047,7 @@ def add_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines},
+                                "hlines": hlines, "control": control},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -1071,7 +1091,8 @@ def add_data_plot(
         entry, stats_note, stats_warnings = data_plot_stats_entry(csv_abs, kind, only_significant,
                                                                   stats_mode, label, **_ckw,
                                                                   facet=facets.get("facet"),
-                                                                  facet_row=facets.get("facet_row"))
+                                                                  facet_row=facets.get("facet_row"),
+                                                                  control=layout.get("control"))
         if entry:
             _append_stats_entry(pyf_path, entry)
 
@@ -1254,6 +1275,8 @@ def list_data_plot_kinds() -> str:
             + "\n- colours: colors=[one per group]; element_colors={'points': 'black', 'median': 'red', "
               "'edges': 'none', 'brackets': 'grey', 'error_bars', 'whiskers', 'outliers', 'inner', 'fit', "
               "'axes', 'background'}."
+            + "\n- comparisons against one control only: control='WT' (one-way ANOVA + Dunnett's test, or "
+              "Mann-Whitney against it with Bonferroni); bar, box, violin."
             + "\n- journal details (every kind with groups): show_n=True (n under each name), show_mean=True "
               "(a mean marker, box / violin), p_format='p' (p-values written instead of stars), hlines=[1.0] "
               "or [{'y': 100, 'label': 'control'}] (reference lines)."
@@ -1873,6 +1896,7 @@ def edit_data_plot(
     show_mean: bool | None = None,
     p_format: str | None = None,
     hlines: list | None = None,
+    control: str | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1930,6 +1954,7 @@ def edit_data_plot(
     *p_format*: "p" = the p-values written on the brackets ("show the p values, not
     stars"), "stars" back; *hlines*: reference lines ([1.0], [{"y": 100, "label":
     "control"}]; [] removes them).
+    *control*: compare every group with this one only (Dunnett); "" = every pair again.
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2017,7 +2042,7 @@ def edit_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines}, current,
+                                "hlines": hlines, "control": control}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."

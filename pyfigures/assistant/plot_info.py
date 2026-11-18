@@ -26,7 +26,7 @@ PLOT_KINDS = {
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
                 'rename', 'violin_inner', 'violin_side', 'element_colors', 'show_n', 'show_mean', 'p_format',
-                'hlines')
+                'hlines', 'control')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -150,7 +150,7 @@ def plot_statistics(spec: dict) -> dict | None:
     cols = spec.get('columns') or None
     ckw = _sel(spec)
     key = (csv, st.st_mtime_ns, st.st_size, spec['kind'], spec['only_significant'], spec['stats_mode'],
-           tuple(cols or ()), spec.get('where'), spec.get('skip_rows'), spec.get('facet'), spec.get('facet_row'))
+           tuple(cols or ()), spec.get('where'), spec.get('skip_rows'), spec.get('facet'), spec.get('facet_row'), spec.get('control'))
     if key in _STATS_CACHE:
         return _STATS_CACHE[key]
     try:
@@ -158,7 +158,8 @@ def plot_statistics(spec: dict) -> dict | None:
         mode = {'auto': None, 'parametric': True, 'nonparametric': False}.get(spec['stats_mode'])
         if spec.get('facet') and hasattr(api, 'facet_stats'):
             recs = api.facet_stats(csv, spec['kind'], spec['facet'], spec.get('facet_row'),
-                                   only_significant=spec['only_significant'], stats_mode=spec['stats_mode'], **ckw)
+                                   only_significant=spec['only_significant'], stats_mode=spec['stats_mode'], **ckw,
+                                   **({'control': spec['control']} if spec.get('control') else {}))
             out = {'facets': {k: {f: r.get(f) for f in ('test', 'omnibus', 'effects', 'split_comparisons', 'r',
                                                        'p', 'error') if f in r}
                               | {'comparisons': [{c: x.get(c) for c in ('a', 'b', 'p', 'p_text', 'stars')}
@@ -172,7 +173,8 @@ def plot_statistics(spec: dict) -> dict | None:
                                   for c in rec.get('comparisons') or []]
         elif spec['kind'] in ('bar', 'box', 'violin'):
             table = api.table_from_csv(csv, **ckw)
-            rec = api.auto_test(table, only_significant=spec['only_significant'], parametric=mode)
+            rec = api.auto_test(table, only_significant=spec['only_significant'], parametric=mode,
+                                **({'control': spec['control']} if spec.get('control') else {}))
             out = {'test': rec.get('test'), 'omnibus': rec.get('omnibus'), 'correction': rec.get('correction'),
                    'normality': rec.get('normality'),
                    'comparisons': [{k: c.get(k) for k in ('a', 'b', 'p', 'p_text', 'stars')}

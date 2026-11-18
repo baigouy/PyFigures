@@ -356,3 +356,15 @@ def test_the_gui_inserts_a_table_panel(qapp, monkeypatch, tidy, tmp_path):
     script = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1].custom_loading_script
     assert script.startswith("# pyfigures-table: ") and '"by": ["genotype"]' in script
     g._dirty = False
+
+
+def test_compare_everything_to_one_group(pyf, tidy):
+    out = C.add_data_plot(pyf, [], tidy, kind="box", columns=["genotype", "area_um2"], control="wt",
+                          only_significant=False)
+    assert not out.startswith("ERROR"), out
+    assert "control='WT'" in _scripts(pyf)[-1]
+    from pyfigures.assistant.plot_info import parse_data_plot, plot_statistics
+    stats = plot_statistics(parse_data_plot(_scripts(pyf)[-1]))
+    assert ("Dunnett" in stats["test"] or "vs WT" in stats["test"]) and all(c["a"] == "WT" for c in stats["comparisons"])
+    assert C.edit_data_plot(pyf, [], 0, control="KO").startswith("ERROR: no group")
+    assert "control 'WT' -> None" in C.edit_data_plot(pyf, [], 0, control="")
