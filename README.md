@@ -205,6 +205,7 @@ Perform the following steps **only once** to set up your environment:
 - **Lines above a table are skipped** (an instrument's header, a title, notes in an Excel sheet): found automatically and said in the reply, or `skip_rows=3` by hand.
 - Colours are colour-blind safe (Wong palette; seaborn's `colorblind`), and points of each series also get their own shape, so they are told apart in grey too.
 - Violins taper past the smallest and largest values (2 bandwidths, as seaborn draws them), with the range, quartiles and median inside.
+- **Plot settings in the GUI** (right-click a data plot → *Plot settings…*): its kind, error bars, title and y label, violins (whole / half, what is inside), points (shown, jitter / swarm / line), n under the groups, mean markers, p-values instead of stars, a control to compare with, facets and the rows kept — the same changes as `edit_data_plot`.
 - **The code of a plot** (right-click → *Show plot code…*, to copy or save as .py; MCP `data_plot_code`): a script that redraws it with staplot, then reads the table with pandas exactly as the plot did and reruns the test with scipy / statsmodels alone, so a reviewer can check every step. The chat sees each plot's settings as this code.
 - **Save & Consolidate** copies the tables of plot panels (CSV, Excel) into the `.files` folder with the images, and the plots read the copies; a moved figure finds them again.
 - **For the chat**, a plot panel is described by what it draws (its CSV, settings, groups, test and p-values; a script panel by its code), next to its preview image.

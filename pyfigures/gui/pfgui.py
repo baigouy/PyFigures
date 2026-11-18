@@ -6312,6 +6312,87 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(set_figure_colors, f"Figure colours: {', '.join(names)}.",
                                colors=names)
 
+    def edit_data_plot_dialog(self, panel):
+        """Right-click a data plot -> Plot settings…: its kind, error bars, labels, violins,
+        points, statistics details, comparisons with a control, facets and rows, changed
+        with edit_data_plot (what the chat changes)."""
+        from pyfigures.assistant.plot_info import parse_data_plot
+        from pyfigures.mcp_tools.content import _DATA_PLOT_KINDS
+        spec = parse_data_plot(getattr(panel, 'custom_loading_script', None) or '')
+        loc = self._locate_panel(panel)
+        if spec is None or loc is None:
+            QMessageBox.information(self, 'Plot settings', 'This panel is not a data plot.')
+            return None
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        widgets = {}
+
+        def combo(row, label, items, current):
+            grid.addWidget(QLabel(label, frame), row, 0)
+            w = QComboBox(frame)
+            w.addItems(items)
+            if current in items:
+                w.setCurrentText(current)
+            grid.addWidget(w, row, 1)
+            return w
+
+        def line(row, label, text, hint=''):
+            grid.addWidget(QLabel(label, frame), row, 0)
+            w = QLineEdit(text or '', frame)
+            w.setPlaceholderText(hint)
+            grid.addWidget(w, row, 1)
+            return w
+
+        def check(row, label, on):
+            w = QCheckBox(label, frame)
+            w.setChecked(bool(on))
+            grid.addWidget(w, row, 0, 1, 2)
+            return w
+        widgets['kind'] = combo(0, 'Plot type:', list(_DATA_PLOT_KINDS), spec['kind'])
+        widgets['error'] = combo(1, 'Error bars:', ['sd', 'sem', 'ci95', 'none'], spec.get('error') or 'sd')
+        widgets['title'] = line(2, 'Title:', spec.get('title'))
+        widgets['ylabel'] = line(3, 'Y-axis label:', spec.get('ylabel'), 'from the table')
+        widgets['violin_side'] = combo(4, 'Violins:', ['both', 'left', 'right'], spec.get('violin_side') or 'both')
+        widgets['violin_inner'] = combo(5, 'Inside the violins:', ['lines', 'box', 'none'],
+                                        spec.get('violin_inner') or 'lines')
+        widgets['point_style'] = combo(6, 'Points:', ['jitter', 'swarm', 'line'], spec.get('point_style') or 'jitter')
+        widgets['show_points'] = check(7, 'Show the individual points', spec.get('show_points', True) is not False)
+        widgets['show_n'] = check(8, 'n under each group', spec.get('show_n'))
+        widgets['show_mean'] = check(9, 'Mark the means', spec.get('show_mean'))
+        widgets['p_values'] = check(10, 'p-values on the brackets instead of stars', spec.get('p_format') == 'p')
+        widgets['control'] = line(11, 'Compare with (control):', spec.get('control'), 'every pair')
+        widgets['facet'] = line(12, 'One plot per value of:', spec.get('facet'), 'a column, e.g. day')
+        widgets['where'] = line(13, 'Only the rows where:', spec.get('where'), "e.g. day == 14")
+        cd = CustomDialog(title="Plot settings", message="Change the data plot (empty = the default)",
+                          main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return None
+        new = {'kind': widgets['kind'].currentText(), 'error': widgets['error'].currentText(),
+               'title': widgets['title'].text().strip(),
+               'violin_side': widgets['violin_side'].currentText(),
+               'violin_inner': widgets['violin_inner'].currentText(),
+               'point_style': widgets['point_style'].currentText(),
+               'show_points': widgets['show_points'].isChecked(),
+               'show_n': widgets['show_n'].isChecked(), 'show_mean': widgets['show_mean'].isChecked(),
+               'p_format': 'p' if widgets['p_values'].isChecked() else 'stars',
+               'control': widgets['control'].text().strip(), 'facet': widgets['facet'].text().strip(),
+               'where': widgets['where'].text().strip()}
+        ylabel = widgets['ylabel'].text().strip()
+        if ylabel != (spec.get('ylabel') or ''):
+            new['ylabel'] = ylabel or 'auto'
+        old = {'violin_side': spec.get('violin_side') or 'both', 'violin_inner': spec.get('violin_inner') or 'lines',
+               'point_style': spec.get('point_style') or 'jitter', 'show_points': spec.get('show_points', True) is not False,
+               'show_n': bool(spec.get('show_n')), 'show_mean': bool(spec.get('show_mean')),
+               'p_format': spec.get('p_format') or 'stars', 'control': spec.get('control') or '',
+               'facet': spec.get('facet') or '', 'where': spec.get('where') or '', 'title': spec.get('title') or '',
+               'kind': spec['kind'], 'error': spec.get('error') or 'sd'}
+        changed = {k: v for k, v in new.items() if k == 'ylabel' or v != old.get(k)}
+        if not changed:
+            return None
+        from pyfigures.mcp_server import edit_data_plot
+        self._run_mcp_mutation(edit_data_plot, 'Plot changed.', group_path=loc[0], image_index=loc[1], **changed)
+        return changed
+
     def show_plot_code(self, panel):
         """Right-click → Show plot code…: the Python code of a data or seaborn plot (it
         redraws the plot, then reads the table and reruns the test with pandas / scipy

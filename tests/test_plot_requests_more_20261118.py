@@ -430,3 +430,38 @@ def test_the_chat_search_points_at_the_table_tools():
     # layout words are not table words
     assert not topic_note("arrange images in one column".split()).startswith("TABLES")
     assert not topic_note("add a scale bar to each of the panels".split()).startswith("FACETS")
+
+
+def test_plot_settings_from_the_right_click_menu(qapp, monkeypatch, tidy, tmp_path):
+    """Right-click a data plot -> Plot settings…: the same changes as edit_data_plot."""
+    from qtpy.QtWidgets import QCheckBox, QComboBox, QDialog, QLineEdit, QMessageBox
+    from pyfigures.gui import pfgui
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    from batoolset.drawings.shapes.image2d import Image2D
+    EZFIG_GUI.show_tips = lambda self: None
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    pyf = str(tmp_path / "fig.pyf")
+    import pyfigures.mcp_server as M
+    M.create_figure(pyf, mode="canvas")
+    M.add_data_plot(pyf, [], tidy, kind="box", columns=["genotype", "area_um2"])
+    g = EZFIG_GUI()
+    g.reload_state(pyf, append=False)
+    panel = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1]
+
+    class _Pick:
+        def __init__(self, *a, main_widget=None, **k):
+            combos = main_widget.findChildren(QComboBox)
+            next(c for c in combos if c.findText("violin") >= 0 and c.findText("split_violin") >= 0).setCurrentText("violin")
+            next(c for c in combos if c.findText("swarm") >= 0).setCurrentText("swarm")
+            next(c for c in main_widget.findChildren(QCheckBox) if c.text().startswith("n under")).setChecked(True)
+            next(e for e in main_widget.findChildren(QLineEdit) if e.placeholderText() == "every pair").setText("WT")
+
+        def exec_(self):
+            return QDialog.Accepted
+    monkeypatch.setattr(pfgui, "CustomDialog", _Pick)
+    changed = g.edit_data_plot_dialog(panel)
+    assert changed == {"kind": "violin", "point_style": "swarm", "show_n": True, "control": "WT"}, changed
+    script = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1].custom_loading_script
+    for word in ("kind='violin'", "point_style='swarm'", "show_n=True", "control='WT'"):
+        assert word in script, word
+    g._dirty = False
