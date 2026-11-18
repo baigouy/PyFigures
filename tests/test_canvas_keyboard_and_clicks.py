@@ -353,8 +353,8 @@ def test_fit_alternates_width_and_height(gui):
     paint.fit_to_width_or_height()
     b = panel.updateBounds()
     fit_w = panel.scale
-    assert abs(b.width() * fit_w - (paint.scrollArea.width() - 2
-                                    - paint.scrollArea.verticalScrollBar().sizeHint().width())) < 2
+    assert abs((b.x() + b.width() + paint.FIT_MARGIN) * fit_w
+               - (paint.scrollArea.width() - 2 - paint.scrollArea.verticalScrollBar().sizeHint().width())) < 2
     paint.fit_to_width_or_height()
     assert panel.scale != fit_w                             # now fitted to the height
     paint.fit_to_window()

@@ -254,49 +254,42 @@ class scrollable_EZFIG(QWidget):
             self.fit_to_height()
         self.is_width_for_alternating = not self.is_width_for_alternating
 
-    # almost there but small bugs
+    FIT_MARGIN = 10     # figure units left free right of / below the figure when fitting
+
+    def _fit_extent(self):
+        """What must fit in the window: the figure plus the space before it (the
+        rulers' margin: the figure starts at about (50, 50), so fitting its size
+        alone overflowed by that margin) and a small margin after it.
+        (0, 0) for an empty figure."""
+        bounds = self.EZFIG_panel.updateBounds()
+        if bounds.width() <= 0 or bounds.height() <= 0:
+            return 0, 0
+        return (max(bounds.x(), 0) + bounds.width() + self.FIT_MARGIN,
+                max(bounds.y(), 0) + bounds.height() + self.FIT_MARGIN)
+
     def fit_to_width(self):
-        # print('TODO implement that')
-        # return
-        # if self.EZFIG_panel.image is None:
-        #     return
-        # self.scrollArea = self.scroll_areas[nb]
         width = self.scrollArea.width() - 2
         width -= self.scrollArea.verticalScrollBar().sizeHint().width()
-        # height-=self.scrollArea.horizontalScrollBar().sizeHint().height()
-        width_im = self.EZFIG_panel.updateBounds().width()
+        width_im = self._fit_extent()[0]
         if width_im <= 0:
             return                      # empty figure: nothing to fit (was ZeroDivisionError)
-        scale = width / width_im
-        self.scaleImage(scale)
+        self.scaleImage(width / width_im)
 
     def fit_to_height(self, nb=0):
-        # print('TODO implement that')
-        # return
-        # paint = self.EZFIG_panels[nb]
-        # if self.EZFIG_panel.image is None:
-        #     return
-        # scrollArea = self.scroll_areas[nb]
         height = self.scrollArea.height() - 2
         height -= self.scrollArea.horizontalScrollBar().sizeHint().height()
-        height_im = self.EZFIG_panel.updateBounds().height()
+        height_im = self._fit_extent()[1]
         if height_im <= 0:
             return
-        scale = height / height_im
-        self.scaleImage(scale)
+        self.scaleImage(height / height_im)
 
     def fit_to_window(self):
         width = self.scrollArea.width() - 2  # required to make sure bars not visible
         height = self.scrollArea.height() - 2
-
-        height_im = self.EZFIG_panel.updateBounds().height()
-        width_im = self.EZFIG_panel.updateBounds().width()
+        width_im, height_im = self._fit_extent()
         if height_im <= 0 or width_im <= 0:
             return
-        scale = height / height_im
-        if width / width_im < scale:
-            scale = width / width_im
-        self.scaleImage(scale)
+        self.scaleImage(min(height / height_im, width / width_im))
 
     def zoomIn(self):
         # print('TODO implement that')

@@ -74,8 +74,11 @@ def test_fit_width_then_height_alternate(gui, tmp_path):
     assert "width" in bar.fit_side_button.toolTip().split("(")[0]
     bar.fit_side_button.click()
     width_scale = panel.scale
-    assert abs(b.width() * width_scale - (area.width() - 2 - area.verticalScrollBar().sizeHint().width())) < 2
+    margin = gui.paint.FIT_MARGIN          # the rulers' margin before the figure fits too
+    assert abs((b.x() + b.width() + margin) * width_scale
+               - (area.width() - 2 - area.verticalScrollBar().sizeHint().width())) < 2
     assert "height" in bar.fit_side_button.toolTip().split("(")[0]
     bar.fit_side_button.click()
-    assert abs(b.height() * panel.scale - (area.height() - 2 - area.horizontalScrollBar().sizeHint().height())) < 2
+    assert abs((b.y() + b.height() + margin) * panel.scale
+               - (area.height() - 2 - area.horizontalScrollBar().sizeHint().height())) < 2
     assert "width" in bar.fit_side_button.toolTip().split("(")[0]

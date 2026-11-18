@@ -191,11 +191,35 @@ def test_zoom_in_out_reset_and_fit(gui, tmp_path):
     assert panel.scale >= 0.01                       # clamped, never 0 or negative
     view.fit_to_width()
     w = view.scrollArea.width() - 2 - view.scrollArea.verticalScrollBar().sizeHint().width()
-    assert panel.updateBounds().width() * panel.scale == pytest.approx(w, abs=1)
+    b = panel.updateBounds()                         # the figure and the rulers' margin before it fit
+    assert (b.x() + b.width() + view.FIT_MARGIN) * panel.scale == pytest.approx(w, abs=1)
     view.fit_to_width_or_height()
     view.fit_to_width_or_height()
     view.fit_to_window()
     assert panel.scale > 0
+
+
+def test_fit_to_window_shows_the_whole_figure(gui, tmp_path):
+    """Fit left the figure's bottom (or right) edge outside the window: it fitted the
+    figure's size but not the rulers' margin before it (about 10 % of a window)."""
+    import numpy as np
+    from batoolset.img import Img
+    from batoolset.drawings.shapes.image2d import Image2D
+    view = gui.paint
+    panel = view.EZFIG_panel
+    view.resize(900, 700)
+    for shape, (h, w) in enumerate(((600, 300), (200, 900))):     # tall, then wide
+        p = str(tmp_path / f"{shape}.tif")
+        Img(np.full((h, w), 90, np.uint8), dimensions="hw").save(p)
+        image = Image2D(p)
+        image.moveTo(50, 50)                                    # where the layout puts a figure
+        panel.shapes_to_draw[:] = [image]
+        panel.update_size()
+        view.fit_to_window()
+        b = panel.updateBounds()
+        assert b.x() > 0 and b.y() > 0                           # the rulers' margin
+        assert (b.x() + b.width()) * panel.scale <= view.scrollArea.width() - 2
+        assert (b.y() + b.height()) * panel.scale <= view.scrollArea.height() - 2
 
 
 def test_click_outside_canvas_deselects(gui, tmp_path):
