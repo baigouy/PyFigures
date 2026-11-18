@@ -393,7 +393,7 @@ def _panel_description(img, stats):
         ylabel = ast.literal_eval(yl.group(1)) if yl else ""
         base = {"bar": "bar chart", "box": "box plot", "violin": "violin plot",
                 "scatter": "scatter plot", "grouped": "grouped bar chart",
-                "split_violin": "split violin plot"}.get(pk, "chart")
+                "split_violin": "split violin plot", "paired": "paired plot"}.get(pk, "chart")
         if ylabel:
             base += f" of {ylabel}"
         if groups and pk != "scatter":

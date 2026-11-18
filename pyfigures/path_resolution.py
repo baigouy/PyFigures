@@ -195,10 +195,11 @@ class PathResolver:
             script = script[:a] + rep + script[b:]
         # a seaborn plot keeps its settings, table included, in its first line: it
         # follows, else editing the plot would read the old place
-        from pyfigures.plot_tables import SEABORN_MARKER, rewrite_table_paths, split_sheet
-        if script.startswith(SEABORN_MARKER):
+        from pyfigures.plot_tables import JSON_MARKERS, rewrite_table_paths, split_sheet
+        marker = next((m for m in JSON_MARKERS if script.startswith(m)), None)
+        if marker:
             try:
-                spec = json.loads(script.splitlines()[0][len(SEABORN_MARKER):])
+                spec = json.loads(script.splitlines()[0][len(marker):])
             except ValueError:
                 return script
             file, _sheet = split_sheet(spec.get("csv", ""))

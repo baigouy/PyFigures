@@ -431,7 +431,7 @@ sheet are ignored and numbers typed as text are read as numbers:
 | Key | Values (default) | Meaning |
 |---|---|---|
 | `plot` | path to a CSV | The data (formats below). |
-| `kind` | `auto` (default), `bar`, `box`, `violin`, `scatter`, `grouped`, `split_violin` | Chart type. `split_violin`: two conditions (e.g. sex) as the two halves of each violin, a legend naming them, each pair tested and the two-way ANOVA under the plot (a two-factor table with a two-level factor). `auto` picks the one that shows the data best: `grouped` for a two-factor table, `scatter` for an x / y series (columns named x / y, time…, in different units, or an increasing first column), else by the points per group: `bar` under 5, `box` 5-19, `violin` 20 or more. The build says which it chose. |
+| `kind` | `auto` (default), `bar`, `box`, `violin`, `scatter`, `grouped`, `split_violin`, `paired` | Chart type. `paired`: repeated measures (one row per subject, one column per condition), a line per subject, paired t-test / Wilcoxon or repeated-measures ANOVA / Friedman. `split_violin`: two conditions (e.g. sex) as the two halves of each violin, a legend naming them, each pair tested and the two-way ANOVA under the plot (a two-factor table with a two-level factor). `auto` picks the one that shows the data best: `grouped` for a two-factor table, `scatter` for an x / y series (columns named x / y, time…, in different units, or an increasing first column), else by the points per group: `bar` under 5, `box` 5-19, `violin` 20 or more. The build says which it chose. |
 | `error` | `sd` (default, as journals prefer), `sem`, `ci95`, `none` | Error bars for `bar` / `grouped`. |
 | `ylabel`, `xlabel`, `title` | text | Axis labels / title. |
 | `stats_mode` | `auto` (default), `parametric`, `nonparametric` | Test family. `auto` picks by a normality check. |
@@ -450,6 +450,13 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `show_points` | `true` / `false` | `false`: no individual points on bar, box and violin plots. |
 | `violin_inner` | `lines` (default), `box`, `none` | Inside each violin: range, quartiles and median; a mini box plot; or nothing. |
 | `violin_side` | `both` (default), `left`, `right` | Half violins: only that half, the points on the other side (a "raincloud"). |
+| `facet`, `facet_row`, `facet_ncols` | column names, number | One plot per value of `facet` (side by side, a shared y axis, each with its own statistics), a row of them per value of `facet_row`; `facet_ncols` facets per row. The `title` goes over all of them. |
+| `show_n`, `show_mean` | `true` / `false` | The n of each group under its name; a mean marker (box, violin). |
+| `p_format` | `stars` (default), `p` | `p`: the p-values written on the brackets instead of stars. |
+| `hlines` | list | Reference lines: `[1.0]` or `[{y: 100, label: control, color: grey, style: '--'}]`. |
+| `where` | pandas query | Only the rows matching it (`'day == 14'`, `"sex == 'male'"`); the statistics use those rows. |
+| `skip_rows` | number | Lines above the table to skip (an instrument's header, a title). By default they are found and skipped, and the build says which. |
+| `element_colors` | mapping | Colours of parts of the plot: `{points: black, median: red, edges: none, brackets: grey}`; also `error_bars`, `whiskers`, `outliers`, `inner`, `fit`, `axes`, `background`. |
 | `columns` | list of column names | The columns used from a wider (tidy) table: `[genotype, area]` (group, value) for bar / box / violin; `[genotype, sex, area]` (x, halves or colour, value) for `split_violin` / `grouped`. |
 | `font_pt` | points | The plot's text in the printed figure (default 7 pt, whatever the panel's size). |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
@@ -507,9 +514,30 @@ countplot, regplot, residplot, heatmap, clustermap), `x`, `y`, `hue`, `style`,
 `size`, `col`, `row`, `col_wrap`, `kind`, `palette`, `height` / `aspect` (inches
 per facet), `title`, `xlabel`, `ylabel`, `index` / `columns` / `values` (a
 heatmap of a pivot), `options` (any other seaborn keyword, e.g. `{bins: 20}`),
-`label`, `sheet` (an Excel table). Rows with a missing value in a column the plot uses are left out (the
+`label`, `sheet` (an Excel table), `where` (only the rows matching a pandas query, `'day == 14'`),
+`skip_rows` (lines above the table), `legend` (`outside`, `top`, `inside`, `none`), `xlim` /
+`ylim` (`[low, high]`), `palette` (a name, or a colour per hue group `{female: red, male: blue}`),
+`rename` (names shown for columns or values:
+`{weight_g: weight (g), mutA: mutant A}`). A cumulative histogram: `function: histplot,
+options: {cumulative: true, element: step, fill: false}` (or `function: ecdfplot`); split
+violins: `function: violinplot, hue: sex, options: {split: true}`. Rows with a missing value in a column the plot uses are left out (the
 reply says how many). No statistics brackets: use `plot` for tested group
 comparisons. MCP: `add_seaborn_plot`, `edit_seaborn_plot`.
+
+### 8c. Tables as panels — `table`
+
+A data table, or a summary of it, drawn as a panel (it stays live, and the table file is
+copied with the figure on consolidation):
+
+```yaml
+- - {table: mice.csv, by: [genotype, sex], value: area, stats: [n, mean±sd, median], decimals: 1}
+  - {table: plate.csv, columns: [control, drug], max_rows: 12, title: "Raw values"}
+```
+
+Keys: `sheet`, `columns` and `where` (which columns and rows), `skip_rows`, `by` (one row
+per group) with `value` and `stats` (`n`, `mean`, `sd`, `sem`, `median`, `min`, `max`,
+`mean±sd`, `mean±sem`, `median [iqr]`; default `[n, mean±sd]`), `decimals`, `max_rows`
+(default 60), `title`, `rename`, `label`. MCP: `add_table_panel`, `edit_table_panel`.
 
 ---
 

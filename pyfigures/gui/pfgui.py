@@ -1575,6 +1575,12 @@ class EZFIG_GUI(QMainWindow):
         insert_menu.addAction(data_plot_action)
         data_plot_action.triggered.connect(self.add_data_plot_action)
 
+        table_panel_action = QAction("Table from CSV…", self)
+        table_panel_action.setToolTip('A data table, or a summary of it (n, mean ± SD... per group), '
+                                      'as a live panel')
+        insert_menu.addAction(table_panel_action)
+        table_panel_action.triggered.connect(self.add_table_panel_action)
+
         channel_merge_action = QAction("Multi-channel merge…", self)
         channel_merge_action.setToolTip('Overlay several single-channel images '
                                         '(e.g. DAPI + GFP + RFP) into one pseudo-coloured merge panel')
@@ -6373,6 +6379,87 @@ class EZFIG_GUI(QMainWindow):
                                group_path=[], script=code)
         return True
 
+    def add_table_panel_action(self, checked=False, path=None):
+        """Insert -> Table from CSV: the table's rows, or a summary per group, as a panel
+        (MCP: add_table_panel)."""
+        if not path:
+            files = openFileNamesDialog(
+                parent_window=self,
+                extensions="Tables (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls *.db *.sqlite *.sqlite3 *.db3);;"
+                           "All Files (*)")
+            if not files:
+                return
+            path = files[0] if isinstance(files, (list, tuple)) else files
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        sheet_combo = None
+        try:
+            from staplot.api import list_sheets, read_table
+            sheets = list_sheets(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Cannot read the table", str(e))
+            return
+        row = 0
+        if sheets:
+            grid.addWidget(QLabel('Sheet / table:', frame), row, 0)
+            sheet_combo = QComboBox(frame)
+            sheet_combo.setEditable(True)
+            sheet_combo.addItems(sheets)
+            grid.addWidget(sheet_combo, row, 1)
+            row += 1
+        grid.addWidget(QLabel('Summary by:', frame), row, 0)
+        by_combo = QComboBox(frame)
+        grid.addWidget(by_combo, row, 1)
+        grid.addWidget(QLabel('Of:', frame), row + 1, 0)
+        value_combo = QComboBox(frame)
+        grid.addWidget(value_combo, row + 1, 1)
+        grid.addWidget(QLabel('Statistics:', frame), row + 2, 0)
+        stats_edit = QLineEdit('n, mean±sd', frame)
+        stats_edit.setToolTip('n, mean, sd, sem, median, min, max, mean±sd, mean±sem, median [iqr]')
+        grid.addWidget(stats_edit, row + 2, 1)
+        grid.addWidget(QLabel('Rows:', frame), row + 3, 0)
+        where_edit = QLineEdit('', frame)
+        where_edit.setPlaceholderText('all, or e.g. day == 14')
+        grid.addWidget(where_edit, row + 3, 1)
+        grid.addWidget(QLabel('Title:', frame), row + 4, 0)
+        title_edit = QLineEdit('', frame)
+        grid.addWidget(title_edit, row + 4, 1)
+
+        def _fill(*_):
+            table = path + (('::' + sheet_combo.currentText()) if sheet_combo is not None else '')
+            try:
+                from pyfigures.mcp_tools.content import table_factors
+                df = read_table(table)
+                factors = [f['column'] for f in table_factors(df)]
+                numbers = [str(c) for c in df.columns if str(c) not in factors and df[c].dtype.kind in 'if']
+            except Exception:
+                factors, numbers = [], []
+            by_combo.clear()
+            by_combo.addItem('(no summary: the rows)')
+            by_combo.addItems(factors)
+            value_combo.clear()
+            value_combo.addItem('(every number column)')
+            value_combo.addItems(numbers)
+        _fill()
+        if sheet_combo is not None:
+            sheet_combo.currentIndexChanged.connect(_fill)
+        cd = CustomDialog(title="Add a table panel", message=os.path.basename(path), main_widget=frame,
+                          options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return
+        kwargs = {}
+        if by_combo.currentIndex() > 0:
+            kwargs['by'] = [by_combo.currentText()]
+            kwargs['stats'] = [x.strip() for x in stats_edit.text().split(',') if x.strip()] or None
+            if value_combo.currentIndex() > 0:
+                kwargs['value'] = value_combo.currentText()
+        if where_edit.text().strip():
+            kwargs['where'] = where_edit.text().strip()
+        from pyfigures.mcp_server import add_table_panel
+        self._run_mcp_mutation(add_table_panel, "Added a table panel — drag it into place.", group_path=[],
+                               csv_path=path, sheet=sheet_combo.currentText() if sheet_combo is not None else None,
+                               title=title_edit.text().strip(), **kwargs)
+
     def add_data_plot_action(self, checked=False, path=None, as_panel=False):
         """Pick a table + plot options, then add a live data-plot panel
         (MCP: add_data_plot — a scripted, re-rendering panel with auto-stats).
@@ -6394,7 +6481,7 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired'])
         kind_combo.setToolTip('auto: the plot that shows the data best: grouped for two factors, scatter for '
                               'an x / y series, else bar (under 5 points per group), box (5-19) or violin (20+).\n'
                               'split_violin: two conditions (e.g. sex) as the two halves of each violin '
@@ -6520,6 +6607,30 @@ class EZFIG_GUI(QMainWindow):
             cols_lay.addWidget(w)
         grid.addWidget(cols_row, 12, 1)
 
+        # facets, a row filter and lines to skip above the table (same options as the MCP
+        # tools and the recipes: facet, where, skip_rows)
+        grid.addWidget(QLabel('Facets / rows:', frame), 13, 0)
+        more_row = QFrame(frame)
+        more_lay = QHBoxLayout(more_row)
+        more_lay.setContentsMargins(0, 0, 0, 0)
+        facet_combo = QComboBox(more_row)
+        facet_combo.setToolTip('One plot per value of this column, side by side, each with its own '
+                               'statistics (e.g. one per day)')
+        where_edit = QLineEdit('', more_row)
+        where_edit.setPlaceholderText("only rows where... e.g. day == 14")
+        where_edit.setToolTip("Keep only the rows matching this condition (pandas query): day == 14, "
+                              "sex == 'male', area > 100 and treatment == 'drug'")
+        skip_spin = QSpinBox(more_row)
+        skip_spin.setRange(-1, 10000)
+        skip_spin.setValue(-1)
+        skip_spin.setSpecialValueText('skip: auto')
+        skip_spin.setPrefix('skip ')
+        skip_spin.setToolTip('Lines above the table to skip (an instrument header, a title). '
+                             '"auto" finds them.')
+        for w in (facet_combo, where_edit, skip_spin):
+            more_lay.addWidget(w)
+        grid.addWidget(more_row, 13, 1)
+
         def _fill_columns(*_):
             table = csv_path + (('::' + sheet_combo.currentText()) if sheet_combo is not None
                                 and sheet_combo.currentText() else '')
@@ -6534,7 +6645,7 @@ class EZFIG_GUI(QMainWindow):
                 factors, numbers = [], []
             for combo, first, items in ((x_combo, 'x: whole table', factors), (split_combo, 'split / colour: none',
                                                                                  factors),
-                                        (value_combo, 'value: -', numbers)):
+                                        (value_combo, 'value: -', numbers), (facet_combo, 'facets: none', factors)):
                 combo.blockSignals(True)
                 combo.clear()
                 combo.addItem(first)
@@ -6552,6 +6663,16 @@ class EZFIG_GUI(QMainWindow):
             if split_combo.currentIndex() > 0:
                 cols.append(split_combo.currentText())
             return cols + [value_combo.currentText()]
+
+        def _chosen_table():
+            out = {}
+            if facet_combo.currentIndex() > 0:
+                out['facet'] = facet_combo.currentText()
+            if where_edit.text().strip():
+                out['where'] = where_edit.text().strip()
+            if skip_spin.value() >= 0:
+                out['skip_rows'] = skip_spin.value()
+            return out
 
         def _chosen_layout():
             out = {}
@@ -6581,20 +6702,28 @@ class EZFIG_GUI(QMainWindow):
                 return None
             kind = kind_combo.currentText()
             columns = _chosen_columns()
+            chosen = _chosen_table()
             if kind == 'auto':
                 from pyfigures.mcp_tools.content import _auto_kind
-                kind, why = _auto_kind(table, columns)
+                kind, why = _auto_kind(table, columns, chosen.get('where'), chosen.get('skip_rows'))
                 if not kind:
                     QMessageBox.warning(self, 'Not added', f'No plot kind fits this table on its own: {why}.')
                     return None
-            from pyfigures.mcp_tools.content import _plot_columns
-            columns, bad = _plot_columns(table, kind, columns)
-            if bad:
-                QMessageBox.warning(self, 'Not added', bad + '.')
+            from pyfigures.mcp_tools.content import _plot_columns, _plot_where, _plot_facet
+            columns, bad = _plot_columns(table, kind, columns, chosen.get('skip_rows'))
+            where, bad2 = _plot_where(table, chosen.get('where'), chosen.get('skip_rows'))
+            facets, bad3 = _plot_facet(table, {'facet': chosen.get('facet')}, {}, chosen.get('skip_rows'), where)
+            if bad or bad2 or bad3:
+                QMessageBox.warning(self, 'Not added', (bad or bad2 or bad3) + '.')
                 return None
             layout = _chosen_layout()
             if columns:
                 layout['columns'] = columns
+            if where:
+                layout['where'] = where
+            if chosen.get('skip_rows') is not None:
+                layout['skip_rows'] = chosen['skip_rows']
+            layout.update(facets)
             if not points_cb.isChecked():
                 layout['show_points'] = False
             script = _make_data_plot_script(table, kind, error_combo.currentText(), annotate_cb.isChecked(),
@@ -6607,7 +6736,9 @@ class EZFIG_GUI(QMainWindow):
                             publication_font_size=PLOT_TEXT_PT, publication_line_width=PLOT_LINE_PT)
             if annotate_cb.isChecked():
                 entry, _note, _warn = data_plot_stats_entry(table, kind, only_sig_cb.isChecked(),
-                                                            stats_combo.currentText(), columns=columns)
+                                                            stats_combo.currentText(), columns=columns,
+                                                            where=where, skip_rows=chosen.get('skip_rows'),
+                                                            facet=facets.get('facet'))
                 if entry:
                     # recorded once the panel is really added (the drop menu can still be
                     # cancelled); kept off the panel, whose attributes are saved
@@ -6635,6 +6766,7 @@ class EZFIG_GUI(QMainWindow):
             columns=_chosen_columns(),
             show_points=None if points_cb.isChecked() else False,
             **_chosen_layout(),
+            **_chosen_table(),
         )
 
     # ------------------------------------------------------------------
@@ -7883,7 +8015,7 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Data-plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin', 'paired'])
         kind_combo.setToolTip('auto: an x-y table (first column increasing) as a scatter, others as bars')
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)

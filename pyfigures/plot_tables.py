@@ -20,7 +20,10 @@ import xml.etree.ElementTree as ET
 
 SHEET_SEP = "::"
 SEABORN_MARKER = "# pyfigures-seaborn: "
-_DATA_PLOT_HINT = "_api.plot("
+TABLE_MARKER = "# pyfigures-table: "
+# panels whose settings (table path included) are JSON in their script's first line
+JSON_MARKERS = (SEABORN_MARKER, TABLE_MARKER)
+_DATA_PLOT_HINT = "_api.plot"          # _api.plot( or _api.plot_facets(
 
 
 def is_sqlite_file(path: str) -> bool:
@@ -86,7 +89,7 @@ def is_drawn_by_script(panel) -> bool:
 
 
 def is_plot_script(script: str) -> bool:
-    return isinstance(script, str) and (script.startswith(SEABORN_MARKER) or _DATA_PLOT_HINT in script)
+    return isinstance(script, str) and (script.startswith(JSON_MARKERS) or _DATA_PLOT_HINT in script)
 
 
 def _string_literals(script: str):
@@ -135,16 +138,17 @@ def rewrite_table_paths(script: str, mapping: dict[str, str]) -> str:
             edits.append((a, b, repr(mapping[file] + sheet)))
     for a, b, rep in reversed(edits):
         script = script[:a] + rep + script[b:]
-    if script.startswith(SEABORN_MARKER):
+    marker = next((m for m in JSON_MARKERS if script.startswith(m)), None)
+    if marker:
         head, _, rest = script.partition("\n")
         try:
-            spec = json.loads(head[len(SEABORN_MARKER):])
+            spec = json.loads(head[len(marker):])
         except ValueError:
             return script
         file, sheet = split_sheet(spec.get("csv", ""))
         if file in mapping:
             spec["csv"] = mapping[file] + sheet
-            head = SEABORN_MARKER + json.dumps(spec, ensure_ascii=False, sort_keys=True)
+            head = marker + json.dumps(spec, ensure_ascii=False, sort_keys=True)
         script = head + "\n" + rest
     return script
 

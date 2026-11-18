@@ -121,7 +121,8 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               # layout and size (only when asked)
               "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend",
               "rename", "font_pt", "show_points", "violin_inner",
-              "violin_side", "columns", "where"}
+              "violin_side", "columns", "where", "skip_rows", "element_colors",
+              "facet", "facet_row", "facet_ncols", "show_n", "show_mean", "p_format", "hlines"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
@@ -135,7 +136,11 @@ _SCRIPT_KEYS = {"label"}
 # seaborn: a CSV drawn by any seaborn function, faceted like ggplot2 (col / row)
 _SEABORN_KEYS = {"function", "x", "y", "hue", "col", "row", "col_wrap", "kind", "style", "size",
                  "palette", "height", "aspect", "title", "xlabel", "ylabel", "index", "columns",
-                 "values", "options", "label", "sheet", "where"}
+                 "values", "options", "label", "sheet", "where", "skip_rows", "rename",
+                 "legend", "xlim", "ylim"}
+# table: a data table or a summary of it (n, mean ± SD per group) as a panel
+_TABLE_KEYS = {"sheet", "columns", "where", "skip_rows", "by", "value", "stats", "decimals", "max_rows",
+               "title", "rename", "label"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
 # a montage / split / merge also takes a scale bar, on its last panel (a split:
@@ -149,10 +154,10 @@ _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
                       "rois", "connectors", "inset", "zoom", "brackets"}
-_PANEL_KINDS = ("image", "glob", "plot", "seaborn", "montage", "split", "merge", "colorbar", "script",
+_PANEL_KINDS = ("image", "glob", "plot", "seaborn", "table", "montage", "split", "merge", "colorbar", "script",
                 "equation", "tex")
 _KIND_KEYS = {"image": _IMAGE_KEYS, "glob": _IMAGE_KEYS - _SINGLE_PANEL_ONLY,
-              "plot": _PLOT_KEYS, "seaborn": _SEABORN_KEYS, "montage": _MONTAGE_KEYS | _SERIES_BAR_KEYS,
+              "plot": _PLOT_KEYS, "seaborn": _SEABORN_KEYS, "table": _TABLE_KEYS, "montage": _MONTAGE_KEYS | _SERIES_BAR_KEYS,
               "split": _SPLIT_KEYS | _SERIES_BAR_KEYS,
               "merge": _MERGE_KEYS | _SERIES_BAR_KEYS,
               "colorbar": _COLORBAR_KEYS, "script": _SCRIPT_KEYS,
@@ -2062,6 +2067,12 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             if kind == "plot":
                 kw = {k: opts[k] for k in _PLOT_KEYS if k in opts}
                 warnings += _check(M.add_data_plot(out, gp, path, **kw), step)
+                n_plots += 1
+                i += 1
+                continue
+            if kind == "table":
+                kw = {k: opts[k] for k in _TABLE_KEYS if k in opts}
+                warnings += _check(M.add_table_panel(out, gp, path, **kw), step)
                 n_plots += 1
                 i += 1
                 continue

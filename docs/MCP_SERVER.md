@@ -361,7 +361,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **205 tools** (about a sixth of them for the poster designer).
+The server currently exposes **207 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -582,6 +582,7 @@ Methods output.
 | Tool | Description |
 |------|-------------|
 | `add_data_plot(pyf_path, group_path, csv_path, kind, error, annotate_stats, stats_mode, ...)` | Add a **live** plot panel (`bar` / `box` / `violin` (whole or half: `violin_side`) / `scatter` / `grouped` / `split_violin`; `columns=` picks the columns of a tidy table, `where=` the rows) from a CSV; re-renders when the CSV changes. bar/box/violin auto-add significance brackets (Welch t / Mann-Whitney for 2 groups; ANOVA+Tukey / Kruskal+Dunn for >2); scatter shows correlation r/R²/p; grouped runs two-way ANOVA. `latex=True` typesets the plot's text with LaTeX (sans-serif; siunitx in labels) |
+| `add_table_panel(pyf_path, group_path, csv_path, by, value, stats, ...)` / `edit_table_panel(...)` | A data table, or a summary per group (n, mean ± SD, median [IQR]...), as a live figure panel |
 | `describe_table(csv_path, sheet, rows)` | A table's sheets or tables, its columns (type, missing cells, range or levels), the first rows and the plots that fit; read-only |
 | `list_factor_columns(csv_path, sheet)` | The columns that can split, colour or facet the data (text, or numbers with few values), with their levels and what each can be in a plot |
 | `summarize_table(csv_path, value, by, where, sheet)` | n, mean, SD, SEM, median, min, max per group (pandas), with a row filter |

@@ -254,12 +254,57 @@ def add_channel_merge(
     )
 
 
-_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin")
+_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin", "paired")
 # the kinds drawn from a two-factor table (factor A, factor B, value)
 _TWO_FACTOR_KINDS = ("grouped", "split_violin")
 
 
-def _auto_kind(table: str, columns=None, where=None) -> tuple[str | None, str]:
+# how a plot reads its table: some columns, some rows, lines skipped above the table
+_TABLE_KEYS = ("columns", "where", "skip_rows")
+# facets of a data plot (staplot.api.plot_facets): the column, a second one for rows, per row
+_FACET_KEYS = ("facet", "facet_row", "facet_ncols")
+
+
+def _plot_facet(csv_abs: str, values: dict, current: dict, skip_rows=None, where=None) -> tuple[dict, str]:
+    """({facet, facet_row, facet_ncols} set, error): *current* with *values* changed ("" /
+    0 clears one); each facet column checked on the table."""
+    out = {k: current.get(k) for k in _FACET_KEYS if current.get(k) not in (None, "", 0)}
+    for k in _FACET_KEYS:
+        v = values.get(k)
+        if v is None:
+            continue
+        if v in ("", 0, False, "none"):
+            out.pop(k, None)
+            if k == "facet":
+                out.pop("facet_row", None)
+            continue
+        if k == "facet_ncols":
+            try:
+                v = int(v)
+            except (TypeError, ValueError):
+                return {}, f"facet_ncols must be a number of facets per row, not {v!r}"
+            if not 1 <= v <= 12:
+                return {}, "facet_ncols must be 1 to 12"
+        else:
+            try:
+                from staplot.api import facet_levels
+                v, _levels = facet_levels(csv_abs, str(v), where, skip_rows)
+            except ImportError:
+                v = str(v)
+            except Exception as e:
+                return {}, str(e)
+        out[k] = v
+    if out.get("facet_row") and not out.get("facet"):
+        return {}, "facet_row needs a facet (the column of the facets side by side)"
+    return out, ""
+
+
+def _sel(values: dict) -> dict:
+    """The table options among *values* that are set (skip_rows=0 is set)."""
+    return {k: values[k] for k in _TABLE_KEYS if values.get(k) is not None and values.get(k) not in ("", [])}
+
+
+def _auto_kind(table: str, columns=None, where=None, skip_rows=None) -> tuple[str | None, str]:
     """(kind, why) for kind="auto": staplot.api.suggest_kind (the plot that shows the
     table best: grouped for two factors, scatter for an x / y series, else bar / box /
     violin by the number of points per group); (None, why) when it cannot tell."""
@@ -268,8 +313,7 @@ def _auto_kind(table: str, columns=None, where=None) -> tuple[str | None, str]:
         pick = getattr(_api, "suggest_kind", None)
         if pick is None:
             return "bar", "staplot too old to choose; bar"
-        sel = {k: v for k, v in (("columns", columns), ("where", where)) if v}
-        rec = pick(table, **sel)
+        rec = pick(table, **_sel({"columns": columns, "where": where, "skip_rows": skip_rows}))
         return rec.get("kind"), rec.get("reason", "")
     except ImportError:
         return "bar", "staplot is not installed"
@@ -305,6 +349,18 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
     cols_kw = f", columns={list(layout['columns'])!r}" if layout.get("columns") else ""
     # only some rows ("only day 14", "only the males"): a pandas query on the table
     cols_kw += f", where={str(layout['where'])!r}" if layout.get("where") else ""
+    # lines above the table skipped by hand (else found by staplot)
+    cols_kw += f", skip_rows={int(layout['skip_rows'])}" if layout.get("skip_rows") is not None else ""
+    # facets: one plot per value of a column ("one plot per day"), each with its statistics
+    if layout.get("facet"):
+        table_line = "_tbl = None                  # a faceted plot reads its table itself"
+        plot_call = (f"_api.plot_facets(_csv, facet={layout['facet']!r}"
+                     + (f", facet_row={layout['facet_row']!r}" if layout.get("facet_row") else "")
+                     + (f", ncols={int(layout['facet_ncols'])}" if layout.get("facet_ncols") else "")
+                     + f"{cols_kw}, kind=")
+    else:
+        table_line = f"_tbl = _api.{builder}(_csv{cols_kw})"
+        plot_call = "_api.plot(_tbl, kind="
     return f"""\
 import numpy as np
 _csv = {csv_path!r}
@@ -329,9 +385,9 @@ else:
             _rc = _latex_rc()
         except Exception:
             _rc = {{}}
-    _tbl = _api.{builder}(_csv{cols_kw})
+    {table_line}
     with _mpl.rc_context(_rc):
-        fig, _rec = _api.plot(_tbl, kind={kind!r}, error={error!r},
+        fig, _rec = {plot_call}{kind!r}, error={error!r},
                               annotate={bool(annotate)!r},
                               only_significant={bool(only_significant)!r},
                               stats_mode={stats_mode!r},
@@ -351,18 +407,32 @@ else:
 
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
-                    "xtick_rotation", "legend", "rename", "violin_inner", "violin_side")
+                    "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
+                    "show_n", "show_mean", "p_format", "hlines")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
-def _plot_where(csv_abs: str, where) -> tuple[str | None, str]:
+def _plot_skip(skip_rows) -> tuple[int | None, str]:
+    """(lines to skip above the table, or None = found automatically; error)."""
+    if skip_rows in (None, "", "auto"):
+        return None, ""
+    try:
+        skip = int(skip_rows)
+    except (TypeError, ValueError):
+        return None, f"skip_rows must be a number of lines (or 'auto'), not {skip_rows!r}"
+    if not 0 <= skip <= 10000:
+        return None, "skip_rows must be 0 or more"
+    return skip, ""
+
+
+def _plot_where(csv_abs: str, where, skip_rows=None) -> tuple[str | None, str]:
     """(the row filter of a plot, a pandas query, or None; error): checked on the table."""
     if where in (None, "", 0, False):
         return None, ""
     where = str(where).strip()
     try:
         from staplot.api import read_table, select_columns
-        select_columns(read_table(csv_abs), None, where)
+        select_columns(read_table(csv_abs, skip_rows), None, where)
     except ImportError:
         pass
     except Exception as e:
@@ -370,7 +440,7 @@ def _plot_where(csv_abs: str, where) -> tuple[str | None, str]:
     return where, ""
 
 
-def _plot_columns(csv_abs: str, kind: str, columns) -> tuple[list | None, str]:
+def _plot_columns(csv_abs: str, kind: str, columns, skip_rows=None) -> tuple[list | None, str]:
     """(the columns a plot uses, of a wider table, or None for the whole table; error).
     Two-factor kinds take three (factor on x, factor split / coloured, value); the others
     two (group, value) or one value column per group."""
@@ -388,7 +458,7 @@ def _plot_columns(csv_abs: str, kind: str, columns) -> tuple[list | None, str]:
     try:
         from staplot import api as _api
         from staplot.api import read_table, select_columns
-        cols = [str(c) for c in select_columns(read_table(csv_abs), cols).columns]
+        cols = [str(c) for c in select_columns(read_table(csv_abs, skip_rows), cols).columns]
     except ImportError:
         pass
     except Exception as e:
@@ -397,7 +467,7 @@ def _plot_columns(csv_abs: str, kind: str, columns) -> tuple[list | None, str]:
 
 
 def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = None,
-                 columns=None, where=None) -> tuple[dict, str]:
+                 columns=None, where=None, skip_rows=None) -> tuple[dict, str]:
     """(layout, error) for a data plot: *current* with the given *values* changed.
     A value of 0 / "" / [] / False clears a setting (back to staplot's default)."""
     out = {k: v for k, v in (current or {}).items()
@@ -456,7 +526,8 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 return {}, 'rename must be {"old name": "new name", ...}'
             try:
                 from staplot import api as _api
-                names = ([c.name for c in _api.table_from_csv(csv_abs, columns=columns, where=where).columns]
+                names = ([c.name for c in _api.table_from_csv(csv_abs, **_sel({"columns": columns, "where": where,
+                                                                         "skip_rows": skip_rows})).columns]
                          if kind not in _TWO_FACTOR_KINDS else None)
             except ImportError:
                 names = None
@@ -470,13 +541,69 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 value = {low[str(k).lower()]: str(v) for k, v in value.items()}
             # names given before stay, the new ones are added
             value = {**(out.get("rename") or {}), **value}
+        elif key in ("show_n", "show_mean"):
+            value = bool(value)
+        elif key == "p_format":
+            value = {"numbers": "p", "number": "p", "p-value": "p", "p-values": "p", "p value": "p",
+                     "p values": "p", "pvalue": "p", "values": "p", "star": "stars", "asterisks": "stars"}.get(
+                str(value).strip().lower(), str(value).strip().lower())
+            if value not in ("stars", "p"):
+                return {}, "p_format must be 'stars' (*, **, ***) or 'p' (the p-value itself, p = 0.0031)"
+            if value == "stars":
+                out.pop(key, None)
+                continue
+        elif key == "hlines":
+            items = value if isinstance(value, (list, tuple)) else [value]
+            fixed = []
+            for item in items:
+                spec = dict(item) if isinstance(item, dict) else {"y": item}
+                try:
+                    spec["y"] = float(spec["y"])
+                except (KeyError, TypeError, ValueError):
+                    return {}, ('hlines: numbers ([1.0]) or {"y": 100, "label": "control", "color": "grey", '
+                                '"style": "--"}')
+                fixed.append(spec if len(spec) > 1 else spec["y"])
+            value = fixed
+        elif key == "element_colors":
+            if not isinstance(value, dict):
+                return {}, 'element_colors must be {"points": "black", "median": "red", ...}'
+            try:
+                from staplot.api import PLOT_ELEMENTS
+            except ImportError:
+                PLOT_ELEMENTS = None
+            from matplotlib.colors import to_rgba
+            fixed = {}
+            for part, colour in value.items():
+                part = str(part).strip().lower().replace(" ", "_")
+                part = {"point": "points", "dots": "points", "medians": "median", "outline": "edges",
+                        "outlines": "edges", "edge": "edges", "bracket": "brackets", "stars": "brackets",
+                        "error_bar": "error_bars", "errorbars": "error_bars", "whisker": "whiskers",
+                        "regression": "fit", "regression_line": "fit", "line": "fit", "axis": "axes",
+                        "outlier": "outliers"}.get(part, part)
+                if PLOT_ELEMENTS is not None and part not in PLOT_ELEMENTS:
+                    return {}, (f"no plot element {part!r}; the elements are {', '.join(PLOT_ELEMENTS)} "
+                                f"(the groups' own colours: colors=[...])")
+                if colour in (None, "", 0, False):
+                    fixed[part] = None
+                    continue
+                try:
+                    if str(colour).lower() != "none":
+                        to_rgba(colour)
+                except ValueError:
+                    return {}, f"unknown colour {colour!r} for {part}: a name (red, black...) or #rrggbb"
+                fixed[part] = str(colour)
+            value = {k: v for k, v in {**(out.get("element_colors") or {}), **fixed}.items() if v is not None}
+            if not value:
+                out.pop(key, None)
+                continue
         elif key == "order":
-            if kind not in ("bar", "box", "violin"):
-                return {}, "order (the groups' order) applies to bar, box and violin plots"
+            if kind not in ("bar", "box", "violin", "paired"):
+                return {}, "order (the groups' order) applies to bar, box, violin and paired plots"
             value = [str(v) for v in (value if isinstance(value, (list, tuple)) else [value])]
             try:
                 from staplot import api as _api
-                names = [c.name for c in _api.table_from_csv(csv_abs, columns=columns, where=where).columns]
+                names = [c.name for c in _api.table_from_csv(csv_abs, **_sel({"columns": columns, "where": where,
+                                                                         "skip_rows": skip_rows})).columns]
             except ImportError:
                 names = None
             except Exception as e:
@@ -534,7 +661,8 @@ def _plot_colours(colors) -> tuple[list | None, str]:
 
 
 def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
-                          stats_mode: str = "auto", label=None, columns=None, where=None):
+                          stats_mode: str = "auto", label=None, columns=None, where=None, skip_rows=None,
+                          facet=None, facet_row=None):
     """(the figure's stats-provenance entry or None, a note for the reply, warnings) of a
     data plot: pairwise tests for bar/box/violin, two-way ANOVA for grouped, a
     correlation for scatter. Shared by add_data_plot and the GUI's dropped tables."""
@@ -543,8 +671,21 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
     _mode = {"auto": None, "parametric": True, "nonparametric": False}.get(stats_mode)
     try:
         from staplot import api as _api
-        _ckw = {k: v for k, v in (("columns", columns), ("where", where)) if v}
-        if kind in ("bar", "box", "violin"):
+        _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows})
+        if facet:
+            recs = _api.facet_stats(csv_abs, kind, facet, facet_row, only_significant=only_significant,
+                                    stats_mode=stats_mode, **_ckw)
+            entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
+                     "facet": facet, "facet_row": facet_row, **_ckw,
+                     "facets": {k: {f: r.get(f) for f in ("test", "omnibus", "comparisons", "effects",
+                                                         "split_comparisons", "r", "p", "error") if f in r}
+                                for k, r in recs.items()}}
+            tests = sorted({str(r.get("test")) for r in recs.values() if r.get("test")})
+            return entry, f" — {len(recs)} facets, each tested ({', '.join(tests)})", []
+        if kind == "paired":
+            rec = _api.paired_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
+                                   parametric=_mode)
+        elif kind in ("bar", "box", "violin"):
             rec = _api.auto_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
                                  parametric=_mode)
         elif kind in _TWO_FACTOR_KINDS:
@@ -564,8 +705,10 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
         entry["columns"] = list(columns)
     if where:
         entry["where"] = str(where)
+    if skip_rows is not None:
+        entry["skip_rows"] = int(skip_rows)
     warnings: list[str] = []
-    if kind in ("bar", "box", "violin"):
+    if kind in ("bar", "box", "violin", "paired"):
         entry.update(omnibus=rec.get("omnibus"), correction=rec.get("correction"),
                      normality=rec.get("normality"), comparisons=rec.get("comparisons"))
         if rec.get("warnings"):
@@ -641,11 +784,21 @@ def _table_path(path: str, sheet=None) -> tuple[str, str]:
     return f"{path}::{sheet}", ""
 
 
-def _csv_number_count(path: str) -> int:
+def _csv_number_count(path: str, skip_rows=None) -> int:
     """How many finite numbers a CSV holds (0 for an empty file or a header
     alone: the plot would be an empty frame)."""
     import csv
     from pyfigures.plot_tables import is_sqlite_file
+    if skip_rows is not None:
+        try:
+            import pandas as pd
+            from staplot.api import read_table
+            df = read_table(path, skip_rows)
+            return int(sum(pd.to_numeric(df[c], errors="coerce").notna().sum() for c in df.columns))
+        except ImportError:
+            pass
+        except Exception:
+            return 0
     if "::" in str(path) or str(path).lower().endswith(_EXCEL) or is_sqlite_file(str(path)):
         try:
             import pandas as pd
@@ -711,6 +864,15 @@ def add_data_plot(
     violin_side: str | None = None,
     columns: list[str] | None = None,
     where: str | None = None,
+    skip_rows: int | str | None = None,
+    element_colors: dict[str, str] | None = None,
+    facet: str | None = None,
+    facet_row: str | None = None,
+    facet_ncols: int | None = None,
+    show_n: bool | None = None,
+    show_mean: bool | None = None,
+    p_format: str | None = None,
+    hlines: list | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -737,6 +899,23 @@ def add_data_plot(
     *where*: only the rows matching this pandas query, on any column of the table:
       "day == 14", "sex == 'male'", "treatment == 'drug' and area > 100" (backquotes
       around names with spaces: "`cells per field` > 30"). The statistics use those rows.
+    *skip_rows*: lines above the table to skip (an instrument's header, a title, notes):
+      found automatically by default (the reply says what was skipped); a number skips
+      that many, 0 none.
+    *element_colors*: the colour of parts of the plot: {"points": "black", "median":
+      "red", "edges": "none", "brackets": "#555555", "error_bars", "whiskers", "outliers",
+      "inner", "fit", "axes", "background"}; the groups' own colours are *colors*.
+    *facet*: one plot per value of this column, side by side, each with its own
+      statistics ("one plot per day", "split by treatment": facet="day"), a shared y axis;
+      *facet_row*: a second column, one row of facets per value (facet_grid);
+      *facet_ncols*: facets per row (default up to 4). The facet columns are not among
+      *columns*. The title goes over all the facets.
+    Journal details: *show_n* the n of each group under its name; *show_mean* a mean
+      marker (box, violin); *p_format* "p" writes the p-values on the brackets instead
+      of stars; *hlines* reference lines: [1.0] or [{"y": 100, "label": "control"}].
+    The axis labels come from the table when not given: the value column's name on y
+      (a long table, or columns=), the factor on x, the split / colour factor as the
+      legend title.
     *kind*: "auto" (default: the plot that shows the data best — grouped for a
       two-factor table, scatter for an x / y series, else by the points per group:
       bar under 5, box 5-19, violin 20 or more) | "bar" | "box" | "violin" |
@@ -805,25 +984,28 @@ def add_data_plot(
     if bad:
         return f"ERROR: {bad}"
     csv_abs = csv_path
-    if not _csv_number_count(csv_abs):
+    skip_rows, bad = _plot_skip(skip_rows)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    if not _csv_number_count(csv_abs, skip_rows):
         return (f"ERROR: {csv_path} holds no numbers to plot (empty, or a header without "
                 f"values); nothing was added.")
     auto_note = ""
     if kind == "auto":
-        where, bad = _plot_where(csv_abs, where)
+        where, bad = _plot_where(csv_abs, where, skip_rows)
         if bad:
             return f"ERROR: {bad}; nothing was added."
-        kind, why = _auto_kind(csv_abs, columns, where)
+        kind, why = _auto_kind(csv_abs, columns, where, skip_rows)
         if not kind:
             return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was added."
         auto_note = f"\nKIND: auto chose {kind}: {why}. Say so; edit_data_plot kind changes it."
-    columns, bad = _plot_columns(csv_abs, kind, columns)
+    columns, bad = _plot_columns(csv_abs, kind, columns, skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
-    where, bad = _plot_where(csv_abs, where)
+    where, bad = _plot_where(csv_abs, where, skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
-    _ckw = {k: v for k, v in (("columns", columns), ("where", where)) if v}
+    _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows})
     if kind in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
@@ -843,7 +1025,10 @@ def add_data_plot(
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
                                 "rename": rename, "violin_inner": violin_inner,
-                                "violin_side": violin_side}, columns=columns, where=where)
+                                "violin_side": violin_side, "element_colors": element_colors,
+                                "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
+                                "hlines": hlines},
+                               columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
     if show_points is False:
@@ -852,6 +1037,13 @@ def add_data_plot(
         layout["columns"] = columns
     if where:
         layout["where"] = where
+    if skip_rows is not None:
+        layout["skip_rows"] = skip_rows
+    facets, bad = _plot_facet(csv_abs, {"facet": facet, "facet_row": facet_row, "facet_ncols": facet_ncols},
+                              {}, skip_rows, where)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    layout.update(facets)
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
                                     stats_mode, latex=latex, colors=plot_colors, layout=layout)
@@ -877,8 +1069,9 @@ def add_data_plot(
     stats_warnings: list[str] = []
     if annotate_stats:
         entry, stats_note, stats_warnings = data_plot_stats_entry(csv_abs, kind, only_significant,
-                                                                  stats_mode, label, columns=columns,
-                                                                  where=where)
+                                                                  stats_mode, label, **_ckw,
+                                                                  facet=facets.get("facet"),
+                                                                  facet_row=facets.get("facet_row"))
         if entry:
             _append_stats_entry(pyf_path, entry)
 
@@ -886,9 +1079,9 @@ def add_data_plot(
     suffix = f' with label "{label}"' if label else ""
     # say what the plot leaves out of the CSV (empty / NA / text cells): tell the user
     from pyfigures.assistant.plot_info import data_cleaning
-    cleaning = data_cleaning({"csv": csv_abs, "kind": kind, "columns": columns, "where": where})
+    cleaning = data_cleaning({"csv": csv_abs, "kind": kind, **_ckw})
     cleaning_note = (f"\nDATA: {cleaning} Tell the user what was left out."
-                     if cleaning and "no value left out" not in cleaning else "")
+                     if cleaning and ("no value left out" not in cleaning or "skipped" in cleaning) else "")
     return (
         f"Data-plot panel ({kind}) added as index {idx} in {loc}{suffix} from "
         f"{os.path.basename(csv_abs)}{stats_note}. Reopen the figure in PyFigures "
@@ -1050,8 +1243,22 @@ def list_data_plot_kinds() -> str:
             + "\n- bar: mean with error bars (sd, sem, ci95, none); individual points or not (show_points)."
             + "\n- scatter: the points of each y column against the first column, a regression line with R² "
               "and p; each series its own colour and marker shape; legend inside / outside / none."
+            + "\n- paired: repeated measures (one row per subject, one column per condition: before / "
+              "after, day 1 / 2 / 3): every subject's values joined by a line, the mean and SD beside them; a "
+              "paired t-test or Wilcoxon signed-rank (2 conditions), a repeated-measures ANOVA or Friedman "
+              "then paired tests (more)."
             + "\n- grouped: bars by two factors with error bars and every point, a two-way ANOVA under them; "
               "legend inside / outside / none."
+            + "\n- facets (every kind): facet='day' draws one plot per day side by side, each with its own "
+              "statistics and a shared y axis; facet_row='sex' a grid; facet_ncols per row."
+            + "\n- colours: colors=[one per group]; element_colors={'points': 'black', 'median': 'red', "
+              "'edges': 'none', 'brackets': 'grey', 'error_bars', 'whiskers', 'outliers', 'inner', 'fit', "
+              "'axes', 'background'}."
+            + "\n- journal details (every kind with groups): show_n=True (n under each name), show_mean=True "
+              "(a mean marker, box / violin), p_format='p' (p-values written instead of stars), hlines=[1.0] "
+              "or [{'y': 100, 'label': 'control'}] (reference lines)."
+            + "\n- the table: columns=[...] of a tidy table, where='day == 14' (some rows), skip_rows (lines "
+              "above the table, found automatically); axis labels come from the column names."
             + "\nCombinations in one plot: violin + mini box (violin_inner='box'), half violin + points "
               "(violin_side='left'), split violin + mini boxes, violin + range/quartile "
               "lines (the default), violin / box / bar + the individual points (show_points), scatter + "
@@ -1066,7 +1273,7 @@ def list_data_plot_kinds() -> str:
 
 
 
-def _read_any_table(csv_path: str, sheet=None):
+def _read_any_table(csv_path: str, sheet=None, skip_rows=None):
     """(DataFrame, table path, error) of a CSV / TSV / TXT, an Excel sheet or an SQLite
     table / query, read as the plots read it (staplot.api.read_table, pandas)."""
     table, bad = _table_path(csv_path, sheet)
@@ -1074,7 +1281,7 @@ def _read_any_table(csv_path: str, sheet=None):
         return None, "", bad
     try:
         from staplot.api import read_table
-        df = read_table(table)
+        df = read_table(table, *(() if skip_rows in (None, "", "auto") else (int(skip_rows),)))
     except ImportError:
         import pandas as pd
         try:
@@ -1114,7 +1321,8 @@ def table_factors(df, max_levels: int = 20) -> list[dict]:
 
 
 @mcp.tool()
-def list_factor_columns(csv_path: str, sheet: str | None = None, max_levels: int = 20) -> str:
+def list_factor_columns(csv_path: str, sheet: str | None = None, max_levels: int = 20,
+                        skip_rows: int | None = None) -> str:
     """The FACTOR columns of a data table: the ones that can split the data into groups
     (text columns such as genotype, sex, treatment; number columns with few values such
     as day 1 / 2 / 3), each with its levels and their counts and what it can be in a plot:
@@ -1126,7 +1334,7 @@ def list_factor_columns(csv_path: str, sheet: str | None = None, max_levels: int
       an SQLite table or query. *max_levels*: a column with more levels is not a factor.
     """
     import pandas as pd
-    df, table, bad = _read_any_table(csv_path, sheet)
+    df, table, bad = _read_any_table(csv_path, sheet, skip_rows)
     if bad:
         return f"ERROR: {bad}"
     factors = table_factors(df, max_levels=max_levels)
@@ -1163,7 +1371,8 @@ def list_factor_columns(csv_path: str, sheet: str | None = None, max_levels: int
 
 
 @mcp.tool()
-def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5) -> str:
+def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5,
+                   skip_rows: int | None = None) -> str:
     """What a data table holds, read with pandas as the plots read it: its sheets (Excel)
     or tables (SQLite), the number of rows, each column with its type, missing cells,
     range (numbers) or levels and their counts (text), the first *rows* rows, and which
@@ -1174,16 +1383,21 @@ def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5) -> st
 
     *csv_path*: CSV, TSV, TXT, an Excel workbook or an SQLite database ("file::sheet" or
       "file::SELECT ..." works too). *sheet*: an Excel sheet, an SQLite table or query.
+    *skip_rows*: lines above the table to skip (default: found automatically, and said).
     """
     import numpy as np
     import pandas as pd
-    df, table, bad = _read_any_table(csv_path, sheet)
+    df, table, bad = _read_any_table(csv_path, sheet, skip_rows)
     if bad:
         return f"ERROR: {bad}"
     from pyfigures.plot_tables import split_sheet
     file, part = split_sheet(table)
     lines = [f"Table {os.path.basename(file)}{(' ' + part) if part else ''}: {len(df)} rows, "
              f"{df.shape[1]} columns."]
+    skipped = df.attrs.get("skipped_lines") or []
+    if skipped:
+        lines.append(f"Skipped above the table ({len(skipped)} line(s); skip_rows=0 keeps them): "
+                     + " | ".join(str(t)[:60] for t in skipped[:5]))
     try:
         from staplot.api import list_sheets
         others = list_sheets(file)
@@ -1249,7 +1463,8 @@ def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5) -> st
 
 @mcp.tool()
 def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str | None = None,
-                    where: str | None = None, sheet: str | None = None) -> str:
+                    where: str | None = None, sheet: str | None = None,
+                    skip_rows: int | None = None) -> str:
     """Numbers of a data table by group, with pandas: n, mean, sd, sem, median, min and
     max of *value* for each combination of the *by* columns ("mean area per genotype and
     sex", "how many cells per day?"). Read-only; nothing is plotted or changed.
@@ -1260,7 +1475,7 @@ def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str
       "`cells per field` > 30"). *sheet*: an Excel sheet, an SQLite table or query.
     """
     import pandas as pd
-    df, table, bad = _read_any_table(csv_path, sheet)
+    df, table, bad = _read_any_table(csv_path, sheet, skip_rows)
     if bad:
         return f"ERROR: {bad}"
     low = {str(c).lower(): c for c in df.columns}
@@ -1303,6 +1518,133 @@ def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str
     return head + "\n" + "\n\n".join(out)
 
 
+_TABLE_PANEL_KEYS = ("columns", "where", "skip_rows", "by", "value", "stats", "decimals", "max_rows",
+                     "title", "rename")
+
+
+@mcp.tool()
+def add_table_panel(
+    pyf_path: str,
+    group_path: list[int],
+    csv_path: str,
+    sheet: str | None = None,
+    columns: list[str] | None = None,
+    where: str | None = None,
+    skip_rows: int | None = None,
+    by: list[str] | str | None = None,
+    value: list[str] | str | None = None,
+    stats: list[str] | None = None,
+    decimals: int = 2,
+    max_rows: int | None = None,
+    title: str = "",
+    rename: dict[str, str] | None = None,
+    label: str | None = None,
+) -> str:
+    """Add a **table panel**: a data table, or a summary of it, drawn as a figure panel
+    ("add a table of mean ± SD per genotype", "show the raw values as a table"). It stays
+    live: the table is read again when the figure opens, and is copied with it on
+    consolidation.
+
+    *csv_path*: CSV, TSV, TXT, Excel (*sheet*) or SQLite (*sheet* = a table or a query).
+    The rows shown: *columns* (some columns), *where* (a pandas query: "day == 14"),
+      *skip_rows* (lines above the table; found automatically otherwise), *max_rows*
+      (default 60; the rest is said under the table).
+    A summary instead: *by* (one column or several: one row per group) and *value* (the
+      number column(s); default every number column), *stats* among n, mean, sd, sem,
+      median, min, max, "mean±sd", "mean±sem", "median [iqr]" (default ["n",
+      "mean±sd"]). *decimals*: digits after the point. *rename*: names shown for columns
+      or values. *title*: over the table.
+    """
+    from pyfigures.table_panel import check, make_script
+    csv_path, bad = _table_path(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}. Nothing was added."
+    spec = {"csv": csv_path}
+    for key, val in (("columns", columns), ("where", where), ("skip_rows", skip_rows), ("by", by),
+                     ("value", value), ("stats", stats), ("decimals", decimals), ("max_rows", max_rows),
+                     ("title", title), ("rename", rename)):
+        if val not in (None, "", [], {}):
+            spec[key] = val
+    if isinstance(spec.get("stats"), str):
+        spec["stats"] = [spec["stats"]]
+    bad = check(spec)
+    if bad:
+        return f"ERROR: {bad}. Nothing was added."
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    img = _new_image2d("__table_panel__")
+    _plot_text_on_page(img)
+    img.find("filename").text = "None"
+    _set_child_text(img, "custom_loading_script", _encode_str(make_script(spec)))
+    if label:
+        img.find("annotations").append(_new_tatext2d(label, "top left"))
+    container, group_path = _append_new_panel(root, container, img, group_path)
+    _save(tree, pyf_path, recompute=True)
+    idx = len([c for c in container if c.tag == "Image2D"]) - 1
+    from pyfigures.table_panel import table_cells
+    header, rows, note = table_cells(spec)
+    what = (f"a summary by {', '.join(by) if isinstance(by, list) else by}" if by else
+            "a summary" if stats else "the table")
+    return (f"Table panel ({what}: {len(rows)} row(s), {len(header)} column(s)) of "
+            f"{os.path.basename(csv_path)} added as index {idx} in "
+            f"{'canvas' if not group_path else f'group {group_path}'}." + (f" {note}." if note else ""))
+
+
+@mcp.tool()
+def edit_table_panel(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    columns: list[str] | None = None,
+    where: str | None = None,
+    skip_rows: int | None = None,
+    by: list[str] | str | None = None,
+    value: list[str] | str | None = None,
+    stats: list[str] | None = None,
+    decimals: int | None = None,
+    max_rows: int | None = None,
+    title: str | None = None,
+    rename: dict[str, str] | None = None,
+    remove: list[str] | None = None,
+) -> str:
+    """Change a table panel (add_table_panel): other columns or rows, a summary by
+    other groups, other statistics, decimals, title, names. Only what is given changes;
+    *remove*: settings to drop (["by", "stats"] shows the raw rows again)."""
+    from pyfigures.table_panel import check, make_script, parse
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    images = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(images):
+        return f"ERROR: image_index {image_index} out of range (0..{len(images) - 1}); nothing was changed."
+    img = images[image_index]
+    spec = parse(_decode_text(_child_text(img, "custom_loading_script")))
+    if spec is None:
+        return "ERROR: this panel is not a table panel (add_table_panel). Nothing was changed."
+    new = dict(spec)
+    for key, val in (("columns", columns), ("where", where), ("skip_rows", skip_rows), ("by", by),
+                     ("value", value), ("stats", stats), ("decimals", decimals), ("max_rows", max_rows),
+                     ("title", title), ("rename", rename)):
+        if val is not None:
+            if val in ("", [], {}):
+                new.pop(key, None)
+            else:
+                new[key] = [val] if key == "stats" and isinstance(val, str) else val
+    for key in remove or []:
+        new.pop(str(key), None)
+    bad = check(new)
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    _set_child_text(img, "custom_loading_script", _encode_str(make_script(new)))
+    _save(tree, pyf_path, recompute=True)
+    changed = [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in sorted(set(spec) | set(new)) if spec.get(k) != new.get(k)]
+    return ("Table panel changed: " + "; ".join(changed) + ".") if changed else \
+        "The table panel already had these settings; nothing was changed."
+
+
 @mcp.tool()
 def add_seaborn_plot(
     pyf_path: str,
@@ -1331,6 +1673,11 @@ def add_seaborn_plot(
     label: str | None = None,
     sheet: str | None = None,
     where: str | None = None,
+    skip_rows: int | None = None,
+    rename: dict[str, str] | None = None,
+    legend: str | None = None,
+    xlim: list[float | None] | None = None,
+    ylim: list[float | None] | None = None,
 ) -> str:
     """Add a **seaborn plot** of a CSV or an Excel sheet (.xlsx, .xls; *sheet* = its name
     or number from 1, else the first) — a tidy / long table: one row per observation — as a
@@ -1349,7 +1696,10 @@ def add_seaborn_plot(
       function="catplot", kind="box", x="genotype", y="length", col="day".
     *kind*: the figure-level function's kind ("scatter"/"line"; "hist"/"kde"/"ecdf";
       "strip"/"swarm"/"box"/"violin"/"boxen"/"point"/"bar"/"count").
-    *palette*: a seaborn / matplotlib palette name ("colorblind", "deep", "viridis"...).
+    *palette*: a seaborn / matplotlib palette name ("colorblind", "deep", "viridis"...), or a
+      colour per hue group: {"female": "#d55e00", "male": "#0072b2"} or a list.
+    *legend*: "outside" (beside), "top" (above, in one line), "inside" or "none".
+    *xlim* / *ylim*: [low, high] of an axis (null for an automatic end).
     Column names unknown? describe_table(csv_path) lists them, their levels and the plots
     that fit. Split (half) violins: function="violinplot" (or catplot kind="violin"),
     hue = a two-level column (e.g. "sex"), options={"split": true}.
@@ -1358,6 +1708,14 @@ def add_seaborn_plot(
     *options*: any other keyword the seaborn function takes (e.g. {"errorbar": "se"},
       {"bins": 20}, {"dodge": true}).
     *where*: only the rows matching a pandas query ("day == 14", "sex == 'male'").
+    *skip_rows*: lines above the table to skip (default: found automatically).
+    *rename*: the names shown, of columns (axis labels, legend titles) or of values
+      (ticks, legend entries): {"weight_g": "weight (g)", "mutA": "mutant A"}.
+    Common requests: a cumulative histogram = function="histplot", options={"cumulative":
+      true, "element": "step", "fill": false} (or function="ecdfplot"); split / half
+      violins = function="violinplot", hue=<two-level column>, options={"split": true};
+      a title = title="..."; facets = col= / row=; log axis = options={"log_scale": true};
+      bins = options={"bins": 30}; error bars as SD = options={"errorbar": "sd"}.
     Rows with a missing value in a used column are left out (the reply says how many).
     """
     from pyfigures.seaborn_plot import check, make_script, dropped_rows
@@ -1369,7 +1727,8 @@ def add_seaborn_plot(
                        ("kind", kind), ("style", style), ("size", size), ("palette", palette),
                        ("height", height), ("aspect", aspect), ("title", title), ("xlabel", xlabel),
                        ("ylabel", ylabel), ("index", index), ("columns", columns), ("values", values),
-                       ("options", options), ("where", where)):
+                       ("options", options), ("where", where), ("skip_rows", skip_rows), ("rename", rename),
+                       ("legend", legend), ("xlim", xlim), ("ylim", ylim)):
         if value not in (None, ""):
             spec[key] = value
     bad = check(spec)
@@ -1417,13 +1776,24 @@ def edit_seaborn_plot(
     options: dict | None = None,
     remove: list[str] | None = None,
     where: str | None = None,
+    skip_rows: int | None = None,
+    rename: dict[str, str] | None = None,
+    legend: str | None = None,
+    xlim: list[float | None] | None = None,
+    ylim: list[float | None] | None = None,
 ) -> str:
     """Change a seaborn plot panel (add_seaborn_plot): another function or kind ("make it a
     violin", "a swarm instead"), other columns, facets ("one facet per day": col="day";
     "no facets": remove=["col", "row"]), palette, size or labels. Only what is given
     changes. *remove*: setting names to drop (e.g. ["hue"], ["col", "col_wrap"]).
     *options* replaces the extra seaborn keywords. *where*: only the rows matching a
-    pandas query ("day == 14"); remove=["where"] plots every row again."""
+    pandas query ("day == 14"); remove=["where"] plots every row again. *skip_rows*: lines
+    above the table to skip. *rename*: names shown for columns or values ({"weight_g":
+    "weight (g)"}), merged with the ones given before.
+    A cumulative histogram: function="histplot", options={"cumulative": true, "element":
+    "step", "fill": false}; or function="ecdfplot". *palette*: a name, or a colour per hue
+    group {"female": "red"}. *legend*: "outside" | "top" | "inside" | "none". *xlim* /
+    *ylim*: [low, high]; remove=["ylim"] gives the automatic range back."""
     from pyfigures.seaborn_plot import check, make_script, parse, dropped_rows
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -1441,9 +1811,14 @@ def edit_seaborn_plot(
     for key, value in (("function", function), ("x", x), ("y", y), ("hue", hue), ("col", col), ("row", row),
                        ("col_wrap", col_wrap), ("kind", kind), ("palette", palette), ("height", height),
                        ("aspect", aspect), ("title", title), ("xlabel", xlabel), ("ylabel", ylabel),
-                       ("options", options), ("where", where)):
+                       ("options", options), ("where", where), ("skip_rows", skip_rows),
+                       ("legend", legend), ("xlim", xlim), ("ylim", ylim)):
         if value is not None:
             new[key] = value.strip().lower() if key == "function" else value
+    if rename is not None:
+        new["rename"] = {**(spec.get("rename") or {}), **rename} if rename else {}
+        if not new["rename"]:
+            new.pop("rename")
     for key in remove or []:
         new.pop(str(key), None)
     bad = check(new)
@@ -1489,6 +1864,15 @@ def edit_data_plot(
     violin_side: str | None = None,
     columns: list[str] | None = None,
     where: str | None = None,
+    skip_rows: int | str | None = None,
+    element_colors: dict[str, str] | None = None,
+    facet: str | None = None,
+    facet_row: str | None = None,
+    facet_ncols: int | None = None,
+    show_n: bool | None = None,
+    show_mean: bool | None = None,
+    p_format: str | None = None,
+    hlines: list | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1535,6 +1919,17 @@ def edit_data_plot(
       [] uses the whole table again. describe_table lists the columns and the factors.
     *where*: only the rows matching a pandas query ("day == 14", "sex == 'male'"); ""
       plots every row again.
+    *skip_rows*: lines above the table to skip (a number; "auto" = found automatically).
+    *element_colors*: colours of parts of the plot ({"points": "black", "median": "red",
+      "edges": "none", "brackets": "grey", ...}); merged with the ones set before, a part
+      set to "" goes back to its default; {} clears them all.
+    *facet*: one plot per value of this column ("one plot per day", "split it by
+      treatment"), each with its statistics; "" = one plot again. *facet_row*: a second
+      column, one row of facets per value. *facet_ncols*: facets per row.
+    *show_n*: n under each group's name ("add the n"); *show_mean*: a mean marker;
+    *p_format*: "p" = the p-values written on the brackets ("show the p values, not
+    stars"), "stars" back; *hlines*: reference lines ([1.0], [{"y": 100, "label":
+    "control"}]; [] removes them).
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -1572,7 +1967,8 @@ def edit_data_plot(
         new["kind"], why = _auto_kind(new["csv"] if csv_path is None and sheet in (None, "") else
                                       _table_path(csv_path if csv_path is not None else new["csv"], sheet)[0],
                                       (columns if columns is not None else spec.get("columns")) or None,
-                                      (where if where is not None else spec.get("where")) or None)
+                                      (where if where is not None else spec.get("where")) or None,
+                                      _plot_skip(skip_rows if skip_rows is not None else spec.get("skip_rows"))[0])
         if not new["kind"]:
             return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was changed."
         auto_note = f" (auto: {why})"
@@ -1588,17 +1984,22 @@ def edit_data_plot(
         if bad:
             return f"ERROR: {bad}. Nothing was changed."
         new["csv"] = table
-    new["columns"], bad = _plot_columns(new["csv"], new["kind"],
-                                        columns if columns is not None else spec.get("columns"))
+    new["skip_rows"], bad = _plot_skip(skip_rows if skip_rows is not None else spec.get("skip_rows"))
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
-    new["where"], bad = _plot_where(new["csv"], where if where is not None else spec.get("where"))
+    new["columns"], bad = _plot_columns(new["csv"], new["kind"],
+                                        columns if columns is not None else spec.get("columns"),
+                                        new["skip_rows"])
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    new["where"], bad = _plot_where(new["csv"], where if where is not None else spec.get("where"),
+                                    new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
     if new["kind"] in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
-            gt = _api.grouped_table_from_csv(new["csv"], **{k: new[k] for k in ("columns", "where") if new[k]})
+            gt = _api.grouped_table_from_csv(new["csv"], **_sel(new))
             if new["kind"] == "split_violin":
                 _api.split_parts(gt)
         except ImportError:
@@ -1607,20 +2008,27 @@ def edit_data_plot(
             return (f"ERROR: a {new['kind']} plot needs a table with two factors and a value column "
                     f"({e}). Nothing was changed.")
     current = {k: spec.get(k) for k in PLOT_LAYOUT_KEYS}
-    if new["kind"] not in ("bar", "box", "violin", "split_violin"):
+    if new["kind"] not in ("bar", "box", "violin", "split_violin", "paired"):
         current.pop("order", None)              # a group order means nothing for scatter / grouped
     layout, bad = _plot_layout(new["kind"], new["csv"],
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
                                 "rename": rename, "violin_inner": violin_inner,
-                                "violin_side": violin_side}, current, columns=new["columns"],
-                               where=new["where"])
+                                "violin_side": violin_side, "element_colors": element_colors,
+                                "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
+                                "hlines": hlines}, current,
+                               columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
-    for k in ("columns", "where"):
-        if new[k]:
-            layout[k] = new[k]
+    layout.update(_sel(new))
+    facets, bad = _plot_facet(new["csv"], {"facet": facet, "facet_row": facet_row, "facet_ncols": facet_ncols},
+                              spec, new["skip_rows"], new["where"])
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    for k in _FACET_KEYS:
+        new[k] = facets.get(k)
+    layout.update(facets)
     for k in PLOT_LAYOUT_KEYS:
         new[k] = layout.get(k)
     if show_points is not None:
@@ -1651,7 +2059,7 @@ def edit_data_plot(
     _save(tree, pyf_path, recompute=True)
     changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
                ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv",
-                "columns", "where")
+                "columns", "where", "skip_rows") + _FACET_KEYS
                + PLOT_LAYOUT_KEYS + ("show_ylabel", "show_xlabel", "show_points")
                if spec.get(k) != new.get(k)]
     if colors is not None:

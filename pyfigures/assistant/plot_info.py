@@ -19,11 +19,14 @@ PLOT_KINDS = {
     'violin': 'the shape of each group\'s distribution; group comparisons',
     'scatter': 'one numeric column against another, with a regression line and correlation test',
     'grouped': 'bars by two factors (e.g. genotype x treatment); two-way ANOVA (needs a two-factor CSV)',
+    'paired': 'repeated measures (before / after on the same subjects): a line per subject; paired '
+              't-test / Wilcoxon, repeated-measures ANOVA / Friedman',
     'split_violin': 'two conditions (e.g. sex) as the two halves of each violin, a legend naming them; '
                     'each pair tested, two-way ANOVA (needs a two-factor table with a two-level factor)',
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
-                'rename', 'violin_inner', 'violin_side')
+                'rename', 'violin_inner', 'violin_side', 'element_colors', 'show_n', 'show_mean', 'p_format',
+                'hlines')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -40,10 +43,16 @@ def _table_file(path):
     return split_sheet(path)[0] if isinstance(path, str) else path
 
 
+def _sel(spec: dict) -> dict:
+    """How the plot reads its table: columns, where, skip_rows (those set)."""
+    return {k: spec[k] for k in ('columns', 'where', 'skip_rows')
+            if spec.get(k) is not None and spec.get(k) not in ('', [])}
+
+
 def parse_data_plot(script: str) -> dict | None:
     """The settings of a data-plot script (mcp_tools.content._make_data_plot_script),
     else None."""
-    if not script or '_api.plot(' not in script:
+    if not script or ('_api.plot(' not in script and '_api.plot_facets(' not in script):
         return None
     try:
         tree = ast.parse(script)
@@ -60,15 +69,15 @@ def parse_data_plot(script: str) -> dict | None:
             if node.func.attr in ('table_from_csv', 'grouped_table_from_csv'):
                 spec['grouped_table'] = node.func.attr == 'grouped_table_from_csv'
                 for kw in node.keywords:
-                    if kw.arg in ('columns', 'where'):
+                    if kw.arg in ('columns', 'where', 'skip_rows'):
                         try:
                             spec[kw.arg] = ast.literal_eval(kw.value)
                         except ValueError:
                             pass
-            elif node.func.attr == 'plot':
+            elif node.func.attr in ('plot', 'plot_facets'):
                 for kw in node.keywords:
                     try:
-                        spec[kw.arg] = ast.literal_eval(kw.value)
+                        spec[{'ncols': 'facet_ncols'}.get(kw.arg, kw.arg)] = ast.literal_eval(kw.value)
                     except ValueError:
                         pass
         elif isinstance(node, ast.If) and isinstance(node.test, ast.Constant) and 'latex' not in spec:
@@ -89,7 +98,12 @@ def parse_data_plot(script: str) -> dict | None:
             # the columns of a wider table the plot uses (None: the whole table)
             'columns': spec.get('columns'),
             # the rows it uses (a pandas query; None: every row)
-            'where': spec.get('where')}
+            'where': spec.get('where'),
+            # lines skipped above the table by hand (None: found automatically)
+            'skip_rows': spec.get('skip_rows'),
+            # facets: one plot per value of a column (staplot.api.plot_facets)
+            'facet': spec.get('facet'), 'facet_row': spec.get('facet_row'),
+            'facet_ncols': spec.get('facet_ncols')}
 
 
 def data_plot_code(spec: dict) -> str | None:
@@ -108,7 +122,9 @@ def data_plot_code(spec: dict) -> str | None:
                      colors=spec.get('colors'), show_title=bool(spec.get('title')),
                      **{k: spec[k] for k in _LAYOUT_KEYS if spec.get(k) not in (None, False, [], '')},
                      **{k: False for k in ('show_ylabel', 'show_xlabel', 'show_points') if spec.get(k) is False},
-                     **{k: spec[k] for k in ('columns', 'where') if spec.get(k)})
+                     **_sel(spec),
+                     **{k: spec[k] for k in ('facet', 'facet_row') if spec.get(k)},
+                     **({'ncols': spec['facet_ncols']} if spec.get('facet_ncols') else {}))
     except Exception:
         return None
 
@@ -132,15 +148,29 @@ def plot_statistics(spec: dict) -> dict | None:
     except (OSError, TypeError):
         return {'error': f'table not found: {csv}'}
     cols = spec.get('columns') or None
-    ckw = {k: spec[k] for k in ('columns', 'where') if spec.get(k)}
+    ckw = _sel(spec)
     key = (csv, st.st_mtime_ns, st.st_size, spec['kind'], spec['only_significant'], spec['stats_mode'],
-           tuple(cols or ()), spec.get('where'))
+           tuple(cols or ()), spec.get('where'), spec.get('skip_rows'), spec.get('facet'), spec.get('facet_row'))
     if key in _STATS_CACHE:
         return _STATS_CACHE[key]
     try:
         from staplot import api
         mode = {'auto': None, 'parametric': True, 'nonparametric': False}.get(spec['stats_mode'])
-        if spec['kind'] in ('bar', 'box', 'violin'):
+        if spec.get('facet') and hasattr(api, 'facet_stats'):
+            recs = api.facet_stats(csv, spec['kind'], spec['facet'], spec.get('facet_row'),
+                                   only_significant=spec['only_significant'], stats_mode=spec['stats_mode'], **ckw)
+            out = {'facets': {k: {f: r.get(f) for f in ('test', 'omnibus', 'effects', 'split_comparisons', 'r',
+                                                       'p', 'error') if f in r}
+                              | {'comparisons': [{c: x.get(c) for c in ('a', 'b', 'p', 'p_text', 'stars')}
+                                                 for x in r.get('comparisons') or []]}
+                              for k, r in recs.items()}}
+        elif spec['kind'] == 'paired' and hasattr(api, 'paired_test'):
+            rec = api.paired_test(api.table_from_csv(csv, **ckw), only_significant=spec['only_significant'],
+                                  parametric=mode)
+            out = {k: rec.get(k) for k in ('test', 'omnibus', 'normality', 'n_subjects', 'error')}
+            out['comparisons'] = [{k: c.get(k) for k in ('a', 'b', 'p', 'p_text', 'stars')}
+                                  for c in rec.get('comparisons') or []]
+        elif spec['kind'] in ('bar', 'box', 'violin'):
             table = api.table_from_csv(csv, **ckw)
             rec = api.auto_test(table, only_significant=spec['only_significant'], parametric=mode)
             out = {'test': rec.get('test'), 'omnibus': rec.get('omnibus'), 'correction': rec.get('correction'),
@@ -174,10 +204,9 @@ def _groups(spec: dict) -> dict | None:
     """{group: n} from the CSV (the plot's own reader), for "I have 3 groups"."""
     try:
         from staplot import api
-        if spec.get('grouped_table') or spec['kind'] == 'scatter':
+        if spec.get('grouped_table') or spec['kind'] == 'scatter' or spec.get('facet'):
             return None
-        groups = api.table_from_csv(spec['csv'], **{k: spec[k] for k in ('columns', 'where') if spec.get(k)}
-                                    ).group_arrays()
+        groups = api.table_from_csv(spec['csv'], **_sel(spec)).group_arrays()
         if isinstance(groups, dict):
             return {str(k): int(sum(1 for v in vals if v == v)) for k, vals in groups.items()}
     except Exception:
@@ -196,8 +225,9 @@ def data_cleaning(spec: dict) -> str | None:
     except (OSError, TypeError):
         return None
     cols = spec.get('columns') or None
-    sel = {k: spec[k] for k in ('columns', 'where') if spec.get(k)}
-    key = ('cleaning', csv, st.st_mtime_ns, st.st_size, tuple(cols or ()), spec.get('where'))
+    sel = _sel(spec)
+    key = ('cleaning', csv, st.st_mtime_ns, st.st_size, tuple(cols or ()), spec.get('where'),
+           spec.get('skip_rows'))
     if key not in _STATS_CACHE:
         try:
             from staplot import api
@@ -221,6 +251,12 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
         out['change_it_with'] = ('edit_seaborn_plot (function, kind, x/y/hue, facets col/row/col_wrap, palette, '
                                  'labels, options) — never set_script on a seaborn plot')
         return out
+    from ..table_panel import parse as parse_table
+    table = parse_table(script)
+    if table:
+        return {'type': 'table_panel', **table,
+                'change_it_with': ('edit_table_panel (columns, where, by / value / stats for a summary, decimals, '
+                                   'title, rename) — never set_script on a table panel')}
     spec = parse_data_plot(script)
     if spec:
         out = {'type': 'data_plot', **{k: v for k, v in spec.items() if v not in (None, '', False) or

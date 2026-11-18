@@ -56,14 +56,15 @@ def table_file(path) -> str:
         return str(path)
 
 
-def read_table(path):
+def read_table(path, skip_rows=None):
     """The table the panel plots: CSV / TXT / TSV, or an Excel sheet (staplot)."""
     try:
         from staplot.api import read_table as staplot_read
     except ImportError:
         import pandas as pd
-        return pd.read_csv(path, sep=None, engine='python', encoding='utf-8-sig')
-    return staplot_read(path)
+        return pd.read_csv(path, sep=None, engine='python', encoding='utf-8-sig',
+                           skiprows=int(skip_rows or 0))
+    return staplot_read(path, skip_rows)
 
 
 def make_script(spec: dict) -> str:
@@ -79,7 +80,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as _Agg
 _spec = {spec!r}
 try:
     from staplot.api import read_table as _read_table     # CSV, TXT, Excel (book.xlsx::Sheet)
-    _df = _read_table(_spec['csv'])
+    _df = _read_table(_spec['csv'], _spec.get('skip_rows'))
 except ImportError:
     _df = _pd.read_csv(_spec['csv'], sep=None, engine='python', encoding='utf-8-sig')
 if _spec.get('where'):
@@ -88,13 +89,35 @@ _kw = {{}}
 for _k in {MAPPINGS!r}:
     if _spec.get(_k):
         _kw[_k] = _spec[_k]
+_ren = _spec.get('rename') or {{}}
+if _ren:
+    # the names shown: columns (axis labels, legend titles) and values (ticks, legend
+    # entries), e.g. {{"weight_g": "weight (g)", "mutA": "mutant A"}}; the table is unchanged
+    for _c in list(_df.columns):
+        if _df[_c].dtype == object or str(_df[_c].dtype) in ('string', 'str', 'category'):
+            _df[_c] = _df[_c].replace(_ren)
+    _df = _df.rename(columns=_ren)
+    for _k in list(_kw):
+        if _kw[_k] in _ren:
+            _kw[_k] = _ren[_kw[_k]]
 _used = []
 for _c in _kw.values():
     if _c in _df.columns:
         _used.append(_c)
 _df = _df.dropna(subset=_used)
 # colour-blind safe colours unless a palette is asked for (user, 2026-11-18)
-_sns.set_theme(style=_spec.get('style_theme') or 'ticks', context='paper', palette=_spec.get('palette') or 'colorblind')
+_pal = _spec.get('palette')
+_sns.set_theme(style=_spec.get('style_theme') or 'ticks', context='paper',
+               palette=_pal if isinstance(_pal, str) and _pal else 'colorblind')
+if isinstance(_pal, (dict, list)) and _kw.get('hue'):
+    # a colour per group ("female in red, male in blue"); renamed values keep theirs
+    # (a loop, not a comprehension: the script's names are not seen inside one)
+    if isinstance(_pal, dict):
+        _kw['palette'] = {{}}
+        for _k in _pal:
+            _kw['palette'][_ren.get(_k, _k)] = _pal[_k]
+    else:
+        _kw['palette'] = _pal
 _fn = getattr(_sns, _spec['function'])
 # points and lines of each hue also get their own shape: told apart without colour
 if _kw.get('hue') and not _kw.get('style') and (_spec['function'] in ('scatterplot', 'lineplot') or (_spec['function'] == 'relplot')):
@@ -147,6 +170,26 @@ else:
     if _spec.get('ylabel'):
         _ax.set_ylabel(_spec['ylabel'])
 _sns.despine(fig=fig)
+for _a in fig.axes:
+    if _spec.get('xlim'):
+        _lo, _hi = (list(_spec['xlim']) + [None, None])[:2]
+        _a.set_xlim(left=_lo, right=_hi)
+    if _spec.get('ylim'):
+        _lo, _hi = (list(_spec['ylim']) + [None, None])[:2]
+        _a.set_ylim(bottom=_lo, top=_hi)
+_where_legend = _spec.get('legend')
+if _where_legend:
+    # the legend: beside the plot, above it, inside, or none ("move the legend out")
+    _holder = _grid if '_grid' in dir() and hasattr(_grid, 'legend') and _grid.legend is not None else (
+        fig.axes[0] if fig.axes and fig.axes[0].get_legend() is not None else None)
+    if _holder is not None:
+        if _where_legend == 'none':
+            (_holder.legend if hasattr(_holder, 'legend') and not callable(_holder.legend) else _holder.get_legend()).remove()
+        else:
+            _place = {{'outside': ('upper left', (1.0, 1.0)), 'top': ('lower center', (0.5, 1.0)),
+                      'inside': ('best', None)}}[_where_legend]
+            _sns.move_legend(_holder, _place[0], bbox_to_anchor=_place[1], frameon=False,
+                             ncol=(20 if _where_legend == 'top' else 1))
 if _spec['function'] in {tuple(FIGURE_LEVEL)!r} and _spec['function'] not in ('heatmap', 'clustermap') and hasattr(_grid, 'tight_layout'):
     _grid.tight_layout()             # keeps room for the grid's legend (fig.tight_layout put a facet under it)
 else:
@@ -177,7 +220,7 @@ def check(spec: dict) -> str | None:
     if spec.get('kind') and function == 'catplot' and spec['kind'] not in CATEGORY_KINDS:
         return f'catplot kind must be one of {CATEGORY_KINDS}'
     try:
-        df = read_table(spec['csv'])
+        df = read_table(spec['csv'], spec.get('skip_rows'))
         columns = list(df.columns)
     except Exception as e:
         return f'could not read the table ({type(e).__name__}: {e})'
@@ -187,6 +230,17 @@ def check(spec: dict) -> str | None:
                 return f'no row where {spec["where"]}'
         except Exception as e:
             return f'cannot keep the rows where {spec["where"]!r} ({type(e).__name__}: {e}); its columns are {columns}'
+    if spec.get('legend') not in (None, '', 'outside', 'top', 'inside', 'none'):
+        return "legend must be 'outside', 'top', 'inside' or 'none'"
+    for lim in ('xlim', 'ylim'):
+        if spec.get(lim) is not None:
+            try:
+                if len(spec[lim]) != 2 or any(v is not None and not isinstance(v, (int, float)) for v in spec[lim]):
+                    raise TypeError
+            except TypeError:
+                return f'{lim} must be [low, high] (null for an automatic end)'
+    if spec.get('rename') is not None and not isinstance(spec['rename'], dict):
+        return 'rename must be {"old name": "new name", ...} (columns or values)'
     wanted = [spec[k] for k in MAPPINGS + ('index', 'columns', 'values') if spec.get(k)]
     missing = [c for c in wanted if c not in columns]
     if missing:
@@ -200,7 +254,7 @@ def check(spec: dict) -> str | None:
 def dropped_rows(spec: dict) -> str | None:
     """How many rows the plot leaves out (a missing value in a column it uses)."""
     try:
-        df = read_table(spec['csv'])
+        df = read_table(spec['csv'], spec.get('skip_rows'))
         if spec.get('where'):
             df = df.query(str(spec['where']), engine='python')
         used =[spec[k] for k in MAPPINGS if spec.get(k) and spec[k] in df.columns]
