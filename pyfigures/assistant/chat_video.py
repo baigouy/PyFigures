@@ -205,18 +205,37 @@ def _scaled(path, width):
     return image.resize((width, height), Image.LANCZOS)
 
 
+def h264_encoder(out_path='video.mp4'):
+    """PyAV's H.264 encoder, as the video export chooses it: x264, else the
+    system's (VideoToolbox on macOS, Media Foundation on Windows), so a Mac
+    whose FFmpeg has no x264 (OpenCV 5.1's took the place of PyAV's) still
+    writes MP4s. RuntimeError when there is none."""
+    from batoolset.img import _av_codec_for
+    codec = _av_codec_for(str(out_path))
+    if not codec:
+        raise RuntimeError('No H.264 encoder in this PyAV (pip install av): the MP4 cannot be written; '
+                           'the GIF can.')
+    return codec
+
+
 def encode_mp4(reel, out_path, width=MP4_WIDTH, crf=22):
     """H.264, yuv420p, faststart (plays in browsers and on forums)."""
     import av
+    codec = h264_encoder(out_path)
     container = av.open(str(out_path), 'w', options={'movflags': '+faststart'})
     try:
         stream = None
         for k, name in enumerate(reel.timeline(FPS)):
             frame = av.VideoFrame.from_image(_scaled(reel.folder / name, width))
             if stream is None:
-                stream = container.add_stream('libx264', rate=FPS)
+                stream = container.add_stream(codec, rate=FPS)
                 stream.width, stream.height, stream.pix_fmt = frame.width, frame.height, 'yuv420p'
-                stream.options = {'crf': str(crf), 'preset': 'slow'}
+                if codec == 'libx264':
+                    stream.options = {'crf': str(crf), 'preset': 'slow'}
+                else:
+                    # hardware encoders take a bit rate, not a crf: 0.3 bit per pixel
+                    # and frame (about 3 Mbit/s at 1280 px, 10 fps), plenty for a screen
+                    stream.bit_rate = int(0.3 * frame.width * frame.height * FPS)
             frame = frame.reformat(format='yuv420p')
             frame.pts = k
             for packet in stream.encode(frame):

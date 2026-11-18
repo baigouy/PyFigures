@@ -55,10 +55,25 @@ def _check_pdf_panels(tmp):
     return f"ok (pypdfium2 {version})"
 
 
-def _check_video():
+def _check_video(tmp):
+    """An H.264 MP4 is really written: with x264 when PyAV has it, else the
+    system's encoder (VideoToolbox on macOS, Media Foundation on Windows), the
+    order the video export uses. (Asking for libx264 by name failed every macOS
+    app when OpenCV 5.1's FFmpeg libraries took the place of PyAV's.)"""
     import av
-    assert "libx264" in av.codecs_available
-    return f"ok (PyAV {av.__version__})"
+    import numpy as np
+    from batoolset.img import _av_codec_for, _write_video_av
+    path = os.path.join(tmp, "self_test.mp4")
+    codec = _av_codec_for(path)
+    assert codec, f"no H.264 encoder in PyAV {av.__version__}"
+    frames = np.zeros((6, 64, 96, 3), np.uint8)
+    frames[:, :, :, 1] = np.arange(6, dtype=np.uint8)[:, None, None] * 40
+    _write_video_av(frames, path, 10, codec, 23)
+    with av.open(path) as container:
+        stream = container.streams.video[0]
+        assert stream.codec_context.name == "h264", stream.codec_context.name
+        assert sum(1 for _ in container.decode(stream)) == 6
+    return f"ok (PyAV {av.__version__}, {codec})"
 
 
 def _check_zarr():
@@ -179,7 +194,7 @@ def run(report_path):
     with tempfile.TemporaryDirectory() as tmp:
         for name, check in CHECKS.items():
             try:
-                results[name] = check(tmp) if name in ("pdf_panels", "chat") else check()
+                results[name] = check(tmp) if name in ("pdf_panels", "video", "chat") else check()
             except Exception:
                 results[name] = "FAILED: " + traceback.format_exc(limit=3)
     ok = all(v.startswith("ok") for v in results.values())
