@@ -45,7 +45,8 @@ continues on the next call; use the terminal command for folders of thousands of
 
 **Tools → Make a demo video from a chat…** (also in the chat sidebar's *Procedures* menu)
 films part of a chat that already happened, without asking the model again. You choose the
-chat, its first and last request, the pacing (about 1 s per step, 3 s on the result), whether
+chat, its first and last request, the pacing (about 1 s per step, 3 s on the result, at most
+60 s in all by default: a longer film has its steps and answers shortened alike), whether
 the model's intermediate messages show, and MP4 (H.264, 1280 px), GIF (8 frames/s, 960 px) or
 both. Off-screen, the figure is put back as it was before the first request (from the copy the
 chat saved then; if that copy is gone, an earlier one with the requests in between replayed

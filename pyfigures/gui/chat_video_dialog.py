@@ -65,6 +65,15 @@ class ChatVideoDialog(QDialog):
         self.final.setValue(3.0)
         self.final.setSuffix(' s')
         form.addRow('Pause on the result', self.final)
+        self.max_seconds = QDoubleSpinBox()
+        self.max_seconds.setRange(0.0, 600.0)
+        self.max_seconds.setDecimals(0)
+        self.max_seconds.setValue(60.0)
+        self.max_seconds.setSuffix(' s')
+        self.max_seconds.setSpecialValueText('no limit')
+        self.max_seconds.setToolTip('A longer film has its steps and answers shortened alike '
+                                    '(the typing and the final pause are kept)')
+        form.addRow('At most', self.max_seconds)
         self.intermediate = QCheckBox("Show the model's intermediate messages (not only its last answer)")
         self.intermediate.setChecked(True)
         form.addRow('', self.intermediate)
@@ -164,7 +173,8 @@ class ChatVideoDialog(QDialog):
 
     def options(self) -> V.Options:
         return V.Options(step_seconds=self.step.value(), final_seconds=self.final.value(),
-                         intermediate=self.intermediate.isChecked(), formats=FORMATS[self.format.currentIndex()][1])
+                         intermediate=self.intermediate.isChecked(), formats=FORMATS[self.format.currentIndex()][1],
+                         max_seconds=self.max_seconds.value())
 
     # making it ------------------------------------------------------------------------
     def command(self):
@@ -209,7 +219,9 @@ class ChatVideoDialog(QDialog):
         self.process = None
         if code == 0 and report:
             self.outputs = report.get('outputs') or []
-            self.log.appendPlainText(f"Done: {report.get('seconds')} s of video.")
+            self.log.appendPlainText(f"Done: {report.get('seconds')} s of video"
+                                     + (f" (shortened from {report.get('filmed_seconds')} s)."
+                                        if report.get('shortened') else '.'))
             for path in self.outputs:
                 self.log.appendPlainText(path)
             if report.get('failed_now'):

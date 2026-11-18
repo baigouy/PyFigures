@@ -1173,13 +1173,14 @@ def save_chat_procedure(procedure_path: str, chat_path: str = "") -> str:
 @mcp.tool()
 def make_chat_video(chat_path: str, output_path: str, first_request: int = 1, last_request: int = 0,
                     video_format: str = "both", step_seconds: float = 1.0, final_seconds: float = 3.0,
-                    intermediate_messages: bool = True) -> str:
+                    intermediate_messages: bool = True, max_seconds: float = 60.0) -> str:
     """A demo video (MP4 and/or GIF) of part of a past chat, without asking the model
     again: requests *first_request*..*last_request* (from 1; 0 = the last one) typed in the
     chat sidebar, the edits the model made then shown one by one on the figure, its
     recorded answers as they appeared, filmed off-screen from the copy of the figure saved
     before the first request. *video_format*: mp4, gif or both (same name, both
-    extensions). list_chat_steps lists a chat's requests. Takes about a minute.
+    extensions). A film longer than *max_seconds* (0 = no limit) has its steps and
+    answers shortened alike. list_chat_steps lists a chat's requests. Takes about a minute.
     GUI: Tools > Make a demo video from a chat…; command line:
     python -m pyfigures.assistant.chat_video CHAT --from N --to M -o demo.mp4"""
     from ..assistant import chat_video as V
@@ -1199,7 +1200,8 @@ def make_chat_video(chat_path: str, output_path: str, first_request: int = 1, la
     formats = ("mp4", "gif") if video_format == "both" else (video_format,)
     program, args = V.video_command(chat_path, first_request, last, output_path,
                                     V.Options(step_seconds=step_seconds, final_seconds=final_seconds,
-                                              intermediate=intermediate_messages, formats=formats))
+                                              intermediate=intermediate_messages, formats=formats,
+                                              max_seconds=max_seconds))
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "QT_QPA_PLATFORM": "offscreen"}
     try:
         done = subprocess.run([program] + args, capture_output=True, text=True, encoding="utf-8",

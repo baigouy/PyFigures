@@ -156,6 +156,23 @@ def test_the_reel_and_its_mp4_and_gif(tmp_path):
     assert V.output_path(tmp_path / 'demo.mp4', 'gif') == tmp_path / 'demo.gif'
 
 
+def test_a_long_film_is_shortened_to_the_limit(tmp_path):
+    """'it will be slow' (user, 2026-11-18): a film longer than max_seconds has its held
+    pictures shortened alike; the typing (one frame each) and the final pause stay."""
+    reel = V.Reel(tmp_path / 'frames')
+    for k in range(10):
+        reel.add(_Picture((k * 20, 0, 0)), 0.1)            # typing
+    for k in range(10):
+        reel.add(_Picture((0, k * 20, 0)), 5.0)            # steps and answers: 50 s
+    reel.hold(3.0)                                         # the result
+    assert reel.seconds == 54.0
+    assert not reel.fit(60) and reel.seconds == 54.0
+    assert reel.fit(20, final_seconds=3.0)
+    assert abs(reel.seconds - 20) <= 0.5
+    assert [n for _, n in reel.shots[:10]] == [1] * 10 and reel.shots[-1][1] >= 30
+    assert len({n for _, n in reel.shots[10:-1]}) == 1     # shortened alike
+
+
 def test_film_a_range_of_a_chat(qapp, gui, runtime, tmp_path):  # noqa: F811
     """Requests 2-3 only: the figure starts as before request 2 (not rotated), only those
     requests are typed, their edits happen on screen, the export is not run again."""
@@ -223,8 +240,8 @@ def test_the_dialog_lists_the_requests_and_makes_the_video(qapp, qtbot, gui, tmp
         dialog.intermediate.setChecked(False)
         dialog.format.setCurrentIndex(1)                     # MP4 only
         _program, args = dialog.command()
-        assert args[-9:] == ['-o', str(tmp_path / 'videos' / 'demo.mp4'), '--format', 'mp4', '--step', '0.2',
-                             '--final', '0.5', '--no-intermediate']
+        assert args[-11:] == ['-o', str(tmp_path / 'videos' / 'demo.mp4'), '--format', 'mp4', '--step', '0.2',
+                              '--final', '0.5', '--max', '60', '--no-intermediate']
         dialog.start()
         qtbot.waitUntil(lambda: dialog.process is None, timeout=240000)
         assert dialog.outputs == [str(tmp_path / 'videos' / 'demo.mp4')], dialog.log.toPlainText()
@@ -259,4 +276,4 @@ def test_video_command():
     exe, args = V.video_command('c.jsonl', 2, 3, 'd.mp4', V.Options(intermediate=False))
     assert args[:2] == ['-m', 'pyfigures.assistant.chat_video']
     assert args[2:] == ['c.jsonl', '--from', '2', '--to', '3', '-o', 'd.mp4', '--format', 'both',
-                        '--step', '1', '--final', '3', '--no-intermediate']
+                        '--step', '1', '--final', '3', '--max', '60', '--no-intermediate']

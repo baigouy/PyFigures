@@ -153,6 +153,24 @@ class Reel:
         self.folder.mkdir(parents=True, exist_ok=True)
         self.shots = []                     # [file name, frames]
 
+    def fit(self, max_seconds, final_seconds=0.0):
+        """At most *max_seconds* long: the pictures held for more than one frame (steps,
+        answers) shortened alike, the final pause kept; the typing (one frame per
+        picture) is never sped up. False when it already fits."""
+        limit = round(max_seconds * FPS)
+        if not max_seconds or self.frames <= limit:
+            return False
+        final = min(self.shots[-1][1] - 1, round(final_seconds * FPS)) if self.shots else 0
+        held = [s for s in self.shots if s[1] > 1]
+        fixed = self.frames - sum(s[1] - 1 for s in held)       # one frame per picture stays
+        spare = sum(s[1] - 1 for s in held) - final
+        room = max(0, limit - fixed - final)
+        scale = room / spare if spare > 0 else 0
+        for s in held:
+            extra = s[1] - 1 - (final if s is self.shots[-1] else 0)
+            s[1] = 1 + round(extra * scale) + (final if s is self.shots[-1] else 0)
+        return True
+
     def add(self, image, seconds):
         name = f'{len(self.shots):05d}.png'
         if not image.save(str(self.folder / name), 'PNG'):
@@ -299,6 +317,9 @@ class Options:
     intermediate: bool = True           # the model's messages before its last one
     formats: tuple = ('mp4', 'gif')     # () films only (frames kept in the work folder)
     typing_seconds: float = 2.5         # at most, for a long request
+    # a video short enough to be shared (user, 2026-11-18: a filmed chat "will be slow");
+    # longer: the steps and answers are shortened alike; 0 = no limit
+    max_seconds: float = 60.0
 
 
 def _wait(app, seconds):
@@ -335,21 +356,21 @@ def _images_loaded(app, window, timeout=60):
 
 
 def _label(image, text, area=None):
-    """*text* in a dark rounded box at the bottom right of *area* (a QRect of the
-    picture: the figure's canvas; the canvas' zoom buttons are at its bottom left)."""
+    """*text* in a dark rounded box at the top right of *area* (a QRect of the picture:
+    the figure's canvas), over its ruler rather than over the figure."""
     from qtpy.QtCore import QRectF, Qt
     from qtpy.QtGui import QColor, QFont, QPainter
     painter = QPainter(image)
     try:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont('Segoe UI' if sys.platform == 'win32' else 'DejaVu Sans')
-        font.setPixelSize(max(14, image.height() // 42))
+        font.setPixelSize(max(13, image.height() // 50))
         font.setBold(True)
         painter.setFont(font)
         metrics = painter.fontMetrics()
         w, h = metrics.horizontalAdvance(text) + 28, metrics.height() + 12
-        right, bottom = (area.right(), area.bottom()) if area is not None else (image.width(), image.height())
-        box = QRectF(right - w - 28, bottom - h - 28, w, h)
+        right, top = (area.right(), area.top()) if area is not None else (image.width(), 0)
+        box = QRectF(right - w - 24, top + 6, w, h)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(30, 30, 30, 190))
         painter.drawRoundedRect(box, 9, 9)
@@ -492,6 +513,9 @@ class Film:
     # the pictures ---------------------------------------------------------------------
     def _shot(self, seconds):
         _wait(self.app, 0.05)
+        if seconds > 1 / FPS:           # not while typing: the figure did not change
+            self._fit()
+            _wait(self.app, 0.05)
         from qtpy.QtCore import QPoint, QRect
         image = self.window.grab().toImage()
         model = next((r.model for r in self.requests[self.first - 1:self.last] if r.model), '')
@@ -598,6 +622,8 @@ class Film:
             self.reel.hold(self.options.final_seconds)
         finally:
             self._close()
+        self.report['filmed_seconds'] = round(self.reel.seconds, 1)
+        self.report['shortened'] = self.reel.fit(self.options.max_seconds, self.options.final_seconds)
         self.report['frames'], self.report['seconds'] = self.reel.frames, round(self.reel.seconds, 1)
         self.report['shots'] = len(self.reel.shots)
         for fmt in self.options.formats:
@@ -633,7 +659,7 @@ def video_command(chat, first, last, out_path, options=None) -> tuple[str, list]
     o = options or Options()
     fmt = 'both' if set(o.formats) == {'mp4', 'gif'} else (o.formats[0] if o.formats else 'mp4')
     args = [str(chat), '--from', str(first), '--to', str(last), '-o', str(out_path), '--format', fmt,
-            '--step', f'{o.step_seconds:g}', '--final', f'{o.final_seconds:g}']
+            '--step', f'{o.step_seconds:g}', '--final', f'{o.final_seconds:g}', '--max', f'{o.max_seconds:g}']
     if not o.intermediate:
         args.append('--no-intermediate')
     if getattr(sys, 'frozen', False):
@@ -664,6 +690,8 @@ def main(argv=None) -> int:
                    help='default: from the -o extension, else both')
     p.add_argument('--step', type=float, default=1.0, help='seconds per step (default 1)')
     p.add_argument('--final', type=float, default=3.0, help='seconds on the final result (default 3)')
+    p.add_argument('--max', type=float, default=60.0,
+                   help='longest video in seconds: steps and answers shortened alike to fit (default 60; 0 = no limit)')
     p.add_argument('--no-intermediate', action='store_true', help='only the model\'s last message of each request')
     p.add_argument('--keep-frames', metavar='FOLDER', help='keep the frames (PNG) in FOLDER')
     a = p.parse_args(argv)
@@ -677,7 +705,7 @@ def main(argv=None) -> int:
     fmt = a.format or {'.mp4': 'mp4', '.gif': 'gif'}.get(Path(a.out).suffix.lower() if a.out else '', 'both')
     formats = ('mp4', 'gif') if fmt == 'both' else (fmt,)
     options = Options(step_seconds=a.step, final_seconds=a.final, intermediate=not a.no_intermediate,
-                      formats=formats)
+                      formats=formats, max_seconds=a.max)
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
     if os.environ['QT_QPA_PLATFORM'].split(':')[0] != 'offscreen':
         os.environ['QT_QPA_PLATFORM'] = 'offscreen'
