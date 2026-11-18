@@ -1163,8 +1163,8 @@ def edit_data_plot(
     _set_child_text(img, "custom_loading_script", _encode_str(script))
     font_note = []
     if font_pt is not None:
-        if not 3 <= float(font_pt) <= 30:
-            return "ERROR: font_pt is the plot's text size in the printed figure, 3 to 30 points. Nothing was changed."
+        if not 3 <= float(font_pt) <= 72:
+            return "ERROR: font_pt is the plot's text size in the printed figure, 3 to 72 points. Nothing was changed."
         old_pt = _child_text(img, "publication_font_size")
         on_page = str(_child_text(img, "publication_font_on_page")) == "True"
         _plot_text_on_page(img, font_pt)

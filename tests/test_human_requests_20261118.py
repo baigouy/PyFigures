@@ -273,7 +273,7 @@ def test_plot_text_is_seven_points_on_the_page(pyf, book, qapp):
     assert float(_child_text(img, "publication_font_size")) == 7
     res = C.edit_data_plot(pyf, [], 0, font_pt=9)
     assert "-> 9 pt on the page" in res, res
-    assert C.edit_data_plot(pyf, [], 0, font_pt=100).startswith("ERROR: font_pt")
+    assert C.edit_data_plot(pyf, [], 0, font_pt=200).startswith("ERROR: font_pt")
     # drawn: whatever the panel's scale, the text measures 9 pt once the plot is fitted
     from batoolset.serializations.tools import element_to_dict, create_object
     _tree, root = _load(pyf)
@@ -291,3 +291,30 @@ def test_plot_text_is_seven_points_on_the_page(pyf, book, qapp):
             assert abs(tick * shown_pt / drawn_pt - 9) < 0.3, (scale, tick * shown_pt / drawn_pt)
         finally:
             panel._restore_publication_style(saved)
+
+
+def test_a_bigger_plot_font_shows_on_the_canvas_too(pyf, book, qapp):
+    """"I have the feeling changing font does nothing or image is not refreshed": the
+    page size was applied to exports only; the canvas kept the plot's own fonts."""
+    from batoolset.serializations.tools import element_to_dict, create_object
+    from pyfigures.panel_source_preview import qimage_to_rgb
+    from qtpy.QtGui import QImage, QPainter, QColor
+    C.add_data_plot(pyf, [], book, kind="box")
+    inks = []
+    for pt in (7, 20):
+        C.edit_data_plot(pyf, [], 0, font_pt=pt)
+        _tree, root = _load(pyf)
+        props = element_to_dict(list(root.iter("Image2D"))[-1])
+        panel = create_object("Image2D", props.get("Image2D", props))
+        panel.scale = 2.0
+        rect = panel.getRect(all=True)
+        image = QImage(int(rect.width()) + 2, int(rect.height()) + 2, QImage.Format.Format_RGBA8888)
+        image.fill(QColor(255, 255, 255))
+        painter = QPainter(image)                 # no antialiasing: the screen path
+        painter.translate(-rect.x(), -rect.y())
+        panel.draw(painter)
+        painter.end()
+        assert panel.renderer._pyf_page_key[1] == pt
+        rgb = qimage_to_rgb(image)
+        inks.append(int((rgb.sum(-1) < 200).sum()))
+    assert inks[1] > inks[0] * 1.3, inks         # far more dark (text) pixels at 20 pt
