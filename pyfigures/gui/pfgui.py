@@ -6393,6 +6393,61 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(edit_data_plot, 'Plot changed.', group_path=loc[0], image_index=loc[1], **changed)
         return changed
 
+    def edit_table_panel_dialog(self, panel):
+        """Right-click a table panel -> Table settings…: the summary (by, value, statistics),
+        the rows kept, decimals and title, changed with edit_table_panel."""
+        from pyfigures.table_panel import parse
+        spec = parse(getattr(panel, 'custom_loading_script', None) or '')
+        loc = self._locate_panel(panel)
+        if spec is None or loc is None:
+            QMessageBox.information(self, 'Table settings', 'This panel is not a table panel.')
+            return None
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+
+        def line(row, label, text, hint=''):
+            grid.addWidget(QLabel(label, frame), row, 0)
+            w = QLineEdit(text or '', frame)
+            w.setPlaceholderText(hint)
+            grid.addWidget(w, row, 1)
+            return w
+
+        def joined(v):
+            return ', '.join(v) if isinstance(v, list) else (v or '')
+        by = line(0, 'Summary by:', joined(spec.get('by')), 'columns, e.g. genotype, sex (empty: the rows)')
+        value = line(1, 'Of:', joined(spec.get('value')), 'a number column (empty: all)')
+        stats = line(2, 'Statistics:', joined(spec.get('stats')), 'n, mean±sd, median [iqr]...')
+        columns = line(3, 'Columns shown:', joined(spec.get('columns')), 'all')
+        where = line(4, 'Only the rows where:', spec.get('where'), 'e.g. day == 14')
+        decimals = line(5, 'Decimals:', str(spec.get('decimals', 2)))
+        title = line(6, 'Title:', spec.get('title'))
+        cd = CustomDialog(title="Table settings", message="Change the table panel", main_widget=frame,
+                          options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return None
+
+        def split(text):
+            return [x.strip() for x in text.split(',') if x.strip()]
+        new = {'by': split(by.text()), 'value': split(value.text()), 'stats': split(stats.text()),
+               'columns': split(columns.text()), 'where': where.text().strip(), 'title': title.text().strip()}
+        try:
+            new['decimals'] = int(decimals.text().strip() or 2)
+        except ValueError:
+            QMessageBox.warning(self, 'Table settings', 'Decimals must be a whole number.')
+            return None
+        old = {'by': spec.get('by') or [], 'value': spec.get('value') or [], 'stats': spec.get('stats') or [],
+               'columns': spec.get('columns') or [], 'where': spec.get('where') or '', 'title': spec.get('title') or '',
+               'decimals': spec.get('decimals', 2)}
+        for k in ('by', 'value'):
+            if isinstance(old[k], str):
+                old[k] = [old[k]]
+        changed = {k: v for k, v in new.items() if v != old[k]}
+        if not changed:
+            return None
+        from pyfigures.mcp_server import edit_table_panel
+        self._run_mcp_mutation(edit_table_panel, 'Table changed.', group_path=loc[0], image_index=loc[1], **changed)
+        return changed
+
     def show_plot_code(self, panel):
         """Right-click → Show plot code…: the Python code of a data or seaborn plot (it
         redraws the plot, then reads the table and reruns the test with pandas / scipy

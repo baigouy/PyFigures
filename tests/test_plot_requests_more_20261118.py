@@ -474,3 +474,35 @@ def test_values_as_a_percentage_of_the_control(pyf, tidy):
     assert ax.get_ylabel() == "% of WT"
     assert C.edit_data_plot(pyf, [], 0, normalize="KO").startswith("ERROR: no group")
     assert "normalize 'WT' -> None" in C.edit_data_plot(pyf, [], 0, normalize="")
+
+
+def test_table_settings_from_the_right_click_menu(qapp, monkeypatch, tidy, tmp_path):
+    from qtpy.QtWidgets import QDialog, QLineEdit, QMessageBox
+    from pyfigures.gui import pfgui
+    from pyfigures.gui.pfgui import EZFIG_GUI
+    from batoolset.drawings.shapes.image2d import Image2D
+    EZFIG_GUI.show_tips = lambda self: None
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: None))
+    pyf = str(tmp_path / "fig.pyf")
+    import pyfigures.mcp_server as M
+    M.create_figure(pyf, mode="canvas")
+    M.add_table_panel(pyf, [], tidy, by=["genotype"], value="area_um2")
+    g = EZFIG_GUI()
+    g.reload_state(pyf, append=False)
+    panel = [s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1]
+
+    class _Pick:
+        def __init__(self, *a, main_widget=None, **k):
+            edits = main_widget.findChildren(QLineEdit)
+            next(e for e in edits if e.text() == "genotype").setText("genotype, sex")
+            next(e for e in edits if e.placeholderText() == "e.g. day == 14").setText("day == 7")
+
+        def exec_(self):
+            return QDialog.Accepted
+    monkeypatch.setattr(pfgui, "CustomDialog", _Pick)
+    changed = g.edit_table_panel_dialog(panel)
+    assert changed == {"by": ["genotype", "sex"], "where": "day == 7"}, changed
+    from pyfigures.table_panel import parse
+    spec = parse([s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1].custom_loading_script)
+    assert spec["by"] == ["genotype", "sex"] and spec["where"] == "day == 7"
+    g._dirty = False

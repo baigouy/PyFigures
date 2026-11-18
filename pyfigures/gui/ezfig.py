@@ -2738,6 +2738,11 @@ class MyWidget(QWidget):
                             # its settings, as edit_data_plot changes them (GUI = MCP)
                             plot_settings = self.contextMenu.addAction("Plot settings…")
                             plot_settings.triggered.connect(lambda: gui.edit_data_plot_dialog(_plot_shape))
+                        from pyfigures.table_panel import parse as _parse_table
+                        if _parse_table(getattr(_plot_shape, 'custom_loading_script', '') or '') \
+                                and hasattr(gui, 'edit_table_panel_dialog'):
+                            table_settings = self.contextMenu.addAction("Table settings…")
+                            table_settings.triggered.connect(lambda: gui.edit_table_panel_dialog(_plot_shape))
                     _fn = getattr(self.selected_shape, 'filename', None)
                     if isinstance(_fn, str) and source_of(_fn) and hasattr(gui, 'recompile_latex_panel'):
                         _doc_shape = self.selected_shape
