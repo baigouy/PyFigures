@@ -318,3 +318,50 @@ def test_a_bigger_plot_font_shows_on_the_canvas_too(pyf, book, qapp):
         rgb = qimage_to_rgb(image)
         inks.append(int((rgb.sum(-1) < 200).sum()))
     assert inks[1] > inks[0] * 1.3, inks         # far more dark (text) pixels at 20 pt
+
+
+def test_a_restyled_plot_still_fills_its_panel(pyf, book, qapp):
+    """"it is not occupying the full space, which is a layout bug": its text set to the
+    page size changed the plot's outline, and the panel kept the old shape."""
+    import re as _re
+    from batoolset.serializations.tools import element_to_dict, create_object
+    from batoolset.matplolibs.tools import get_fig_rect
+    C.add_data_plot(pyf, [], book, kind="violin")
+    for pt, scale in ((7, 2.0), (20, 2.0), (7, 0.7)):
+        C.edit_data_plot(pyf, [], 0, font_pt=pt)
+        _tree, root = _load(pyf)
+        props = element_to_dict(list(root.iter("Image2D"))[-1])
+        panel = create_object("Image2D", props.get("Image2D", props))
+        panel.scale = scale
+        rect = get_fig_rect(panel.img)
+        size = tuple(panel.img.get_size_inches())
+        svg = panel._toBuffer(bufferType="svg", apply_publication=True).read().decode("utf-8", "replace")
+        w, h = (float(v) for v in _re.search(r'width="([\d.]+)pt" height="([\d.]+)pt"', svg).groups())
+        assert abs((w / h) / (rect.width() / rect.height()) - 1) < 0.02, (pt, scale, w / h)
+        assert tuple(panel.img.get_size_inches()) == size          # put back
+
+
+def test_the_scale_of_a_plot_is_its_y_axis(pyf, book):
+    """"make the scale bar start at 0 and go to 50", just after editing plot g: the chat
+    looked for an image scale bar and asked which panel."""
+    from pyfigures.assistant.categorized_mcp import __file__ as hints_file
+    hints = open(hints_file, encoding="utf-8").read()
+    assert '"start at 0 and go to 50" mean its y axis: ylim=[0, 50]' in hints
+    C.add_data_plot(pyf, [], book, kind="violin")
+    assert "ylim None -> [0.0, 50.0]" in C.edit_data_plot(pyf, [], 0, ylim=[0, 50])
+
+
+def test_rename_a_group_and_rotate_its_name_left(pyf, book):
+    """"rename mutA into mutant A" (the chat said to edit the Excel file); "rotate x
+    labels by 45 degrees left" (it chose -45, the user meant +45)."""
+    C.add_data_plot(pyf, [], book, kind="violin")
+    res = C.edit_data_plot(pyf, [], 0, rename={"muta": "mutant A"})
+    assert "rename None -> {'mutA': 'mutant A'}" in res, res
+    assert C.edit_data_plot(pyf, [], 0, rename={"zz": "x"}).startswith("ERROR: no group named")
+    from pyfigures.assistant.plot_info import parse_data_plot, staplot_call
+    assert "rename={'mutA': 'mutant A'}" in staplot_call(parse_data_plot(_scripts(pyf)[-1]))
+    assert "rename {'mutA': 'mutant A'} -> None" in C.edit_data_plot(pyf, [], 0, rename={})
+    doc = C.edit_data_plot.__doc__
+    assert '"rotate\n      left" / "anticlockwise" = positive' in doc
+    from pyfigures.assistant.categorized_mcp import __file__ as hints_file
+    assert '"rotate left" = +45' in open(hints_file, encoding="utf-8").read()

@@ -342,7 +342,7 @@ else:
 
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
-                    "xtick_rotation", "legend")
+                    "xtick_rotation", "legend", "rename")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -354,7 +354,7 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
     for key, value in values.items():
         if value is None:
             continue
-        if value is False or (not isinstance(value, bool) and value in (0, "", [])):
+        if value is False or (not isinstance(value, bool) and value in (0, "", [], {})):
             out.pop(key, None)
             continue
         if key in _LAYOUT_LIMITS:
@@ -384,6 +384,24 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 value = [None if v is None else float(v) for v in value]
             except (TypeError, ValueError):
                 return {}, "ylim must be two numbers (or null), e.g. [0, null]"
+        elif key == "rename":
+            if not isinstance(value, dict):
+                return {}, 'rename must be {"old name": "new name", ...}'
+            try:
+                from staplot import api as _api
+                names = ([c.name for c in _api.table_from_csv(csv_abs).columns] if kind != "grouped" else None)
+            except ImportError:
+                names = None
+            except Exception as e:
+                return {}, f"cannot read the groups of {csv_abs}: {e}"
+            if names is not None:
+                low = {n.lower(): n for n in names}
+                missing = [k for k in value if str(k).lower() not in low]
+                if missing:
+                    return {}, f"no group named {missing}; the groups are {names}"
+                value = {low[str(k).lower()]: str(v) for k, v in value.items()}
+            # names given before stay, the new ones are added
+            value = {**(out.get("rename") or {}), **value}
         elif key == "order":
             if kind not in ("bar", "box", "violin"):
                 return {}, "order (the groups' order) applies to bar, box and violin plots"
@@ -584,6 +602,7 @@ def add_data_plot(
     xtick_rotation: float | None = None,
     legend: str | None = None,
     font_pt: float | None = None,
+    rename: dict[str, str] | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -631,7 +650,8 @@ def add_data_plot(
       its panel), *font_scale* (1.3 = text 30 % bigger), *order* (group names in the
       order to draw; groups left out are dropped and not tested), *ylim* [low, high]
       (null keeps an end automatic), *log_y*, *xtick_rotation* (degrees, for long
-      group names), *legend* "inside" | "outside" | "none" (scatter, grouped).
+      group names), *legend* "inside" | "outside" | "none" (scatter, grouped), *rename*
+      {"mutA": "mutant A"} (the name a group shows; the table is unchanged).
     *font_pt*: the size of the plot's text in the printed figure, in points (default
       7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
       when the user asks for a size.
@@ -687,7 +707,8 @@ def add_data_plot(
     layout, bad = _plot_layout(kind, csv_abs,
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
-                                "xtick_rotation": xtick_rotation, "legend": legend})
+                                "xtick_rotation": xtick_rotation, "legend": legend,
+                                "rename": rename})
     if bad:
         return f"ERROR: {bad}; nothing was added."
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
@@ -1047,6 +1068,7 @@ def edit_data_plot(
     xtick_rotation: float | None = None,
     legend: str | None = None,
     font_pt: float | None = None,
+    rename: dict[str, str] | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1074,7 +1096,11 @@ def edit_data_plot(
       *font_scale*: relative sizes inside the plot only; for "bigger text" use font_pt.
     Layout: *order*: the groups in this order (names; groups left out are dropped and
       not tested); *ylim*: [low, high], null for an automatic end ("start the y axis at
-      0": [0, null]); *log_y*; *xtick_rotation*: degrees ("the group names overlap": 45);
+      0": [0, null]; on a plot "the scale" / "the scale bar" / "the range from 0 to 50"
+      is its y axis: [0, 50]); *rename*: {"mutA": "mutant A"} the name a group shows
+      (axis, legend, statistics; the table is unchanged; {} gives the table's names back); *log_y*; *xtick_rotation*: degrees ANTICLOCKWISE ("the group names overlap": 45; "rotate
+      left" / "anticlockwise" = positive, the names rising "/"; "rotate right" /
+      "clockwise" = negative, "\\");
       *legend*: "inside" | "outside" | "none".
     0, "" or [] clears a layout setting (back to the default); only what is asked changes.
     *csv_path*: plot another table (CSV, TXT, Excel) with the same settings.
@@ -1143,7 +1169,8 @@ def edit_data_plot(
     layout, bad = _plot_layout(new["kind"], new["csv"],
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
-                                "xtick_rotation": xtick_rotation, "legend": legend}, current)
+                                "xtick_rotation": xtick_rotation, "legend": legend,
+                                "rename": rename}, current)
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
     for k in PLOT_LAYOUT_KEYS:

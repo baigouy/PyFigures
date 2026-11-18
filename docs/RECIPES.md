@@ -445,7 +445,9 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `order` | list of group names | The groups in this order (bar, box, violin); groups left out are not drawn nor tested. |
 | `ylim` | `[low, high]` | The y range; `null` keeps an end automatic (`[0, null]`: y from 0). |
 | `log_y` | `true` / `false` | A log y axis. |
-| `xtick_rotation` | degrees | Tilted group names (`45`) when they overlap. |
+| `xtick_rotation` | degrees | Tilted group names when they overlap, anticlockwise: `45` rises "/" (rotated left), `-45` falls "\" (rotated right). |
+| `rename` | mapping | The name a group shows (`{mutA: mutant A}`): axis, legend and statistics; the table is unchanged. |
+| `font_pt` | points | The plot's text in the printed figure (default 7 pt, whatever the panel's size). |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 
 CSV formats:

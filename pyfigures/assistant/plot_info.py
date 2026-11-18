@@ -20,7 +20,8 @@ PLOT_KINDS = {
     'scatter': 'one numeric column against another, with a regression line and correlation test',
     'grouped': 'bars by two factors (e.g. genotype x treatment); two-way ANOVA (needs a two-factor CSV)',
 }
-_LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend')
+_LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
+                'rename')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -222,8 +223,9 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
             out['code'] = call
             out['full_code_with'] = 'data_plot_code'
         out['change_it_with'] = ('edit_data_plot (kind, error bars, only_significant, stats on/off, stats_mode, '
-                                 'labels, colours, csv_path, sheet; layout and size: aspect, width, height, font_scale, '
-                                 'order, ylim, log_y, xtick_rotation, legend) — never set_script on a data plot')
+                                 'labels, colours, csv_path, sheet; text size font_pt; layout and size: aspect, width, height, '
+                                 'order, rename (group names shown), ylim (its "scale" / "range": a plot has no scale bar), '
+                                 'log_y, xtick_rotation (anticlockwise: left = +), legend) — never set_script on a data plot')
         return out
     if not script:
         return {'type': 'figure', 'note': 'drawn by a matplotlib figure without a stored script'}
