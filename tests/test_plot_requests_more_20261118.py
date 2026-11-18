@@ -465,3 +465,12 @@ def test_plot_settings_from_the_right_click_menu(qapp, monkeypatch, tidy, tmp_pa
     for word in ("kind='violin'", "point_style='swarm'", "show_n=True", "control='WT'"):
         assert word in script, word
     g._dirty = False
+
+
+def test_values_as_a_percentage_of_the_control(pyf, tidy):
+    out = C.add_data_plot(pyf, [], tidy, kind="bar", columns=["genotype", "area_um2"], normalize="wt")
+    assert not out.startswith("ERROR"), out
+    ax = _draw(_scripts(pyf)[-1]).axes[0]
+    assert ax.get_ylabel() == "% of WT"
+    assert C.edit_data_plot(pyf, [], 0, normalize="KO").startswith("ERROR: no group")
+    assert "normalize 'WT' -> None" in C.edit_data_plot(pyf, [], 0, normalize="")

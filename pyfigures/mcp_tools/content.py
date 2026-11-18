@@ -408,7 +408,7 @@ else:
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
-                    "show_n", "show_mean", "p_format", "hlines", "control", "point_style")
+                    "show_n", "show_mean", "p_format", "hlines", "control", "point_style", "normalize")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -555,9 +555,11 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             if value == "jitter":
                 out.pop(key, None)
                 continue
-        elif key == "control":
-            if kind not in ("bar", "box", "violin"):
+        elif key in ("control", "normalize"):
+            if key == "control" and kind not in ("bar", "box", "violin"):
                 return {}, "control (compare every group with one) applies to bar, box and violin plots"
+            if key == "normalize" and kind not in ("bar", "box", "violin", "paired"):
+                return {}, "normalize (values as % of a group) applies to bar, box, violin and paired plots"
             try:
                 from staplot import api as _api
                 names = [c.name for c in _api.table_from_csv(csv_abs, **_sel({"columns": columns, "where": where,
@@ -569,7 +571,8 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             if names is not None:
                 low = {n.lower(): n for n in names}
                 if str(value).lower() not in low:
-                    return {}, f"no group named {value!r} to compare with; the groups are {names}"
+                    return {}, (f"no group named {value!r} to {'compare with' if key == 'control' else 'normalise to'}; "
+                                f"the groups are {names}")
                 value = low[str(value).lower()]
         elif key == "p_format":
             value = {"numbers": "p", "number": "p", "p-value": "p", "p-values": "p", "p value": "p",
@@ -929,6 +932,7 @@ def add_data_plot(
     hlines: list | None = None,
     control: str | None = None,
     point_style: str | None = None,
+    normalize: str | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -973,6 +977,8 @@ def add_data_plot(
       ANOVA + Dunnett's test, or Mann-Whitney against it (Bonferroni); bar, box, violin.
     *point_style*: the individual points "jitter" (default), "swarm" (side by side, never
       overlapping) or "line" (one column).
+    *normalize*: a group's name: the values as a % of its mean ("normalise to WT", "% of
+      control"); the y label says so unless given.
     The axis labels come from the table when not given: the value column's name on y
       (a long table, or columns=), the factor on x, the split / colour factor as the
       legend title.
@@ -1091,7 +1097,8 @@ def add_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines, "control": control, "point_style": point_style},
+                                "hlines": hlines, "control": control, "point_style": point_style,
+                                "normalize": normalize},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -1323,6 +1330,8 @@ def list_data_plot_kinds() -> str:
             + "\n- colours: colors=[one per group]; element_colors={'points': 'black', 'median': 'red', "
               "'edges': 'none', 'brackets': 'grey', 'error_bars', 'whiskers', 'outliers', 'inner', 'fit', "
               "'axes', 'background'}."
+            + "\n- normalised values: normalize='WT' = every value as a % of WT's mean (the y label says "
+              "'% of WT'); the tests are unchanged by the scaling."
             + "\n- comparisons against one control only: control='WT' (one-way ANOVA + Dunnett's test, or "
               "Mann-Whitney against it with Bonferroni); bar, box, violin."
             + "\n- journal details (every kind with groups): show_n=True (n under each name), show_mean=True "
@@ -1963,6 +1972,7 @@ def edit_data_plot(
     hlines: list | None = None,
     control: str | None = None,
     point_style: str | None = None,
+    normalize: str | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -2023,6 +2033,7 @@ def edit_data_plot(
     *control*: compare every group with this one only (Dunnett); "" = every pair again.
     *point_style*: "swarm" (points side by side, a beeswarm), "line" (one column),
       "jitter" (random, the default).
+    *normalize*: values as a % of this group's mean ("% of WT"); "" = the raw values.
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2110,7 +2121,8 @@ def edit_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines, "control": control, "point_style": point_style}, current,
+                                "hlines": hlines, "control": control, "point_style": point_style,
+                                "normalize": normalize}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
