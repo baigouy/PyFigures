@@ -368,3 +368,14 @@ def test_compare_everything_to_one_group(pyf, tidy):
     assert ("Dunnett" in stats["test"] or "vs WT" in stats["test"]) and all(c["a"] == "WT" for c in stats["comparisons"])
     assert C.edit_data_plot(pyf, [], 0, control="KO").startswith("ERROR: no group")
     assert "control 'WT' -> None" in C.edit_data_plot(pyf, [], 0, control="")
+
+
+def test_a_summary_saved_for_the_source_data(tidy, tmp_path):
+    out_csv = tmp_path / "summary.csv"
+    out = C.summarize_table(tidy, value="area_um2", by=["genotype", "sex"], out_path=str(out_csv))
+    assert "Saved to" in out
+    df = pd.read_csv(out_csv)
+    assert {"genotype", "sex", "n", "mean", "sd"} <= set(df.columns) and len(df) == 6
+    out_x = tmp_path / "summary.xlsx"
+    assert "Saved to" in C.summarize_table(tidy, by="genotype", out_path=str(out_x))
+    assert set(pd.ExcelFile(out_x).sheet_names) == {"day", "area_um2"}

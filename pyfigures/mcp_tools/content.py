@@ -1487,7 +1487,7 @@ def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5,
 @mcp.tool()
 def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str | None = None,
                     where: str | None = None, sheet: str | None = None,
-                    skip_rows: int | None = None) -> str:
+                    skip_rows: int | None = None, out_path: str | None = None) -> str:
     """Numbers of a data table by group, with pandas: n, mean, sd, sem, median, min and
     max of *value* for each combination of the *by* columns ("mean area per genotype and
     sex", "how many cells per day?"). Read-only; nothing is plotted or changed.
@@ -1496,6 +1496,8 @@ def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str
       (None = the whole table). *where*: rows to keep, as a pandas query
       ("day == 3", "treatment == 'drug' and area > 100"; backquote names with spaces:
       "`cells per field` > 30"). *sheet*: an Excel sheet, an SQLite table or query.
+    *out_path*: also save the summary there (.csv, .xlsx: one sheet per value), e.g. for
+      the source data of a figure; nothing else is written.
     """
     import pandas as pd
     df, table, bad = _read_any_table(csv_path, sheet, skip_rows)
@@ -1526,6 +1528,7 @@ def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str
     if not values:
         return "ERROR: no column of numbers to summarise."
     out = []
+    frames = {}
     for v in values:
         data = df[groups + [v]].copy()
         data[v] = pd.to_numeric(data[v], errors="coerce")
@@ -1534,11 +1537,25 @@ def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str
         if not groups:
             res = res.to_frame().T
         res = res.rename(columns={"count": "n", "std": "sd"})
+        frames[str(v)] = res
         with pd.option_context("display.max_rows", 200, "display.width", 200,
                                "display.float_format", "{:.4g}".format):
             out.append(f"{v}" + (f" by {', '.join(map(str, groups))}" if groups else "") + ":\n" + res.to_string())
     head = f"{os.path.basename(table)}: {len(df)} rows" + (f" where {where}" if where else "") + "."
-    return head + "\n" + "\n\n".join(out)
+    saved = ""
+    if out_path:
+        try:
+            out_path = os.path.abspath(str(out_path))
+            if out_path.lower().endswith((".xlsx", ".xlsm")):
+                with pd.ExcelWriter(out_path, engine="openpyxl") as book:
+                    for name, res in frames.items():
+                        res.to_excel(book, sheet_name=str(name)[:31] or "summary")
+            else:
+                pd.concat(frames, names=["value"]).to_csv(out_path)
+            saved = f"\nSaved to {out_path}."
+        except Exception as e:
+            return f"ERROR: cannot save {out_path} ({type(e).__name__}: {e})"
+    return head + saved + "\n" + "\n\n".join(out)
 
 
 _TABLE_PANEL_KEYS = ("columns", "where", "skip_rows", "by", "value", "stats", "decimals", "max_rows",
