@@ -1575,6 +1575,12 @@ class EZFIG_GUI(QMainWindow):
         insert_menu.addAction(data_plot_action)
         data_plot_action.triggered.connect(self.add_data_plot_action)
 
+        seaborn_action = QAction("Seaborn plot from CSV…", self)
+        seaborn_action.setToolTip('Any seaborn plot of a tidy table, with facets like ggplot2 '
+                                  '(one plot per value of a column)')
+        insert_menu.addAction(seaborn_action)
+        seaborn_action.triggered.connect(self.add_seaborn_plot_action)
+
         table_panel_action = QAction("Table from CSV…", self)
         table_panel_action.setToolTip('A data table, or a summary of it (n, mean ± SD... per group), '
                                       'as a live panel')
@@ -6514,6 +6520,92 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(add_scripted_image, f'Added {os.path.basename(path)} as a script panel.',
                                group_path=[], script=code)
         return True
+
+    def add_seaborn_plot_action(self, checked=False, path=None):
+        """Insert -> Seaborn plot from CSV: a seaborn plot of a tidy table, its columns picked
+        in combos (MCP: add_seaborn_plot)."""
+        if not path:
+            files = openFileNamesDialog(
+                parent_window=self,
+                extensions="Tables (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls *.db *.sqlite *.sqlite3 *.db3);;"
+                           "All Files (*)")
+            if not files:
+                return
+            path = files[0] if isinstance(files, (list, tuple)) else files
+        from pyfigures.seaborn_plot import FUNCTIONS, CATEGORY_KINDS
+        try:
+            from staplot.api import list_sheets, read_table
+            sheets = list_sheets(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Cannot read the table", str(e))
+            return
+        frame = QFrame(self)
+        grid = QGridLayout(frame)
+        row = 0
+        sheet_combo = None
+        if sheets:
+            grid.addWidget(QLabel('Sheet / table:', frame), row, 0)
+            sheet_combo = QComboBox(frame)
+            sheet_combo.setEditable(True)
+            sheet_combo.addItems(sheets)
+            grid.addWidget(sheet_combo, row, 1)
+            row += 1
+        grid.addWidget(QLabel('Function:', frame), row, 0)
+        fn_combo = QComboBox(frame)
+        fn_combo.addItems(list(FUNCTIONS))
+        fn_combo.setCurrentText('catplot')
+        fn_combo.setToolTip('\n'.join(f'{k}: {v}' for k, v in FUNCTIONS.items()))
+        grid.addWidget(fn_combo, row, 1)
+        grid.addWidget(QLabel('Kind:', frame), row + 1, 0)
+        kind_combo = QComboBox(frame)
+        kind_combo.addItems(['(default)'] + list(CATEGORY_KINDS) + ['scatter', 'line', 'hist', 'kde', 'ecdf'])
+        kind_combo.setCurrentText('box')
+        grid.addWidget(kind_combo, row + 1, 1)
+        combos = {}
+        for i, key in enumerate(('x', 'y', 'hue', 'col', 'row')):
+            grid.addWidget(QLabel(f'{key}:', frame), row + 2 + i, 0)
+            combos[key] = QComboBox(frame)
+            grid.addWidget(combos[key], row + 2 + i, 1)
+        r = row + 7
+        grid.addWidget(QLabel('Only the rows where:', frame), r, 0)
+        where_edit = QLineEdit('', frame)
+        where_edit.setPlaceholderText('all, or e.g. day == 14')
+        grid.addWidget(where_edit, r, 1)
+        split_cb = QCheckBox('Split violins by the hue (two levels)', frame)
+        grid.addWidget(split_cb, r + 1, 0, 1, 2)
+        grid.addWidget(QLabel('Title:', frame), r + 2, 0)
+        title_edit = QLineEdit('', frame)
+        grid.addWidget(title_edit, r + 2, 1)
+
+        def _fill(*_):
+            table = path + (('::' + sheet_combo.currentText()) if sheet_combo is not None else '')
+            try:
+                cols = [str(c) for c in read_table(table).columns]
+            except Exception:
+                cols = []
+            for key, c in combos.items():
+                c.clear()
+                c.addItem('(none)')
+                c.addItems(cols)
+        _fill()
+        if sheet_combo is not None:
+            sheet_combo.currentIndexChanged.connect(_fill)
+        cd = CustomDialog(title="Add a seaborn plot", message=os.path.basename(path), main_widget=frame,
+                          options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
+        if cd.exec_() != QDialog.Accepted:
+            return
+        kwargs = {k: c.currentText() for k, c in combos.items() if c.currentIndex() > 0}
+        if kind_combo.currentIndex() > 0 and fn_combo.currentText() in ('catplot', 'relplot', 'displot', 'jointplot'):
+            kwargs['kind'] = kind_combo.currentText()
+        if where_edit.text().strip():
+            kwargs['where'] = where_edit.text().strip()
+        if split_cb.isChecked():
+            kwargs['options'] = {'split': True}
+        from pyfigures.mcp_server import add_seaborn_plot
+        self._run_mcp_mutation(add_seaborn_plot, "Added a seaborn plot — drag it into place.", group_path=[],
+                               csv_path=path, function=fn_combo.currentText(),
+                               sheet=sheet_combo.currentText() if sheet_combo is not None else None,
+                               title=title_edit.text().strip(), **kwargs)
 
     def add_table_panel_action(self, checked=False, path=None):
         """Insert -> Table from CSV: the table's rows, or a summary per group, as a panel
