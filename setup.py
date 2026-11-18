@@ -110,7 +110,10 @@ setuptools.setup(
         ],
         'video': [
             "av",            # PyAV: reads videos and writes H.264 (bundles ffmpeg; Windows/macOS/Linux)
-            "opencv-python-headless",   # batoolset's mp4/avi/mkv stacks (cv2)
+            # batoolset's mp4/avi/mkv stacks (cv2). <5.1: on macOS, 5.1.0.95's bundled
+            # FFmpeg libraries take the place of PyAV's, which then has no H.264
+            # encoder (libx264): every macOS app failed its video self-test (2026-11-18)
+            "opencv-python-headless<5.1",
         ],
         'fiji': [
             "pyimagej",      # Fiji / Bio-Formats reader for .lif, .czi, .nd2, ... (needs Java)
@@ -138,7 +141,7 @@ setuptools.setup(
             "mcp>=1.12,<2",
             "qtpy-ai-sidecar>=0.1.14",
             "av",
-            "opencv-python-headless",
+            "opencv-python-headless<5.1",    # see 'video'
             "pyimagej",
             "zarr>=3; python_version >= '3.11'",
             "pymupdf",
