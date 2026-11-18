@@ -408,7 +408,7 @@ else:
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
-                    "show_n", "show_mean", "p_format", "hlines", "control")
+                    "show_n", "show_mean", "p_format", "hlines", "control", "point_style")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -543,6 +543,15 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             value = {**(out.get("rename") or {}), **value}
         elif key in ("show_n", "show_mean"):
             value = bool(value)
+        elif key == "point_style":
+            value = {"beeswarm": "swarm", "bee swarm": "swarm", "swarmplot": "swarm", "random": "jitter",
+                     "column": "line", "aligned": "line", "straight": "line"}.get(str(value).strip().lower(),
+                                                                                str(value).strip().lower())
+            if value not in ("jitter", "swarm", "line"):
+                return {}, "point_style must be 'jitter' (random), 'swarm' (side by side) or 'line' (one column)"
+            if value == "jitter":
+                out.pop(key, None)
+                continue
         elif key == "control":
             if kind not in ("bar", "box", "violin"):
                 return {}, "control (compare every group with one) applies to bar, box and violin plots"
@@ -891,6 +900,7 @@ def add_data_plot(
     p_format: str | None = None,
     hlines: list | None = None,
     control: str | None = None,
+    point_style: str | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -933,6 +943,8 @@ def add_data_plot(
       of stars; *hlines* reference lines: [1.0] or [{"y": 100, "label": "control"}].
     *control*: compare every group with this one only ("compare everything to WT"): one-way
       ANOVA + Dunnett's test, or Mann-Whitney against it (Bonferroni); bar, box, violin.
+    *point_style*: the individual points "jitter" (default), "swarm" (side by side, never
+      overlapping) or "line" (one column).
     The axis labels come from the table when not given: the value column's name on y
       (a long table, or columns=), the factor on x, the split / colour factor as the
       legend title.
@@ -1047,7 +1059,7 @@ def add_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines, "control": control},
+                                "hlines": hlines, "control": control, "point_style": point_style},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -1914,6 +1926,7 @@ def edit_data_plot(
     p_format: str | None = None,
     hlines: list | None = None,
     control: str | None = None,
+    point_style: str | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1972,6 +1985,8 @@ def edit_data_plot(
     stars"), "stars" back; *hlines*: reference lines ([1.0], [{"y": 100, "label":
     "control"}]; [] removes them).
     *control*: compare every group with this one only (Dunnett); "" = every pair again.
+    *point_style*: "swarm" (points side by side, a beeswarm), "line" (one column),
+      "jitter" (random, the default).
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2059,7 +2074,7 @@ def edit_data_plot(
                                 "rename": rename, "violin_inner": violin_inner,
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
-                                "hlines": hlines, "control": control}, current,
+                                "hlines": hlines, "control": control, "point_style": point_style}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."

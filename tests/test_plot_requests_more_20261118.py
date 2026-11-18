@@ -379,3 +379,11 @@ def test_a_summary_saved_for_the_source_data(tidy, tmp_path):
     out_x = tmp_path / "summary.xlsx"
     assert "Saved to" in C.summarize_table(tidy, by="genotype", out_path=str(out_x))
     assert set(pd.ExcelFile(out_x).sheet_names) == {"day", "area_um2"}
+
+
+def test_points_side_by_side(pyf, tidy):
+    C.add_data_plot(pyf, [], tidy, kind="violin", columns=["genotype", "area_um2"], point_style="beeswarm")
+    assert "point_style='swarm'" in _scripts(pyf)[-1]
+    _draw(_scripts(pyf)[-1])
+    assert "point_style 'swarm' -> 'line'" in C.edit_data_plot(pyf, [], 0, point_style="column")
+    assert C.edit_data_plot(pyf, [], 0, point_style="dots").startswith("ERROR: point_style")
