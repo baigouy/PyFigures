@@ -336,6 +336,14 @@ if __name__ == '__main__':
         run_live_mcp()
         sys.stdout.flush()
         os._exit(0)
+    if '--chat-video' in sys.argv:
+        # Tools > Make a demo video from a chat… in the standalone apps (no python
+        # to run `python -m pyfigures.assistant.chat_video`)
+        from pyfigures.assistant.chat_video import main as chat_video
+        rest = sys.argv[sys.argv.index('--chat-video') + 1:]
+        code = chat_video(rest)
+        sys.stdout.flush()
+        os._exit(code)
     if '--self-test' in sys.argv:
         # build check: PyFigures --self-test report.json (see pyfigures/self_test.py)
         from pyfigures.self_test import run as run_self_test

@@ -63,6 +63,9 @@ LINKED = {
     "menu: Tools > Save the last chat as a procedure…": [
         "test_chat_replay_20261113.py::test_save_the_last_chat_and_run_it_from_the_chat"],
     "menu: Tools > Run a procedure…": ["test_chat_replay_20261113.py::test_run_a_procedure_on_the_open_figure"],
+    # films part of a past chat in a process of its own (the film itself: test_film_a_range_of_a_chat)
+    "menu: Tools > Make a demo video from a chat…": [
+        "test_chat_video_20261118.py::test_the_dialog_lists_the_requests_and_makes_the_video"],
     "menu: Tools > MCP call history / undo…": [
         "test_mcp_history.py::test_gui_shows_the_history_and_undoes_the_last_mcp_change"],
     # records the user's own clicks: real events are sent through the application there

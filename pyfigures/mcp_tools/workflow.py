@@ -1171,6 +1171,56 @@ def save_chat_procedure(procedure_path: str, chat_path: str = "") -> str:
 
 
 @mcp.tool()
+def make_chat_video(chat_path: str, output_path: str, first_request: int = 1, last_request: int = 0,
+                    video_format: str = "both", step_seconds: float = 1.0, final_seconds: float = 3.0,
+                    intermediate_messages: bool = True) -> str:
+    """A demo video (MP4 and/or GIF) of part of a past chat, without asking the model
+    again: requests *first_request*..*last_request* (from 1; 0 = the last one) typed in the
+    chat sidebar, the edits the model made then shown one by one on the figure, its
+    recorded answers as they appeared, filmed off-screen from the copy of the figure saved
+    before the first request. *video_format*: mp4, gif or both (same name, both
+    extensions). list_chat_steps lists a chat's requests. Takes about a minute.
+    GUI: Tools > Make a demo video from a chat…; command line:
+    python -m pyfigures.assistant.chat_video CHAT --from N --to M -o demo.mp4"""
+    from ..assistant import chat_video as V
+    if video_format not in ("mp4", "gif", "both"):
+        return "ERROR: video_format is mp4, gif or both"
+    try:
+        requests = V.requests_of(chat_path)
+    except (OSError, ValueError) as e:
+        return f"ERROR: {e}"
+    last = last_request or len(requests)
+    try:
+        if not 1 <= first_request <= last <= len(requests):
+            raise ValueError(f"choose requests from 1 to {len(requests)}, the first before the last")
+        V.start_state(requests, first_request)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    formats = ("mp4", "gif") if video_format == "both" else (video_format,)
+    program, args = V.video_command(chat_path, first_request, last, output_path,
+                                    V.Options(step_seconds=step_seconds, final_seconds=final_seconds,
+                                              intermediate=intermediate_messages, formats=formats))
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "QT_QPA_PLATFORM": "offscreen"}
+    try:
+        done = subprocess.run([program] + args, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", env=env, timeout=1800,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0)
+    except subprocess.TimeoutExpired:
+        return "ERROR: the video took more than 30 minutes; choose fewer requests."
+    report = next((json.loads(line[7:]) for line in done.stdout.splitlines() if line.startswith("REPORT ")), None)
+    if done.returncode != 0 or report is None:
+        return "ERROR: the video could not be made: " + (done.stderr or done.stdout)[-1500:]
+    text = (f"Filmed requests {first_request}–{last} ({report['seconds']} s): " + ", ".join(report["outputs"])
+            + f". Started from {report['start']['note']}.")
+    if report["failed_now"]:
+        text += f" {len(report['failed_now'])} operation(s) failed now: " + "; ".join(
+            f["error"][:120] for f in report["failed_now"][:3])
+    if report["skipped"]:
+        text += f" Requests undone in the chat, not filmed: {report['skipped']}."
+    return text
+
+
+@mcp.tool()
 def run_procedure(procedure_path: str, figure_path: str, output_path: str = "",
                   keep_going: bool = False) -> str:
     """Run every step of a procedure (saved from a chat: save_chat_procedure, or Tools >

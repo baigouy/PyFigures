@@ -41,6 +41,24 @@ parent's index. Changing the embedding model means indexing again (the descripti
 only the texts are re-embedded). In the chat, one indexing call works for about 100 s and then
 continues on the next call; use the terminal command for folders of thousands of images.
 
+## Demo videos from past chats
+
+**Tools → Make a demo video from a chat…** (also in the chat sidebar's *Procedures* menu)
+films part of a chat that already happened, without asking the model again. You choose the
+chat, its first and last request, the pacing (about 1 s per step, 3 s on the result), whether
+the model's intermediate messages show, and MP4 (H.264, 1280 px), GIF (8 frames/s, 960 px) or
+both. Off-screen, the figure is put back as it was before the first request (from the copy the
+chat saved then; if that copy is gone, an earlier one with the requests in between replayed
+unseen), then each request is typed in the chat, the model's recorded edits are run again one
+by one on the figure and its recorded answers appear; a *Replayed from the chat* label is on
+every frame. The timing is not the real one, the images the chat used must still exist, edits
+made by hand between requests were not recorded, and exports or saves are not repeated.
+
+    python -m pyfigures.assistant.chat_video CHAT.jsonl --list
+    python -m pyfigures.assistant.chat_video CHAT.jsonl --from 2 --to 4 -o demo.mp4 --format both
+
+The chat logs are in `<user data>/qtpy-ai-sidecar/PyFigures/chats`; MCP: `make_chat_video`.
+
 # Poster / collage designer
 
 Alongside the main figure editor, PyFigures includes a separate **Poster /

@@ -1844,6 +1844,11 @@ class EZFIG_GUI(QMainWindow):
                                     "figure: the same changes on each figure")
         tools_menu.addAction(procedure_action)
         procedure_action.triggered.connect(lambda _checked=False: self.run_procedure_action())
+        chat_video_action = QAction("Make a demo video from a chat…", self)
+        chat_video_action.setToolTip("An MP4 / GIF of part of a past chat (from a first to a last request), "
+                                     "replayed off-screen without asking the model again")
+        tools_menu.addAction(chat_video_action)
+        chat_video_action.triggered.connect(lambda _checked=False: self.chat_video_action())
         self.pdf_vector_action = QAction("Vector PDF panels (PyMuPDF)…", self)
         tools_menu.addAction(self.pdf_vector_action)
         self.pdf_vector_action.triggered.connect(lambda *_: (self._offer_vector_pdf('menu'),
@@ -2031,7 +2036,7 @@ class EZFIG_GUI(QMainWindow):
         if not ai_features_enabled():
             for act in (self.chat_toolbar_action, mcp_server_action, mcp_history_action,
                         self.share_figure_action, chat_action, web_chat_action,
-                        self.chat_at_start_action, chat_tuto_action):
+                        self.chat_at_start_action, chat_tuto_action, chat_video_action):
                 act.setVisible(False)
 
     # Maps each persistent toolbar QAction to its qtawesome icon name.
@@ -6649,6 +6654,13 @@ class EZFIG_GUI(QMainWindow):
         self._replay_dialog = dialog
         dialog.show()
         return dialog
+
+    def chat_video_action(self, chat=None):
+        """Tools > Make a demo video from a chat…: part of a past chat filmed off-screen
+        (pyfigures.assistant.chat_video). Returns the dialog (non-modal)."""
+        from pyfigures.gui.chat_video_dialog import open_dialog
+        self._chat_video_dialog = open_dialog(self, chat)
+        return self._chat_video_dialog
 
     def run_procedure_action(self, path=None):
         """Tools > Run a procedure…: every step of a procedure file on this figure at once
