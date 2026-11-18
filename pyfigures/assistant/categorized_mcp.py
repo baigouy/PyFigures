@@ -111,6 +111,23 @@ def topic_note(words):
                 'taller: put fewer images in it (arrange_live_images row_counts), crop its images narrower '
                 '(transform_image), or widen the whole figure (resize_figure). set_size on one row makes it wider than '
                 'the others: not what is asked. Say this and offer these choices; do not search further. ')
+    if words & {'column', 'columns', 'sheet', 'sheets', 'head', 'preview', 'factor', 'factors', 'factorizable',
+                'levels', 'mean', 'means', 'summary', 'summarize', 'summarise'} \
+            and words & {'table', 'tables', 'csv', 'excel', 'xlsx', 'xls', 'sqlite', 'data', 'dataframe'}:
+        # 2026-11-18: eight searches for a way to read a table's columns, then stopped
+        return ('TABLES: describe_table(csv_path, sheet) = its columns, types, levels, first rows and the plots '
+                'that fit; list_factor_columns(csv_path, sheet) = the columns that can split / colour / facet; '
+                'summarize_table(csv_path, value, by, where) = n, mean, SD per group; add_table_panel = a table '
+                'as a figure panel. A data plot / seaborn plot panel already says its table in panel_references. '
+                'Call one of them now; do not search further. ')
+    if words & {'half', 'split', 'splitted', 'raincloud'} and words & {'violin', 'violins'}:
+        return ('HALF / SPLIT VIOLINS: edit_data_plot(panel_ref, violin_side="left") = half violins (points on the '
+                'other side); kind="split_violin" with columns=[x, two-level column, value] = two conditions as the '
+                'two halves (e.g. sex); seaborn: add_seaborn_plot(function="violinplot", hue=..., options={"split": '
+                'true}). Do not search further. ')
+    if words & {'facet', 'facets', 'faceted'}:
+        return ('FACETS: add_data_plot / edit_data_plot(facet="day") = one plot per value, each with its '
+                'statistics (facet_row for a grid); seaborn: col= / row=. Do not search further. ')
     if words & {'z', 'slice', 'slices', 'plane'} and not words & {'montage', 'orthogonal'}:
         return ('ONE Z SLICE: configure_image(projection="max", projection_z_start=k, projection_z_end=k+1) shows slice k '
                 '(0-based) alone; "next z" = the current start + 1 (no stored start = a projection of all slices or slice 0: '

@@ -416,3 +416,17 @@ def test_colours_given_by_group_name(pyf, tidy):
     out = C.edit_data_plot(pyf, [], 0, colors={"KO": "blue"})
     assert out.startswith("ERROR") and "no group" in out
     assert C.edit_data_plot(pyf, [], 0, colors={"mutB": "blurple"}).startswith("ERROR: unknown colour")
+
+
+def test_the_chat_search_points_at_the_table_tools():
+    """The chat searched eight times for the columns of a table (2026-11-18), then stopped."""
+    from pyfigures.assistant.categorized_mcp import topic_note
+    for query in ("read csv excel table columns names preview sheet head rows",
+                  "table columns names csv xlsx sheet inspect_table table_info column names values head",
+                  "list factorizable columns of the table"):
+        assert topic_note(query.split()).startswith("TABLES"), query
+    assert topic_note("half violin split violin half_violin seaborn split=True".split()).startswith("HALF / SPLIT")
+    assert topic_note("facet the plot by day".split()).startswith("FACETS")
+    # layout words are not table words
+    assert not topic_note("arrange images in one column".split()).startswith("TABLES")
+    assert not topic_note("add a scale bar to each of the panels".split()).startswith("FACETS")
