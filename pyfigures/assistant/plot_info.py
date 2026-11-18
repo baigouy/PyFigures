@@ -19,9 +19,11 @@ PLOT_KINDS = {
     'violin': 'the shape of each group\'s distribution; group comparisons',
     'scatter': 'one numeric column against another, with a regression line and correlation test',
     'grouped': 'bars by two factors (e.g. genotype x treatment); two-way ANOVA (needs a two-factor CSV)',
+    'split_violin': 'two conditions (e.g. sex) as the two halves of each violin, a legend naming them; '
+                    'each pair tested, two-way ANOVA (needs a two-factor table with a two-level factor)',
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
-                'rename', 'violin_inner')
+                'rename', 'violin_inner', 'violin_side')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -57,6 +59,12 @@ def parse_data_plot(script: str) -> dict | None:
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
             if node.func.attr in ('table_from_csv', 'grouped_table_from_csv'):
                 spec['grouped_table'] = node.func.attr == 'grouped_table_from_csv'
+                for kw in node.keywords:
+                    if kw.arg in ('columns', 'where'):
+                        try:
+                            spec[kw.arg] = ast.literal_eval(kw.value)
+                        except ValueError:
+                            pass
             elif node.func.attr == 'plot':
                 for kw in node.keywords:
                     try:
@@ -77,7 +85,11 @@ def parse_data_plot(script: str) -> dict | None:
             **{k: spec.get(k) for k in _LAYOUT_KEYS},
             # False: that axis has no label at all
             'show_ylabel': spec.get('show_ylabel', True), 'show_xlabel': spec.get('show_xlabel', True),
-            'show_points': spec.get('show_points', True)}
+            'show_points': spec.get('show_points', True),
+            # the columns of a wider table the plot uses (None: the whole table)
+            'columns': spec.get('columns'),
+            # the rows it uses (a pandas query; None: every row)
+            'where': spec.get('where')}
 
 
 def data_plot_code(spec: dict) -> str | None:
@@ -95,7 +107,8 @@ def data_plot_code(spec: dict) -> str | None:
                      ylabel=spec.get('ylabel', ''), xlabel=spec.get('xlabel', ''),
                      colors=spec.get('colors'), show_title=bool(spec.get('title')),
                      **{k: spec[k] for k in _LAYOUT_KEYS if spec.get(k) not in (None, False, [], '')},
-                     **{k: False for k in ('show_ylabel', 'show_xlabel', 'show_points') if spec.get(k) is False})
+                     **{k: False for k in ('show_ylabel', 'show_xlabel', 'show_points') if spec.get(k) is False},
+                     **{k: spec[k] for k in ('columns', 'where') if spec.get(k)})
     except Exception:
         return None
 
@@ -118,14 +131,17 @@ def plot_statistics(spec: dict) -> dict | None:
         st = os.stat(_table_file(csv))
     except (OSError, TypeError):
         return {'error': f'table not found: {csv}'}
-    key = (csv, st.st_mtime_ns, st.st_size, spec['kind'], spec['only_significant'], spec['stats_mode'])
+    cols = spec.get('columns') or None
+    ckw = {k: spec[k] for k in ('columns', 'where') if spec.get(k)}
+    key = (csv, st.st_mtime_ns, st.st_size, spec['kind'], spec['only_significant'], spec['stats_mode'],
+           tuple(cols or ()), spec.get('where'))
     if key in _STATS_CACHE:
         return _STATS_CACHE[key]
     try:
         from staplot import api
         mode = {'auto': None, 'parametric': True, 'nonparametric': False}.get(spec['stats_mode'])
         if spec['kind'] in ('bar', 'box', 'violin'):
-            table = api.table_from_csv(csv)
+            table = api.table_from_csv(csv, **ckw)
             rec = api.auto_test(table, only_significant=spec['only_significant'], parametric=mode)
             out = {'test': rec.get('test'), 'omnibus': rec.get('omnibus'), 'correction': rec.get('correction'),
                    'normality': rec.get('normality'),
@@ -136,11 +152,14 @@ def plot_statistics(spec: dict) -> dict | None:
             if rec.get('warnings'):
                 out['warnings'] = rec['warnings']
         elif spec['kind'] == 'scatter':
-            rec = api.correlation_test(api.table_from_csv(csv))
+            rec = api.correlation_test(api.table_from_csv(csv, **ckw))
             out = {k: rec.get(k) for k in ('test', 'r', 'r2', 'p', 'n', 'x', 'y')}
-        elif spec['kind'] == 'grouped':
-            rec = api.two_way_test(api.grouped_table_from_csv(csv))
+        elif spec['kind'] in ('grouped', 'split_violin'):
+            gt = api.grouped_table_from_csv(csv, **ckw)
+            rec = api.two_way_test(gt)
             out = {'test': rec.get('test'), 'effects': rec.get('effects')}
+            if spec['kind'] == 'split_violin' and hasattr(api, 'split_pair_tests'):
+                out['split_comparisons'] = api.split_pair_tests(*api.split_parts(gt))
         else:
             out = None
     except Exception as e:                      # soft dependency, odd CSVs: say so, never fail the description
@@ -157,7 +176,8 @@ def _groups(spec: dict) -> dict | None:
         from staplot import api
         if spec.get('grouped_table') or spec['kind'] == 'scatter':
             return None
-        groups = api.table_from_csv(spec['csv']).group_arrays()
+        groups = api.table_from_csv(spec['csv'], **{k: spec[k] for k in ('columns', 'where') if spec.get(k)}
+                                    ).group_arrays()
         if isinstance(groups, dict):
             return {str(k): int(sum(1 for v in vals if v == v)) for k, vals in groups.items()}
     except Exception:
@@ -168,19 +188,21 @@ def _groups(spec: dict) -> dict | None:
 def data_cleaning(spec: dict) -> str | None:
     """staplot's account of the CSV's left-out cells (staplot >= 0.1.1), cached with the
     statistics; None with an older staplot or for a grouped (two-factor) table."""
-    if spec.get('grouped_table') or spec.get('kind') == 'grouped':
+    if spec.get('grouped_table') or spec.get('kind') in ('grouped', 'split_violin'):
         return None
     csv = spec.get('csv')
     try:
         st = os.stat(_table_file(csv))
     except (OSError, TypeError):
         return None
-    key = ('cleaning', csv, st.st_mtime_ns, st.st_size)
+    cols = spec.get('columns') or None
+    sel = {k: spec[k] for k in ('columns', 'where') if spec.get(k)}
+    key = ('cleaning', csv, st.st_mtime_ns, st.st_size, tuple(cols or ()), spec.get('where'))
     if key not in _STATS_CACHE:
         try:
             from staplot import api
             report = getattr(api, 'csv_cleaning_report', None)
-            _STATS_CACHE[key] = report(csv)['summary'] if report else None
+            _STATS_CACHE[key] = report(csv, **sel)['summary'] if report else None
         except Exception:
             _STATS_CACHE[key] = None
     return _STATS_CACHE[key]
@@ -225,7 +247,7 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
             out['full_code_with'] = 'data_plot_code'
         out['change_it_with'] = ('edit_data_plot (kind, error bars, only_significant, stats on/off, stats_mode, '
                                  'labels, colours, csv_path, sheet; text size font_pt; layout and size: aspect, width, height, '
-                                 'order, rename (group names shown), show_points, violin_inner, ylim (its "scale" / "range": a plot has no scale bar), '
+                                 'order, rename (group names shown), show_points, violin_inner, violin_side (half violins), ylim (its "scale" / "range": a plot has no scale bar), '
                                  'log_y, xtick_rotation (anticlockwise: left = +), legend) — never set_script on a data plot')
         return out
     if not script:

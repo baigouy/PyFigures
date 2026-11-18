@@ -318,7 +318,7 @@ def _csv_groups(path, kind):
         except ValueError:
             return False
     body = rows[1:]
-    if kind != "grouped" and len(header) == 2 and body and not isnum(body[0][0]) and isnum(body[0][1]):
+    if kind not in ("grouped", "split_violin") and len(header) == 2 and body and not isnum(body[0][0]) and isnum(body[0][1]):
         seen = []
         for r in body:
             if r and r[0].strip() and r[0].strip() not in seen:
@@ -384,7 +384,7 @@ def _panel_description(img, stats):
             base += f" ({_join(cw)})"
         kind = "merge"
     elif "from staplot import api" in script:
-        m = re.search(r"kind=('[a-z]+')", script)
+        m = re.search(r"kind=('[a-z_]+')", script)
         pk = ast.literal_eval(m.group(1)) if m else "data"
         c = re.search(r"^_csv = (.*)$", script, re.M)
         csvp = ast.literal_eval(c.group(1)) if c else None
@@ -392,7 +392,8 @@ def _panel_description(img, stats):
         yl = re.search(r"ylabel=('(?:[^'\\]|\\.)*')", script)
         ylabel = ast.literal_eval(yl.group(1)) if yl else ""
         base = {"bar": "bar chart", "box": "box plot", "violin": "violin plot",
-                "scatter": "scatter plot", "grouped": "grouped bar chart"}.get(pk, "chart")
+                "scatter": "scatter plot", "grouped": "grouped bar chart",
+                "split_violin": "split violin plot"}.get(pk, "chart")
         if ylabel:
             base += f" of {ylabel}"
         if groups and pk != "scatter":

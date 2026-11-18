@@ -254,10 +254,12 @@ def add_channel_merge(
     )
 
 
-_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped")
+_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin")
+# the kinds drawn from a two-factor table (factor A, factor B, value)
+_TWO_FACTOR_KINDS = ("grouped", "split_violin")
 
 
-def _auto_kind(table: str) -> tuple[str | None, str]:
+def _auto_kind(table: str, columns=None, where=None) -> tuple[str | None, str]:
     """(kind, why) for kind="auto": staplot.api.suggest_kind (the plot that shows the
     table best: grouped for two factors, scatter for an x / y series, else bar / box /
     violin by the number of points per group); (None, why) when it cannot tell."""
@@ -266,7 +268,8 @@ def _auto_kind(table: str) -> tuple[str | None, str]:
         pick = getattr(_api, "suggest_kind", None)
         if pick is None:
             return "bar", "staplot too old to choose; bar"
-        rec = pick(table)
+        sel = {k: v for k, v in (("columns", columns), ("where", where)) if v}
+        rec = pick(table, **sel)
         return rec.get("kind"), rec.get("reason", "")
     except ImportError:
         return "bar", "staplot is not installed"
@@ -286,7 +289,7 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
 
     NB: no nested def()s — PyFigures exec's scripts with split globals/locals, so
     a nested function cannot see top-level imports (name 'np' not defined)."""
-    builder = "grouped_table_from_csv" if kind == "grouped" else "table_from_csv"
+    builder = "grouped_table_from_csv" if kind in _TWO_FACTOR_KINDS else "table_from_csv"
     # width / height of the plot (a plot can take any shape, unlike an image), its size,
     # text size, group order, y axis, labels, legend: only what was asked
     layout = dict(layout or {})
@@ -297,6 +300,11 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
     # an axis label removed: none at all, not staplot's automatic "Value"
     aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel", "show_points")
                          if layout.get(k) is False)
+    # the columns of a wider (tidy) table the plot uses ("split by sex" from a sheet
+    # holding genotype, treatment, sex, day, area)
+    cols_kw = f", columns={list(layout['columns'])!r}" if layout.get("columns") else ""
+    # only some rows ("only day 14", "only the males"): a pandas query on the table
+    cols_kw += f", where={str(layout['where'])!r}" if layout.get("where") else ""
     return f"""\
 import numpy as np
 _csv = {csv_path!r}
@@ -321,7 +329,7 @@ else:
             _rc = _latex_rc()
         except Exception:
             _rc = {{}}
-    _tbl = _api.{builder}(_csv)
+    _tbl = _api.{builder}(_csv{cols_kw})
     with _mpl.rc_context(_rc):
         fig, _rec = _api.plot(_tbl, kind={kind!r}, error={error!r},
                               annotate={bool(annotate)!r},
@@ -343,11 +351,53 @@ else:
 
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
-                    "xtick_rotation", "legend", "rename", "violin_inner")
+                    "xtick_rotation", "legend", "rename", "violin_inner", "violin_side")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
-def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = None) -> tuple[dict, str]:
+def _plot_where(csv_abs: str, where) -> tuple[str | None, str]:
+    """(the row filter of a plot, a pandas query, or None; error): checked on the table."""
+    if where in (None, "", 0, False):
+        return None, ""
+    where = str(where).strip()
+    try:
+        from staplot.api import read_table, select_columns
+        select_columns(read_table(csv_abs), None, where)
+    except ImportError:
+        pass
+    except Exception as e:
+        return None, str(e)
+    return where, ""
+
+
+def _plot_columns(csv_abs: str, kind: str, columns) -> tuple[list | None, str]:
+    """(the columns a plot uses, of a wider table, or None for the whole table; error).
+    Two-factor kinds take three (factor on x, factor split / coloured, value); the others
+    two (group, value) or one value column per group."""
+    if columns in (None, "", [], 0, False):
+        return None, ""
+    cols = [columns] if isinstance(columns, str) else [str(c) for c in columns]
+    want = {"grouped": 3, "split_violin": 3}.get(kind)
+    if want and len(cols) != want:
+        return None, (f"a {kind} plot takes 3 columns: the factor on x, the factor "
+                      f"{'split into the two halves' if kind == 'split_violin' else 'in colour'}, "
+                      f"the value (e.g. ['genotype', 'sex', 'area'])")
+    if not want and len(cols) < 2 and kind != "scatter":
+        return None, ("give 2 columns (the group column, then the value column, e.g. "
+                      "['genotype', 'area']) or one column per group")
+    try:
+        from staplot import api as _api
+        from staplot.api import read_table, select_columns
+        cols = [str(c) for c in select_columns(read_table(csv_abs), cols).columns]
+    except ImportError:
+        pass
+    except Exception as e:
+        return None, str(e)
+    return cols, ""
+
+
+def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = None,
+                 columns=None, where=None) -> tuple[dict, str]:
     """(layout, error) for a data plot: *current* with the given *values* changed.
     A value of 0 / "" / [] / False clears a setting (back to staplot's default)."""
     out = {k: v for k, v in (current or {}).items()
@@ -392,12 +442,22 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             if value == "lines":
                 out.pop(key, None)
                 continue
+        elif key == "violin_side":
+            value = {"half": "left", "true": "left", "full": "both", "whole": "both"}.get(
+                str(value).strip().lower(), str(value).strip().lower())
+            if value not in ("both", "left", "right"):
+                return {}, ("violin_side must be 'left' or 'right' (half violins, the points on the other "
+                            "side) or 'both' (whole violins, the default)")
+            if value == "both":
+                out.pop(key, None)
+                continue
         elif key == "rename":
             if not isinstance(value, dict):
                 return {}, 'rename must be {"old name": "new name", ...}'
             try:
                 from staplot import api as _api
-                names = ([c.name for c in _api.table_from_csv(csv_abs).columns] if kind != "grouped" else None)
+                names = ([c.name for c in _api.table_from_csv(csv_abs, columns=columns, where=where).columns]
+                         if kind not in _TWO_FACTOR_KINDS else None)
             except ImportError:
                 names = None
             except Exception as e:
@@ -416,7 +476,7 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             value = [str(v) for v in (value if isinstance(value, (list, tuple)) else [value])]
             try:
                 from staplot import api as _api
-                names = [c.name for c in _api.table_from_csv(csv_abs).columns]
+                names = [c.name for c in _api.table_from_csv(csv_abs, columns=columns, where=where).columns]
             except ImportError:
                 names = None
             except Exception as e:
@@ -474,7 +534,7 @@ def _plot_colours(colors) -> tuple[list | None, str]:
 
 
 def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
-                          stats_mode: str = "auto", label=None):
+                          stats_mode: str = "auto", label=None, columns=None, where=None):
     """(the figure's stats-provenance entry or None, a note for the reply, warnings) of a
     data plot: pairwise tests for bar/box/violin, two-way ANOVA for grouped, a
     correlation for scatter. Shared by add_data_plot and the GUI's dropped tables."""
@@ -483,19 +543,27 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
     _mode = {"auto": None, "parametric": True, "nonparametric": False}.get(stats_mode)
     try:
         from staplot import api as _api
+        _ckw = {k: v for k, v in (("columns", columns), ("where", where)) if v}
         if kind in ("bar", "box", "violin"):
-            rec = _api.auto_test(_api.table_from_csv(csv_abs), only_significant=only_significant,
+            rec = _api.auto_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
                                  parametric=_mode)
-        elif kind == "grouped":
-            rec = _api.two_way_test(_api.grouped_table_from_csv(csv_abs))
+        elif kind in _TWO_FACTOR_KINDS:
+            gt = _api.grouped_table_from_csv(csv_abs, **_ckw)
+            rec = _api.two_way_test(gt)
+            if kind == "split_violin" and "error" not in rec:
+                rec["split_comparisons"] = _api.split_pair_tests(*_api.split_parts(gt), parametric=_mode)
         elif kind == "scatter":
-            rec = _api.correlation_test(_api.table_from_csv(csv_abs))
+            rec = _api.correlation_test(_api.table_from_csv(csv_abs, **_ckw))
     except Exception as e:
         return None, f" (stats provenance skipped: {type(e).__name__})", []
     if not rec or "error" in rec:
         return None, note, []
     entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
              "test": rec.get("test")}
+    if columns:
+        entry["columns"] = list(columns)
+    if where:
+        entry["where"] = str(where)
     warnings: list[str] = []
     if kind in ("bar", "box", "violin"):
         entry.update(omnibus=rec.get("omnibus"), correction=rec.get("correction"),
@@ -504,9 +572,12 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
             entry["warnings"] = rec["warnings"]
         note = f" — {rec.get('test')}, {len(rec.get('sig_pairs', []))} significant pair(s) bracketed"
         warnings = list(rec.get("warnings", []))
-    elif kind == "grouped":
+    elif kind in _TWO_FACTOR_KINDS:
         entry.update(effects=rec.get("effects"))
         note = f" — {rec.get('test')} recorded"
+        if rec.get("split_comparisons"):
+            entry["split_comparisons"] = rec["split_comparisons"]
+            note += ", each pair of halves compared"
     elif kind == "scatter":
         entry.update(r=rec.get("r"), r2=rec.get("r2"), p=rec.get("p"), n=rec.get("n"),
                      x=rec.get("x"), y=rec.get("y"))
@@ -637,6 +708,9 @@ def add_data_plot(
     rename: dict[str, str] | None = None,
     show_points: bool | None = None,
     violin_inner: str | None = None,
+    violin_side: str | None = None,
+    columns: list[str] | None = None,
+    where: str | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -655,7 +729,14 @@ def add_data_plot(
       SQL query "SELECT genotype, area FROM cells WHERE day = 3"; else the first table).
       - bar/box/violin/scatter: **wide** (one column per group, rows = replicates)
         or **long** (2 columns: group label, value).
-      - grouped: **long** with 3 columns: factor_a, factor_b, value.
+      - grouped / split_violin: **long** with 3 columns: factor_a, factor_b, value.
+    *columns*: the columns to use from a wider (tidy) table, by name: ["genotype",
+      "area"] (group, value) for bar / box / violin; ["genotype", "sex", "area"] (factor
+      on x, factor split or coloured, value) for split_violin / grouped. describe_table
+      lists a table's columns and which are factors.
+    *where*: only the rows matching this pandas query, on any column of the table:
+      "day == 14", "sex == 'male'", "treatment == 'drug' and area > 100" (backquotes
+      around names with spaces: "`cells per field` > 30"). The statistics use those rows.
     *kind*: "auto" (default: the plot that shows the data best — grouped for a
       two-factor table, scatter for an x / y series, else by the points per group:
       bar under 5, box 5-19, violin 20 or more) | "bar" | "box" | "violin" |
@@ -688,7 +769,11 @@ def add_data_plot(
       (null keeps an end automatic), *log_y*, *xtick_rotation* (degrees, for long
       group names), *legend* "inside" | "outside" | "none" (scatter, grouped), *rename*
       {"mutA": "mutant A"} (the name a group shows; the table is unchanged),
-      *show_points* False (no individual points), *violin_inner* "box" | "lines" | "none".
+      *show_points* False (no individual points), *violin_inner* "box" | "lines" | "none",
+      *violin_side* "left" | "right" (half violins, the points on the other side).
+    *kind="split_violin"*: two conditions as the two halves of each violin ("split by
+      sex", "half violins per condition"): a two-factor table (e.g. genotype, sex, value)
+      where one factor has two levels; a legend names the halves, each pair is tested.
     *font_pt*: the size of the plot's text in the printed figure, in points (default
       7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
       when the user asks for a size.
@@ -725,17 +810,29 @@ def add_data_plot(
                 f"values); nothing was added.")
     auto_note = ""
     if kind == "auto":
-        kind, why = _auto_kind(csv_abs)
+        where, bad = _plot_where(csv_abs, where)
+        if bad:
+            return f"ERROR: {bad}; nothing was added."
+        kind, why = _auto_kind(csv_abs, columns, where)
         if not kind:
             return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was added."
         auto_note = f"\nKIND: auto chose {kind}: {why}. Say so; edit_data_plot kind changes it."
-    if kind == "grouped":
+    columns, bad = _plot_columns(csv_abs, kind, columns)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    where, bad = _plot_where(csv_abs, where)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    _ckw = {k: v for k, v in (("columns", columns), ("where", where)) if v}
+    if kind in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
-            _api.grouped_table_from_csv(csv_abs)
+            gt = _api.grouped_table_from_csv(csv_abs, **_ckw)
+            if kind == "split_violin":
+                _api.split_parts(gt)
         except ImportError:
             pass                        # the panel says staplot is missing
-        except ValueError as e:
+        except (ValueError, AttributeError) as e:
             return f"ERROR: {e}; nothing was added."
 
     plot_colors, bad = _plot_colours(colors)
@@ -745,11 +842,16 @@ def add_data_plot(
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
-                                "rename": rename, "violin_inner": violin_inner})
+                                "rename": rename, "violin_inner": violin_inner,
+                                "violin_side": violin_side}, columns=columns, where=where)
     if bad:
         return f"ERROR: {bad}; nothing was added."
     if show_points is False:
         layout["show_points"] = False
+    if columns:
+        layout["columns"] = columns
+    if where:
+        layout["where"] = where
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
                                     stats_mode, latex=latex, colors=plot_colors, layout=layout)
@@ -775,7 +877,8 @@ def add_data_plot(
     stats_warnings: list[str] = []
     if annotate_stats:
         entry, stats_note, stats_warnings = data_plot_stats_entry(csv_abs, kind, only_significant,
-                                                                  stats_mode, label)
+                                                                  stats_mode, label, columns=columns,
+                                                                  where=where)
         if entry:
             _append_stats_entry(pyf_path, entry)
 
@@ -783,7 +886,7 @@ def add_data_plot(
     suffix = f' with label "{label}"' if label else ""
     # say what the plot leaves out of the CSV (empty / NA / text cells): tell the user
     from pyfigures.assistant.plot_info import data_cleaning
-    cleaning = data_cleaning({"csv": csv_abs, "kind": kind})
+    cleaning = data_cleaning({"csv": csv_abs, "kind": kind, "columns": columns, "where": where})
     cleaning_note = (f"\nDATA: {cleaning} Tell the user what was left out."
                      if cleaning and "no value left out" not in cleaning else "")
     return (
@@ -934,14 +1037,23 @@ def list_data_plot_kinds() -> str:
             + "\n\nWhat each can show (edit_data_plot):"
             + "\n- violin, inside each violin (violin_inner): 'lines' (default: a thin line over the range, a thick "
               "one over the quartiles, a white median dot), 'box' (a mini box plot: quartile box, median line, "
-              "whiskers to 1.5 IQR) or 'none' (the shape alone); plus the individual points or not (show_points)."
+              "whiskers to 1.5 IQR) or 'none' (the shape alone); plus the individual points or not (show_points); "
+              "half violins (violin_side='left' or 'right': the half shape, the points on the open side, a "
+              "'raincloud')."
+            + "\n- split_violin: two conditions (sex, treatment...) as the two halves of each violin, one "
+              "violin per level of the other factor, a legend naming the halves above the plot; each pair "
+              "of halves tested (t-test or Mann-Whitney) and the two-way ANOVA under the plot. Needs a "
+              "two-factor table (factor A, factor B, value) with a two-level factor. Split violins in "
+              "facets (e.g. one facet per treatment): add_seaborn_plot function='catplot', kind='violin', "
+              "hue='sex', col='treatment', options={'split': true}."
             + "\n- box: median, quartiles, whiskers to 1.5 IQR and outliers; individual points or not (show_points)."
             + "\n- bar: mean with error bars (sd, sem, ci95, none); individual points or not (show_points)."
             + "\n- scatter: the points of each y column against the first column, a regression line with R² "
               "and p; each series its own colour and marker shape; legend inside / outside / none."
             + "\n- grouped: bars by two factors with error bars and every point, a two-way ANOVA under them; "
               "legend inside / outside / none."
-            + "\nCombinations in one plot: violin + mini box (violin_inner='box'), violin + range/quartile "
+            + "\nCombinations in one plot: violin + mini box (violin_inner='box'), half violin + points "
+              "(violin_side='left'), split violin + mini boxes, violin + range/quartile "
               "lines (the default), violin / box / bar + the individual points (show_points), scatter + "
               "regression line. Other combinations (a bar over a violin, two kinds side by side in one "
               "panel) are not drawn: make two panels, or a seaborn plot."
@@ -951,6 +1063,244 @@ def list_data_plot_kinds() -> str:
             + "\nError bars (bar, grouped): sem, sd, ci95 or none. Statistics: automatic test (parametric "
               "or not from a normality check), or stats_mode='parametric' / 'nonparametric'; brackets for "
               "every tested pair or only the significant ones.\n\n" + describe_functions())
+
+
+
+def _read_any_table(csv_path: str, sheet=None):
+    """(DataFrame, table path, error) of a CSV / TSV / TXT, an Excel sheet or an SQLite
+    table / query, read as the plots read it (staplot.api.read_table, pandas)."""
+    table, bad = _table_path(csv_path, sheet)
+    if bad:
+        return None, "", bad
+    try:
+        from staplot.api import read_table
+        df = read_table(table)
+    except ImportError:
+        import pandas as pd
+        try:
+            df = pd.read_csv(table, sep=None, engine="python")
+        except Exception as e:
+            return None, table, f"cannot read {os.path.basename(table)} ({type(e).__name__}: {e})"
+    except Exception as e:
+        return None, table, f"cannot read {os.path.basename(table)} ({type(e).__name__}: {e})"
+    return df, table, ""
+
+
+def table_factors(df, max_levels: int = 20) -> list[dict]:
+    """The columns of *df* that can split the data into groups (factors): text columns,
+    and number columns with few distinct values (day 1 / 2 / 3, a 0 / 1 code), each
+    with its levels and their counts and what it can do in a plot."""
+    import pandas as pd
+    out = []
+    n = max(1, len(df))
+    for c in df.columns:
+        col = df[c].dropna()
+        if col.empty:
+            continue
+        num = pd.to_numeric(col, errors="coerce")
+        is_number = num.notna().sum() >= len(col) * 0.8
+        levels = col.astype(str).str.strip().value_counts(sort=False)
+        k = len(levels)
+        if k < 2 or k > max_levels:
+            continue
+        if is_number and (k > 6 or k > n / 3):
+            continue                           # a measurement, not a code
+        uses = ["x groups", "hue (colour)", "facets (col / row)"]
+        if k == 2:
+            uses.insert(1, "split violin halves")
+        out.append({"column": str(c), "type": "numbers" if is_number else "text",
+                    "levels": {str(a): int(b) for a, b in levels.items()}, "uses": uses})
+    return out
+
+
+@mcp.tool()
+def list_factor_columns(csv_path: str, sheet: str | None = None, max_levels: int = 20) -> str:
+    """The FACTOR columns of a data table: the ones that can split the data into groups
+    (text columns such as genotype, sex, treatment; number columns with few values such
+    as day 1 / 2 / 3), each with its levels and their counts and what it can be in a plot:
+    x groups, the two halves of a split violin (two levels), hue, facets. Also the number
+    columns (the values to plot). Read-only. Use it for "which columns can I split /
+    facet / colour by?", "what are the factors of this table?".
+
+    *csv_path*: CSV, TSV, TXT, Excel workbook or SQLite database. *sheet*: an Excel sheet,
+      an SQLite table or query. *max_levels*: a column with more levels is not a factor.
+    """
+    import pandas as pd
+    df, table, bad = _read_any_table(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}"
+    factors = table_factors(df, max_levels=max_levels)
+    names = {f["column"] for f in factors}
+    values = [str(c) for c in df.columns if str(c) not in names
+              and pd.to_numeric(df[c], errors="coerce").notna().sum() >= max(1, df[c].notna().sum() * 0.8)]
+    lines = [f"{os.path.basename(table)}: {len(df)} rows."]
+    if not factors:
+        lines.append("No factor column (no text column, nor a number column with a few values): a wide "
+                     "table, one column per group.")
+    else:
+        lines.append("Factor columns:")
+        for f in factors:
+            lv = ", ".join(f"{k} ({v})" for k, v in f["levels"].items())
+            lines.append(f"- {f['column']} ({f['type']}, {len(f['levels'])} levels: {lv}): "
+                         + ", ".join(f["uses"]))
+    if values:
+        lines.append("Value columns (numbers): " + ", ".join(values))
+    two = [f["column"] for f in factors if len(f["levels"]) == 2]
+    many = [f["column"] for f in factors if len(f["levels"]) > 2]
+    if factors and values:
+        x = (many or [f["column"] for f in factors])[0]
+        lines.append("E.g. add_data_plot kind='violin', columns=['%s', '%s']" % (x, values[0]))
+        if two:
+            other = next((f["column"] for f in factors if f["column"] != two[0]), None)
+            if other:
+                lines.append(f"     add_data_plot kind='split_violin', columns=['{other}', '{two[0]}', "
+                             f"'{values[0]}'] (halves = {two[0]})")
+            rest = [f["column"] for f in factors if f["column"] not in (two[0], other)]
+            lines.append(f"     add_seaborn_plot function='catplot', kind='violin', x='{other or two[0]}', "
+                         f"y='{values[0]}', hue='{two[0]}', options={{'split': true}}"
+                         + (f", col='{rest[0]}' (one facet per {rest[0]})" if rest else ""))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5) -> str:
+    """What a data table holds, read with pandas as the plots read it: its sheets (Excel)
+    or tables (SQLite), the number of rows, each column with its type, missing cells,
+    range (numbers) or levels and their counts (text), the first *rows* rows, and which
+    plots fit it (a column with two levels can split violins; text columns can be
+    seaborn hue / col / row facets). Read-only. Use it BEFORE add_data_plot /
+    add_seaborn_plot when the column names are not known ("what's in this table?",
+    "which columns can I facet by?", "show me the data").
+
+    *csv_path*: CSV, TSV, TXT, an Excel workbook or an SQLite database ("file::sheet" or
+      "file::SELECT ..." works too). *sheet*: an Excel sheet, an SQLite table or query.
+    """
+    import numpy as np
+    import pandas as pd
+    df, table, bad = _read_any_table(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}"
+    from pyfigures.plot_tables import split_sheet
+    file, part = split_sheet(table)
+    lines = [f"Table {os.path.basename(file)}{(' ' + part) if part else ''}: {len(df)} rows, "
+             f"{df.shape[1]} columns."]
+    try:
+        from staplot.api import list_sheets
+        others = list_sheets(file)
+        if others:
+            lines.append(("Sheets: " if file.lower().endswith(_EXCEL) else "Tables / views: ")
+                         + ", ".join(others))
+    except Exception:
+        pass
+    text_cols, two_level, numeric = [], [], []
+    lines.append("Columns:")
+    for c in df.columns:
+        col = df[c]
+        missing = int(col.isna().sum())
+        miss = f", {missing} missing" if missing else ""
+        num = pd.to_numeric(col, errors="coerce")
+        if num.notna().sum() and num.notna().sum() >= col.notna().sum() * 0.8:
+            numeric.append(str(c))
+            levels = num.dropna().unique()
+            extra = (f", {len(levels)} distinct values" if len(levels) <= 6 else "")
+            lines.append(f"- {c!s}: numbers, {num.min():.4g} to {num.max():.4g}, mean {num.mean():.4g}"
+                         f"{extra}{miss}")
+        else:
+            counts = col.dropna().astype(str).value_counts(sort=False)
+            text_cols.append(str(c))
+            if len(counts) == 2:
+                two_level.append(str(c))
+            shown = ", ".join(f"{k} ({v})" for k, v in list(counts.items())[:12])
+            more = f", ... {len(counts) - 12} more" if len(counts) > 12 else ""
+            lines.append(f"- {c!s}: text, {len(counts)} levels: {shown}{more}{miss}")
+    with pd.option_context("display.max_columns", 30, "display.width", 200):
+        lines.append(f"First {min(rows, len(df))} rows:\n" + df.head(max(0, int(rows))).to_string(index=False))
+    fit = []
+    try:
+        from staplot.api import suggest_kind
+        rec = suggest_kind(table)
+        if rec.get("kind"):
+            fit.append(f"add_data_plot kind='auto' would draw {rec['kind']} ({rec.get('reason', '')})")
+        else:
+            fit.append(f"add_data_plot: {rec.get('reason', '')}")
+    except Exception:
+        pass
+    if text_cols and numeric:
+        fit.append(f"seaborn (add_seaborn_plot): y = a number column ({', '.join(numeric[:6])}); x, hue, "
+                   f"col / row facets = text columns ({', '.join(text_cols[:6])})")
+    if two_level and numeric:
+        fit.append(f"split violins by {', '.join(two_level)} (two levels): add_seaborn_plot "
+                   f"function='violinplot' or 'catplot' kind='violin', hue='{two_level[0]}', "
+                   "options={'split': true} (+ col= for facets); or add_data_plot "
+                   f"kind='split_violin', columns=[a factor, '{two_level[0]}', a value column] "
+                   "(with statistics)")
+    if text_cols and numeric and df.shape[1] > 3:
+        fit.append("add_data_plot on some columns only: columns=[factor, value] for bar / box / violin "
+                   "(e.g. " + repr([text_cols[0], numeric[0]]) + "), [factor, factor, value] for "
+                   "grouped / split_violin; list_factor_columns lists the factors")
+    factors = table_factors(df)
+    if factors:
+        lines.append("Factor columns (x groups, hue, facets; two levels = split violin halves): "
+                     + "; ".join(f"{f['column']} ({len(f['levels'])} levels)" for f in factors))
+    if fit:
+        lines.append("Plots that fit:\n" + "\n".join(f"- {f}" for f in fit))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def summarize_table(csv_path: str, value: str | None = None, by: list[str] | str | None = None,
+                    where: str | None = None, sheet: str | None = None) -> str:
+    """Numbers of a data table by group, with pandas: n, mean, sd, sem, median, min and
+    max of *value* for each combination of the *by* columns ("mean area per genotype and
+    sex", "how many cells per day?"). Read-only; nothing is plotted or changed.
+
+    *value*: a number column (None = every number column). *by*: one column or a list
+      (None = the whole table). *where*: rows to keep, as a pandas query
+      ("day == 3", "treatment == 'drug' and area > 100"; backquote names with spaces:
+      "`cells per field` > 30"). *sheet*: an Excel sheet, an SQLite table or query.
+    """
+    import pandas as pd
+    df, table, bad = _read_any_table(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}"
+    low = {str(c).lower(): c for c in df.columns}
+
+    def col(name):
+        return low.get(str(name).strip().lower())
+    if where:
+        try:
+            df = df.query(str(where), engine="python")
+        except Exception as e:
+            return (f"ERROR: cannot apply where={where!r} ({type(e).__name__}: {e}); the columns are "
+                    f"{', '.join(map(str, df.columns))}")
+    groups = [by] if isinstance(by, str) else list(by or [])
+    missing = [g for g in groups if col(g) is None]
+    if value is not None and col(value) is None:
+        missing.append(value)
+    if missing:
+        return f"ERROR: no column {missing}; the columns are {', '.join(map(str, df.columns))}"
+    groups = [col(g) for g in groups]
+    if value is not None:
+        values = [col(value)]
+    else:
+        values = [c for c in df.columns if c not in groups
+                  and pd.to_numeric(df[c], errors="coerce").notna().sum() >= max(1, df[c].notna().sum() * 0.8)]
+    if not values:
+        return "ERROR: no column of numbers to summarise."
+    out = []
+    for v in values:
+        data = df[groups + [v]].copy()
+        data[v] = pd.to_numeric(data[v], errors="coerce")
+        stats = (data.groupby(groups, dropna=False, sort=False)[v] if groups else data[v])
+        res = stats.agg(["count", "mean", "std", "sem", "median", "min", "max"])
+        if not groups:
+            res = res.to_frame().T
+        res = res.rename(columns={"count": "n", "std": "sd"})
+        with pd.option_context("display.max_rows", 200, "display.width", 200,
+                               "display.float_format", "{:.4g}".format):
+            out.append(f"{v}" + (f" by {', '.join(map(str, groups))}" if groups else "") + ":\n" + res.to_string())
+    head = f"{os.path.basename(table)}: {len(df)} rows" + (f" where {where}" if where else "") + "."
+    return head + "\n" + "\n\n".join(out)
 
 
 @mcp.tool()
@@ -980,6 +1330,7 @@ def add_seaborn_plot(
     options: dict | None = None,
     label: str | None = None,
     sheet: str | None = None,
+    where: str | None = None,
 ) -> str:
     """Add a **seaborn plot** of a CSV or an Excel sheet (.xlsx, .xls; *sheet* = its name
     or number from 1, else the first) — a tidy / long table: one row per observation — as a
@@ -999,10 +1350,14 @@ def add_seaborn_plot(
     *kind*: the figure-level function's kind ("scatter"/"line"; "hist"/"kde"/"ecdf";
       "strip"/"swarm"/"box"/"violin"/"boxen"/"point"/"bar"/"count").
     *palette*: a seaborn / matplotlib palette name ("colorblind", "deep", "viridis"...).
+    Column names unknown? describe_table(csv_path) lists them, their levels and the plots
+    that fit. Split (half) violins: function="violinplot" (or catplot kind="violin"),
+    hue = a two-level column (e.g. "sex"), options={"split": true}.
     *height* / *aspect*: inches per facet and width / height.
     *index* / *columns* / *values*: heatmap / clustermap of a pivot of the table.
     *options*: any other keyword the seaborn function takes (e.g. {"errorbar": "se"},
       {"bins": 20}, {"dodge": true}).
+    *where*: only the rows matching a pandas query ("day == 14", "sex == 'male'").
     Rows with a missing value in a used column are left out (the reply says how many).
     """
     from pyfigures.seaborn_plot import check, make_script, dropped_rows
@@ -1014,7 +1369,7 @@ def add_seaborn_plot(
                        ("kind", kind), ("style", style), ("size", size), ("palette", palette),
                        ("height", height), ("aspect", aspect), ("title", title), ("xlabel", xlabel),
                        ("ylabel", ylabel), ("index", index), ("columns", columns), ("values", values),
-                       ("options", options)):
+                       ("options", options), ("where", where)):
         if value not in (None, ""):
             spec[key] = value
     bad = check(spec)
@@ -1061,12 +1416,14 @@ def edit_seaborn_plot(
     ylabel: str | None = None,
     options: dict | None = None,
     remove: list[str] | None = None,
+    where: str | None = None,
 ) -> str:
     """Change a seaborn plot panel (add_seaborn_plot): another function or kind ("make it a
     violin", "a swarm instead"), other columns, facets ("one facet per day": col="day";
     "no facets": remove=["col", "row"]), palette, size or labels. Only what is given
     changes. *remove*: setting names to drop (e.g. ["hue"], ["col", "col_wrap"]).
-    *options* replaces the extra seaborn keywords."""
+    *options* replaces the extra seaborn keywords. *where*: only the rows matching a
+    pandas query ("day == 14"); remove=["where"] plots every row again."""
     from pyfigures.seaborn_plot import check, make_script, parse, dropped_rows
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -1084,7 +1441,7 @@ def edit_seaborn_plot(
     for key, value in (("function", function), ("x", x), ("y", y), ("hue", hue), ("col", col), ("row", row),
                        ("col_wrap", col_wrap), ("kind", kind), ("palette", palette), ("height", height),
                        ("aspect", aspect), ("title", title), ("xlabel", xlabel), ("ylabel", ylabel),
-                       ("options", options)):
+                       ("options", options), ("where", where)):
         if value is not None:
             new[key] = value.strip().lower() if key == "function" else value
     for key in remove or []:
@@ -1129,6 +1486,9 @@ def edit_data_plot(
     rename: dict[str, str] | None = None,
     show_points: bool | None = None,
     violin_inner: str | None = None,
+    violin_side: str | None = None,
+    columns: list[str] | None = None,
+    where: str | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -1162,12 +1522,19 @@ def edit_data_plot(
       *show_points*: False removes the individual points ("remove the point cloud"),
       True brings them back; *violin_inner*: inside each violin, "box" (a mini box plot:
       "a box plot within the violin"), "lines" (default: range, quartiles, median dot)
-      or "none"; *log_y*; *xtick_rotation*: degrees ANTICLOCKWISE ("the group names overlap": 45; "rotate
+      or "none"; *violin_side*: "left" / "right" = half violins ("make it half violins"), the
+      points on the open side, "both" = whole violins; kind="split_violin" puts two
+      conditions in the two halves (needs a two-factor table); *log_y*; *xtick_rotation*: degrees ANTICLOCKWISE ("the group names overlap": 45; "rotate
       left" / "anticlockwise" = positive, the names rising "/"; "rotate right" /
       "clockwise" = negative, "\\");
       *legend*: "inside" | "outside" | "none".
     0, "" or [] clears a layout setting (back to the default); only what is asked changes.
     *csv_path*: plot another table (CSV, TXT, Excel) with the same settings.
+    *columns*: the columns used from a wider (tidy) table: ["genotype", "area"] (bar /
+      box / violin), ["genotype", "sex", "area"] (split_violin: x, halves, value; grouped);
+      [] uses the whole table again. describe_table lists the columns and the factors.
+    *where*: only the rows matching a pandas query ("day == 14", "sex == 'male'"); ""
+      plots every row again.
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -1203,7 +1570,9 @@ def edit_data_plot(
     auto_note = ""
     if new["kind"] == "auto":
         new["kind"], why = _auto_kind(new["csv"] if csv_path is None and sheet in (None, "") else
-                                      _table_path(csv_path if csv_path is not None else new["csv"], sheet)[0])
+                                      _table_path(csv_path if csv_path is not None else new["csv"], sheet)[0],
+                                      (columns if columns is not None else spec.get("columns")) or None,
+                                      (where if where is not None else spec.get("where")) or None)
         if not new["kind"]:
             return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was changed."
         auto_note = f" (auto: {why})"
@@ -1219,25 +1588,39 @@ def edit_data_plot(
         if bad:
             return f"ERROR: {bad}. Nothing was changed."
         new["csv"] = table
-    if new["kind"] == "grouped":
+    new["columns"], bad = _plot_columns(new["csv"], new["kind"],
+                                        columns if columns is not None else spec.get("columns"))
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    new["where"], bad = _plot_where(new["csv"], where if where is not None else spec.get("where"))
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    if new["kind"] in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
-            _api.grouped_table_from_csv(new["csv"])
+            gt = _api.grouped_table_from_csv(new["csv"], **{k: new[k] for k in ("columns", "where") if new[k]})
+            if new["kind"] == "split_violin":
+                _api.split_parts(gt)
         except ImportError:
             pass
-        except ValueError as e:
-            return (f"ERROR: a grouped plot needs a CSV with two factors and a value column ({e}). "
-                    f"Nothing was changed.")
+        except (ValueError, AttributeError) as e:
+            return (f"ERROR: a {new['kind']} plot needs a table with two factors and a value column "
+                    f"({e}). Nothing was changed.")
     current = {k: spec.get(k) for k in PLOT_LAYOUT_KEYS}
-    if new["kind"] not in ("bar", "box", "violin"):
+    if new["kind"] not in ("bar", "box", "violin", "split_violin"):
         current.pop("order", None)              # a group order means nothing for scatter / grouped
     layout, bad = _plot_layout(new["kind"], new["csv"],
                                {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
                                 "order": order, "ylim": ylim, "log_y": log_y,
                                 "xtick_rotation": xtick_rotation, "legend": legend,
-                                "rename": rename, "violin_inner": violin_inner}, current)
+                                "rename": rename, "violin_inner": violin_inner,
+                                "violin_side": violin_side}, current, columns=new["columns"],
+                               where=new["where"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
+    for k in ("columns", "where"):
+        if new[k]:
+            layout[k] = new[k]
     for k in PLOT_LAYOUT_KEYS:
         new[k] = layout.get(k)
     if show_points is not None:
@@ -1267,7 +1650,8 @@ def edit_data_plot(
                          f"on the page"]
     _save(tree, pyf_path, recompute=True)
     changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
-               ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv")
+               ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv",
+                "columns", "where")
                + PLOT_LAYOUT_KEYS + ("show_ylabel", "show_xlabel", "show_points")
                if spec.get(k) != new.get(k)]
     if colors is not None:
@@ -1866,14 +2250,14 @@ OKABE_ITO = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "
 def _plot_group_count(script: str) -> int | None:
     """How many groups (colours) the data plot of *script* draws, or None."""
     m = re.search(r"^_csv = (.+)$", script, re.M)
-    kind = re.search(r"kind=('[a-z]+')", script)
+    kind = re.search(r"kind=('[a-z_]+')", script)
     if not m:
         return None
     try:
         import ast
         from staplot import api as _api
         csv = ast.literal_eval(m.group(1))
-        if kind and ast.literal_eval(kind.group(1)) == "grouped":
+        if kind and ast.literal_eval(kind.group(1)) in _TWO_FACTOR_KINDS:
             import csv as _csvmod
             with open(csv, newline="", encoding="utf-8-sig") as f:
                 rows = list(_csvmod.reader(f))[1:]

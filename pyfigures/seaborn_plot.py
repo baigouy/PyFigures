@@ -82,6 +82,8 @@ try:
     _df = _read_table(_spec['csv'])
 except ImportError:
     _df = _pd.read_csv(_spec['csv'], sep=None, engine='python', encoding='utf-8-sig')
+if _spec.get('where'):
+    _df = _df.query(_spec['where'], engine='python')     # only these rows ("only day 14")
 _kw = {{}}
 for _k in {MAPPINGS!r}:
     if _spec.get(_k):
@@ -145,7 +147,10 @@ else:
     if _spec.get('ylabel'):
         _ax.set_ylabel(_spec['ylabel'])
 _sns.despine(fig=fig)
-fig.tight_layout()
+if _spec['function'] in {tuple(FIGURE_LEVEL)!r} and _spec['function'] not in ('heatmap', 'clustermap') and hasattr(_grid, 'tight_layout'):
+    _grid.tight_layout()             # keeps room for the grid's legend (fig.tight_layout put a facet under it)
+else:
+    fig.tight_layout()
 _Agg(fig)
 _plt.close(fig)
 self.img = fig
@@ -172,9 +177,16 @@ def check(spec: dict) -> str | None:
     if spec.get('kind') and function == 'catplot' and spec['kind'] not in CATEGORY_KINDS:
         return f'catplot kind must be one of {CATEGORY_KINDS}'
     try:
-        columns = list(read_table(spec['csv']).columns)
+        df = read_table(spec['csv'])
+        columns = list(df.columns)
     except Exception as e:
         return f'could not read the table ({type(e).__name__}: {e})'
+    if spec.get('where'):
+        try:
+            if df.query(str(spec['where']), engine='python').empty:
+                return f'no row where {spec["where"]}'
+        except Exception as e:
+            return f'cannot keep the rows where {spec["where"]!r} ({type(e).__name__}: {e}); its columns are {columns}'
     wanted = [spec[k] for k in MAPPINGS + ('index', 'columns', 'values') if spec.get(k)]
     missing = [c for c in wanted if c not in columns]
     if missing:
@@ -189,6 +201,8 @@ def dropped_rows(spec: dict) -> str | None:
     """How many rows the plot leaves out (a missing value in a column it uses)."""
     try:
         df = read_table(spec['csv'])
+        if spec.get('where'):
+            df = df.query(str(spec['where']), engine='python')
         used =[spec[k] for k in MAPPINGS if spec.get(k) and spec[k] in df.columns]
         if not used:
             return None

@@ -120,7 +120,8 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label", "latex", "colors", "sheet", "aspect",
               # layout and size (only when asked)
               "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend",
-              "rename", "font_pt", "show_points", "violin_inner"}
+              "rename", "font_pt", "show_points", "violin_inner",
+              "violin_side", "columns", "where"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
@@ -134,7 +135,7 @@ _SCRIPT_KEYS = {"label"}
 # seaborn: a CSV drawn by any seaborn function, faceted like ggplot2 (col / row)
 _SEABORN_KEYS = {"function", "x", "y", "hue", "col", "row", "col_wrap", "kind", "style", "size",
                  "palette", "height", "aspect", "title", "xlabel", "ylabel", "index", "columns",
-                 "values", "options", "label", "sheet"}
+                 "values", "options", "label", "sheet", "where"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
 # a montage / split / merge also takes a scale bar, on its last panel (a split:

@@ -6394,9 +6394,11 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin'])
         kind_combo.setToolTip('auto: the plot that shows the data best: grouped for two factors, scatter for '
-                              'an x / y series, else bar (under 5 points per group), box (5-19) or violin (20+)')
+                              'an x / y series, else bar (under 5 points per group), box (5-19) or violin (20+).\n'
+                              'split_violin: two conditions (e.g. sex) as the two halves of each violin '
+                              '(a table factorA, factorB, value with a two-level factor)')
         grid.addWidget(kind_combo, 0, 1)
 
         grid.addWidget(QLabel('Error bars:', frame), 1, 0)
@@ -6484,10 +6486,87 @@ class EZFIG_GUI(QMainWindow):
                 sheet_combo.addItems(sheets)
                 grid.addWidget(sheet_combo, 10, 1)
 
+        # violins: whole or half, what goes inside, the points (user, 2026-11-18: "make it
+        # half violins"); same options as add_data_plot / edit_data_plot and recipes
+        grid.addWidget(QLabel('Violins:', frame), 11, 0)
+        violin_row = QFrame(frame)
+        violin_lay = QHBoxLayout(violin_row)
+        violin_lay.setContentsMargins(0, 0, 0, 0)
+        side_combo = QComboBox(violin_row)
+        side_combo.addItems(['whole', 'half (left)', 'half (right)'])
+        side_combo.setToolTip('Half violins: only one half, the points beside it (a "raincloud")')
+        inner_combo = QComboBox(violin_row)
+        inner_combo.addItems(['lines inside', 'mini box inside', 'nothing inside'])
+        points_cb = QCheckBox('points', violin_row)
+        points_cb.setChecked(True)
+        points_cb.setToolTip('The individual points (bar, box and violin plots)')
+        for w in (side_combo, inner_combo, points_cb):
+            violin_lay.addWidget(w)
+        grid.addWidget(violin_row, 11, 1)
+
+        # the columns of a tidy table (genotype, treatment, sex, day, area): which ones
+        # the plot uses, so no reshaping is needed ("split by sex")
+        grid.addWidget(QLabel('Columns (tidy table):', frame), 12, 0)
+        cols_row = QFrame(frame)
+        cols_lay = QHBoxLayout(cols_row)
+        cols_lay.setContentsMargins(0, 0, 0, 0)
+        x_combo, split_combo, value_combo = QComboBox(cols_row), QComboBox(cols_row), QComboBox(cols_row)
+        x_combo.setToolTip('The groups on the x axis (a factor column). Leave "whole table" to plot the '
+                           'table as it is (one column per group, or group, value).')
+        split_combo.setToolTip('Split (the two halves of a split violin) or colour by this column '
+                               '(a grouped plot); "none" for one factor')
+        value_combo.setToolTip('The numbers to plot')
+        for w in (x_combo, split_combo, value_combo):
+            cols_lay.addWidget(w)
+        grid.addWidget(cols_row, 12, 1)
+
+        def _fill_columns(*_):
+            table = csv_path + (('::' + sheet_combo.currentText()) if sheet_combo is not None
+                                and sheet_combo.currentText() else '')
+            try:
+                from staplot.api import read_table
+                from pyfigures.mcp_tools.content import table_factors
+                df = read_table(table)
+                factors = [f['column'] for f in table_factors(df)]
+                numbers = [str(c) for c in df.columns if str(c) not in factors
+                           and df[c].dtype.kind in 'if']
+            except Exception:
+                factors, numbers = [], []
+            for combo, first, items in ((x_combo, 'x: whole table', factors), (split_combo, 'split / colour: none',
+                                                                                 factors),
+                                        (value_combo, 'value: -', numbers)):
+                combo.blockSignals(True)
+                combo.clear()
+                combo.addItem(first)
+                combo.addItems(items)
+                combo.blockSignals(False)
+            cols_row.setEnabled(bool(factors and numbers))
+        _fill_columns()
+        if sheet_combo is not None:
+            sheet_combo.currentIndexChanged.connect(_fill_columns)
+
+        def _chosen_columns():
+            if x_combo.currentIndex() <= 0 or value_combo.currentIndex() <= 0:
+                return None
+            cols = [x_combo.currentText()]
+            if split_combo.currentIndex() > 0:
+                cols.append(split_combo.currentText())
+            return cols + [value_combo.currentText()]
+
+        def _chosen_layout():
+            out = {}
+            side = {1: 'left', 2: 'right'}.get(side_combo.currentIndex())
+            if side:
+                out['violin_side'] = side
+            inner = {1: 'box', 2: 'none'}.get(inner_combo.currentIndex())
+            if inner:
+                out['violin_inner'] = inner
+            return out
+
         cd = CustomDialog(
             title="Add data plot from a table",
             message=(f"{os.path.basename(csv_path)} — columns are groups (wide) or "
-                     "'group,value' (long); 'grouped' needs 'factorA,factorB,value'."),
+                     "'group,value' (long); 'grouped' and 'split_violin' need 'factorA,factorB,value'."),
             main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
@@ -6501,23 +6580,34 @@ class EZFIG_GUI(QMainWindow):
                 QMessageBox.warning(self, 'Not added', bad + '.')
                 return None
             kind = kind_combo.currentText()
+            columns = _chosen_columns()
             if kind == 'auto':
                 from pyfigures.mcp_tools.content import _auto_kind
-                kind, why = _auto_kind(table)
+                kind, why = _auto_kind(table, columns)
                 if not kind:
                     QMessageBox.warning(self, 'Not added', f'No plot kind fits this table on its own: {why}.')
                     return None
+            from pyfigures.mcp_tools.content import _plot_columns
+            columns, bad = _plot_columns(table, kind, columns)
+            if bad:
+                QMessageBox.warning(self, 'Not added', bad + '.')
+                return None
+            layout = _chosen_layout()
+            if columns:
+                layout['columns'] = columns
+            if not points_cb.isChecked():
+                layout['show_points'] = False
             script = _make_data_plot_script(table, kind, error_combo.currentText(), annotate_cb.isChecked(),
                                             only_sig_cb.isChecked(), title_edit.text().strip(),
                                             ylabel_edit.text().strip(), '', stats_combo.currentText(),
-                                            latex=latex_cb.isChecked())
+                                            latex=latex_cb.isChecked(), layout=layout)
             # its text 7 pt on the printed page, whatever the panel's size (as add_data_plot)
             from pyfigures.mcp_tools.content import PLOT_TEXT_PT, PLOT_LINE_PT
             img2d = Image2D(custom_loading_script=script, publication_font_on_page=True,
                             publication_font_size=PLOT_TEXT_PT, publication_line_width=PLOT_LINE_PT)
             if annotate_cb.isChecked():
                 entry, _note, _warn = data_plot_stats_entry(table, kind, only_sig_cb.isChecked(),
-                                                            stats_combo.currentText())
+                                                            stats_combo.currentText(), columns=columns)
                 if entry:
                     # recorded once the panel is really added (the drop menu can still be
                     # cancelled); kept off the panel, whose attributes are saved
@@ -6542,6 +6632,9 @@ class EZFIG_GUI(QMainWindow):
             label=label_edit.text().strip() or None,
             latex=latex_cb.isChecked(),
             sheet=sheet_combo.currentText() if sheet_combo is not None else None,
+            columns=_chosen_columns(),
+            show_points=None if points_cb.isChecked() else False,
+            **_chosen_layout(),
         )
 
     # ------------------------------------------------------------------
@@ -7790,7 +7883,7 @@ class EZFIG_GUI(QMainWindow):
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Data-plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped', 'split_violin'])
         kind_combo.setToolTip('auto: an x-y table (first column increasing) as a scatter, others as bars')
         grid.addWidget(kind_combo, 0, 1)
         grid.addWidget(QLabel('Journal (optional):', frame), 1, 0)

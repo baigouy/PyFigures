@@ -638,7 +638,7 @@ def draft_figure(
     *folder*: directory of source files. *out_pyf*: output figure path.
     *pattern*: glob to filter images (CSVs are always included).
     *plot_kind*: chart type for CSV panels ("auto"/"bar"/"box"/"violin"/"scatter"/
-      "grouped"); "auto" (default) draws an x-y table (two numeric columns, the
+      "grouped"/"split_violin"); "auto" (default) draws an x-y table (two numeric columns, the
       first increasing) as a scatter and any other as bars.
     *group_by*: image grouping — "none" | "subfolder" | "prefix"; with
       "subfolder" the CSVs of the sub-folders are plotted too.

@@ -431,7 +431,7 @@ sheet are ignored and numbers typed as text are read as numbers:
 | Key | Values (default) | Meaning |
 |---|---|---|
 | `plot` | path to a CSV | The data (formats below). |
-| `kind` | `auto` (default), `bar`, `box`, `violin`, `scatter`, `grouped` | Chart type. `auto` picks the one that shows the data best: `grouped` for a two-factor table, `scatter` for an x / y series (columns named x / y, time…, in different units, or an increasing first column), else by the points per group: `bar` under 5, `box` 5-19, `violin` 20 or more. The build says which it chose. |
+| `kind` | `auto` (default), `bar`, `box`, `violin`, `scatter`, `grouped`, `split_violin` | Chart type. `split_violin`: two conditions (e.g. sex) as the two halves of each violin, a legend naming them, each pair tested and the two-way ANOVA under the plot (a two-factor table with a two-level factor). `auto` picks the one that shows the data best: `grouped` for a two-factor table, `scatter` for an x / y series (columns named x / y, time…, in different units, or an increasing first column), else by the points per group: `bar` under 5, `box` 5-19, `violin` 20 or more. The build says which it chose. |
 | `error` | `sd` (default, as journals prefer), `sem`, `ci95`, `none` | Error bars for `bar` / `grouped`. |
 | `ylabel`, `xlabel`, `title` | text | Axis labels / title. |
 | `stats_mode` | `auto` (default), `parametric`, `nonparametric` | Test family. `auto` picks by a normality check. |
@@ -449,6 +449,8 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `rename` | mapping | The name a group shows (`{mutA: mutant A}`): axis, legend and statistics; the table is unchanged. |
 | `show_points` | `true` / `false` | `false`: no individual points on bar, box and violin plots. |
 | `violin_inner` | `lines` (default), `box`, `none` | Inside each violin: range, quartiles and median; a mini box plot; or nothing. |
+| `violin_side` | `both` (default), `left`, `right` | Half violins: only that half, the points on the other side (a "raincloud"). |
+| `columns` | list of column names | The columns used from a wider (tidy) table: `[genotype, area]` (group, value) for bar / box / violin; `[genotype, sex, area]` (x, halves or colour, value) for `split_violin` / `grouped`. |
 | `font_pt` | points | The plot's text in the printed figure (default 7 pt, whatever the panel's size). |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 
@@ -457,7 +459,10 @@ CSV formats:
 - `bar`, `box`, `violin`, `scatter` — **wide** (one column per group, one row
   per replicate; columns may have different lengths) or **long** (2 columns:
   group, value).
-- `grouped` — **long** with 3 columns: factor A, factor B, value.
+- `grouped`, `split_violin` — **long** with 3 columns: factor A, factor B, value
+  (or `columns:` picking them from a wider table; a factor may be coded by a few
+  numbers, e.g. day 7 / 14). For `split_violin` the factor with two levels gives
+  the halves (the second column if both have two).
 
 ```text
 WT,KO,Rescue          group,value          genotype,treatment,value
