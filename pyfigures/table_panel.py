@@ -86,14 +86,19 @@ def cell_widths(header, rows) -> list[float]:
     return widths or [10.0]
 
 
-def _fmt(v, decimals):
+def _fmt(v, decimals, trim=False):
+    """A cell's text: *decimals* digits; *trim* (the raw rows) drops trailing zeros, so a
+    table's 56.9 stays 56.9 and 12.0 shows 12."""
     import numpy as np
     if v is None or (isinstance(v, float) and not np.isfinite(v)):
         return ''
     if isinstance(v, (int, np.integer)):
         return str(int(v))
     if isinstance(v, (float, np.floating)):
-        return f'{float(v):.{decimals}f}'
+        text = f'{float(v):.{decimals}f}'
+        if trim and '.' in text:
+            text = text.rstrip('0').rstrip('.')
+        return text
     return str(v)
 
 
@@ -148,7 +153,7 @@ def table_cells(spec: dict) -> tuple[list, list, str]:
     note = f'{len(df) - max_rows} more row(s) not shown' if len(df) > max_rows else ''
     df = df.head(max_rows)
     header = [str(ren.get(str(c), c)) for c in df.columns]
-    rows = [[_fmt(ren.get(v, v) if isinstance(v, str) else v, decimals) for v in r]
+    rows = [[_fmt(ren.get(v, v) if isinstance(v, str) else v, int(spec.get('decimals', 4)), trim=True) for v in r]
             for r in df.itertuples(index=False)]
     return header, rows, note
 
