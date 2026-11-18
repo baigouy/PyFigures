@@ -224,6 +224,22 @@ def test_double_click_image_opens_panel_editor(gui, ui):
     assert len(img.annotations or []) == n_ann            # cancelled: unchanged
 
 
+def test_double_click_on_a_plot_opens_the_editor_on_its_script(gui, ui, monkeypatch):
+    """User, 2026-11-18: "if I double click a graph it should bring me by default in the
+    annotation editor but at the script tab, because this is what most users would want"."""
+    panel = gui.paint.EZFIG_panel
+    opened = []
+    monkeypatch.setattr(panel, "update_image_annotations",
+                        lambda image2d=None, tab=None, draw_tool=True: opened.append((image2d, tab)))
+    plot, picture = images(rows(gui)[0])[:2]
+    monkeypatch.setattr(plot, "custom_loading_script", "import numpy as np\n_csv = 'x.csv'\nself.img = fig")
+    monkeypatch.setattr(plot, "filename", None)
+    _mouse(panel, "dbl", _center(panel, plot))
+    _mouse(panel, "dbl", _center(panel, picture))
+    _process()
+    assert opened == [(plot, "Script"), (picture, None)]
+
+
 def test_double_click_empty_space_does_nothing(gui, ui):
     panel = gui.paint.EZFIG_panel
     b = panel.updateBounds()

@@ -241,6 +241,15 @@ class Session:
             # the answer gave width x height only, the axes were meant)
             if r.get('kind') == 'image':
                 r['dimensions'] = numpy_dimensions(p, (r.get('geometry') or {}).get('source_size'), r.get('stack'))
+            elif r.get('kind') == 'code':
+                # what it draws: a data plot's CSV, settings, groups and statistics, or a
+                # script's code (user, 2026-11-18: q34/q35 found "no p-values", "no
+                # comparisons" on a box plot with brackets; q33 broke it with set_script)
+                from .plot_info import describe_code_panel
+                try:
+                    r['code'] = describe_code_panel(p)
+                except Exception as e:
+                    r['code'] = {'type': 'unknown', 'error': f'{type(e).__name__}: {e}'[:200]}
         from .advanced_annotations import describe, text_inspection_record
         annotations = [text_inspection_record(a, '/'.join(map(str, (*gp, ix))), gp, ix,
                         index, sum(isinstance(v, TAText2D) for v in p.annotations[:index]))
@@ -556,6 +565,13 @@ class Session:
                     output = STATE / 'panel_source.png'
                     text = preview_panel(resolve_panel(w, ref), str(output), title='panel ' + ref,
                                          brighten=bool(args.get('brighten', True)), region=args.get('region'))
+                # a code panel: its picture and what makes it, together (user, 2026-11-18)
+                panel = resolve_panel(w, ref)
+                if panel_kind(panel) == 'code':
+                    from .plot_info import preview_text
+                    extra = preview_text(panel)
+                    if extra:
+                        text = (text or '') + '\n\n' + extra
                 result = {'path': str(output), 'description': text, 'revision': self.revision}
             elif op in ('undo', 'redo'):
                 if op == 'undo':

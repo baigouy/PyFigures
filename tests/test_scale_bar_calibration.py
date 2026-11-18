@@ -88,7 +88,11 @@ def test_typed_pixel_size_fills_only_missing(fig):
     # a 27B model chose "missing", then said every image used the given value
     assert "plain.png 0.5 (given)" in r and "calibrated.tif 0.25 (its own, kept: NOT" in r, r
     assert "px_to_unit_scope='all'" in r
-    r = set_scale_bar_all(fig, 10, px_to_unit=0.5)
+    # scope 'all' over a calibrated image is refused unless the user says it is wrong
+    # (2026-11-18: "same magnification as A" overwrote a calibrated pixel size)
+    refused = set_scale_bar_all(fig, 10, px_to_unit=0.5, px_to_unit_scope="all")
+    assert refused.startswith("ERROR") and "confirm_recalibration" in refused
+    r = set_scale_bar_all(fig, 10, px_to_unit=0.5, confirm_recalibration=True)
     assert "calibrated.tif 0.5 (given)" in r and "NOTE" not in r, r
 
 

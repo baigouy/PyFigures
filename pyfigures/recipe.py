@@ -117,7 +117,9 @@ _DETECT_KEYS = {"shape", "polarity", "min_area", "max_area", "split", "padding",
 # a connector joins two of the panel's rois (numbered from 1) and stays attached to them
 _CONNECTOR_KEYS = {"from", "to", "from_site", "to_site", "color", "stroke", "arrow"}
 _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
-              "annotate_stats", "only_significant", "label", "latex", "colors"}
+              "annotate_stats", "only_significant", "label", "latex", "colors", "sheet", "aspect",
+              # layout and size (only when asked)
+              "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",
@@ -128,6 +130,10 @@ _MERGE_KEYS = {"colors", "mode", "label", "label_placement", "normalization"}
 _COLORBAR_KEYS = {"vmin", "vmax", "label", "orientation", "ticks", "tick_labels",
                   "panel_label"}
 _SCRIPT_KEYS = {"label"}
+# seaborn: a CSV drawn by any seaborn function, faceted like ggplot2 (col / row)
+_SEABORN_KEYS = {"function", "x", "y", "hue", "col", "row", "col_wrap", "kind", "style", "size",
+                 "palette", "height", "aspect", "title", "xlabel", "ylabel", "index", "columns",
+                 "values", "options", "label", "sheet"}
 _EQUATION_KEYS = {"font_size", "color", "fontset", "label", "engine", "preamble", "font"}
 _TEX_KEYS = {"label", "preamble"}           # tex: LaTeX code panel
 # a montage / split / merge also takes a scale bar, on its last panel (a split:
@@ -141,10 +147,10 @@ _SERIES_BAR_KEYS = {"scale_bar", "px_to_unit",
 # panel-local extras that make no sense repeated on every glob match
 _SINGLE_PANEL_ONLY = {"label", "arrows", "kymograph", "orthogonal", "text", "corner_labels",
                       "rois", "connectors", "inset", "zoom", "brackets"}
-_PANEL_KINDS = ("image", "glob", "plot", "montage", "split", "merge", "colorbar", "script",
+_PANEL_KINDS = ("image", "glob", "plot", "seaborn", "montage", "split", "merge", "colorbar", "script",
                 "equation", "tex")
 _KIND_KEYS = {"image": _IMAGE_KEYS, "glob": _IMAGE_KEYS - _SINGLE_PANEL_ONLY,
-              "plot": _PLOT_KEYS, "montage": _MONTAGE_KEYS | _SERIES_BAR_KEYS,
+              "plot": _PLOT_KEYS, "seaborn": _SEABORN_KEYS, "montage": _MONTAGE_KEYS | _SERIES_BAR_KEYS,
               "split": _SPLIT_KEYS | _SERIES_BAR_KEYS,
               "merge": _MERGE_KEYS | _SERIES_BAR_KEYS,
               "colorbar": _COLORBAR_KEYS, "script": _SCRIPT_KEYS,
@@ -1584,7 +1590,8 @@ def _apply_image_settings(M, out, gp, i, path, opts, base, step, scale_bar):
             raise RecipeError(f"{step}: property {name!r} can't be set from a recipe "
                               f"(settable: {sorted(known - _MANAGED_PROPERTIES)})")
         text = value if isinstance(value, str) else repr(value)
-        w += _check(M.set_image_property(out, gp, i, name, text), step + f" property {name}")
+        w += _check(M.set_image_property(out, gp, i, name, text, confirm_recalibration=True),
+                    step + f" property {name}")
     return w
 
 
@@ -2004,7 +2011,9 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
             placement=sb.get("placement", "bottom right"),
             bar_color=sb.get("color", "white"),
             label_color=sb.get("color", "white"),
-            px_to_unit=px, bar_height_px=sb.get("thickness")), step + " scale bar")
+            px_to_unit=px, bar_height_px=sb.get("thickness"),
+            # the recipe's pixel size is its author's: never refused as a model's "match"
+            confirm_recalibration=True), step + " scale bar")
 
     def series_finish(group_path, opts, step, default="last"):
         """Scale bar of a montage / split group: one bar, on the last panel (a
@@ -2049,11 +2058,14 @@ def _build_plan(plan: dict, recipe_path: str) -> dict:
                 name = kind
             step = f"row {r + 1}, panel {c + 1} ({name})"
             if kind == "plot":
-                kw = {k: opts[k] for k in ("kind", "error", "ylabel", "xlabel", "title",
-                                           "stats_mode", "annotate_stats",
-                                           "only_significant", "label", "latex", "colors")
-                      if k in opts}
+                kw = {k: opts[k] for k in _PLOT_KEYS if k in opts}
                 warnings += _check(M.add_data_plot(out, gp, path, **kw), step)
+                n_plots += 1
+                i += 1
+                continue
+            if kind == "seaborn":
+                kw = {k: opts[k] for k in _SEABORN_KEYS - {"function"} if k in opts}
+                warnings += _check(M.add_seaborn_plot(out, gp, path, opts.get("function", ""), **kw), step)
                 n_plots += 1
                 i += 1
                 continue

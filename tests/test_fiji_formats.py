@@ -97,7 +97,10 @@ def test_fiji_samples_load_as_fiji_shows_them(name, shape, dims):
 
 @pytest.mark.skipif(not os.path.isdir(FIJI), reason="the Fiji sample images are not on this computer")
 def test_every_fiji_sample_but_text_is_accepted():
-    refused = sorted(os.path.basename(p) for p in glob.glob(os.path.join(FIJI, "*")) if not is_image_file(p))
+    # tables put in the folder to try dropping images with a plot (aaa_measurements.xlsx)
+    # are no images either, and become plots instead
+    refused = sorted(os.path.basename(p) for p in glob.glob(os.path.join(FIJI, "*"))
+                     if not is_image_file(p) and not p.lower().endswith((".xlsx", ".xls", ".csv", ".tsv")))
     assert refused == ["MaMuT_TGMM_Parhyale_demo.xml", "MessedUpColoc.txt", "first-instar-brain.txt"]
 
 

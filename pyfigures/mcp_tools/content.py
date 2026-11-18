@@ -24,6 +24,7 @@ from .app import (
 )
 from .core import (
     _append_image,
+    _append_new_panel,
     _append_stats_entry,
     _child_text,
     _channel_count_from_file,
@@ -221,7 +222,7 @@ def add_channel_merge(
         # white: a merge is a dark fluorescence image (default text is black)
         img.find("annotations").append(_new_tatext2d(label, label_placement,
                                                      color=0xFFFFFF))
-    _append_image(container, img, is_root=(not group_path))
+    container, group_path = _append_new_panel(root, container, img, group_path)
     _save(tree, pyf_path, recompute=True)
 
     idx = len([c for c in container if c.tag == "Image2D"]) - 1
@@ -256,10 +257,28 @@ def add_channel_merge(
 _DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped")
 
 
+def _auto_kind(table: str) -> tuple[str | None, str]:
+    """(kind, why) for kind="auto": staplot.api.suggest_kind (the plot that shows the
+    table best: grouped for two factors, scatter for an x / y series, else bar / box /
+    violin by the number of points per group); (None, why) when it cannot tell."""
+    try:
+        from staplot import api as _api
+        pick = getattr(_api, "suggest_kind", None)
+        if pick is None:
+            return "bar", "staplot too old to choose; bar"
+        rec = pick(table)
+        return rec.get("kind"), rec.get("reason", "")
+    except ImportError:
+        return "bar", "staplot is not installed"
+    except Exception as e:
+        return None, f"cannot read the table ({e})"
+
+
 def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
                            only_significant: bool, title: str, ylabel: str,
                            xlabel: str, stats_mode: str = "auto", latex: bool = False,
-                           colors: list | None = None) -> str:
+                           colors: list | None = None, aspect: float | None = None,
+                           layout: dict | None = None) -> str:
     """Return a custom_loading_script that renders a data-plot panel from a CSV
     via staplot's UI-free api. Soft dependency: if staplot is not importable the
     panel shows an install hint instead of crashing the figure. The panel is
@@ -268,6 +287,15 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
     NB: no nested def()s — PyFigures exec's scripts with split globals/locals, so
     a nested function cannot see top-level imports (name 'np' not defined)."""
     builder = "grouped_table_from_csv" if kind == "grouped" else "table_from_csv"
+    # width / height of the plot (a plot can take any shape, unlike an image), its size,
+    # text size, group order, y axis, labels, legend: only what was asked
+    layout = dict(layout or {})
+    if aspect:
+        layout["aspect"] = aspect
+    aspect_kw = "".join(f", {k}={layout[k]!r}" for k in PLOT_LAYOUT_KEYS
+                        if layout.get(k) not in (None, False, [], ""))
+    # an axis label removed: none at all, not staplot's automatic "Value"
+    aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel") if layout.get(k) is False)
     return f"""\
 import numpy as np
 _csv = {csv_path!r}
@@ -300,7 +328,7 @@ else:
                               stats_mode={stats_mode!r},
                               colors={list(colors) if colors else None!r},
                               title={title!r}, ylabel={ylabel!r}, xlabel={xlabel!r},
-                              show_title={bool(title)!r})
+                              show_title={bool(title)!r}{aspect_kw})
     fig._pyf_rc = _rc
     # out of pyplot's list of open figures (every plot panel stayed there:
     # "More than 20 figures have been opened"); the panel draws it with savefig
@@ -310,6 +338,89 @@ else:
     _plt.close(fig)
     self.img = fig
 """
+
+
+# the layout / size settings of a data plot (staplot.api.plot), in the order they are written
+PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
+                    "xtick_rotation", "legend")
+_LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
+
+
+def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = None) -> tuple[dict, str]:
+    """(layout, error) for a data plot: *current* with the given *values* changed.
+    A value of 0 / "" / [] / False clears a setting (back to staplot's default)."""
+    out = {k: v for k, v in (current or {}).items()
+           if k in PLOT_LAYOUT_KEYS and v not in (None, False, [], "")}
+    for key, value in values.items():
+        if value is None:
+            continue
+        if value is False or (not isinstance(value, bool) and value in (0, "", [])):
+            out.pop(key, None)
+            continue
+        if key in _LAYOUT_LIMITS:
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                return {}, f"{key} must be a number, not {value!r}"
+            low, high = _LAYOUT_LIMITS[key]
+            if not low <= value <= high:
+                return {}, (f"{key} must be between {low} and {high}"
+                            + (" (inches)" if key in ("width", "height") else ""))
+        elif key == "xtick_rotation":
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                return {}, f"xtick_rotation must be degrees, not {value!r}"
+        elif key == "legend":
+            value = str(value).strip().lower()
+            if value not in ("inside", "outside", "none"):
+                return {}, "legend must be 'inside', 'outside' or 'none'"
+        elif key == "log_y":
+            value = bool(value)
+        elif key == "ylim":
+            if isinstance(value, (int, float, str)) or len(value) != 2:
+                return {}, "ylim must be [low, high] (null for an automatic end), e.g. [0, null]"
+            try:
+                value = [None if v is None else float(v) for v in value]
+            except (TypeError, ValueError):
+                return {}, "ylim must be two numbers (or null), e.g. [0, null]"
+        elif key == "order":
+            if kind not in ("bar", "box", "violin"):
+                return {}, "order (the groups' order) applies to bar, box and violin plots"
+            value = [str(v) for v in (value if isinstance(value, (list, tuple)) else [value])]
+            try:
+                from staplot import api as _api
+                names = [c.name for c in _api.table_from_csv(csv_abs).columns]
+            except ImportError:
+                names = None
+            except Exception as e:
+                return {}, f"cannot read the groups of {csv_abs}: {e}"
+            if names is not None:
+                low = {n.lower(): n for n in names}
+                missing = [v for v in value if v.lower() not in low]
+                if missing:
+                    return {}, f"no group named {missing}; the groups are {names}"
+                value = [low[v.lower()] for v in value]
+        out[key] = value
+    return out, ""
+
+
+# the size of a plot's text and lines on the printed page (the journals' range for figure
+# text is 5-8 pt; 7 pt reads well and fits them all), whatever the panel's size
+PLOT_TEXT_PT = 7.0
+PLOT_LINE_PT = 0.5
+
+
+def _plot_text_on_page(img, font_pt: float | None = None) -> None:
+    """Draw the plot panel *img* with its text at *font_pt* points ON THE PAGE (the
+    exported figure): before, its text was set in the plot's own points and shrank or
+    grew with the panel (7 pt in one figure, 16 pt in another). User, 2026-11-18:
+    "plots should fit the text font recommended by journals by default unless the user
+    explicitly asks for a given size"."""
+    _set_child_text(img, "publication_style", "True")
+    _set_child_text(img, "publication_font_on_page", "True")
+    _set_child_text(img, "publication_font_size", f"{float(font_pt or PLOT_TEXT_PT):g}")
+    _set_child_text(img, "publication_line_width", f"{PLOT_LINE_PT:g}")
 
 
 def _plot_colours(colors) -> tuple[list | None, str]:
@@ -336,10 +447,92 @@ def _plot_colours(colors) -> tuple[list | None, str]:
     return out, ""
 
 
+def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
+                          stats_mode: str = "auto", label=None):
+    """(the figure's stats-provenance entry or None, a note for the reply, warnings) of a
+    data plot: pairwise tests for bar/box/violin, two-way ANOVA for grouped, a
+    correlation for scatter. Shared by add_data_plot and the GUI's dropped tables."""
+    rec = None
+    note = ""
+    _mode = {"auto": None, "parametric": True, "nonparametric": False}.get(stats_mode)
+    try:
+        from staplot import api as _api
+        if kind in ("bar", "box", "violin"):
+            rec = _api.auto_test(_api.table_from_csv(csv_abs), only_significant=only_significant,
+                                 parametric=_mode)
+        elif kind == "grouped":
+            rec = _api.two_way_test(_api.grouped_table_from_csv(csv_abs))
+        elif kind == "scatter":
+            rec = _api.correlation_test(_api.table_from_csv(csv_abs))
+    except Exception as e:
+        return None, f" (stats provenance skipped: {type(e).__name__})", []
+    if not rec or "error" in rec:
+        return None, note, []
+    entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
+             "test": rec.get("test")}
+    warnings: list[str] = []
+    if kind in ("bar", "box", "violin"):
+        entry.update(omnibus=rec.get("omnibus"), correction=rec.get("correction"),
+                     normality=rec.get("normality"), comparisons=rec.get("comparisons"))
+        if rec.get("warnings"):
+            entry["warnings"] = rec["warnings"]
+        note = f" — {rec.get('test')}, {len(rec.get('sig_pairs', []))} significant pair(s) bracketed"
+        warnings = list(rec.get("warnings", []))
+    elif kind == "grouped":
+        entry.update(effects=rec.get("effects"))
+        note = f" — {rec.get('test')} recorded"
+    elif kind == "scatter":
+        entry.update(r=rec.get("r"), r2=rec.get("r2"), p=rec.get("p"), n=rec.get("n"),
+                     x=rec.get("x"), y=rec.get("y"))
+        note = f" — {rec.get('test')} r={rec.get('r'):.3g}, p={rec.get('p'):.3g}"
+    return entry, note, warnings
+
+
+_EXCEL = (".xlsx", ".xlsm", ".xls")
+
+
+def _table_path(path: str, sheet=None) -> tuple[str, str]:
+    """(absolute table path, error) for a plot's table: a CSV / TSV / TXT, or an Excel
+    workbook whose *sheet* (name or number from 1) is kept as "book.xlsx::Sheet" —
+    the form the panel script and staplot read."""
+    path = str(path)
+    if "::" in path and sheet in (None, ""):
+        path, sheet = path.rsplit("::", 1)
+    if not os.path.isfile(path):
+        return "", f"no such table file: {path}"
+    path = os.path.abspath(path)
+    excel = path.lower().endswith(_EXCEL)
+    if sheet not in (None, "") and not excel:
+        return "", f"sheet applies to Excel files (.xlsx, .xls) only, not {os.path.basename(path)}"
+    if not excel:
+        return path, ""
+    try:
+        from staplot.api import list_sheets
+        names = list_sheets(path)
+    except ImportError as e:
+        return "", str(e)
+    except Exception as e:
+        return "", f"cannot read {os.path.basename(path)} ({type(e).__name__}: {e})"
+    if sheet in (None, ""):
+        return path, ""
+    sheet = str(sheet)
+    if sheet not in names and not (sheet.strip().isdigit() and 1 <= int(sheet) <= len(names)):
+        return "", f"no sheet {sheet!r} in {os.path.basename(path)}; its sheets are {', '.join(names)}"
+    return f"{path}::{sheet}", ""
+
+
 def _csv_number_count(path: str) -> int:
     """How many finite numbers a CSV holds (0 for an empty file or a header
     alone: the plot would be an empty frame)."""
     import csv
+    if "::" in str(path) or str(path).lower().endswith(_EXCEL):
+        try:
+            import pandas as pd
+            from staplot.api import read_table
+            df = read_table(path)
+            return int(sum(pd.to_numeric(df[c], errors="coerce").notna().sum() for c in df.columns))
+        except Exception:
+            return 0
     try:
         from staplot.api import csv_format
     except ImportError:                 # soft dependency: the panel itself says it is missing
@@ -368,8 +561,8 @@ def add_data_plot(
     pyf_path: str,
     group_path: list[int],
     csv_path: str,
-    kind: str = "bar",
-    error: str = "sem",
+    kind: str = "auto",
+    error: str = "sd",              # SD, as journals prefer (user, 2026-11-18)
     annotate_stats: bool = True,
     only_significant: bool = True,
     label: str | None = None,
@@ -380,6 +573,17 @@ def add_data_plot(
     stats_mode: str = "auto",
     latex: bool = False,
     colors: list[str] | None = None,
+    sheet: str | None = None,
+    aspect: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    font_scale: float | None = None,
+    order: list[str] | None = None,
+    ylim: list[float | None] | None = None,
+    log_y: bool | None = None,
+    xtick_rotation: float | None = None,
+    legend: str | None = None,
+    font_pt: float | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -392,11 +596,15 @@ def add_data_plot(
     package (a soft dependency); if it isn't installed the panel shows an install
     hint instead of failing.
 
-    *csv_path*: a CSV of the data.
+    *csv_path*: a table of the data: CSV, TSV, TXT, or an Excel workbook (.xlsx, .xls;
+      *sheet* = the sheet's name or number from 1, else the first sheet).
       - bar/box/violin/scatter: **wide** (one column per group, rows = replicates)
         or **long** (2 columns: group label, value).
       - grouped: **long** with 3 columns: factor_a, factor_b, value.
-    *kind*: "bar" | "box" | "violin" | "scatter" | "grouped".
+    *kind*: "auto" (default: the plot that shows the data best — grouped for a
+      two-factor table, scatter for an x / y series, else by the points per group:
+      bar under 5, box 5-19, violin 20 or more) | "bar" | "box" | "violin" |
+      "scatter" | "grouped". The reply says which kind auto chose and why.
     *error*: error-bar type for bar/grouped — "sem" | "sd" | "ci95" | "none".
     *annotate_stats*: for bar/box/violin, compare the groups (Welch t / Mann-
       Whitney for 2 groups; ANOVA+Tukey / Kruskal+Dunn for >2, chosen by a
@@ -416,6 +624,17 @@ def add_data_plot(
       computer's LaTeX (TeX Live / MiKTeX / MacTeX): full LaTeX in labels, e.g.
       ``ylabel="$D$ (\\si{\\micro\\metre\\squared\\per\\second})"``, sans-serif to
       match the figure. Ignored without a LaTeX installation.
+    *aspect*: width / height of the plot (e.g. 1.5 for a wide plot); default: one
+      0.9 in-wide column per group, 4 in tall.
+    Layout and size (only when asked; edit_data_plot changes them later): *width* /
+      *height* in inches (a smaller plot has relatively bigger text once scaled into
+      its panel), *font_scale* (1.3 = text 30 % bigger), *order* (group names in the
+      order to draw; groups left out are dropped and not tested), *ylim* [low, high]
+      (null keeps an end automatic), *log_y*, *xtick_rotation* (degrees, for long
+      group names), *legend* "inside" | "outside" | "none" (scatter, grouped).
+    *font_pt*: the size of the plot's text in the printed figure, in points (default
+      7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
+      when the user asks for a size.
     *colors*: one colour per group, in the CSV's order (names such as magenta /
       green or #rrggbb); groups beyond the list keep the default palette.
       set_figure_colors recolours plots and images together.
@@ -431,21 +650,28 @@ def add_data_plot(
         add_data_plot("fig.pyf", [0], "counts.csv", kind="box",
                       ylabel="cells / field", label="D")
     """
-    kind = kind.lower()
-    if kind not in _DATA_PLOT_KINDS:
-        return f"ERROR: kind must be one of {_DATA_PLOT_KINDS}."
+    kind = (kind or "auto").lower()
+    if kind not in _DATA_PLOT_KINDS + ("auto",):
+        return f"ERROR: kind must be 'auto' or one of {_DATA_PLOT_KINDS}."
     if error not in ("sem", "sd", "ci95", "none"):
         return "ERROR: error must be 'sem', 'sd', 'ci95' or 'none'."
     if stats_mode not in ("auto", "parametric", "nonparametric"):
         return (f"ERROR: stats_mode must be 'auto', 'parametric' or 'nonparametric', not "
                 f"{stats_mode!r}: the test itself is chosen from the data (t-test / ANOVA "
                 f"are 'parametric', Mann-Whitney / Kruskal-Wallis 'nonparametric').")
-    if not os.path.isfile(csv_path):
-        return f"ERROR: no such CSV file: {csv_path}"
-    csv_abs = os.path.abspath(csv_path)
+    csv_path, bad = _table_path(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}"
+    csv_abs = csv_path
     if not _csv_number_count(csv_abs):
         return (f"ERROR: {csv_path} holds no numbers to plot (empty, or a header without "
                 f"values); nothing was added.")
+    auto_note = ""
+    if kind == "auto":
+        kind, why = _auto_kind(csv_abs)
+        if not kind:
+            return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was added."
+        auto_note = f"\nKIND: auto chose {kind}: {why}. Say so; edit_data_plot kind changes it."
     if kind == "grouped":
         try:
             from staplot import api as _api
@@ -458,9 +684,15 @@ def add_data_plot(
     plot_colors, bad = _plot_colours(colors)
     if bad:
         return f"ERROR: {bad}"
+    layout, bad = _plot_layout(kind, csv_abs,
+                               {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
+                                "order": order, "ylim": ylim, "log_y": log_y,
+                                "xtick_rotation": xtick_rotation, "legend": legend})
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
     script = _make_data_plot_script(csv_abs, kind, error, annotate_stats,
                                     only_significant, title, ylabel, xlabel,
-                                    stats_mode, latex=latex, colors=plot_colors)
+                                    stats_mode, latex=latex, colors=plot_colors, layout=layout)
 
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
@@ -469,9 +701,10 @@ def add_data_plot(
     img = _new_image2d("__data_plot__")
     img.find("filename").text = "None"
     _set_child_text(img, "custom_loading_script", _encode_str(script))
+    _plot_text_on_page(img, font_pt)
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
-    _append_image(container, img, is_root=(not group_path))
+    container, group_path = _append_new_panel(root, container, img, group_path)
     _save(tree, pyf_path, recompute=True)
     idx = len([c for c in container if c.tag == "Image2D"]) - 1
 
@@ -481,51 +714,473 @@ def add_data_plot(
     stats_note = ""
     stats_warnings: list[str] = []
     if annotate_stats:
-        rec = None
-        _mode = {"auto": None, "parametric": True, "nonparametric": False}[stats_mode]
-        try:
-            from staplot import api as _api
-            if kind in ("bar", "box", "violin"):
-                rec = _api.auto_test(_api.table_from_csv(csv_abs),
-                                     only_significant=only_significant,
-                                     parametric=_mode)
-            elif kind == "grouped":
-                rec = _api.two_way_test(_api.grouped_table_from_csv(csv_abs))
-            elif kind == "scatter":
-                rec = _api.correlation_test(_api.table_from_csv(csv_abs))
-        except Exception as e:
-            stats_note = f" (stats provenance skipped: {type(e).__name__})"
-        if rec and "error" not in rec:
-            entry = {"source": "data_plot", "panel_label": label,
-                     "csv": csv_abs, "kind": kind, "test": rec.get("test")}
-            if kind in ("bar", "box", "violin"):
-                entry.update(omnibus=rec.get("omnibus"),
-                             correction=rec.get("correction"),
-                             normality=rec.get("normality"),
-                             comparisons=rec.get("comparisons"))
-                if rec.get("warnings"):
-                    entry["warnings"] = rec["warnings"]
-                nsig = len(rec.get("sig_pairs", []))
-                stats_note = f" — {rec.get('test')}, {nsig} significant pair(s) bracketed"
-                stats_warnings = list(rec.get("warnings", []))
-            elif kind == "grouped":
-                entry.update(effects=rec.get("effects"))
-                stats_note = f" — {rec.get('test')} recorded"
-            elif kind == "scatter":
-                entry.update(r=rec.get("r"), r2=rec.get("r2"), p=rec.get("p"),
-                             n=rec.get("n"), x=rec.get("x"), y=rec.get("y"))
-                stats_note = (f" — {rec.get('test')} r={rec.get('r'):.3g}, "
-                              f"p={rec.get('p'):.3g}")
+        entry, stats_note, stats_warnings = data_plot_stats_entry(csv_abs, kind, only_significant,
+                                                                  stats_mode, label)
+        if entry:
             _append_stats_entry(pyf_path, entry)
 
     loc = "canvas" if not group_path else f"group {group_path}"
     suffix = f' with label "{label}"' if label else ""
+    # say what the plot leaves out of the CSV (empty / NA / text cells): tell the user
+    from pyfigures.assistant.plot_info import data_cleaning
+    cleaning = data_cleaning({"csv": csv_abs, "kind": kind})
+    cleaning_note = (f"\nDATA: {cleaning} Tell the user what was left out."
+                     if cleaning and "no value left out" not in cleaning else "")
     return (
         f"Data-plot panel ({kind}) added as index {idx} in {loc}{suffix} from "
         f"{os.path.basename(csv_abs)}{stats_note}. Reopen the figure in PyFigures "
         f"to render it."
         + "".join(f"\nNOTE: {w}" for w in stats_warnings)
+        + cleaning_note + auto_note
     )
+
+
+@mcp.tool()
+def match_display_range(
+    pyf_path: str,
+    files: list[str] | None = None,
+    low_percentile: float = 0.1,
+    high_percentile: float = 99.9,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> str:
+    """Give image panels ONE SHARED display range, so their brightness can honestly be
+    compared: "same brightness and contrast so they're comparable", "same display
+    settings for WT and mutant", "don't auto-scale each image". The range is computed
+    from all the chosen panels' pixels together (low/high percentiles), or given
+    (*min_value* / *max_value*), and set identically on each: a pixel value then looks the
+    same in every panel. Never use per-channel auto-normalisation for this: it stretches
+    each image to its own range and makes them NOT comparable.
+
+    *files*: the source file names (as in panel_references source_file) of the panels to
+      match; None = every image panel (plots and drawings are left alone). Match only
+      images of the same kind of acquisition (same stain, same settings).
+    *low_percentile* / *high_percentile*: the shared range's ends, in percent of all their
+      pixels (0.1 and 99.9 by default).
+    """
+    import numpy as np
+    from batoolset.img import Img
+    from .core import _decode
+    if not 0 <= low_percentile < high_percentile <= 100:
+        return "ERROR: need 0 <= low_percentile < high_percentile <= 100. Nothing was changed."
+    if (min_value is None) != (max_value is None) or (min_value is not None and min_value >= max_value):
+        return "ERROR: give both min_value and max_value (min < max), or neither. Nothing was changed."
+    wanted = {os.path.basename(str(f)).lower() for f in files} if files else None
+    tree, root = _load(pyf_path)
+    chosen = []
+    for img in root.iter("Image2D"):
+        if (_decode(img.findtext("isText")) or "False") not in ("False", "None"):
+            continue
+        name = _first_filename(img)
+        script = _decode_text(_child_text(img, "custom_loading_script"))
+        if not name or str(name) in ("None", "__data_plot__") or (script and script.strip() not in ("", "None")):
+            continue
+        if str(name).lower().endswith((".svg", ".pdf", ".eps")):
+            continue
+        if wanted is not None and os.path.basename(str(name)).lower() not in wanted:
+            continue
+        chosen.append((img, str(name)))
+    if wanted is not None:
+        found = {os.path.basename(n).lower() for _, n in chosen}
+        missing = sorted(wanted - found)
+        if missing:
+            return f"ERROR: no image panel shows {missing}. Nothing was changed."
+    if len(chosen) < 2 and min_value is None:
+        return "ERROR: a shared range needs at least two image panels. Nothing was changed."
+    dtypes = set()
+    if min_value is None:
+        samples = []
+        rng = np.random.default_rng(0)
+        for _, name in chosen:
+            try:
+                a = np.asarray(Img(name))
+            except Exception as e:
+                return f"ERROR: could not read {os.path.basename(name)} ({type(e).__name__}). Nothing was changed."
+            dtypes.add(str(a.dtype))
+            flat = a.reshape(-1)
+            if flat.size > 1_000_000:
+                flat = flat[rng.integers(0, flat.size, 1_000_000)]
+            samples.append(flat.astype(np.float64))
+        pooled = np.concatenate(samples)
+        min_value, max_value = (float(v) for v in np.percentile(pooled, [low_percentile, high_percentile]))
+        if max_value <= min_value:
+            return "ERROR: these images are uniform over that range; nothing to stretch. Nothing was changed."
+    text = repr({"range": "custom", "min_value": min_value, "max_value": max_value})
+    for img, _ in chosen:
+        _set_child_text(img, "normalization", text)
+    _save(tree, pyf_path)
+    names = ", ".join(os.path.basename(n) for _, n in chosen)
+    note = (f" NOTE: the images have different pixel types ({', '.join(sorted(dtypes))}): one range rarely "
+            f"suits them all; match images of the same acquisition only." if len(dtypes) > 1 else "")
+    return (f"One shared display range {min_value:g}–{max_value:g} set on {len(chosen)} panel(s): {names}. "
+            f"Equal pixel values now look the same in each.{note}")
+
+
+def plot_panel_code(script: str) -> str | None:
+    """The Python code of a plot panel's script, to read or run outside PyFigures, or None
+    when the panel is not a plot (shared by data_plot_code and the GUI's Show plot code)."""
+    from pyfigures.assistant.plot_info import parse_data_plot, data_plot_code as _code
+    spec = parse_data_plot(script)
+    if spec:
+        return _code(spec)
+    from pyfigures.seaborn_plot import parse as parse_seaborn
+    if parse_seaborn(script) is not None:
+        return ("# A seaborn plot made by PyFigures; runs on its own (pandas, seaborn, matplotlib).\n"
+                "class _Panel:\n    img = None\n\n\nself = _Panel()\n\n" + script.split("\n", 1)[1] +
+                '\n\nself.img.savefig("plot.pdf")            # vector; or .png / .svg\n')
+    return None
+
+
+@mcp.tool()
+def data_plot_code(pyf_path: str, group_path: list[int], image_index: int, out_path: str | None = None) -> str:
+    """The **Python code of a plot panel** ("show me the code of this plot", "how was it
+    made?", "give me the script so I can redo it"): for a data plot, a script that redraws
+    it with staplot and then reads the table with pandas (as the plot reads it: separator,
+    decimal comma, Excel sheet, left-out cells) and runs the same test with scipy /
+    statsmodels alone, so the statistics can be checked without PyFigures; for a seaborn
+    plot, its seaborn code. *out_path*: also save it as a .py file.
+    To change the plot, use edit_data_plot / edit_seaborn_plot, not this code."""
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    images = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(images):
+        return f"ERROR: image_index {image_index} out of range (0..{len(images) - 1})"
+    code = plot_panel_code(_decode_text(_child_text(images[image_index], "custom_loading_script")))
+    if code is None:
+        return ("ERROR: this panel is not a data plot or a seaborn plot (add_data_plot / add_seaborn_plot); "
+                "a script panel's code is read with get_script.")
+    if out_path:
+        if not out_path.lower().endswith(".py"):
+            return "ERROR: out_path must end in .py"
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(code)
+        return f"Saved to {out_path}.\n\n{code}"
+    return code
+
+
+@mcp.tool()
+def list_data_plot_kinds() -> str:
+    """The kinds of data plot PyFigures draws from a CSV (add_data_plot, edit_data_plot),
+    with what each shows. Read-only. Use it for "what plot types are there?", "which plot
+    should I use?"."""
+    from pyfigures.assistant.plot_info import PLOT_KINDS
+    from pyfigures.seaborn_plot import describe_functions
+    return ("Data-plot kinds with statistics (add_data_plot to add one, edit_data_plot to switch an existing plot):\n"
+            + "\n".join(f"- {k}: {v}" for k, v in PLOT_KINDS.items())
+            + "\nError bars (bar, grouped): sem, sd, ci95 or none. Statistics: automatic test (parametric "
+              "or not from a normality check), or stats_mode='parametric' / 'nonparametric'; brackets for "
+              "every tested pair or only the significant ones.\n\n" + describe_functions())
+
+
+@mcp.tool()
+def add_seaborn_plot(
+    pyf_path: str,
+    group_path: list[int],
+    csv_path: str,
+    function: str,
+    x: str | None = None,
+    y: str | None = None,
+    hue: str | None = None,
+    col: str | None = None,
+    row: str | None = None,
+    col_wrap: int | None = None,
+    kind: str | None = None,
+    style: str | None = None,
+    size: str | None = None,
+    palette: str | None = None,
+    height: float | None = None,
+    aspect: float | None = None,
+    title: str = "",
+    xlabel: str = "",
+    ylabel: str = "",
+    index: str | None = None,
+    columns: str | None = None,
+    values: str | None = None,
+    options: dict | None = None,
+    label: str | None = None,
+    sheet: str | None = None,
+) -> str:
+    """Add a **seaborn plot** of a CSV or an Excel sheet (.xlsx, .xls; *sheet* = its name
+    or number from 1, else the first) — a tidy / long table: one row per observation — as a
+    panel: any seaborn plot, with FACETS like ggplot2's facet_wrap / facet_grid. It stays
+    live: the CSV is read again when the figure opens. No statistics brackets (use
+    add_data_plot for tested group comparisons).
+
+    *function*: relplot, displot, catplot, lmplot, pairplot, jointplot (figure-level), or
+      scatterplot, lineplot, histplot, kdeplot, ecdfplot, rugplot, stripplot, swarmplot,
+      boxplot, violinplot, boxenplot, pointplot, barplot, countplot, regplot, residplot,
+      heatmap, clustermap. list_data_plot_kinds describes them.
+    *x*, *y*, *hue*, *style*, *size*: column names mapped as in seaborn.
+    *col* / *row*: facet by these columns (one small plot per value), as facet_wrap
+      (col + *col_wrap* = how many per row) or facet_grid (col and row); relplot,
+      displot, catplot and lmplot only. E.g. box plots per genotype, one facet per day:
+      function="catplot", kind="box", x="genotype", y="length", col="day".
+    *kind*: the figure-level function's kind ("scatter"/"line"; "hist"/"kde"/"ecdf";
+      "strip"/"swarm"/"box"/"violin"/"boxen"/"point"/"bar"/"count").
+    *palette*: a seaborn / matplotlib palette name ("colorblind", "deep", "viridis"...).
+    *height* / *aspect*: inches per facet and width / height.
+    *index* / *columns* / *values*: heatmap / clustermap of a pivot of the table.
+    *options*: any other keyword the seaborn function takes (e.g. {"errorbar": "se"},
+      {"bins": 20}, {"dodge": true}).
+    Rows with a missing value in a used column are left out (the reply says how many).
+    """
+    from pyfigures.seaborn_plot import check, make_script, dropped_rows
+    csv_path, bad = _table_path(csv_path, sheet)
+    if bad:
+        return f"ERROR: {bad}. Nothing was added."
+    spec = {"function": str(function).strip().lower(), "csv": csv_path}
+    for key, value in (("x", x), ("y", y), ("hue", hue), ("col", col), ("row", row), ("col_wrap", col_wrap),
+                       ("kind", kind), ("style", style), ("size", size), ("palette", palette),
+                       ("height", height), ("aspect", aspect), ("title", title), ("xlabel", xlabel),
+                       ("ylabel", ylabel), ("index", index), ("columns", columns), ("values", values),
+                       ("options", options)):
+        if value not in (None, ""):
+            spec[key] = value
+    bad = check(spec)
+    if bad:
+        return f"ERROR: {bad}. Nothing was added."
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    img = _new_image2d("__seaborn_plot__")
+    _plot_text_on_page(img)
+    img.find("filename").text = "None"
+    _set_child_text(img, "custom_loading_script", _encode_str(make_script(spec)))
+    if label:
+        img.find("annotations").append(_new_tatext2d(label, "top left"))
+    container, group_path = _append_new_panel(root, container, img, group_path)
+    _save(tree, pyf_path, recompute=True)
+    idx = len([c for c in container if c.tag == "Image2D"]) - 1
+    facets = (f", faceted by {' and '.join(v for v in (col, row) if v)}" if (col or row) else "")
+    rows_note = dropped_rows(spec)
+    return (f"Seaborn {spec['function']}{' (' + kind + ')' if kind else ''} of {os.path.basename(csv_path)} added as "
+            f"index {idx} in {'canvas' if not group_path else f'group {group_path}'}{facets}."
+            + (f"\nDATA: {rows_note}." if rows_note else ""))
+
+
+@mcp.tool()
+def edit_seaborn_plot(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    function: str | None = None,
+    x: str | None = None,
+    y: str | None = None,
+    hue: str | None = None,
+    col: str | None = None,
+    row: str | None = None,
+    col_wrap: int | None = None,
+    kind: str | None = None,
+    palette: str | None = None,
+    height: float | None = None,
+    aspect: float | None = None,
+    title: str | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    options: dict | None = None,
+    remove: list[str] | None = None,
+) -> str:
+    """Change a seaborn plot panel (add_seaborn_plot): another function or kind ("make it a
+    violin", "a swarm instead"), other columns, facets ("one facet per day": col="day";
+    "no facets": remove=["col", "row"]), palette, size or labels. Only what is given
+    changes. *remove*: setting names to drop (e.g. ["hue"], ["col", "col_wrap"]).
+    *options* replaces the extra seaborn keywords."""
+    from pyfigures.seaborn_plot import check, make_script, parse, dropped_rows
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    images = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(images):
+        return f"ERROR: image_index {image_index} out of range (0..{len(images) - 1}); nothing was changed."
+    img = images[image_index]
+    spec = parse(_decode_text(_child_text(img, "custom_loading_script")))
+    if spec is None:
+        return ("ERROR: this panel is not a seaborn plot (add_seaborn_plot). A data plot with statistics is "
+                "changed with edit_data_plot. Nothing was changed.")
+    new = dict(spec)
+    for key, value in (("function", function), ("x", x), ("y", y), ("hue", hue), ("col", col), ("row", row),
+                       ("col_wrap", col_wrap), ("kind", kind), ("palette", palette), ("height", height),
+                       ("aspect", aspect), ("title", title), ("xlabel", xlabel), ("ylabel", ylabel),
+                       ("options", options)):
+        if value is not None:
+            new[key] = value.strip().lower() if key == "function" else value
+    for key in remove or []:
+        new.pop(str(key), None)
+    bad = check(new)
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    _set_child_text(img, "custom_loading_script", _encode_str(make_script(new)))
+    _save(tree, pyf_path, recompute=True)
+    changed = [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in sorted(set(spec) | set(new)) if spec.get(k) != new.get(k)]
+    rows_note = dropped_rows(new)
+    return (("Seaborn plot changed: " + "; ".join(changed) + ".") if changed else
+            "The plot already had these settings; nothing was changed.") + (f"\nDATA: {rows_note}." if rows_note and changed else "")
+
+
+@mcp.tool()
+def edit_data_plot(
+    pyf_path: str,
+    group_path: list[int],
+    image_index: int,
+    kind: str | None = None,
+    error: str | None = None,
+    annotate_stats: bool | None = None,
+    only_significant: bool | None = None,
+    stats_mode: str | None = None,
+    title: str | None = None,
+    ylabel: str | None = None,
+    xlabel: str | None = None,
+    colors: list[str] | None = None,
+    csv_path: str | None = None,
+    sheet: str | None = None,
+    aspect: float | None = None,
+    width: float | None = None,
+    height: float | None = None,
+    font_scale: float | None = None,
+    order: list[str] | None = None,
+    ylim: list[float | None] | None = None,
+    log_y: bool | None = None,
+    xtick_rotation: float | None = None,
+    legend: str | None = None,
+    font_pt: float | None = None,
+) -> str:
+    """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
+    switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
+    statistics ("only show the significant comparisons", "no stats", "non-parametric"),
+    its axis labels, colours or CSV. Only the arguments given change; the rest is kept.
+    The plot is redrawn and its statistics recomputed. Never edit a data plot's script
+    with set_script: that breaks it.
+
+    *kind*: bar | box | violin | scatter | grouped (list_data_plot_kinds says what each shows),
+      or auto (the one that shows the data best; the reply says which and why).
+    *error*: sem | sd | ci95 | none (bar and grouped plots).
+    *annotate_stats*: False removes the test and its brackets, True brings them back.
+    *only_significant*: True draws brackets only for p < 0.05 pairs, False for every pair.
+    *stats_mode*: auto | parametric | nonparametric.
+    *title* / *ylabel* / *xlabel*: "" removes one (no label at all on that axis);
+      "auto" gives back the automatic one ("Value", the column's name).
+    *colors*: one colour per group (names or #rrggbb).
+    *aspect*: width / height of the plot ("make the plot wider": 1.5 or 2; "narrower": 0.7).
+      A plot, unlike an image, can take any shape: in a row it is as tall as its
+      neighbours, so a larger aspect gives it more of the row.
+    Text size: *font_pt* = the size of ALL the plot's text in the printed figure, in
+      points ("bigger text" 8 or 9, "like the panel letters" their size, "7 pt"). The
+      default is 7 pt on the page whatever the panel's size (journals ask 5-8 pt).
+    Size: *width* / *height* in inches ("make the plot smaller / bigger").
+      *font_scale*: relative sizes inside the plot only; for "bigger text" use font_pt.
+    Layout: *order*: the groups in this order (names; groups left out are dropped and
+      not tested); *ylim*: [low, high], null for an automatic end ("start the y axis at
+      0": [0, null]); *log_y*; *xtick_rotation*: degrees ("the group names overlap": 45);
+      *legend*: "inside" | "outside" | "none".
+    0, "" or [] clears a layout setting (back to the default); only what is asked changes.
+    *csv_path*: plot another table (CSV, TXT, Excel) with the same settings.
+    *sheet*: another sheet of the Excel workbook (name or number from 1).
+    *group_path* / *image_index*: the panel, as for the other image tools.
+    """
+    from pyfigures.assistant.plot_info import parse_data_plot
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    images = [c for c in container if c.tag == "Image2D"]
+    if not 0 <= image_index < len(images):
+        return f"ERROR: image_index {image_index} out of range (0..{len(images) - 1}); nothing was changed."
+    img = images[image_index]
+    spec = parse_data_plot(_decode_text(_child_text(img, "custom_loading_script")))
+    if spec is None:
+        return ("ERROR: this panel is not a data plot made from a CSV (add_data_plot), so it has no plot "
+                "settings to change. A panel drawn by a Python script is changed with get_script / "
+                "set_script. Nothing was changed.")
+    new = dict(spec)
+    for axis, value in (("ylabel", ylabel), ("xlabel", xlabel)):
+        # "remove the y label": gone, not replaced by the automatic "Value" (user, 2026-11-18:
+        # "I did not say replace it by value, I said I want the label of the y axis gone")
+        if value is not None:
+            gone = str(value).strip() == ""
+            new["show_" + axis] = not gone
+            if str(value).strip().lower() == "auto":
+                ylabel, xlabel = (("", xlabel) if axis == "ylabel" else (ylabel, ""))
+    for key, value in (("kind", kind), ("error", error), ("annotate_stats", annotate_stats),
+                       ("only_significant", only_significant), ("stats_mode", stats_mode),
+                       ("title", title), ("ylabel", ylabel), ("xlabel", xlabel)):
+        if value is not None:
+            new[key] = value.lower().strip() if key in ("kind", "error", "stats_mode") else value
+    auto_note = ""
+    if new["kind"] == "auto":
+        new["kind"], why = _auto_kind(new["csv"] if csv_path is None and sheet in (None, "") else
+                                      _table_path(csv_path if csv_path is not None else new["csv"], sheet)[0])
+        if not new["kind"]:
+            return f"ERROR: no plot kind fits this table on its own: {why}. Nothing was changed."
+        auto_note = f" (auto: {why})"
+    if new["kind"] not in _DATA_PLOT_KINDS:
+        return f"ERROR: kind must be 'auto' or one of {_DATA_PLOT_KINDS} (list_data_plot_kinds). Nothing was changed."
+    if new["error"] not in ("sem", "sd", "ci95", "none"):
+        return "ERROR: error must be 'sem', 'sd', 'ci95' or 'none'. Nothing was changed."
+    if new["stats_mode"] not in ("auto", "parametric", "nonparametric"):
+        return "ERROR: stats_mode must be 'auto', 'parametric' or 'nonparametric'. Nothing was changed."
+    if csv_path is not None or sheet not in (None, ""):
+        from pyfigures.plot_tables import split_sheet
+        table, bad = _table_path(csv_path if csv_path is not None else split_sheet(new["csv"])[0], sheet)
+        if bad:
+            return f"ERROR: {bad}. Nothing was changed."
+        new["csv"] = table
+    if new["kind"] == "grouped":
+        try:
+            from staplot import api as _api
+            _api.grouped_table_from_csv(new["csv"])
+        except ImportError:
+            pass
+        except ValueError as e:
+            return (f"ERROR: a grouped plot needs a CSV with two factors and a value column ({e}). "
+                    f"Nothing was changed.")
+    current = {k: spec.get(k) for k in PLOT_LAYOUT_KEYS}
+    if new["kind"] not in ("bar", "box", "violin"):
+        current.pop("order", None)              # a group order means nothing for scatter / grouped
+    layout, bad = _plot_layout(new["kind"], new["csv"],
+                               {"aspect": aspect, "width": width, "height": height, "font_scale": font_scale,
+                                "order": order, "ylim": ylim, "log_y": log_y,
+                                "xtick_rotation": xtick_rotation, "legend": legend}, current)
+    if bad:
+        return f"ERROR: {bad}. Nothing was changed."
+    for k in PLOT_LAYOUT_KEYS:
+        new[k] = layout.get(k)
+    for k in ("show_ylabel", "show_xlabel"):
+        if new.get(k) is False:
+            layout[k] = False
+    plot_colors = new.get("colors")
+    if colors is not None:
+        plot_colors, bad = _plot_colours(colors)
+        if bad:
+            return f"ERROR: {bad}. Nothing was changed."
+    script = _make_data_plot_script(new["csv"], new["kind"], new["error"], new["annotate_stats"],
+                                    new["only_significant"], new["title"], new["ylabel"], new["xlabel"],
+                                    new["stats_mode"], latex=new.get("latex", False), colors=plot_colors,
+                                    layout=layout)
+    _set_child_text(img, "custom_loading_script", _encode_str(script))
+    font_note = []
+    if font_pt is not None:
+        if not 3 <= float(font_pt) <= 30:
+            return "ERROR: font_pt is the plot's text size in the printed figure, 3 to 30 points. Nothing was changed."
+        old_pt = _child_text(img, "publication_font_size")
+        on_page = str(_child_text(img, "publication_font_on_page")) == "True"
+        _plot_text_on_page(img, font_pt)
+        if not on_page or str(old_pt) != f"{float(font_pt):g}":
+            font_note = [f"text {old_pt or '?'} pt{'' if on_page else ' (plot points)'} -> {float(font_pt):g} pt "
+                         f"on the page"]
+    _save(tree, pyf_path, recompute=True)
+    changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
+               ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv")
+               + PLOT_LAYOUT_KEYS + ("show_ylabel", "show_xlabel")
+               if spec.get(k) != new.get(k)]
+    if colors is not None:
+        changed.append(f"colours -> {plot_colors}")
+    if not changed:
+        return "The data plot already had these settings; nothing was changed." + auto_note
+    return "Data plot changed: " + "; ".join(changed) + auto_note + "."
 
 
 def _flip_state(img) -> tuple[bool, bool]:

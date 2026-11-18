@@ -48,7 +48,9 @@ def test_a_bar_in_mm_is_that_long_and_one_under_a_pixel_is_refused(tmp_path):
     # µm bars are as before, and so are all the images at once
     assert not set_scale_bar(pyf, [0], 1, 10, px_to_unit=1.0).startswith("ERROR")
     assert json.loads(get_scale_bar(pyf, [0], 1))["bar_width_in_units"] == 10
-    out = set_scale_bar_all(pyf, 0.01, unit="mm", px_to_unit=0.001)        # 10 µm at 1 µm/px
+    # 10 µm at 1 µm/px; a.tif got 596.847 µm/px above: a recalibration the test means
+    # (a calibrated pixel size is only changed when confirmed, since 2026-11-18)
+    out = set_scale_bar_all(pyf, 0.01, unit="mm", px_to_unit=0.001, confirm_recalibration=True)
     assert "Scale bar applied to 2" in out
     for i in (0, 1):
         assert json.loads(get_scale_bar(pyf, [0], i))["bar_width_in_units"] == pytest.approx(10)

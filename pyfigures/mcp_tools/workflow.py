@@ -667,7 +667,9 @@ def draft_figure(
     out_pyf = os.path.abspath(out_pyf)
 
     def _csvs_in(d):
-        return sorted([str(p) for ext in ("*.csv", "*.tsv") for p in Path(d).glob(ext)])
+        # Excel workbooks are tables too (first sheet); "~$book.xlsx" is Excel's lock file
+        return sorted({str(p) for ext in ("*.csv", "*.tsv", "*.xlsx", "*.xlsm", "*.xls")
+                       for p in Path(d).glob(ext) if not p.name.startswith("~$")})
 
     images = _collect_image_files(folder, pattern)
     csvs = _csvs_in(folder)

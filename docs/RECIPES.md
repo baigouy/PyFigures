@@ -403,7 +403,7 @@ Tip: to get replicates on several rows, use one `glob` row per group
 ```yaml
 - - plot: data/counts.csv
     kind: box
-    error: sem
+    error: sd
     ylabel: "cells / field"
     xlabel: ""
     title: ""
@@ -418,17 +418,35 @@ opened, so a rebuild or a re-open picks up new data. Requires the `staplot`
 package (bundled with PyFigures installs; otherwise the panel shows an install
 hint instead of failing).
 
+The table can be a CSV, TSV, TXT (semicolon / decimal-comma files included) or an
+**Excel workbook** (`.xlsx`, `.xlsm`, `.xls`); `sheet:` names the sheet (or its
+number from 1), else the first one is used. Blank margin rows and columns of a
+sheet are ignored and numbers typed as text are read as numbers:
+
+```yaml
+- - {plot: measurements.xlsx, sheet: counts, kind: box}
+  - {seaborn: measurements.xlsx, sheet: growth, function: catplot, kind: violin, x: genotype, y: length, col: day}
+```
+
 | Key | Values (default) | Meaning |
 |---|---|---|
 | `plot` | path to a CSV | The data (formats below). |
-| `kind` | `bar` (default), `box`, `violin`, `scatter`, `grouped` | Chart type. |
-| `error` | `sem` (default), `sd`, `ci95`, `none` | Error bars for `bar` / `grouped`. |
+| `kind` | `auto` (default), `bar`, `box`, `violin`, `scatter`, `grouped` | Chart type. `auto` picks the one that shows the data best: `grouped` for a two-factor table, `scatter` for an x / y series (columns named x / y, time…, in different units, or an increasing first column), else by the points per group: `bar` under 5, `box` 5-19, `violin` 20 or more. The build says which it chose. |
+| `error` | `sd` (default, as journals prefer), `sem`, `ci95`, `none` | Error bars for `bar` / `grouped`. |
 | `ylabel`, `xlabel`, `title` | text | Axis labels / title. |
 | `stats_mode` | `auto` (default), `parametric`, `nonparametric` | Test family. `auto` picks by a normality check. |
 | `annotate_stats` | `true` (default) | Compare groups and draw significance brackets. |
 | `only_significant` | `true` (default) | Draw brackets only for p < 0.05 (all comparisons are still recorded). |
 | `label` | text | Corner label on the chart. |
 | `colors` | list | One colour per group, in the CSV's order (`[magenta, green]`, `#rrggbb`). |
+| `aspect` | number | Width / height of the plot (`2` = twice as wide as tall); only when wanted, the default shape is staplot's. |
+| `width`, `height` | inches | The plot's size; a smaller plot has relatively bigger text and lines once scaled into its panel. One alone keeps the shape. |
+| `font_scale` | number | Every text of the plot times this (`1.3` = 30 % bigger). |
+| `order` | list of group names | The groups in this order (bar, box, violin); groups left out are not drawn nor tested. |
+| `ylim` | `[low, high]` | The y range; `null` keeps an end automatic (`[0, null]`: y from 0). |
+| `log_y` | `true` / `false` | A log y axis. |
+| `xtick_rotation` | degrees | Tilted group names (`45`) when they overlap. |
+| `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 
 CSV formats:
 
@@ -451,6 +469,38 @@ p-value go to `<figure>.stats.json` — ready for the Methods section (the
 adjustment-ledger export turns it into a paragraph).
 
 Charts have white backgrounds, so their letters are black.
+
+Missing or non-numeric cells (empty, `NA`, `nan`, a typo such as `abc`) are left
+out group by group, never filled in; a long-table row without a group label is
+left out too. The MCP reply and the chat say how many were left out, and where.
+
+**Changing a plot later:** `edit_data_plot` switches its kind (box → violin…), its
+error bars, its brackets (`only_significant`) or its test, keeping the rest;
+`list_data_plot_kinds` lists the kinds.
+
+### 8b. Seaborn plots, faceted like ggplot2 — `seaborn`
+
+Any seaborn plot of a tidy CSV (one row per observation), with facets as in
+ggplot2's `facet_wrap` / `facet_grid`: `col` (+ `col_wrap`) and `row` on the
+figure-level functions (`relplot`, `displot`, `catplot`, `lmplot`).
+
+```yaml
+rows:
+  - - {seaborn: growth.csv, function: catplot, kind: box, x: genotype, y: length,
+       hue: treatment, col: day, palette: colorblind}
+  - - {seaborn: growth.csv, function: displot, kind: kde, x: length, hue: genotype, row: treatment}
+```
+
+Keys: `function` (required: relplot, displot, catplot, lmplot, pairplot,
+jointplot, scatterplot, lineplot, histplot, kdeplot, ecdfplot, rugplot,
+stripplot, swarmplot, boxplot, violinplot, boxenplot, pointplot, barplot,
+countplot, regplot, residplot, heatmap, clustermap), `x`, `y`, `hue`, `style`,
+`size`, `col`, `row`, `col_wrap`, `kind`, `palette`, `height` / `aspect` (inches
+per facet), `title`, `xlabel`, `ylabel`, `index` / `columns` / `values` (a
+heatmap of a pivot), `options` (any other seaborn keyword, e.g. `{bins: 20}`),
+`label`, `sheet` (an Excel table). Rows with a missing value in a column the plot uses are left out (the
+reply says how many). No statistics brackets: use `plot` for tested group
+comparisons. MCP: `add_seaborn_plot`, `edit_seaborn_plot`.
 
 ---
 

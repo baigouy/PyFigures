@@ -91,6 +91,9 @@ setuptools.setup(
         "batoolset>=0.2.2",          # 0.2.2: the image store re-reads a file changed on disk
         "batoolset-gui>=0.2.5",      # Qt layer; 0.2.5: boxed panel letters hug their ink, corner texts stack by their ink
         "staplot>=0.1.0",            # data-plot panels and stats brackets (staplot.api)
+        "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)
+        "openpyxl",                  # plots from Excel .xlsx sheets (MIT)
+        "xlrd",                      # plots from old Excel .xls files (BSD-3)
         "pyautogui",
         "imagecodecs",
         "psutil",

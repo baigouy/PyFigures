@@ -1386,6 +1386,36 @@ def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
             f"asked for, a bar of about a quarter of the width is {suggestion:g} {unit}.")
 
 
+def recalibration_refusal(img: ET.Element, new_value, confirm: bool, name: str = "this panel") -> str | None:
+    """An ERROR text when *new_value* would replace the pixel size an image already has
+    (a different, non-zero value) without the user saying the calibration is wrong.
+
+    The pixel size is the acquisition's calibration: every scale bar and measurement
+    follows it. Asked "panel D should be the same magnification as panel A", a model set
+    D's 0.107 µm/px to A's 1.24 (2026-11-18): the bars then lied by 11x. Matching how
+    big things look is a layout question (crop, row sizes), never a new calibration."""
+    if confirm or new_value is None:
+        return None
+    try:
+        new = float(new_value)
+    except (TypeError, ValueError):
+        return None
+    old, source = _pixel_size(img)       # stored on the panel, else the file's own metadata
+    if not old or old <= 0 or new <= 0 or abs(new / old - 1) < 0.01:
+        return None
+    if abs(old - 1.0) < 1e-9 and source == "figure":
+        return None       # 1 unit per pixel with nothing in the file: the "not set" default, no calibration
+    return (f"ERROR: {name} is already calibrated at {old:g} units/pixel; {new:g} would change its "
+            f"calibration, so every scale bar and measurement on it would be wrong. The pixel size "
+            f"comes from the acquisition: never change it to make panels 'match' or 'look the same "
+            f"magnification'. For the same magnification, the panels must be shown at the same "
+            f"physical scale: check_scale_consistency says how wide each panel would have to be; "
+            f"cropping (transform_image) or the row arrangement changes that; same-length scale bars "
+            f"let readers compare. Only if the USER says the calibration itself is wrong (e.g. 'the "
+            f"pixel size is really 0.2 µm'), call again with confirm_recalibration=True. "
+            f"Nothing was changed.")
+
+
 def _scale_bar_small_note(img: ET.Element, bar_width_in_units: float, px_to_unit: float | None,
                           unit: str = "µm", unit_factor: float = 1.0) -> str:
     """A warning when the bar is under 3 % of the shown image width: a 2000 µm bar on a
@@ -2249,6 +2279,34 @@ def _append_image(container: ET.Element, img: ET.Element, is_root: bool = False)
         container.insert(insert_pos, img)
     else:
         container.append(img)
+
+
+def _append_new_panel(root: ET.Element, container: ET.Element, img: ET.Element,
+                      group_path: list[int]) -> tuple[ET.Element, list[int]]:
+    """Append a brand-new panel; returns (its container, its group path).
+
+    Added to the canvas of a figure made of rows, a loose panel kept its natural
+    size (a seaborn plot 968 px wide under rows of 183 mm): it goes into a row of
+    its own, as wide as the widest row, like a recipe row."""
+    if group_path:
+        container.append(img)
+        return container, list(group_path)
+    tops = _top_groups(root)
+    if not tops:
+        _append_image(container, img, is_root=True)
+        return container, []
+
+    def _num(grp, tag, default):
+        try:
+            value = float(_child_text(grp, tag) or default)
+        except ValueError:
+            return default
+        return value if math.isfinite(value) and value > 0 else default
+    row = _new_group_elem("X", int(_num(tops[0], "space", 3)), _next_group_id(root))
+    row.find("size").text = repr(max(_num(g, "size", 512.0) for g in tops))
+    row.find("content").append(img)
+    _append_image(root, row, is_root=True)
+    return row.find("content"), [len(tops)]
 
 
 # ---------------------------------------------------------------------------

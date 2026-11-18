@@ -329,6 +329,59 @@ def overlay_contrast(panel, max_side=400, max_overlays=12):
     return {'problems': problems, 'read_well': good}
 
 
+def overlay_ratios(plain, with_one):
+    """The contrast ratio of each solid pixel of an overlay against what is behind it
+    (an array), or None when the overlay changes no pixel."""
+    import numpy as np
+    diff = np.abs(with_one.astype(int) - plain.astype(int)).sum(-1) > 30
+    if not diff.any():
+        return None
+    fg_px, bg_px = with_one[diff].astype(float), plain[diff].astype(float)
+    sat = fg_px.max(1) - fg_px.min(1)
+    strength = np.abs(fg_px @ np.array([.2126, .7152, .0722]) - bg_px @ np.array([.2126, .7152, .0722])) + sat
+    core = strength >= np.percentile(strength, 50)
+    if core.sum() >= 5:
+        fg_px, bg_px = fg_px[core], bg_px[core]
+
+    def lum(c):
+        v = c / 255
+        v = np.where(v <= .04045, v / 12.92, ((v + .055) / 1.055) ** 2.4)
+        return v @ np.array([.2126, .7152, .0722])
+    lf, lb = lum(fg_px), lum(bg_px)
+    return (np.maximum(lf, lb) + .05) / (np.minimum(lf, lb) + .05)
+
+
+def scale_bar_visibility(panel, max_side=300):
+    """How well the panel's scale bar (bar and text) reads where it is drawn: the
+    contrast that three quarters of its pixels reach (a bar half on a bright cell and
+    half on black reads badly even when its median contrast is fine); 0 when it is
+    not visible, None when the panel has no scale bar."""
+    import numpy as np
+    from qtpy.QtCore import QRectF
+    try:
+        panel_rgb(panel)
+    except ValueError:
+        pass
+    original = getattr(panel, 'annotations', None)
+    bars = [a for a in (original or []) if _overlay_kind(a) == 'scale_bar']
+    if not bars:
+        return None
+    view = QRectF(panel.getRect(all=True))
+    zoom = max_side / max(view.width(), view.height(), 1e-6)
+    size = (max(1, int(round(view.width() * zoom))), max(1, int(round(view.height() * zoom))))
+    export = hasattr(panel, 'enter_export_mode')
+    if export:
+        panel.enter_export_mode()
+    try:
+        plain = qimage_to_rgb(_draw_panel(panel, view, zoom, size, [], original))
+        with_bar = qimage_to_rgb(_draw_panel(panel, view, zoom, size, bars, original))
+    finally:
+        if export:
+            panel.exit_export_mode()
+    ratios = overlay_ratios(plain, with_bar)
+    return 0.0 if ratios is None else float(np.percentile(ratios, 25))
+
+
 def preview_panel_as_shown(panel, out_path, title='', region=None, letters=True, texts=True,
                            scale_bar=True, rois=True, insets=True, max_side=900):
     """Render *panel* as it appears in the figure (its crop, LUTs, letter, texts,

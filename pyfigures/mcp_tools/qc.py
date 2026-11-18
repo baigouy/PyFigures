@@ -710,6 +710,62 @@ def enforce_min_font_size(
 
 
 @mcp.tool()
+def change_text_size(pyf_path: str, delta_pt: float = 1.0) -> str:
+    """Make EVERY text of the figure bigger (or smaller, negative *delta_pt*) by the same
+    number of points: panel letters, labels and stamps, scale-bar texts, and the text of
+    plot panels. Use it for "make the text bigger everywhere", "I can't read it",
+    "all text 2 pt smaller". When the request names one kind of text only ("bigger
+    letters"), change that kind (restyle_texts / edit_panel_letters) instead; when it is
+    unclear which text is meant, ask. Default +1 pt; no text goes below 4 pt.
+    """
+    if not (isinstance(delta_pt, (int, float)) and math.isfinite(delta_pt)) or delta_pt == 0 or abs(delta_pt) > 30:
+        return f"ERROR: delta_pt must be a non-zero number of points up to ±30 (got {delta_pt!r})."
+    tree, root = _load(pyf_path)
+
+    def new_size(v):
+        out = max(4.0, v + float(delta_pt))
+        return int(out) if float(out).is_integer() else round(out, 1)
+
+    counts = {"figure font": 0, "texts": 0, "plot panels": 0}
+    font_el = root.find("SerializableQFont")
+    if font_el is not None:
+        try:
+            cur = float(_child_text(font_el, "size"))
+            _set_child_text(font_el, "size", str(new_size(cur)))
+            counts["figure font"] = 1
+        except (TypeError, ValueError):
+            pass
+    pattern = re.compile(r"font-size:\s*([\d.]+)pt")
+    for el in root.iter():
+        if el.tag == "SerializableQFont" or not el.text or "font-size" not in el.text:
+            continue
+        raw = _decode(el.text)
+        if not isinstance(raw, str):
+            continue
+        n_before = len(pattern.findall(raw))
+        new = pattern.sub(lambda m: f"font-size:{new_size(float(m.group(1)))}pt", raw)
+        if n_before and new != raw:
+            el.text = _encode_str(new)
+            counts["texts"] += 1
+    for img in root.iter("Image2D"):
+        pf = img.find("publication_font_size")
+        try:
+            v = float(pf.text) if pf is not None and pf.text not in (None, "None") else None
+        except (TypeError, ValueError):
+            v = None
+        if v is not None:
+            pf.text = str(new_size(v))
+            counts["plot panels"] += 1
+    if not any(counts.values()):
+        return "No text with a size was found; nothing was changed."
+    _save(tree, pyf_path)
+    sign = "+" if delta_pt > 0 else ""
+    return (f"All text sizes changed by {sign}{delta_pt:g} pt: figure font (panel letters) "
+            f"{'yes' if counts['figure font'] else 'no'}, {counts['texts']} text(s) "
+            f"(labels, stamps, scale-bar texts), {counts['plot panels']} panel(s) with plot text.")
+
+
+@mcp.tool()
 def check_journal_compliance(
     pyf_path: str,
     journal: str | None = None,

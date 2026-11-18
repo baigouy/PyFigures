@@ -180,8 +180,10 @@ def test_drop(qapp, e2e_gui, e2e_files, tmp_path, watch, situation, names, where
 
 
 def test_drop_without_menu(qapp, e2e_gui, e2e_files, tmp_path, watch):
-    """.pyf: merged straight away; CSV / text alone: refused, said in the
-    status bar, figure untouched; a plain text drag is not even accepted."""
+    """.pyf: merged straight away; a CSV alone opens the data-plot dialog (user,
+    2026-11-18: a dropped table is offered as a plot); text that is no table alone:
+    refused, said in the status bar, figure untouched; a plain text drag is not even
+    accepted."""
     from qtpy.QtCore import QMimeData, Qt
     from qtpy.QtGui import QDragEnterEvent
     g = e2e_gui
@@ -193,7 +195,17 @@ def test_drop_without_menu(qapp, e2e_gui, e2e_files, tmp_path, watch):
     after = H.snapshot(g, tmp_path)
     H.expect_rows(after, BASE + ["row 3: gray8.tif | cells2.png"], ".pyf drop")
     H.check_invariants(qapp, g, tmp_path, before, after)
-    for name in ("csv", "txt"):
+    start(qapp, g, tmp_path, e2e_files)
+    asked = []
+    real = g.add_data_plot_action
+    g.add_data_plot_action = lambda checked=False, path=None, as_panel=False: asked.append(path)
+    try:
+        H.drop_files(g, [e2e_files["csv"]])
+    finally:
+        g.add_data_plot_action = real
+    assert [os.path.normcase(p) for p in asked] == [os.path.normcase(e2e_files["csv"])]
+    assert H.same(H.snapshot(g, tmp_path), before)     # the dialog decides; nothing added yet
+    for name in ("txt",):
         start(qapp, g, tmp_path, e2e_files)
         H.drop_files(g, [e2e_files[name]])
         assert H.drop_menu(g) is None

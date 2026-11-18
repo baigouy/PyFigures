@@ -38,6 +38,7 @@ from .core import (
     _height_choices,
     _ROI_PROTECTED,
     _append_image,
+    _append_new_panel,
     _atomic_write_text,
     _clear_derived_sidecars,
     _auto_recompute,
@@ -653,7 +654,7 @@ def add_image(
         img.find("annotations").append(_new_tatext2d(label, label_placement))
     from .core import _z_stack_projection
     z_note = _z_stack_projection(img, filename)
-    _append_image(container, img, is_root=(not group_path))
+    container, group_path = _append_new_panel(root, container, img, group_path)
     _save(tree, pyf_path, recompute=True)
     n = len([c for c in container if c.tag == "Image2D"]) - 1
     suffix = f' with label "{label}" ({label_placement})' if label else ""
@@ -788,7 +789,7 @@ def add_latex_code(
     _set_child_text(img, "custom_loading_script", _encode_str(script))
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
-    _append_image(container, img, is_root=(not group_path))
+    container, group_path = _append_new_panel(root, container, img, group_path)
     _save(tree, pyf_path, recompute=True)
     n = len([c for c in container if c.tag == "Image2D"]) - 1
     loc = "canvas" if not group_path else f"group {group_path}"
@@ -2316,8 +2317,13 @@ def set_image_property(
     image_index: int,
     property_name: str,
     value: str | int | float | bool | list | None,
+    confirm_recalibration: bool = False,
 ) -> str:
     """Set any named property on an Image2D element.
+
+    The pixel size (px_to_unit_conversion_factor) of a calibrated image is refused
+    unless *confirm_recalibration* is True, which only the user's own statement that the
+    calibration is wrong justifies: never to make panels "match".
 
     This is the universal setter — it covers every field that PyFigures stores
     without requiring a dedicated tool for each one.
@@ -2400,6 +2406,11 @@ def set_image_property(
     property_name, err = _resolve_image_property(imgs[image_index], property_name)
     if err:
         return err
+    if property_name == "px_to_unit_conversion_factor":
+        from .core import recalibration_refusal
+        refusal = recalibration_refusal(imgs[image_index], value, confirm_recalibration)
+        if refusal:
+            return refusal
     if property_name in _READONLY:
         return (
             f"ERROR: '{property_name}' is a layout/internal field managed by "
@@ -2631,7 +2642,7 @@ def add_scripted_image(
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
 
-    _append_image(container, img, is_root=(not group_path))
+    container, group_path = _append_new_panel(root, container, img, group_path)
     _save(tree, pyf_path, recompute=True)
 
     idx = len([c for c in container if c.tag == "Image2D"]) - 1

@@ -221,8 +221,13 @@ def set_scale_bar(
     label_color: str | int | None = None,
     px_to_unit: float | None = None,
     bar_height_px: float | None = None,
+    confirm_recalibration: bool = False,
 ) -> str:
     """Add or update the scale bar on a specific image.
+
+    A *px_to_unit* that differs from the pixel size the image already has is refused
+    unless *confirm_recalibration* is True (only when the user says the calibration
+    itself is wrong).
 
     If the image already has a ScaleBar annotation it is updated; otherwise a new
     one is added.  Reopen the figure in PyFigures to see the change.
@@ -254,8 +259,12 @@ def set_scale_bar(
     *placement*: "bottom right" | "bottom left" | "top right" | "top left"
                  (default "bottom right").
     *bar_color*: color of the bar itself — name ("white", "yellow", …), #rrggbb
-                 hex string, or integer (e.g. 16777215 for white).
-    *label_color*: color of the text label (same formats as bar_color).
+                 hex string, or integer (e.g. 16777215 for white), or "auto": white
+                 or black, whichever reads best on this panel (measured). A NEW bar
+                 without a colour gets "auto". Visibility comes before the same
+                 colour everywhere.
+    *label_color*: color of the text label (same formats as bar_color; with
+                 bar_color "auto" the text follows the bar unless given).
     *px_to_unit*: pixel size in physical units — how many *unit*s per pixel
                   of the raw image (e.g. 0.1 means 1px = 0.1µm).
                   When supplied this is stored on the image's
@@ -268,8 +277,9 @@ def set_scale_bar(
     Color quick reference: white=16777215, black=0, yellow=16776960,
     red=16711680, green=65280, blue=255, cyan=65535, magenta=16711935.
     """
+    auto_colour = isinstance(bar_color, str) and bar_color.strip().lower() == "auto"
     try:
-        bar_color_int = None if bar_color is None else _color_to_int(bar_color)
+        bar_color_int = None if bar_color is None or auto_colour else _color_to_int(bar_color)
         label_color_int = None if label_color is None else _color_to_int(label_color)
     except ValueError as e:
         return f"ERROR: {e}"
@@ -286,6 +296,12 @@ def set_scale_bar(
     imgs = [c for c in container if c.tag == "Image2D"]
     if not 0 <= image_index < len(imgs):
         return f"ERROR: image_index {image_index} out of range ({len(imgs)} images)."
+    if px_to_unit is not None:
+        from .core import recalibration_refusal
+        refusal = recalibration_refusal(imgs[image_index], px_to_unit * _stored_units_per(unit),
+                                        confirm_recalibration)
+        if refusal:
+            return refusal
     calibrated = px_to_unit is not None or _pixel_size(imgs[image_index])[0] is not None
     factor = _stored_units_per(unit) if calibrated else 1.0
     annotations = imgs[image_index].find("annotations")
@@ -361,6 +377,13 @@ def set_scale_bar(
         bar_height_px=bar_height_px,
     )
     _scale_bars_in_text_font(tree.getroot())        # in the font of the other texts
+    colour_note = ""
+    if auto_colour or (action == "added" and bar_color is None):
+        picked = _fit_bar_colour(imgs[image_index], keep_text_colour=label_color_int is not None)
+        if picked:
+            colour_note = f" Colour: {picked}, the one that reads best on this panel."
+    elif bar_color_int is not None:
+        colour_note = _poor_bar_note([imgs[image_index]], [f"image {image_index}"])
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     px_note = f", px_to_unit={px_to_unit}" if px_to_unit is not None else ""
@@ -369,8 +392,77 @@ def set_scale_bar(
     thick = f", {float(bar.findtext('bar_height_in_px') or 3):g} px thick" if bar is not None else ""
     return (
         f"Scale bar {action} on image {image_index} in {loc}: "
-        f"{text}, {where}{thick}{px_note}." + chosen + _uncalibrated_warning(uncal, unit) + small
+        f"{text}, {where}{thick}{px_note}." + chosen + colour_note + _uncalibrated_warning(uncal, unit) + small
     )
+
+
+_BAR_CHOICES = (("white", 0xFFFFFF), ("black", 0x000000))
+
+
+def _bar_visibility(img: ET.Element, colour: int | None = None, text_colour: int | None = None) -> float | None:
+    """How well the scale bar of *img* reads (scale_bar_visibility), drawn in *colour*
+    (bar) and *text_colour* (its text) when given; None when it cannot be measured."""
+    import copy
+    try:
+        from batoolset.serializations.tools import element_to_dict, create_object
+        from batoolset.settings.global_settings import set_UI
+        from .core import _ensure_qapp
+        from ..panel_source_preview import scale_bar_visibility
+        el = copy.deepcopy(img)
+        bar = _find_scale_bar(el)
+        if bar is None:
+            return None
+        if colour is not None:
+            _set_child_text(bar, "color", str(int(colour)))
+            _set_child_text(bar, "bar_color", str(int(colour)))
+        if text_colour is not None:
+            legend = bar.find("legend")
+            if legend is not None and legend.text and legend.text.strip() != "None":
+                legend.text = re.sub(r'color="#[0-9a-fA-F]{6}"', f'color="#{int(text_colour) & 0xFFFFFF:06x}"',
+                                     legend.text)
+        set_UI()
+        _ensure_qapp()
+        props = element_to_dict(el)
+        panel = create_object("Image2D", props.get("Image2D", props))
+        return scale_bar_visibility(panel)
+    except Exception:
+        return None
+
+
+def _fit_bar_colour(img: ET.Element, keep_text_colour: bool = False) -> str | None:
+    """Give the scale bar of *img* the colour (white or black) that reads best on this
+    panel, its text too unless *keep_text_colour*. Visibility comes before a uniform
+    look (user, 2026-11-18: black bars on every panel were invisible on the dark ones).
+    Returns the colour chosen, None when it could not be measured (the bar is kept)."""
+    scores = []
+    for name, value in _BAR_CHOICES:
+        v = _bar_visibility(img, value, None if keep_text_colour else value)
+        if v is not None:
+            scores.append((v, name, value))
+    if not scores:
+        return None
+    _score, name, value = max(scores)
+    bar = _find_scale_bar(img)
+    _set_child_text(bar, "color", str(value))
+    _set_child_text(bar, "bar_color", str(value))
+    legend = bar.find("legend")
+    if not keep_text_colour and legend is not None and legend.text and legend.text.strip() != "None":
+        legend.text = re.sub(r'color="#[0-9a-fA-F]{6}"', f'color="#{value:06x}"', legend.text)
+    return name
+
+
+def _poor_bar_note(imgs: list, names: list[str]) -> str:
+    """A note on the bars that read poorly in the colour asked for."""
+    poor = []
+    for img, name in zip(imgs, names):
+        v = _bar_visibility(img)
+        if v is not None and v < 3:
+            poor.append(f"{name} ({v:.1f}:1)")
+    if not poor:
+        return ""
+    return (f"\nWARNING: in this colour the bar is hard to see on {', '.join(poor)}. A visible bar matters more "
+            f"than the same colour everywhere: bar_color='auto' gives each bar the colour (white or black) that "
+            f"reads best on its own panel.")
 
 
 @mcp.tool()
@@ -417,8 +509,13 @@ def set_scale_bar_all(
     px_to_unit: float | None = None,
     px_to_unit_scope: str = "all",
     bar_height_px: float | None = None,
+    confirm_recalibration: bool = False,
 ) -> str:
     """Add or update the scale bar on EVERY image in the figure at once.
+
+    A *px_to_unit* (scope "all") that differs from the pixel size of an image that already
+    has one is refused unless *confirm_recalibration* is True (the user says those
+    calibrations are wrong); px_to_unit_scope="missing" calibrates only the others.
 
     "Add scale bars to all" with no length: call it with NO
     *bar_width_in_units*, ONE call: when no image has a bar yet, every image
@@ -460,8 +557,17 @@ def set_scale_bar_all(
         set_scale_bar_all("figure.pyf", 50, label="50 nm",
                           bar_color="yellow", label_color="white")
 
+    Colours: new bars without *bar_color*, and bar_color="auto", get per panel the
+    colour (white or black) that reads best on that panel, measured: a dark image a
+    white bar, a bright one a black bar. Visibility comes before the same colour
+    everywhere; pass one colour only when the user asks for it (the reply then names
+    the panels where it is hard to see).
+
     Returns a summary: how many images were updated vs. how many got a new bar.
     """
+    auto_colour = isinstance(bar_color, str) and bar_color.strip().lower() == "auto"
+    if auto_colour:
+        bar_color = None
     try:
         bar_color_int = None if bar_color is None else _color_to_int(bar_color)
         label_color_int = None if label_color is None else _color_to_int(label_color)
@@ -490,11 +596,25 @@ def set_scale_bar_all(
     px_legend_html = _scale_bar_legend_html(_default_bar_label(width_for_text, "px"), text_colour)
 
     tree, root = _load(pyf_path)
+    if px_to_unit is not None and px_to_unit_scope == "all" and not confirm_recalibration:
+        from .core import recalibration_refusal
+        clash = []
+        for img in root.iter("Image2D"):
+            if recalibration_refusal(img, px_to_unit * _stored_units_per(unit), False):
+                clash.append(f"{os.path.basename(str(_first_filename(img) or 'image'))} "
+                             f"({_pixel_size(img)[0]:g} µm/px)")
+        if clash:
+            return (f"ERROR: {len(clash)} image(s) already have their own pixel size: {', '.join(clash[:8])}. "
+                    f"px_to_unit={px_to_unit:g} would change their calibration, so their scale bars would be "
+                    f"wrong. Use px_to_unit_scope='missing' to calibrate only the images without one; only if "
+                    f"the USER says those calibrations are wrong, call again with confirm_recalibration=True. "
+                    f"Nothing was changed.")
 
     added = 0
     updated = 0
     skipped = 0
     kept_own = 0
+    touched: list = []          # (element, name, was added) of every bar set
     too_long: list[str] = []
     uncalibrated: list[str] = []
     used: list[str] = []         # the pixel size each bar was drawn with
@@ -542,6 +662,7 @@ def set_scale_bar_all(
             else:
                 used.append(f"{name} {px_um:g} µm")
             chosen.append(f"{name} {_default_bar_label(length, picked_unit)}")
+            touched.append((img, name, True))
             action = _apply_scalebar_to_img(
                 img, length * (_stored_units_per(picked_unit) if px_um is not None else 1.0),
                 "" if no_text else (_scale_bar_legend_html(label, text_colour) if label is not None
@@ -572,6 +693,7 @@ def set_scale_bar_all(
                 legend = _scale_bar_legend_html(old_text, label_color_int)
             _apply_scalebar_to_img(img, None, legend, placement, bar_color_int,
                                    None if px is None else px * factor, bar_height_px=bar_height_px)
+            touched.append((img, os.path.basename(str(_first_filename(img))), False))
             updated += 1
             return
         err = _scale_bar_length_error(img, bar_width_in_units, px, unit, factor)
@@ -590,6 +712,7 @@ def set_scale_bar_all(
                         + (", kept: NOT the value given)" if px_to_unit is not None else ")"))
         if no_text:
             legend = ""
+        touched.append((img, name, _find_scale_bar(img) is None))
         action = _apply_scalebar_to_img(
             img, bar_width_in_units * factor, legend,
             placement or "bottom right", 16777215 if bar_color_int is None else bar_color_int,
@@ -621,6 +744,21 @@ def set_scale_bar_all(
     if too_long:
         return "ERROR: " + " | ".join(too_long[:3]) + " Nothing was changed."
     total = added + updated
+    # each bar in the colour that reads on its own panel (new bars without a colour, or
+    # "auto"); a colour asked for is kept, with a word on the panels where it is not seen
+    colour_note = ""
+    fit = [(img, name) for img, name, new in touched if auto_colour or (new and bar_color is None)]
+    if fit:
+        picks: dict = {}
+        for img, name in fit:
+            picked = _fit_bar_colour(img, keep_text_colour=label_color_int is not None)
+            if picked:
+                picks.setdefault(picked, []).append(name)
+        if picks:
+            colour_note = ("\nColours, the one that reads best on each panel: "
+                           + "; ".join(f"{c}: {', '.join(n[:10])}" for c, n in picks.items()) + ".")
+    elif bar_color_int is not None and touched:
+        colour_note = _poor_bar_note([t[0] for t in touched], [t[1] for t in touched])
     if auto_length:
         if not total:
             return ("ERROR: no image width could be read for a scale bar: give the length in "
@@ -633,7 +771,7 @@ def set_scale_bar_all(
                 + (f" Skipped {skipped} data-plot / colour-bar / vector panel(s)." if skipped else "")
                 + (f"\nWidth unknown, NO bar added (give a length): {', '.join(no_width)}." if no_width else "")
                 + (f"\nPixel size per image: " + "; ".join(used[:12]) + "." if used else "")
-                + _uncalibrated_warning(uncalibrated, unit))
+                + colour_note + _uncalibrated_warning(uncalibrated, unit))
     if bar_width_in_units is None:
         if not updated:
             return ("ERROR: no image has a scale bar yet: give the length in bar_width_in_units "
@@ -645,8 +783,10 @@ def set_scale_bar_all(
                                 (f"text colour {label_color}", label_color is not None),
                                 (f"{placement}", placement is not None),
                                 (f"{bar_height_px:g} px thick" if bar_height_px is not None else "", bar_height_px is not None)) if on]
+        if auto_colour:
+            what.append("colour per panel")
         return (f"{updated} existing scale bar(s) restyled ({', '.join(what) or 'nothing to change'}); "
-                f"lengths kept. {skipped} image(s) without a scale bar left as they are.")
+                f"lengths kept. {skipped} image(s) without a scale bar left as they are." + colour_note)
     if total == 0:
         return "No images found in this figure."
     _scale_bars_in_text_font(tree.getroot())        # in the font of the other texts
@@ -666,7 +806,7 @@ def set_scale_bar_all(
         + (f"\nNOTE: {kept_own} image(s) kept their own pixel size instead of "
            f"px_to_unit={px_to_unit:g}. If the user gave one pixel size for the whole figure, "
            f"call again with px_to_unit_scope='all'." if px_to_unit is not None and kept_own else "")
-        + _uncalibrated_warning(uncalibrated, unit)
+        + colour_note + _uncalibrated_warning(uncalibrated, unit)
     )
 
 

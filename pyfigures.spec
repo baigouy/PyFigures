@@ -55,6 +55,8 @@ hiddenimports += collect_submodules('imagecodecs')
 # PyAV (pyfigures[video]): H.264 export that plays on a Mac + video reading;
 # the frozen app cannot pip install it later, so it must be bundled here
 hiddenimports += collect_submodules('av')
+hiddenimports += collect_submodules('openpyxl')    # plots from .xlsx sheets
+hiddenimports += collect_submodules('xlrd')        # plots from old .xls files
 hiddenimports += collect_submodules('zarr')          # OME-Zarr reading
 hiddenimports += collect_submodules('numcodecs')
 # pypdfium2 (Apache/BSD): PDF files as panels, rendered as images, with its
@@ -62,6 +64,9 @@ hiddenimports += collect_submodules('numcodecs')
 # of the apps (excluded below); pip users can add it with pyfigures[pdf].
 hiddenimports += collect_submodules('pypdfium2')
 hiddenimports += collect_submodules('pylatexenc')     # imported lazily (Illustrator maths)
+# seaborn plot panels: imported by the panels' own scripts, which PyInstaller never sees
+hiddenimports += collect_submodules('seaborn')
+hiddenimports += collect_submodules('staplot')
 hiddenimports += ['latex2mathml.converter', 'mathml2omml']
 hiddenimports += collect_submodules('pypdfium2_raw')
 if not NO_AI:

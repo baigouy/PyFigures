@@ -50,6 +50,7 @@ from pyfigures.gui.group_builder_GUI import PanelOrRow
 from batoolset.drawings.shapes.rectangle2d import Rectangle2D
 from batoolset.img import Img, guess_dimensions, get_series_info, is_forbidden_image_file, list_image_files_in_folder, \
     is_image_file, IMAGE_FILE_EXTS
+from pyfigures.plot_tables import is_plot_table as _is_plot_table
 import traceback
 from qtpy.QtGui import QColor, QTextCursor, QTextCharFormat, QKeySequence, QTransform, QDesktopServices, \
     QIcon, QPixmap
@@ -258,6 +259,16 @@ def _pixels_pending(img2d, pending):
         marks.add(id(img2d))
     else:
         marks.discard(id(img2d))
+
+
+class _DroppedFile:
+    """A dropped table or .py script, held at its place in the drop until its dialog
+    has made it a panel (or the user cancelled)."""
+    __slots__ = ('path', 'kind')
+
+    def __init__(self, path, kind):
+        self.path = path
+        self.kind = kind            # 'table' | 'script'
 
 
 def _qt_alive(obj):
@@ -2532,6 +2543,16 @@ class EZFIG_GUI(QMainWindow):
                         replays.append(url)
                         continue
                     if not (url.lower().endswith('.pyf') or is_image_file(url)):
+                        # a table (CSV, Excel...) is offered as a plot (user, 2026-11-18: an
+                        # .xlsx dropped with images was left out, said only in the status bar)
+                        if _is_plot_table(url):
+                            # kept at its place in the drop: it joins the images' row
+                            self.list.append(_DroppedFile(url, 'table'))
+                            continue
+                        if url.lower().endswith('.py'):
+                            # a script for a panel: shown first, run only if the user says so
+                            self.list.append(_DroppedFile(url, 'script'))
+                            continue
                         # a .txt/.csv/.docx... used to be added as a broken panel
                         unsupported.append(url)
                         continue
@@ -2540,6 +2561,29 @@ class EZFIG_GUI(QMainWindow):
             event.accept()
             for path in replays:
                 self.replay_drop(path)
+            # tables and scripts: their dialog (Cancel leaves the file out); alone, each is
+            # added as before; dropped with images, each becomes a panel at its place in
+            # the drop, so they all go in the same row / column / grid (user, 2026-11-18)
+            dropped = [f for f in self.list if isinstance(f, _DroppedFile)]
+            others = [f for f in self.list if not isinstance(f, _DroppedFile)]
+            if dropped and not others and len(dropped) == 1:
+                self.list = []
+                f = dropped[0]
+                if f.kind == 'table':
+                    self.add_data_plot_action(path=f.path)
+                else:
+                    self.add_script_file_panel(f.path)
+            elif dropped:
+                resolved = []
+                for f in self.list:
+                    if not isinstance(f, _DroppedFile):
+                        resolved.append(f)
+                        continue
+                    panel = (self.add_data_plot_action(path=f.path, as_panel=True) if f.kind == 'table'
+                             else self.add_script_file_panel(f.path, as_panel=True))
+                    if isinstance(panel, Image2D):
+                        resolved.append(panel)
+                self.list = resolved
 
             if rejected:
                 names = ', '.join(os.path.basename(r) for r in rejected)
@@ -2943,6 +2987,21 @@ class EZFIG_GUI(QMainWindow):
         self.paint.EZFIG_panel.update_text_rows.emit()
         self.paint.EZFIG_panel.undo_redo_save_required.emit()
 
+    def _record_dropped_plot_stats(self, panels):
+        """The statistics of data plots that came with a drop go into the figure's stats
+        record (the Methods text reads it), once they are really in the figure."""
+        pending = getattr(self, '_pending_plot_stats', None)
+        if not pending:
+            return
+        from pyfigures.mcp_tools.core import _append_stats_entry
+        for p in panels or []:
+            held = pending.pop(id(p), None)
+            if held and held[0] is p:
+                try:
+                    _append_stats_entry(self._sidecar_base() + '.pyf', held[1])
+                except OSError as e:
+                    logger.warning('Statistics record not written: ' + str(e))
+
     def _load_images_then_callback(self, filenames, callback):
         """Load Img pixel data in a background thread, build Image2D on the main thread,
         then invoke callback(list_of_Image2D).  Non-string items are passed through unchanged.
@@ -2969,7 +3028,9 @@ class EZFIG_GUI(QMainWindow):
 
         if not str_paths:
             self.statusBar().clearMessage()
-            callback([f for f in pending if _item_path_serie(f)[0] is None])
+            ready = [f for f in pending if _item_path_serie(f)[0] is None]
+            callback(ready)
+            self._record_dropped_plot_stats(ready)
             return
 
         from batoolset.img import is_video_file
@@ -3031,6 +3092,7 @@ class EZFIG_GUI(QMainWindow):
                                              + ', '.join(unreadable), 10000)
             if result:
                 callback(result)
+                self._record_dropped_plot_stats(result)
                 QTimer.singleShot(0, self._maybe_show_edit_hint)
             thread.quit()
             try:
@@ -6244,26 +6306,101 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(set_figure_colors, f"Figure colours: {', '.join(names)}.",
                                colors=names)
 
-    def add_data_plot_action(self):
-        """Pick a CSV + plot options, then add a live data-plot panel
-        (MCP: add_data_plot — a scripted, re-rendering panel with auto-stats)."""
-        files = openFileNamesDialog(
-            parent_window=self,
-            extensions="CSV data (*.csv *.tsv *.txt);;All Files (*)")
-        if not files:
-            return
-        csv_path = files[0] if isinstance(files, (list, tuple)) else files
+    def show_plot_code(self, panel):
+        """Right-click → Show plot code…: the Python code of a data or seaborn plot (it
+        redraws the plot, then reads the table and reruns the test with pandas / scipy
+        alone), to copy or save as a .py file. Same code as MCP data_plot_code."""
+        from pyfigures.mcp_tools.content import plot_panel_code
+        code = plot_panel_code(getattr(panel, 'custom_loading_script', None) or '')
+        if not code:
+            QMessageBox.information(self, 'Plot code', 'This panel is not a data plot or a seaborn plot.')
+            return None
+        from qtpy.QtWidgets import QPlainTextEdit, QDialogButtonBox
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Plot code')
+        layout = QVBoxLayout(dlg)
+        view = QPlainTextEdit(dlg)
+        view.setPlainText(code)
+        view.setReadOnly(True)
+        view.setMinimumSize(700, 500)
+        layout.addWidget(view)
+        buttons = QDialogButtonBox(dlg)
+        copy_btn = buttons.addButton('Copy', QDialogButtonBox.ActionRole)
+        save_btn = buttons.addButton('Save as .py…', QDialogButtonBox.ActionRole)
+        buttons.addButton(QDialogButtonBox.Close)
+        copy_btn.clicked.connect(lambda *_: QApplication.clipboard().setText(code))
+
+        def _save(*_):
+            out = saveFileDialog(parent_window=self, extensions="Python (*.py)", default_ext='.py')
+            if out:
+                with open(out, 'w', encoding='utf-8') as f:
+                    f.write(code)
+                self.statusBar().showMessage(f'Saved {out}', 6000)
+        save_btn.clicked.connect(_save)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+        dlg.show()
+        self._plot_code_dialog = dlg        # kept alive while shown
+        return dlg
+
+    def add_script_file_panel(self, path, as_panel=False):
+        """A dropped .py file as a script panel, safely: the file is only read, its code is
+        shown with what it does beyond drawing, and it runs (as a panel) only if the user
+        clicks "Run as a panel"; Cancel is the default (pyfigures.script_safety)."""
+        from pyfigures import script_safety as S
+        code, bad = S.read_script(path)
+        if bad:
+            QMessageBox.warning(self, 'Not added', bad + '.')
+            return False
+        info = S.review(code)
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle('Run this script as a panel?')
+        box.setText(S.warning_text(path, info))
+        box.setDetailedText(code)                       # the whole code, before anything runs
+        run = box.addButton('Run as a panel', QMessageBox.AcceptRole)
+        cancel = box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        box.exec_() if hasattr(box, 'exec_') else box.exec()
+        if box.clickedButton() is not run:
+            self.statusBar().showMessage(f'{os.path.basename(path)} was not run.', 6000)
+            return False
+        if as_panel:                                    # joins the other dropped files
+            return Image2D(custom_loading_script=code)
+        from pyfigures.mcp_server import add_scripted_image
+        self._run_mcp_mutation(add_scripted_image, f'Added {os.path.basename(path)} as a script panel.',
+                               group_path=[], script=code)
+        return True
+
+    def add_data_plot_action(self, checked=False, path=None, as_panel=False):
+        """Pick a table + plot options, then add a live data-plot panel
+        (MCP: add_data_plot — a scripted, re-rendering panel with auto-stats).
+        *path*: a table already chosen (dropped on the window). *as_panel*: return
+        the panel (an Image2D) instead of adding it, for a drop of several files.
+        *checked*: the menu action's bool, never a path."""
+        if path:
+            csv_path = path
+        else:
+            files = openFileNamesDialog(
+                parent_window=self,
+                extensions="Tables (*.csv *.tsv *.txt *.xlsx *.xlsm *.xls);;All Files (*)")
+            if not files:
+                return
+            csv_path = files[0] if isinstance(files, (list, tuple)) else files
 
         frame = QFrame(self)
         grid = QGridLayout(frame)
         grid.addWidget(QLabel('Plot type:', frame), 0, 0)
         kind_combo = QComboBox(frame)
-        kind_combo.addItems(['bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.addItems(['auto', 'bar', 'box', 'violin', 'scatter', 'grouped'])
+        kind_combo.setToolTip('auto: the plot that shows the data best: grouped for two factors, scatter for '
+                              'an x / y series, else bar (under 5 points per group), box (5-19) or violin (20+)')
         grid.addWidget(kind_combo, 0, 1)
 
         grid.addWidget(QLabel('Error bars:', frame), 1, 0)
         error_combo = QComboBox(frame)
-        error_combo.addItems(['sem', 'sd', 'ci95', 'none'])
+        error_combo.addItems(['sd', 'sem', 'ci95', 'none'])     # SD first: journals prefer it
         grid.addWidget(error_combo, 1, 1)
 
         grid.addWidget(QLabel('Statistics:', frame), 2, 0)
@@ -6316,13 +6453,61 @@ class EZFIG_GUI(QMainWindow):
             install_btn.clicked.connect(_install)
             grid.addWidget(install_btn, 9, 0, 1, 2)
 
+        sheet_combo = None
+        if csv_path.lower().endswith(('.xlsx', '.xlsm', '.xls')):
+            try:
+                from staplot.api import list_sheets
+                sheets = list_sheets(csv_path)
+            except Exception as e:
+                QMessageBox.warning(self, "Cannot read the workbook", str(e))
+                return
+            if len(sheets) > 1:
+                grid.addWidget(QLabel('Sheet:', frame), 10, 0)
+                sheet_combo = QComboBox(frame)
+                sheet_combo.addItems(sheets)
+                grid.addWidget(sheet_combo, 10, 1)
+
         cd = CustomDialog(
-            title="Add data plot from CSV",
+            title="Add data plot from a table",
             message=(f"{os.path.basename(csv_path)} — columns are groups (wide) or "
                      "'group,value' (long); 'grouped' needs 'factorA,factorB,value'."),
             main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
         if cd.exec_() != QDialog.Accepted:
             return
+        if as_panel:
+            # dropped with other files: the plot panel joins them, in the drop order and
+            # the same row (user, 2026-11-18), instead of a row of its own
+            from pyfigures.mcp_tools.content import (_table_path, _make_data_plot_script,
+                                                     data_plot_stats_entry)
+            table, bad = _table_path(csv_path, sheet_combo.currentText() if sheet_combo is not None else None)
+            if bad:
+                QMessageBox.warning(self, 'Not added', bad + '.')
+                return None
+            kind = kind_combo.currentText()
+            if kind == 'auto':
+                from pyfigures.mcp_tools.content import _auto_kind
+                kind, why = _auto_kind(table)
+                if not kind:
+                    QMessageBox.warning(self, 'Not added', f'No plot kind fits this table on its own: {why}.')
+                    return None
+            script = _make_data_plot_script(table, kind, error_combo.currentText(), annotate_cb.isChecked(),
+                                            only_sig_cb.isChecked(), title_edit.text().strip(),
+                                            ylabel_edit.text().strip(), '', stats_combo.currentText(),
+                                            latex=latex_cb.isChecked())
+            # its text 7 pt on the printed page, whatever the panel's size (as add_data_plot)
+            from pyfigures.mcp_tools.content import PLOT_TEXT_PT, PLOT_LINE_PT
+            img2d = Image2D(custom_loading_script=script, publication_font_on_page=True,
+                            publication_font_size=PLOT_TEXT_PT, publication_line_width=PLOT_LINE_PT)
+            if annotate_cb.isChecked():
+                entry, _note, _warn = data_plot_stats_entry(table, kind, only_sig_cb.isChecked(),
+                                                            stats_combo.currentText())
+                if entry:
+                    # recorded once the panel is really added (the drop menu can still be
+                    # cancelled); kept off the panel, whose attributes are saved
+                    if not hasattr(self, '_pending_plot_stats'):
+                        self._pending_plot_stats = {}
+                    self._pending_plot_stats[id(img2d)] = (img2d, entry)
+            return img2d
 
         from pyfigures.mcp_server import add_data_plot
         self._run_mcp_mutation(
@@ -6339,6 +6524,7 @@ class EZFIG_GUI(QMainWindow):
             ylabel=ylabel_edit.text().strip(),
             label=label_edit.text().strip() or None,
             latex=latex_cb.isChecked(),
+            sheet=sheet_combo.currentText() if sheet_combo is not None else None,
         )
 
     # ------------------------------------------------------------------
@@ -7909,6 +8095,11 @@ class EZFIG_GUI(QMainWindow):
                 # proceed to replacement directly within the file
 
             self._save_state_to_file(output_filename)
+            # the tables of plot panels (CSV, Excel...) join the images in the bundle,
+            # then the figure is reloaded so its plots read the copies
+            from pyfigures.plot_tables import consolidate_plot_tables
+            if consolidate_plot_tables(output_filename, save_output_folder):
+                self.reload_state(output_filename, append=False, skip_add_to_stack=True)
             # caption / stats sidecars follow the figure to its consolidated file
             self._copy_sidecars(self._sidecar_base(),
                                 os.path.splitext(output_filename)[0])

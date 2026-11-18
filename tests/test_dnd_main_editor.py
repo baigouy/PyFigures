@@ -189,6 +189,96 @@ def test_drop_text_is_ignored(gui):
     assert drop_menu(gui) is None and _all_images(gui) == []
 
 
+def test_a_dropped_table_is_offered_as_a_plot(gui, qapp, ui, files, tmp_path, monkeypatch):
+    """User, 2026-11-18: 11 files dropped, one of them aaa_measurements.xlsx: "it was not
+    included as a graph, I was not warned that the file is dropped nor offered to plot it"."""
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("openpyxl")
+    book = str(tmp_path / "aaa_measurements.xlsx")
+    pd.DataFrame({"WT": [1.0, 2.0, 3.0], "mut": [4.0, 5.0, 6.0]}).to_excel(book, index=False)
+    notes = tmp_path / "notes.txt"
+    notes.write_text("remember to ask about the antibody\n", encoding="utf-8")
+    offered = []
+    real = gui.add_data_plot_action
+
+    def spy(checked=False, path=None, as_panel=False):
+        offered.append(path)
+        return real(path=path, as_panel=as_panel)
+    monkeypatch.setattr(gui, "add_data_plot_action", spy)
+    # "I dropped all at the same time so they should all have been in the same row ...
+    # and also you should respect the drop order"
+    drop(gui, [files[0], book, str(notes), files[1]])
+    assert [os.path.normcase(os.path.normpath(p)) for p in offered] == [
+        os.path.normcase(os.path.normpath(book))]  # the table, not the notes
+    click(gui, "↔  To row")
+    _wait(qapp, gui, timeout=15)
+    row = [s for s in gui.paint.EZFIG_panel.shapes_to_draw if hasattr(s, "content")][-1]
+    kinds = ["plot" if getattr(i, "custom_loading_script", None) else os.path.basename(i.filename)
+             for i in row.content]
+    assert kinds == ["f0.tif", "plot", "f1.tif"], kinds
+    from pyfigures.mcp_tools.core import _read_stats
+    assert [e["kind"] for e in _read_stats(gui._sidecar_base() + ".pyf")] == ["bar"]   # the Methods text knows it
+
+
+_PLOT_PY = ("import numpy as np\nx = np.linspace(0, 1, 20)\nfig, ax = plt.subplots(figsize=(2, 2))\n"
+            "ax.plot(x, x ** 2)\nself.img = fig\n")
+
+
+def _answer_script_box(monkeypatch, button_text, shown):
+    """Click *button_text* in the script warning (recording what it showed)."""
+    def fake_exec(box, *a, **k):
+        shown.append((box.text(), box.detailedText(), [b.text() for b in box.buttons()]))
+        for b in box.buttons():
+            if b.text().replace("&", "") == button_text:
+                b.click()
+                return 0
+        box.buttons()[-1].click()
+        return 0
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec, raising=False)
+    monkeypatch.setattr(QMessageBox, "exec_", fake_exec, raising=False)
+
+
+def test_a_dropped_python_file_runs_only_when_the_user_says_so(gui, qapp, tmp_path, monkeypatch):
+    """User, 2026-11-18: "can the user also drop a .py file, to be used as a script for the
+    panel, just make sure it's done safely". Dropping never runs it: its code is shown with
+    a warning, Cancel is the default, and only "Run as a panel" adds (and runs) it."""
+    marker = tmp_path / "ran.txt"
+    script = tmp_path / "my_plot.py"
+    script.write_text(_PLOT_PY + f"open({str(marker)!r}, 'w').write('ran')\n", encoding="utf-8")
+    shown = []
+    _answer_script_box(monkeypatch, "Cancel", shown)
+    drop(gui, [str(script)])
+    assert shown and "my_plot.py is Python code" in shown[0][0] and "writes a file" in shown[0][0]
+    assert "self.img = fig" in shown[0][1]                              # the whole code is there to read
+    assert not marker.exists() and _all_images(gui) == []              # declined: never run, nothing added
+    shown.clear()
+    _answer_script_box(monkeypatch, "Run as a panel", shown)
+    drop(gui, [str(script)])
+    _wait(qapp, gui, timeout=10)
+    assert len(_all_images(gui)) == 1 and marker.exists()              # chosen: added and run
+
+
+def test_a_broken_or_huge_python_file_is_refused_without_running(tmp_path):
+    from pyfigures import script_safety as S
+    (tmp_path / "bad.py").write_text("def broken(:\n", encoding="utf-8")
+    code, why = S.read_script(str(tmp_path / "bad.py"))
+    assert code is None and "not valid Python" in why
+    (tmp_path / "big.py").write_text("x = 1\n" * 200000, encoding="utf-8")
+    assert S.read_script(str(tmp_path / "big.py"))[0] is None
+    info = S.review("import subprocess\nimport shutil\nshutil.rmtree('C:/x')\n")
+    assert [w for _n, w, _t in info["risky"]] == ["imports subprocess (starts programs)",
+                                                   "deletes a folder and everything in it"]
+    assert not info["sets_image"] and "never sets self.img" in S.warning_text("a.py", info)
+
+
+def test_tables_are_told_from_notes(tmp_path):
+    from pyfigures.plot_tables import is_plot_table
+    (tmp_path / "t.txt").write_text("a\tb\n1\t2\n3\t4\n", encoding="utf-8")
+    (tmp_path / "n.txt").write_text("just some notes\nnothing else\n", encoding="utf-8")
+    assert is_plot_table(str(tmp_path / "t.txt")) and not is_plot_table(str(tmp_path / "n.txt"))
+    assert is_plot_table("x.xls") and is_plot_table("x.CSV") and not is_plot_table("x.docx")
+
+
 def test_drop_several_shows_layout_menu(gui, files):
     drop(gui, files)
     labels = menu_buttons(gui)
@@ -315,12 +405,17 @@ def test_drop_unsupported_file_does_not_break(gui, qapp, files, tmp_path, ui):
     assert not errors, errors
     names = [os.path.basename(i.filename) for i in _all_images(gui)]
     assert names == ["f0.tif"]                          # the .txt is skipped, not a broken panel
-    csv = tmp_path / "only.csv"
-    csv.write_text("a,b\n1,2\n")
-    drop(gui, [str(csv)])
+    doc = tmp_path / "only.docx"
+    doc.write_bytes(b"PK not a figure")
+    drop(gui, [str(doc)])
     assert drop_menu(gui) is None                       # nothing droppable: no menu at all
-    assert "only.csv" in gui.statusBar().currentMessage()
+    assert "only.docx" in gui.statusBar().currentMessage()
     assert len(_all_images(gui)) == 1
+    # a table is not "unsupported" any more: it is offered as a plot (2026-11-18)
+    csv = tmp_path / "only.csv"
+    csv.write_text("a,b\n1,2\n3,4\n")
+    drop(gui, [str(csv)])
+    assert drop_menu(gui) is None and len(_all_images(gui)) == 2     # the dialog (accepted) added it
 
 
 # ---------------------------------------------------------------------------

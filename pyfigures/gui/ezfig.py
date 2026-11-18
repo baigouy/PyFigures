@@ -2725,6 +2725,13 @@ class MyWidget(QWidget):
                         _code_shape = self.selected_shape
                         edit_code = self.contextMenu.addAction("Edit LaTeX code…")
                         edit_code.triggered.connect(lambda: gui.edit_latex_code(_code_shape))
+                    from pyfigures.plot_tables import is_plot_script
+                    if is_plot_script(getattr(self.selected_shape, 'custom_loading_script', None)) \
+                            and hasattr(gui, 'show_plot_code'):
+                        # the code of a data / seaborn plot, to read, copy or save (MCP data_plot_code)
+                        _plot_shape = self.selected_shape
+                        show_code = self.contextMenu.addAction("Show plot code…")
+                        show_code.triggered.connect(lambda: gui.show_plot_code(_plot_shape))
                     _fn = getattr(self.selected_shape, 'filename', None)
                     if isinstance(_fn, str) and source_of(_fn) and hasattr(gui, 'recompile_latex_panel'):
                         _doc_shape = self.selected_shape
@@ -4597,8 +4604,11 @@ class MyWidget(QWidget):
                         if image2d is None:
                             return
 
-
-                        self.update_image_annotations(image2d=image2d)
+                        # a plot (data plot, seaborn plot, any panel drawn by a script) opens on its
+                        # Script tab: its code is what one changes (user, 2026-11-18)
+                        from pyfigures.plot_tables import is_drawn_by_script
+                        self.update_image_annotations(image2d=image2d,
+                                                      tab='Script' if is_drawn_by_script(image2d) else None)
         # self.freeze = False
                     #
                     # try:

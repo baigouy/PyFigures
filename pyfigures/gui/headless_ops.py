@@ -219,6 +219,9 @@ def consolidate(pyf_path: str, out_pyf: str, download_remote: bool = False, fail
         for img in imgs:
             img.consolidate_names(names, consolidated)
         gui._save_state_to_file(out_pyf)
+        # the tables of plot panels (CSV, Excel...) join the images in the bundle
+        from pyfigures.plot_tables import consolidate_plot_tables
+        consolidate_plot_tables(out_pyf, files_dir)
         src_base = _os.path.splitext(_os.path.abspath(pyf_path))[0]
         dst_base = _os.path.splitext(out_pyf)[0]
         if src_base != dst_base:

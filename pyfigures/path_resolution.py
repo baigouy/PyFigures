@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import io
+import json
 import os
 import re
 import tokenize
@@ -82,6 +83,11 @@ class PathResolver:
         """New location of *path*, or None if it exists already / can't be found."""
         if not isinstance(path, str) or not path.strip() or not _looks_absolute(path):
             return None
+        from pyfigures.plot_tables import split_sheet
+        file, sheet = split_sheet(path)
+        if sheet:                       # a plot's Excel sheet: "book.xlsx::counts"
+            found = self.resolve(file)
+            return found + sheet if found else None
         if path in self.resolved:
             return self.resolved[path]
         if path in self.unresolved or os.path.exists(path):
@@ -187,6 +193,18 @@ class PathResolver:
                     edits.append((a, b, repr(new)))
         for a, b, rep in reversed(edits):
             script = script[:a] + rep + script[b:]
+        # a seaborn plot keeps its settings, table included, in its first line: it
+        # follows, else editing the plot would read the old place
+        from pyfigures.plot_tables import SEABORN_MARKER, rewrite_table_paths, split_sheet
+        if script.startswith(SEABORN_MARKER):
+            try:
+                spec = json.loads(script.splitlines()[0][len(SEABORN_MARKER):])
+            except ValueError:
+                return script
+            file, _sheet = split_sheet(spec.get("csv", ""))
+            new = self.resolve(file)
+            if new:
+                script = rewrite_table_paths(script, {file: new})
         return script
 
 

@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 from .app import mcp, _warn
 from .core import (
     _append_image,
+    _append_new_panel,
     _child_text,
     _color_to_int,
     _decode,
@@ -43,6 +44,8 @@ from .content import _canonical_lut_names, _make_channel_merge_script
 
 
 _CROP_SIDES = ("left", "right", "top", "bottom")
+_TIME_UNITS = {"ms", "s", "sec", "secs", "second", "seconds", "min", "mins", "minute", "minutes",
+               "h", "hr", "hrs", "hour", "hours", "day", "days"}
 
 
 def _check_crop(crop):
@@ -258,6 +261,7 @@ def add_stack_montage(
     stamp_color: str | int = "white",
     series: int | None = None,
     spacing: int = 3,
+    pad_last_row: bool = True,
     crop: dict[str, int] | None = None,
 ) -> str:
     """Show several frames of ONE stack side by side — a time-lapse or Z-series
@@ -276,6 +280,9 @@ def add_stack_montage(
     *columns*: panels per row; default: one row up to 6 frames, then rows of
       at most 6 (a short last row is padded with empty panels so every frame
       keeps the same size). columns=len(frames) forces a single row.
+    *pad_last_row*: False = no empty panels: the short last row's frames are then
+      drawn larger than the others. When the user asks for no empty panels, pass
+      False (or remove them afterwards with remove_empty_placeholders).
     *parent_group_path*: None = add as a new top-level row (or block of rows);
       [i] = nest inside that group.
     *projection*: for a time montage of a 3-D stack, how each time point's Z
@@ -301,6 +308,13 @@ def add_stack_montage(
     axis_l = {"t": "t", "time": "t", "z": "d", "d": "d", "depth": "d"}.get(str(axis).lower())
     if axis_l is None:
         return "ERROR: axis must be 't' or 'z'."
+    if axis_l == "d" and unit is not None and str(unit).strip().lower() in _TIME_UNITS:
+        # "add time stamps every 5 min" on a Z stack: a model stamped 0-75 min on depth
+        # sections (2026-11-18) — a time scale invented for data that has none
+        return (f"ERROR: unit {unit!r} is a time, but axis='z' shows depth sections: stamping times on "
+                f"them would present a Z stack as a time series. Tell the user this stack has no time "
+                f"axis (its planes are Z sections); stamps in a length unit (µm) give each section's depth. "
+                f"Nothing was added.")
     err = _check_crop(crop)
     if err:
         return err
@@ -385,6 +399,7 @@ def add_stack_montage(
     if err:
         return f"ERROR: {err}"
     k = 0
+    padded = 0
     base = os.path.basename(stack_path)
     for grp, row in zip(targets, rows):
         for f in row:
@@ -400,19 +415,46 @@ def add_stack_montage(
                 img.find("annotations").append(
                     _new_tatext2d(stamp(f), stamp_placement, is_letter=False, color=scol))
             grp.find("content").append(img)
-        if len(rows) > 1:
+        if len(rows) > 1 and pad_last_row:
             for _ in range(per_row - len(row)):
                 grp.find("content").append(_placeholder_panel(info))
+                padded += 1
     _crop_panels(outer.iter("Image2D"), crop)
     _save(tree, pyf_path, recompute=True)
     stamps_note = ""
     if stamps:
         stamps_note = (f"; stamps {stamp(idx[0])} … {stamp(idx[-1])}" if step is not None else
                        "; no frame interval in the file — stamps are frame numbers "
-                       "(pass interval= and unit= for times)")
+                       "(pass interval= and unit= for times)" if axis_l == "t" else
+                       "; no Z step in the file — stamps are slice numbers "
+                       "(pass interval= and unit='µm' for depths)")
+    pad_note = (f" {padded} empty panel(s) pad the last row so every frame keeps the same size; "
+                f"remove_empty_placeholders deletes them if the user does not want them." if padded else "")
     return (f"Montage of {len(idx)} {'time points' if axis_l == 't' else 'Z slices'} "
             f"of {base} added at group {path} ({len(rows)} row(s))"
-            + (f", Z {proj}-projected" if proj else "") + stamps_note + ".")
+            + (f", Z {proj}-projected" if proj else "") + stamps_note + "." + pad_note)
+
+
+@mcp.tool()
+def remove_empty_placeholders(pyf_path: str) -> str:
+    """Delete the empty panels that pad a montage's or grid's short last row ("remove
+    the empty boxes", "no empty panels"). The frames of that row are then drawn
+    larger. Template slots meant to be filled (add_placeholder_grid) are kept."""
+    from .core import _is_empty_placeholder
+    tree, root = _load(pyf_path)
+    parent = {c: p for p in root.iter() for c in p}
+    removed = 0
+    for img in list(root.iter("Image2D")):
+        holder = parent.get(img)
+        # layout panels only: never an inset or a picture inside a panel's annotations
+        if holder is None or holder.tag != "content" or not _is_empty_placeholder(img):
+            continue
+        holder.remove(img)
+        removed += 1
+    if not removed:
+        return "No empty placeholder panel in the figure; nothing was changed."
+    _save(tree, pyf_path, recompute=True)
+    return f"Removed {removed} empty placeholder panel(s); the remaining panels of those rows are drawn larger."
 
 
 # ---------------------------------------------------------------------------
@@ -846,7 +888,7 @@ def add_kymograph(
     if mark_line:
         src.find("annotations").append(
             _new_roi_line(x1, y1, x2, y2, _color_to_int(line_color), 1.0, 1.0, False, False))
-    _append_image(container, img, is_root=(not gp))
+    container, gp = _append_new_panel(root, container, img, gp)
     _save(tree, pyf_path, recompute=True)
     interval, tunit = info.get("interval"), info.get("time_unit")
     tnote = (f"{T} frames × {interval:g} {tunit} = {(T - 1) * interval:g} {tunit} top to bottom"
@@ -1044,7 +1086,7 @@ def add_orthogonal_views(
             annots.append(line)
     if label:
         annots.append(_new_tatext2d(label, "top left", color=0xFFFFFF))
-    _append_image(container, img, is_root=(not gp))
+    container, gp = _append_new_panel(root, container, img, gp)
     _save(tree, pyf_path, recompute=True)
     return (f"Orthogonal views added to group {gp}: XY {W}×{H}, side views {Zp} px deep "
             f"(Z ×{z_scale:.3g}); cut at x={x}, y={y}"
