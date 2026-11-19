@@ -88,9 +88,9 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batoolset>=0.2.2",          # 0.2.2: the image store re-reads a file changed on disk
-        "batoolset-gui>=0.2.5",      # Qt layer; 0.2.5: boxed panel letters hug their ink, corner texts stack by their ink
-        "staplot>=0.1.0",            # data-plot panels and stats brackets (staplot.api)
+        "batoolset>=0.2.3",          # 0.2.3: images with no extension recognised by content; folder order as the file browser
+        "batoolset-gui>=0.2.6",      # Qt layer; 0.2.6: plots follow the label font and size
+        "staplot>=0.1.1",            # data-plot panels and stats brackets (staplot.api); 0.1.1: stats_text, pairs, normalize
         "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)
         "openpyxl",                  # plots from Excel .xlsx sheets (MIT)
         "xlrd",                      # plots from old Excel .xls files (BSD-3)
@@ -104,7 +104,7 @@ setuptools.setup(
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
         # the chat sidebar (Tools > Chat sidebar, a core part of PyFigures): a
         # local or API model edits the open figure through the MCP tools (BSD-2)
-        "qtpy-ai-sidecar>=0.1.14",   # 0.1.14: Procedures > Make a demo video from a chat
+        "qtpy-ai-sidecar>=0.1.15",   # 0.1.15: a turn going in circles gets one last chance to act
         "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
     ]),
     extras_require=_extras({
@@ -138,11 +138,11 @@ setuptools.setup(
         # `pip install pyfigures[chat]` from older instructions still works
         'chat': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.14",
+            "qtpy-ai-sidecar>=0.1.15",
         ],
         'all': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.14",
+            "qtpy-ai-sidecar>=0.1.15",
             "av",
             "opencv-python-headless<5.1",    # see 'video'
             "pyimagej",
