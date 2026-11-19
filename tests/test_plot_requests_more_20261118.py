@@ -516,3 +516,44 @@ def test_only_show_some_brackets(pyf, tidy):
     _draw(_scripts(pyf)[-1])
     assert C.edit_data_plot(pyf, [], 0, pairs=[["WT", "KO"]]).startswith("ERROR: no group")
     assert "pairs [['WT', 'mutA']] -> None" in C.edit_data_plot(pyf, [], 0, pairs=[])
+
+
+@pytest.fixture
+def mice_db(tmp_path, tidy):
+    import sqlite3
+    path = tmp_path / "mice.sqlite"
+    con = sqlite3.connect(path)
+    pd.read_csv(tidy).to_sql("mice", con, index=False)
+    con.close()
+    return str(path)
+
+
+def test_the_new_plots_and_tables_from_an_sqlite_database(pyf, mice_db):
+    """"also allow plot from sqlite": a table, a view or an SQL query, for every kind."""
+    from pyfigures.mcp_tools.content import plot_panel_code
+    checks = [
+        dict(kind="split_violin", columns=["genotype", "sex", "area_um2"]),
+        dict(kind="violin", columns=["genotype", "area_um2"], facet="day", violin_side="left"),
+        dict(kind="line", columns=["genotype", "day", "area_um2"]),
+        dict(kind="box", control="WT", normalize="WT", point_style="swarm", where="sex == 'male'",
+             columns=["genotype", "area_um2"]),
+    ]
+    for i, kw in enumerate(checks):
+        out = C.add_data_plot(pyf, [], mice_db, sheet="mice", **kw)
+        assert not out.startswith("ERROR"), (kw, out)
+        _draw(_scripts(pyf)[-1])
+        code = plot_panel_code(_scripts(pyf)[-1])
+        assert "sqlite3.connect" in code, kw
+        exec(compile(code.replace('fig.savefig("plot.pdf")', ""), "code", "exec"), {})
+    out = C.add_data_plot(pyf, [], mice_db, sheet="SELECT genotype, area_um2 FROM mice WHERE day = 14", kind="box")
+    assert not out.startswith("ERROR"), out
+    out = C.add_table_panel(pyf, [], mice_db, sheet="mice", by=["genotype", "sex"], value="area_um2")
+    assert out.startswith("Table panel"), out
+    code = plot_panel_code(_scripts(pyf)[-1])
+    assert "sqlite3.connect" in code and "groupby" in code
+    exec(compile(code, "table", "exec"), {})
+    assert "genotype" in C.describe_table(mice_db, sheet="mice")
+    assert "split violin halves" in C.list_factor_columns(mice_db, sheet="mice")
+    out = C.add_seaborn_plot(pyf, [], mice_db, "catplot", sheet="mice", kind="violin", x="genotype", y="area_um2",
+                             hue="sex", col="day", options={"split": True})
+    assert not out.startswith("ERROR"), out

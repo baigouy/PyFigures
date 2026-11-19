@@ -197,3 +197,41 @@ def check(spec: dict) -> str | None:
     except Exception as e:
         return f'could not summarise the table ({type(e).__name__}: {e})'
     return None
+
+
+def table_code(spec: dict) -> str:
+    """Python code (pandas alone) that reads the table as the panel does and computes what
+    it shows: the rows kept, or the summary per group."""
+    from pyfigures.plot_tables import split_sheet
+    file, sheet = split_sheet(spec['csv'])
+    lines = ["# A table panel made by PyFigures: the table read with pandas, then what the panel shows.",
+             "import numpy as np", "import pandas as pd", ""]
+    try:
+        from staplot.api import _loading_code
+        lines += _loading_code(spec['csv'], None, None, spec.get('skip_rows'))
+    except Exception:
+        lines += [f"df = pd.read_csv(r{file!r}, sep=None, engine='python')", ""]
+    if spec.get('where'):
+        lines.append(f"df = df.query({spec['where']!r}, engine='python')       # the rows kept")
+    by = spec.get('by') or []
+    by = [by] if isinstance(by, str) else list(by)
+    if by or spec.get('stats'):
+        value = spec.get('value')
+        values = [value] if isinstance(value, str) else list(value or [])
+        stats = spec.get('stats') or ['n', 'mean±sd']
+        lines += ["# the summary: n, mean, SD (ddof=1), SEM, median and quartiles per group",
+                  f"values = {values!r} or [c for c in df.columns if c not in {by!r} and "
+                  "pd.to_numeric(df[c], errors='coerce').notna().mean() >= 0.8]",
+                  "for v in values:",
+                  "    x = pd.to_numeric(df[v], errors='coerce')",
+                  (f"    g = x.groupby([df[c] for c in {by!r}], sort=False)" if by else "    g = x.groupby(lambda _i: 'all')"),
+                  "    summary = pd.DataFrame({'n': g.count(), 'mean': g.mean(), 'sd': g.std(ddof=1), 'sem': g.sem(),",
+                  "                            'median': g.median(), 'q1': g.quantile(0.25), 'q3': g.quantile(0.75),",
+                  "                            'min': g.min(), 'max': g.max()})",
+                  f"    print(v, '(shown: ' + {', '.join(stats)!r} + ')')",
+                  f"    print(summary.round({int(spec.get('decimals', 2))}))"]
+    else:
+        if spec.get('columns'):
+            lines.append(f"df = df[{list(spec['columns'])!r}]")
+        lines.append(f"print(df.head({int(spec.get('max_rows') or MAX_ROWS)}))")
+    return "\n".join(lines) + "\n"

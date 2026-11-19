@@ -1280,6 +1280,10 @@ def plot_panel_code(script: str) -> str | None:
         return ("# A seaborn plot made by PyFigures; runs on its own (pandas, seaborn, matplotlib).\n"
                 "class _Panel:\n    img = None\n\n\nself = _Panel()\n\n" + script.split("\n", 1)[1] +
                 '\n\nself.img.savefig("plot.pdf")            # vector; or .png / .svg\n')
+    from pyfigures.table_panel import parse as parse_table, table_code
+    table = parse_table(script)
+    if table is not None:
+        return table_code(table)
     return None
 
 
