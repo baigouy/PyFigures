@@ -286,7 +286,6 @@ def _panel_label_texts(img_elem):
     return [t for t in out if t]
 
 
-@mcp.tool()
 def shared_channel_luts(img) -> dict | None:
     """{'lut': name, 'channels': [1-based]} when two or more SHOWN channels of
     this image have the same LUT (e.g. GRAY on every channel of a merge): they

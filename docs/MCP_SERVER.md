@@ -361,7 +361,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **207 tools** (about a sixth of them for the poster designer).
+The server currently exposes **206 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -456,6 +456,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `find_moved_files(pyf_path, apply)` | Report source files found at a new location relative to the `.pyf` (figure moved to another folder / disk / OS) and those still missing; `apply=True` writes the found paths |
 | `set_figure_properties(pyf_path, ...)` | Set global font, letter colours, default spacing, and `page_background` — the colour of the whole figure behind the panels (the gaps between them); `"none"` = transparent (default), `"white"` keeps separators white in any viewer |
 | `set_label_background(pyf_path, color="black", group_path=None, include_letters=True)` | Filled box behind panel letters, labels, time stamps and channel names so they read on any image (`"none"` removes). Skips data plots and scale-bar legends |
+| `set_panel_letter_layout(pyf_path, letter_layout, row_letter_align)` | Letter the figure per row (one letter per row of panels) or per panel |
 
 ### Annotation & ROI tools
 
@@ -463,6 +464,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 |------|-------------|
 | `add_annotation(pyf_path, group_path, image_index, text, placement)` | Add one floating text label |
 | `add_corner_labels(pyf_path, group_path, image_index, top_left, top_right, bottom_left, bottom_right)` | Add stacked text labels to any/all corners in one call |
+| `move_annotation_in_corner(pyf_path, group_path, image_index, annotation_index, to)` | Change the stacking order of the annotations sharing one corner of an image (label, scale bar, inset…): the first is closest to the corner |
 | `set_annotation_text(pyf_path, group_path, image_index, annotation_index, html_text)` | Edit annotation text (supports HTML); `annotation_index` = the `text_index` `get_annotations` reports |
 | `style_annotation(pyf_path, group_path, ...)` | Restyle an existing text label (font, size, colour, weight, `background` box, `vertical_align` superscript/subscript, …), or only one word of it: `match` (+ `occurrence` when it occurs several times — otherwise the error asks which). GUI: double-click the text → Edit text, select the word. |
 | `set_roi_properties(pyf_path, group_path, image_index, annotation_index, ...)` | Change an existing ROI, keeping the rest: outline `color`, `fill_color` (`"none"` removes it), `stroke`, `opacity`, `line_style` (solid/dashed/dotted/dash-dot), geometry in raw image pixels (`x`/`y`/`width`/`height`, `x1`…`y2`, `points`, `move_by`), arrowheads on/off. GUI: double-click the image → Edit Image, select the ROI. |
@@ -499,6 +501,7 @@ Common ROI parameters: `color` (name/hex/int), `fill_color` (null = transparent)
 | `remove_rois(pyf_path, group_path=None, image_index=None, shapes=["rect","ellipse","polygon"], all_panels=False, keep_inset_rois=True)` | Removes all the ROIs of one panel (or every panel) in one call — rectangles/squares, ellipses/circles/points, polygons, and `"line"` (lines, arrows, brackets) only when asked — with the connectors joining them; the ROI an inset shows stays unless `keep_inset_rois=false`; texts, letters, scale bars and insets never. Instead of one `remove_annotation` per ROI. GUI: Annotations → Remove ROIs…, panel editor **Remove all ROIs** |
 | `detect_objects(pyf_path, group_path, image_index, shape="rect", polarity="auto", min_area=None, max_area=None, split_touching=True, channel="all" (or a channel number, or the colour a channel is shown in), padding=3, color="yellow", stroke=2, dry_run=False, max_objects=300, region=None)` | An ROI around every object of one panel (cells, nuclei, embryos) found by an automatic (Otsu) threshold, in one call; only the visible (cropped) part is searched, or `region=[x0, y0, x1, y1]` (source pixels) inside it, without cropping the panel (an object cut by the region's side is kept), touching round objects split, edge-cut and elongated pieces skipped. Returns JSON (found, added, boxes, threshold, what was dropped); `dry_run` only counts. A simple tool for clear objects on a plain background. GUI: Annotations → Detect objects (ROIs) in selected panel…; recipe: `detect_objects` |
 | `add_zoom_callout(pyf_path, group_path, image_index, source_x, source_y, source_w, source_h, ...)` | Zoom/magnified-detail callout: ROI box + magnified inset + leader lines (inset flush in its corner, leaders on its corners). GUI: Annotations → Add zoom callout to selected panel… |
+| `add_connector(pyf_path, group_path, image_index, from_index, to_index, from_site, to_site, line_color, stroke, arrow)` | A line (or arrow) between two annotations of one panel that stays attached when they move ("join these two ROIs") |
 | `connect_roi_to_inset(pyf_path, group_path, image_index, roi_index=None, inset_index=None, connectors=2, ...)` | Leader lines from a rectangle ROI to an inset of the same panel, ending on the corners where the inset is drawn (replaces earlier ones between them). GUI: image editor → Annotations → Connect ROI ↔ inset |
 | `list_insets(pyf_path, group_path, image_index)` | List all insets on a panel |
 | `remove_inset(pyf_path, group_path, image_index, inset_index)` | Remove an inset |
@@ -616,6 +619,7 @@ together.
 | `check_scale_consistency(pyf_path, tolerance)` | Flag panels whose **displayed physical scale** differs (a µm feature occupies different on-figure pixels per panel) so they can't be honestly compared by eye; recommends the on-figure width to fix each |
 | `check_text_consistency(pyf_path)` | Flag texts that do not look alike: panel letters (font, size, bold, italic, underline, background box), scale-bar labels, other texts (size aside), and more than one font among the texts other than letters (letters may have their own); names each odd one and the style most have. Also a criterion of `check_journal_compliance` |
 | `enforce_min_font_size(pyf_path, min_pt, ...)` | Bump every label up to a minimum point size |
+| `change_text_size(pyf_path, delta_pt)` | Every text of the figure (letters, labels, scale-bar texts, plot text) bigger or smaller by the same number of points |
 | `check_journal_compliance(pyf_path, journal, ...)` | Report width / DPI / font issues against a journal's rules |
 | `apply_journal_guidelines(pyf_path, journal, ...)` | Bundle: resize + min-font + resolution fixes for a journal in one call |
 | `list_journal_presets()` | List the built-in journal size presets |
@@ -717,6 +721,8 @@ logged call.
 |------|-------------|
 | `list_fonts(pyf_path)` | Report the figure's font situation, including PyFigures' bundled portable fonts |
 | `list_colors(query)` | Colour names for image channels (`set_figure_colors`) and for drawings (outlines, text, arrows, ROIs); with a query, whether that colour works for each |
+| `list_luts(query)` | The colour look-up tables `set_lut` accepts, filtered by *query* |
+| `match_display_range(pyf_path, files, low_percentile, high_percentile, min_value, max_value)` | One shared display range for the chosen image panels, computed from all their pixels, so their brightness can be compared |
 | `tidy_text(pyf_path)` | Conservative typography auto-fixes across all labels (also listed under annotations) |
 
 ### Rendering & export tools
@@ -750,6 +756,7 @@ logged call.
 | Tool | Description |
 |------|-------------|
 | `remove_image(pyf_path, group_path, image_index)` | Delete an image panel. In the chat, several at once in ONE call: `use_pyfigures_tool(tool_name="remove_image", arguments={"panel_refs": ["h", "f", "m"]})`. Every letter is turned into its panel before anything is removed, the panels go from the last to the first (so the others keep their place), the letters are redone once, and the whole removal is one undo step. A panel named twice removes nothing. |
+| `remove_empty_placeholders(pyf_path)` | Delete the empty panels padding a montage's or grid's short last row (template slots are kept) |
 | `remove_group(pyf_path, group_path)` | Delete a group |
 | `write_xml(pyf_path, xml_content)` | Raw XML write (advanced / fallback) |
 

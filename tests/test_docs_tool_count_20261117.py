@@ -15,3 +15,15 @@ def test_the_guide_states_the_real_number_of_tools():
     with open(guide, encoding="utf-8") as f:
         stated = int(re.search(r"exposes \*\*(\d+) tools\*\*", f.read()).group(1))
     assert stated == count, f"docs/MCP_SERVER.md says {stated} tools, the server has {count}"
+
+
+def test_the_guide_names_every_tool():
+    """2026-11-19: eight tools (and five new plot tools) were missing from the guide's
+    tables, and an internal helper (shared_channel_luts) was registered as a tool."""
+    import pyfigures.mcp_server as M
+    names = [t.name for t in asyncio.run(M.mcp.list_tools())]
+    guide = os.path.join(os.path.dirname(__file__), "..", "docs", "MCP_SERVER.md")
+    with open(guide, encoding="utf-8") as f:
+        text = f.read()
+    missing = [n for n in names if not re.search(r"\b" + n + r"\b", text)]
+    assert not missing, f"tools not in docs/MCP_SERVER.md: {missing}"
