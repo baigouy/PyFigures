@@ -115,7 +115,21 @@ own marker shape.
 
 ---
 
-## 3. The statistics, as code
+## 3. The statistics, in the legend and as code
+
+A figure shows **stars**; the tests themselves go in the legend. File → *Figure caption / legend…* →
+**Insert statistics** (chat / MCP: `add_statistics_to_caption`; `caption_statistics` only reads it)
+adds a paragraph such as:
+
+> Statistics: (g) n = 10 per group; one-way ANOVA followed by Tukey's HSD test (F = 23.3, p < 0.0001).
+> (h) mean ± SD; two-way ANOVA (genotype p < 0.0001; treatment p < 0.0001; genotype × treatment
+> p = 0.02); stars: the genotype groups compared within each treatment level (one-way ANOVA followed
+> by Tukey's HSD test). \*p < 0.05, \*\*p < 0.01, \*\*\*p < 0.001, \*\*\*\*p < 0.0001.
+
+Edit it as you like: PyFigures remembers what it inserted, updates it when the data change only while
+you have not touched it, and otherwise just tells you (in `get_figure_caption`) that the plots'
+statistics changed.
+
 
 Right-click a plot → **Show plot code…** (chat / MCP: `data_plot_code`) gives a script with
 two parts:

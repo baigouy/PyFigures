@@ -27,7 +27,7 @@ def live_parameter(name):
 # arguments (letters, captions, figure size, moved images).
 _NOT_BATCHABLE = {'set_figure_properties', 'set_label_background', 'set_annotation_text', 'add_corner_labels',
                   'move_image', 'resize_figure', 'set_figure_caption', 'render_preview', 'simulate_color_blindness',
-                  'copy_style'}
+                  'copy_style', 'caption_statistics', 'add_statistics_to_caption'}
 
 # A batch collects the arguments each item would send, instead of sending them one by one.
 import contextvars

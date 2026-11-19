@@ -7752,14 +7752,21 @@ class EZFIG_GUI(QMainWindow):
         # formatted (bold, italics…) in the poster's rich-text editor: it was
         # two plain text boxes
         from pyfigures.gui.caption_dialog import CaptionDialog
-        from pyfigures.mcp_tools.overlays import _read_caption_markdown
-        dlg = CaptionDialog(self, cur_title, cur_caption, _read_caption_markdown(self.current_file))
+        from pyfigures.mcp_tools.overlays import _read_caption_markdown, _caption_field
+        from pyfigures.stats_legend import statistics_text
+        path = self.current_file
+        dlg = CaptionDialog(self, cur_title, cur_caption, _read_caption_markdown(path),
+                            statistics=lambda: statistics_text(path),
+                            stored_statistics=_caption_field(path, 'statistics'))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         v = dlg.values()
         try:
             set_figure_caption(self.current_file, v["caption"], title=v["title"] or None,
                                caption_markdown=v["caption_markdown"])
+            if v.get("statistics"):
+                from pyfigures.mcp_tools.overlays import _remember_statistics
+                _remember_statistics(self.current_file, v["statistics"])
         except Exception:
             logger.error('set caption failed:\n' + traceback.format_exc())
             QMessageBox.warning(self, 'Failed', 'Could not save the caption (see log).')

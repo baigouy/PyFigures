@@ -106,10 +106,33 @@ def set_figure_caption(pyf_path: str, caption: str, title: str | None = None,
     entry = {"title": title if title is not None else old_title, "caption": caption}
     if caption_markdown:
         entry["caption_markdown"] = caption_markdown
+    stored = _caption_field(pyf_path, "statistics")
+    if stored:
+        entry["statistics"] = stored          # the statistics text inserted last (add_statistics_to_caption)
     _atomic_write_text(p, json.dumps(entry, ensure_ascii=False, indent=2))
     return (f"Figure caption set ({len(caption)} chars)"
             + (f", title={title!r}" if title is not None else "")
             + f" → {os.path.basename(p)}.")
+
+
+def _remember_statistics(pyf_path: str, text: str) -> None:
+    """The statistics text inserted in the caption (the GUI's Insert statistics)."""
+    p = _caption_sidecar_path(pyf_path)
+    try:
+        with open(p, encoding="utf-8") as f:
+            entry = json.load(f)
+    except (OSError, ValueError):
+        return
+    entry["statistics"] = text
+    _atomic_write_text(p, json.dumps(entry, ensure_ascii=False, indent=2))
+
+
+def _caption_field(pyf_path: str, key: str):
+    try:
+        with open(_caption_sidecar_path(pyf_path), encoding="utf-8") as f:
+            return json.load(f).get(key)
+    except (OSError, ValueError):
+        return None
 
 
 def _read_caption_markdown(pyf_path: str):
@@ -130,7 +153,74 @@ def get_figure_caption(pyf_path: str) -> str:
     title, caption = _read_caption(pyf_path)
     if not caption and not title:
         return "No figure caption set. Use set_figure_caption() to add one."
-    return json.dumps({"title": title, "caption": caption}, ensure_ascii=False, indent=2)
+    out = {"title": title, "caption": caption}
+    note = _statistics_note(pyf_path, caption)
+    if note:
+        out["statistics_note"] = note
+    return json.dumps(out, ensure_ascii=False, indent=2)
+
+
+def _statistics_note(pyf_path: str, caption: str | None):
+    """A warning when the statistics inserted in the caption no longer match the plots."""
+    stored = _caption_field(pyf_path, "statistics")
+    if not stored or not caption:
+        return None
+    try:
+        from pyfigures.stats_legend import statistics_text
+        fresh = statistics_text(pyf_path)
+    except Exception:
+        return None
+    if fresh == stored:
+        return None
+    if stored in caption:
+        return ("The statistics in the caption no longer match the plots (data or tests changed): "
+                "add_statistics_to_caption updates them.")
+    return ("The statistics paragraph was edited by hand and the plots' statistics changed since: "
+            "check it (caption_statistics gives the current text).")
+
+
+@mcp.tool()
+def caption_statistics(pyf_path: str) -> str:
+    """The Statistics paragraph for the figure legend, from its data plots (read-only).
+
+    Per plot (by panel letter): the test and its result, n, two-way ANOVA effects,
+    what the stars compare, then the star key. add_statistics_to_caption puts it in
+    the caption."""
+    if not os.path.isfile(pyf_path):
+        return f"ERROR: no such .pyf file: {pyf_path}"
+    from pyfigures.stats_legend import statistics_text
+    return statistics_text(pyf_path) or "No tested data plot in this figure."
+
+
+@mcp.tool()
+def add_statistics_to_caption(pyf_path: str, force: bool = False) -> str:
+    """Add the plots' Statistics paragraph to the figure caption, or update it.
+
+    The text inserted is remembered: a later call replaces it while the user has not
+    edited it; an edited paragraph is left alone (*force*=True adds the new one at
+    the end). Use it for "put the stats in the legend", "the ANOVA in the caption"."""
+    if not os.path.isfile(pyf_path):
+        return f"ERROR: no such .pyf file: {pyf_path}"
+    from pyfigures.stats_legend import statistics_text, merged_caption
+    fresh = statistics_text(pyf_path)
+    if not fresh:
+        return "No tested data plot in this figure: nothing to add."
+    title, caption = _read_caption(pyf_path)
+    stored = _caption_field(pyf_path, "statistics")
+    new, status = merged_caption(caption or "", stored, fresh, force)
+    if status == "edited":
+        return ("The Statistics paragraph of the caption was edited by hand: left as it is. The current "
+                "statistics: " + fresh + " (force=True adds this at the end).")
+    entry = {"title": title, "caption": new, "statistics": fresh}
+    md = _read_caption_markdown(pyf_path)
+    if md:
+        esc = (lambda t: t.replace("*", "\\*"))
+        md_new, _ = merged_caption(md, esc(stored) if stored else None, esc(fresh), force)
+        entry["caption_markdown"] = md_new
+    _atomic_write_text(_caption_sidecar_path(pyf_path), json.dumps(entry, ensure_ascii=False, indent=2))
+    return {"added": "Statistics paragraph added to the caption: ",
+            "updated": "Statistics paragraph of the caption updated: ",
+            "unchanged": "The caption's statistics are up to date: "}[status] + fresh
 
 
 @mcp.tool()

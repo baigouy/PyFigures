@@ -152,7 +152,8 @@ def topic_note(words):
                 'anova', 'stars', 'stats', 'statistics', 'significance', 'pvalue', 'pvalues', 'swarm'}:
         # the plot options, said only when the model asks about plots: they were 8 kB of the
         # tool description sent on every turn (user, 2026-11-19: first messages small)
-        return 'PLOT OPTIONS: ' + _PLOT_OPTIONS + ' '
+        return ('PLOT OPTIONS: ' + _PLOT_OPTIONS + ' The tests in the figure LEGEND / caption ("put the stats in '
+                'the legend"): add_statistics_to_caption (caption_statistics reads it). ')
     if words & {'z', 'slice', 'slices', 'plane'} and not words & {'montage', 'orthogonal'}:
         return ('ONE Z SLICE: configure_image(projection="max", projection_z_start=k, projection_z_end=k+1) shows slice k '
                 '(0-based) alone; "next z" = the current start + 1 (no stored start = a projection of all slices or slice 0: '

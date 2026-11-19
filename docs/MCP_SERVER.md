@@ -364,7 +364,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **206 tools** (about a sixth of them for the poster designer).
+The server currently exposes **208 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -612,6 +612,8 @@ together.
 |------|-------------|
 | `set_figure_caption(pyf_path, caption, title)` | Store the figure's legend text (+ optional short title). Empty caption clears it |
 | `get_figure_caption(pyf_path)` | Return the stored caption/title as JSON |
+| `caption_statistics(pyf_path)` | The Statistics paragraph of the figure's data plots, for the legend: per panel letter the test, result, n, two-way ANOVA effects, what the stars compare, then the star key (read-only) |
+| `add_statistics_to_caption(pyf_path, force)` | Add that paragraph to the caption, or update it; the text inserted is remembered, so a paragraph edited by hand is never rewritten (`force=True` adds the new one at the end). `get_figure_caption` says when it no longer matches the plots |
 | `export_caption(pyf_path, out_path, fmt)` | Write the caption to a `.txt` / `.md` file for manuscript submission |
 
 ### QC & journal-compliance tools
