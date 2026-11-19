@@ -104,7 +104,8 @@ What is cleaned up for you, and said in the reply:
   `reference`, `axes`, `background`);
 - `hlines=[1.0]` or `[{"y": 100, "label": "control"}]`: reference lines;
 - `order=[...]`, `ylim=[0, null]`, `log_y`, `xtick_rotation=45`, `legend="outside"`;
-- `aspect`, `width`, `height`; `font_pt` (the plot's text on the printed page, 7 pt by default).
+- `aspect`, `width`, `height`; `font_scale=1.3` (every text 30 % bigger; the plot's text is
+  7 pt on the printed page by default).
 
 Colours are colour-blind safe by default (the Wong palette), and every series also gets its
 own marker shape.
