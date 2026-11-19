@@ -332,7 +332,10 @@ written to disk until you save):
 ```
 
 It starts with six tools (inspect, preview, undo/redo, and categories to find
-and run every PyFigures tool on the live figure). Set
+and run every PyFigures tool on the live figure). The categories: `inspect`,
+`layout`, `lettering`, `images`, `annotations`, `scale_bars`, `plots` (data,
+seaborn and table panels, reading tables, a plot's code), `create_export`,
+`quality`, `posters`, `help`, `native_gui`, `setup`. Set
 `PYFIGURES_MCP_SURFACE=all` to list every tool directly.
 
 **Chat sidebar.** **Tools → Chat sidebar (local model)…** (or `--chat`) docks

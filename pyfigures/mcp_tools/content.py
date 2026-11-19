@@ -409,7 +409,7 @@ else:
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
                     "show_n", "show_mean", "p_format", "hlines", "control", "point_style", "normalize",
-                    "pairs")
+                    "pairs", "stats_text")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -545,8 +545,10 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 value = {low[str(k).lower()]: str(v) for k, v in value.items()}
             # names given before stay, the new ones are added
             value = {**(out.get("rename") or {}), **value}
-        elif key in ("show_n", "show_mean"):
+        elif key in ("show_n", "show_mean", "stats_text"):
             value = bool(value)
+            if key == "stats_text" and value and kind not in _TWO_FACTOR_KINDS:
+                return {}, "stats_text (the two-way ANOVA written under the axes) applies to grouped, split_violin and line plots"
         elif key == "pairs":
             if kind not in ("bar", "box", "violin", "paired"):
                 return {}, "pairs (the brackets drawn) applies to bar, box, violin and paired plots"
@@ -755,7 +757,8 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
             entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
                      "facet": facet, "facet_row": facet_row, **_ckw,
                      "facets": {k: {f: r.get(f) for f in ("test", "omnibus", "comparisons", "effects",
-                                                         "split_comparisons", "r", "p", "error") if f in r}
+                                                         "split_comparisons", "within_x", "r", "p", "error")
+                                    if f in r}
                                 for k, r in recs.items()}}
             tests = sorted({str(r.get("test")) for r in recs.values() if r.get("test")})
             return entry, f" — {len(recs)} facets, each tested ({', '.join(tests)})", []
@@ -771,6 +774,8 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
             rec = _api.two_way_test(gt)
             if kind == "split_violin" and "error" not in rec:
                 rec["split_comparisons"] = _api.split_pair_tests(*_api.split_parts(gt), parametric=_mode)
+            elif "error" not in rec and hasattr(_api, "within_x_tests"):
+                rec["within_x"] = _api.within_x_tests(gt, parametric=_mode, only_significant=only_significant)
         elif kind == "scatter":
             rec = _api.correlation_test(_api.table_from_csv(csv_abs, **_ckw))
     except Exception as e:
@@ -799,6 +804,9 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
         if rec.get("split_comparisons"):
             entry["split_comparisons"] = rec["split_comparisons"]
             note += ", each pair of halves compared"
+        if rec.get("within_x"):
+            entry["within_x"] = rec["within_x"]
+            note += ", the groups compared at each x level (stars)"
     elif kind == "scatter":
         entry.update(r=rec.get("r"), r2=rec.get("r2"), p=rec.get("p"), n=rec.get("n"),
                      x=rec.get("x"), y=rec.get("y"))
@@ -955,6 +963,7 @@ def add_data_plot(
     point_style: str | None = None,
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
+    stats_text: bool | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -1003,6 +1012,8 @@ def add_data_plot(
       control"); the y label says so unless given.
     *pairs*: brackets only for these pairs ([["WT", "mutA"]]: "only show WT vs mutA"); the
       p-values stay those of the whole test.
+    *stats_text*: grouped / split_violin / line: True writes the two-way ANOVA under the
+      axes ("show the ANOVA on the plot"); off by default, the plot shows stars only.
     The axis labels come from the table when not given: the value column's name on y
       (a long table, or columns=), the factor on x, the split / colour factor as the
       legend title.
@@ -1052,8 +1063,10 @@ def add_data_plot(
       set_figure_colors recolours plots and images together.
 
     For *kind="scatter"* the correlation (r, R^2, p) of the first two columns is
-    shown in the legend and recorded; for *kind="grouped"* a two-way ANOVA (main
-    effects + interaction) is printed under the axes and recorded.
+    shown in the legend and recorded; for *kind="grouped"* / *"line"* the groups are
+    compared at each x level (stars; Tukey / Dunn within the level) and the two-way ANOVA
+    (main effects + interaction) is recorded, for the legend text; *stats_text=True*
+    also writes it under the axes (off by default: not elegant on a figure).
 
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
 
@@ -1122,7 +1135,7 @@ def add_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize, "pairs": pairs},
+                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -2002,6 +2015,7 @@ def edit_data_plot(
     point_style: str | None = None,
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
+    stats_text: bool | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -2064,6 +2078,7 @@ def edit_data_plot(
       "jitter" (random, the default).
     *normalize*: values as a % of this group's mean ("% of WT"); "" = the raw values.
     *pairs*: brackets only for these pairs ([["WT", "mutA"]]); [] = every significant pair.
+    *stats_text*: True = the two-way ANOVA written under the axes; False = stars only (default).
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2152,7 +2167,7 @@ def edit_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize, "pairs": pairs}, current,
+                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."

@@ -59,10 +59,10 @@ What is cleaned up for you, and said in the reply:
 |---|---|---|
 | `auto` (default) | the plot that shows the data best: grouped for two factors, scatter for an x / y series, else bars (under 5 points per group), box (5-19), violin (20+) | as below |
 | `bar`, `box`, `violin` | groups side by side | 2 groups: Welch t / Mann-Whitney; more: ANOVA + Tukey / Kruskal + Dunn (chosen by a normality check, or `stats_mode`) |
-| `split_violin` | two conditions (e.g. female / male) as the two halves of each violin, a legend naming them | each pair of halves tested; two-way ANOVA |
+| `split_violin` | two conditions (e.g. female / male) as the two halves of each violin, a legend naming them | each pair of halves tested (stars); two-way ANOVA recorded |
 | `paired` | repeated measures (one row per subject): a line per subject, the mean ± SD beside | paired t / Wilcoxon; RM-ANOVA / Friedman + paired post-hoc |
-| `line` | a time course / dose response: mean ± error of each group across x (spaced as numbers when they read as numbers) | two-way ANOVA |
-| `grouped` | bars by two factors | two-way ANOVA |
+| `line` | a time course / dose response: mean ± error of each group across x (spaced as numbers when they read as numbers) | the groups compared at each x (a star over it); two-way ANOVA recorded |
+| `grouped` | bars by two factors | the colour groups compared within each x level (brackets with stars; Tukey / Dunn within the level); two-way ANOVA recorded |
 | `scatter` | y against x, a regression line | Pearson correlation |
 
 ### Options (all optional; `edit_data_plot` changes any of them later)
@@ -83,6 +83,9 @@ What is cleaned up for you, and said in the reply:
 - `only_significant` (default: brackets for p < 0.05 only), `stats_mode="parametric"` /
   `"nonparametric"`, `annotate_stats=False` (no test);
 - `p_format="p"`: the p-values written on the brackets instead of stars;
+- `stats_text=True` (two-factor plots): the two-way ANOVA also written under the axes. Off by
+  default: a figure shows stars, the ANOVA belongs in the legend text (it is in the stats
+  record and in *Show plot code…*);
 - `show_n=True`: the n of each group under its name;
 - `normalize="WT"`: every value as a % of WT's mean ("% of WT" on the y axis; the tests are
   unchanged by the scaling);

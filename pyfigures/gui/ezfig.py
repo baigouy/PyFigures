@@ -142,7 +142,7 @@ import copy # used to clone class instances
 from qtpy.QtCore import QSize, QRect, QRectF, QPoint, QPointF, Qt, QSizeF, Signal, QTimer,QObject,QEvent
 from qtpy.QtSvg import QSvgGenerator
 from qtpy.QtWidgets import QMenu, QDialog,QWidget,QApplication, QVBoxLayout, QPushButton,QScrollArea,QLabel,QInputDialog, QMessageBox,QSpinBox,QAbstractScrollArea
-from qtpy.QtGui import QBrush, QPen, QColor, QTransform,QPainter, QColor,QFontMetrics,QImage,QPdfWriter,QPageSize,QTextCursor, QFont, QTextCharFormat, QRegion
+from qtpy.QtGui import QBrush, QPen, QColor, QTransform,QPainter, QColor,QFontMetrics,QImage,QPdfWriter,QPageSize,QTextCursor, QFont, QTextCharFormat, QRegion, QPolygon
 from batoolset.drawings.shapes.freehand2d import Freehand2D
 from batoolset.drawings.shapes.scalebar import ScaleBar
 from batoolset.drawings.shapes.polygon2d import Polygon2D
@@ -726,12 +726,96 @@ class MyWidget(QWidget):
             body_font = QFont(painter.font())
             body_font.setPointSize(11)
             painter.setFont(body_font)
-            body_rect = QRect(0, self.height() // 2 - 40, self.width(), 80)
+            body_rect = QRect(0, self.height() // 2 - 110, self.width(), 80)
             painter.drawText(body_rect,
                              Qt.AlignHCenter | Qt.AlignVCenter | Qt.TextWordWrap,
                              'Drop image files here to get started\n'
                              'or ask the chat (robot, top left) to build the figure for you')
+            self._draw_build_hints(painter, label_font, self.height() // 2 - 20)
             painter.restore()
+
+    # the three gestures that build a figure: the only thing not obvious in PyFigures
+    # (user, 2026-11-19), drawn as little sketches on the empty canvas
+    BUILD_HINTS = (
+        ('files', 'Drop image files',
+         'each is added to the figure\n(several: as a row, or loose)'),
+        ('onto', 'Drag a panel onto another',
+         'a menu: To row, To column,\nSwap, Join this row…'),
+        ('out', 'Drag a panel to empty space',
+         '"Extrude": it leaves its row\nand stands on its own'),
+    )
+
+    def _draw_build_hints(self, painter, font, top):
+        """Three sketches, side by side (stacked as text when the canvas is narrow):
+        files dropped -> panels; A dropped on B -> A | B; A dragged out of A | B -> A  B."""
+        n = len(self.BUILD_HINTS)
+        bold = QFont(font.family(), font.pointSize(), QFont.Bold)
+        fm, fmb = QFontMetrics(font), QFontMetrics(bold)
+        col_w = 24 + max(max(fmb.horizontalAdvance(t), *(fm.horizontalAdvance(l) for l in d.split('\n')), 170)
+                         for _k, t, d in self.BUILD_HINTS)
+        if self.width() < n * col_w + 20:
+            # narrow: the same in words, one gesture per paragraph
+            painter.setFont(font)
+            y = top
+            for _k, t, d in self.BUILD_HINTS:
+                text = f'{t}: {d.replace(chr(10), " ")}'
+                r = fm.boundingRect(QRect(10, y, max(0, self.width() - 20), 1000),
+                                    Qt.AlignHCenter | Qt.TextWordWrap, text)
+                painter.drawText(QRect(10, y, max(0, self.width() - 20), r.height()),
+                                 Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap, text)
+                y += r.height() + 6
+            return
+        x0 = (self.width() - n * col_w) // 2
+        color = painter.pen().color()
+        light = QColor(color)
+        light.setAlpha(45)
+        for i, (kind, title, desc) in enumerate(self.BUILD_HINTS):
+            cx = x0 + i * col_w + col_w // 2
+            y = top + 4
+            painter.setPen(QPen(color, 1.3))
+
+            def panel(x, yy, letter, w=26, h=20, fill=True):
+                r = QRect(int(x), int(yy), w, h)
+                if fill:
+                    painter.fillRect(r, light)
+                painter.drawRect(r)
+                painter.drawText(r, Qt.AlignCenter, letter)
+
+            def arrow(xa, ya, xb, yb):
+                painter.drawLine(int(xa), int(ya), int(xb), int(yb))
+                painter.drawLine(int(xb), int(yb), int(xb) - 6, int(yb) - 4)
+                painter.drawLine(int(xb), int(yb), int(xb) - 6, int(yb) + 4)
+
+            painter.setFont(font)
+            if kind == 'files':
+                # a page with a folded corner -> two panels
+                fx, fy = cx - 68, y
+                painter.drawPolygon(QPolygon([QPoint(fx, fy), QPoint(fx + 14, fy), QPoint(fx + 20, fy + 6),
+                                              QPoint(fx + 20, fy + 24), QPoint(fx, fy + 24)]))
+                arrow(cx - 40, y + 12, cx - 10, y + 12)
+                panel(cx, y + 2, 'A')
+                panel(cx + 30, y + 2, 'B')
+            elif kind == 'onto':
+                panel(cx - 75, y + 2, 'B')
+                painter.setPen(QPen(color, 1.0, Qt.DashLine))
+                panel(cx - 64, y - 6, 'A', fill=False)            # A dragged over B
+                painter.setPen(QPen(color, 1.3))
+                arrow(cx - 30, y + 12, cx - 4, y + 12)
+                panel(cx + 4, y + 2, 'B')
+                panel(cx + 32, y + 2, 'A')
+            else:
+                panel(cx - 82, y + 2, 'A')
+                panel(cx - 54, y + 2, 'B')
+                arrow(cx - 22, y + 12, cx + 4, y + 12)
+                panel(cx + 12, y + 2, 'A')
+                painter.drawText(QRect(cx + 38, y + 2, 14, 20), Qt.AlignCenter, '+')   # two separate panels
+                panel(cx + 52, y + 2, 'B')
+            painter.setFont(bold)
+            painter.drawText(QRect(cx - col_w // 2, y + 32, col_w, fmb.height() + 2),
+                             Qt.AlignHCenter | Qt.AlignVCenter, title)
+            painter.setFont(font)
+            painter.drawText(QRect(cx - col_w // 2, y + 36 + fmb.height(), col_w, 2 * fm.height() + 4),
+                             Qt.AlignHCenter | Qt.AlignTop, desc)
 
 
     def _get_rect(self, shape):

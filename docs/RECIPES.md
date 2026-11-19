@@ -452,6 +452,7 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `violin_side` | `both` (default), `left`, `right` | Half violins: only that half, the points on the other side (a "raincloud"). |
 | `facet`, `facet_row`, `facet_ncols` | column names, number | One plot per value of `facet` (side by side, a shared y axis, each with its own statistics), a row of them per value of `facet_row`; `facet_ncols` facets per row. The `title` goes over all of them. |
 | `point_style` | `jitter` (default), `swarm`, `line` | The individual points spread at random, side by side without overlap (a beeswarm), or in one column. |
+| `stats_text` | bool | Grouped / split violin / line: the two-way ANOVA also written under the axes (off by default: stars only, the ANOVA in the stats record for the legend). |
 | `pairs` | list of pairs | Brackets only for these pairs (`[[WT, mutA]]`); the p-values stay those of the whole test. |
 | `normalize` | a group name | Every value as a % of this group's mean ("% of WT" on the y axis); the tests are unchanged by the scaling. |
 | `control` | a group name | Compare every group with this one only: one-way ANOVA + Dunnett's test, or Mann-Whitney against it (Bonferroni). |

@@ -28,7 +28,7 @@ PLOT_KINDS = {
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
                 'rename', 'violin_inner', 'violin_side', 'element_colors', 'show_n', 'show_mean', 'p_format',
-                'hlines', 'control', 'point_style', 'normalize', 'pairs')
+                'hlines', 'control', 'point_style', 'normalize', 'pairs', 'stats_text')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -194,6 +194,9 @@ def plot_statistics(spec: dict) -> dict | None:
             out = {'test': rec.get('test'), 'effects': rec.get('effects')}
             if spec['kind'] == 'split_violin' and hasattr(api, 'split_pair_tests'):
                 out['split_comparisons'] = api.split_pair_tests(*api.split_parts(gt))
+            elif hasattr(api, 'within_x_tests'):
+                out['within_x'] = [{k: r.get(k) for k in ('x', 'test', 'omnibus', 'sig_pairs')}
+                                   for r in api.within_x_tests(gt)]
         else:
             out = None
     except Exception as e:                      # soft dependency, odd CSVs: say so, never fail the description
