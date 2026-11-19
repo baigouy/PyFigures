@@ -17,6 +17,7 @@ publication_steps()  batch annotations, the QC menu, caption, submission exports
 sharing_steps()      consolidate, review round trip, merge, remap, colour blindness, theme
 stacks_steps()       projection, channel split, montage, kymograph, orthogonal views, merge, video
 automation_steps()   draft from folder, recipes, library, compare, copy style, alt text, review
+plots_steps()        data plots from a table, settings, statistics code, seaborn, table panels
 poster_steps()       the poster window; album=True the photo album window (PosterWindow)
 
 Steps that need what an earlier step built declare it (``requires``); when
@@ -2502,11 +2503,11 @@ def publication_steps() -> list[TutorialStep]:
 
         # ── Data-plot panel from a CSV ────────────────────────────────────────
         TutorialStep(
-            title='Step 5 — Add a data plot from a CSV',
+            title='Step 5 — Add a data plot from a table',
             message=(
                 'Quantification belongs in the same figure as the images. Open '
-                '<b>Insert → "Data plot from CSV…"</b>.<br><br>'
-                'Pick a <b>CSV</b> of measurements and a plot type '
+                '<b>Insert → "Data plot from a table…"</b>.<br><br>'
+                'Pick a table of measurements (<b>CSV</b>, <b>Excel</b> or <b>SQLite</b>) and a plot type '
                 '(<b>bar / box / violin / scatter / grouped</b>). PyFigures runs '
                 'the right statistical test automatically — Welch <i>t</i> / '
                 'Mann-Whitney for two groups, ANOVA+Tukey / Kruskal+Dunn for more '
@@ -3427,6 +3428,148 @@ def _poster_is_saved(win):
     c = win.canvas
     return bool(c.file_path) and not c.is_modified()
 
+
+
+def _samples_plot_tables(win):
+    """A tidy table three ways: a CSV with an instrument's lines above it, an Excel
+    workbook and an SQLite database (the dialog reads all three)."""
+    import os
+    import sqlite3
+    import numpy as np
+    import pandas as pd
+    d = _sample_subdir('plots')
+    rng = np.random.default_rng(11)
+    rows = []
+    for g, ge in (('WT', 0), ('mutA', -20), ('mutB', 5)):
+        for sx, se in (('female', 0), ('male', 25)):
+            for day in (7, 14):
+                rows += [(g, sx, day, round(200 + ge + se + 2 * day + rng.normal(0, 12), 1)) for _ in range(10)]
+    df = pd.DataFrame(rows, columns=['genotype', 'sex', 'day', 'area'])
+    csv = os.path.join(d, 'mice_export.csv')
+    with open(csv, 'w', encoding='utf-8', newline='') as f:
+        f.write('Instrument export v1.2\nDate: 2026-11-19\n')
+        df.to_csv(f, index=False)
+    try:
+        df.to_excel(os.path.join(d, 'mice.xlsx'), sheet_name='mice', index=False)
+    except Exception:
+        pass
+    con = sqlite3.connect(os.path.join(d, 'mice.sqlite'))
+    df.to_sql('mice', con, index=False, if_exists='replace')
+    con.close()
+    return _where('Sample tables (the same mice as CSV, Excel and SQLite)', d,
+                  'Pick any of them in the dialog.')
+
+
+def plots_steps() -> list[TutorialStep]:
+    """Plots and tables from your data: data plots with statistics, their settings and
+    code, seaborn plots, table panels and what to ask the chat."""
+    n_panels = _make_count_increase_check(_n_images)
+    return [
+        TutorialStep(
+            title='Plots &amp; Tables tutorial',
+            message=(
+                'Turn a table of measurements into publication plots with their statistics, '
+                'straight in the figure. A table can be a <b>CSV / TSV / TXT</b>, an <b>Excel</b> '
+                'sheet or an <b>SQLite</b> database (a table, a view or an SQL query). The plots stay '
+                '<b>live</b>: edit the table, reopen the figure, the plot and its tests follow.<br><br>'
+                'No table at hand? The next step can make sample ones.'
+            ),
+        ),
+        TutorialStep(
+            title='Step 1 — Add a data plot from a table',
+            message=(
+                'Open <b>Insert → "Data plot from a table…"</b> and pick a table.<br><br>'
+                'Leave the plot type on <b>auto</b>: PyFigures picks the plot that shows the data '
+                'best (bars for a few points, box plots, violins from 20 points) and the right test '
+                '(t-test / Mann-Whitney, ANOVA + Tukey / Kruskal + Dunn), then draws the '
+                '<b>significance brackets</b>. Lines above the table (an instrument\'s header, a '
+                'title) are skipped by themselves.'
+            ),
+            get_target=lambda win: win.menuBar,
+            completion_check=n_panels,
+            samples=_samples_plot_tables,
+        ),
+        TutorialStep(
+            title='Step 2 — Columns, facets and rows',
+            message=(
+                'A <b>tidy</b> table (one row per measurement: genotype, sex, day, area…) needs no '
+                'reshaping. In the same dialog:<br>'
+                '• <b>Columns</b>: x = <i>genotype</i>, value = <i>area</i>; add split / colour = '
+                '<i>sex</i> with the <b>split_violin</b> type for two conditions in the two halves '
+                'of each violin;<br>'
+                '• <b>Facets</b>: one plot per <i>day</i>, each with its own test;<br>'
+                '• <b>Rows</b>: <code>day == 14</code> keeps only those;<br>'
+                '• <b>Violins</b>: half violins, a mini box inside, the points or not.<br><br>'
+                'Other types: <b>paired</b> (before / after on the same subjects), <b>line</b> (a time '
+                'course), <b>grouped</b> bars. Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.menuBar,
+            completion_check=None,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 3 — Change the plot',
+            message=(
+                '<b>Right-click</b> the plot → <b>Plot settings…</b>: another type, error bars, labels, '
+                'violins, points side by side (<b>swarm</b>), <b>n</b> under the groups, mean markers, '
+                'the <b>p-values</b> written instead of stars, a <b>control</b> to compare every group '
+                'with (Dunnett\'s test), facets and rows.<br><br>'
+                'The axis labels come from the table (a row of units under the header too: '
+                '"area (µm²)"). Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.paint,
+            completion_check=None,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 4 — The statistics, as code',
+            message=(
+                '<b>Right-click</b> the plot → <b>Show plot code…</b>: a script that redraws the plot, '
+                'then reads the table with pandas exactly as the plot did and reruns every test with '
+                '<b>scipy / statsmodels</b> alone (each facet too), so you or a reviewer can check '
+                'each step. <b>Copy</b> it or <b>Save as .py</b>. The tests and p-values are also '
+                'kept for the Methods section (QC → Adjustment provenance ledger). Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.paint,
+            completion_check=None,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 5 — Any seaborn plot',
+            message=(
+                '<b>Insert → "Seaborn plot from a table…"</b> draws any seaborn plot (catplot, '
+                'relplot, displot, histplot, ecdfplot…) with <b>facets</b> like ggplot2: pick x, y, '
+                'hue and the col / row columns. No statistics brackets there: use data plots for '
+                'tested comparisons. Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.menuBar,
+            completion_check=None,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 6 — A table as a panel',
+            message=(
+                '<b>Insert → "Table panel…"</b> puts the table itself, or a summary per group '
+                '(n, mean ± SD, median [IQR]…), in the figure, in the same 7 pt as the plots. '
+                '<b>Right-click</b> it → <b>Table settings…</b> to change it. Click <b>Next</b>.'
+            ),
+            get_target=lambda win: win.menuBar,
+            completion_check=None,
+            auto_advance=False,
+        ),
+        TutorialStep(
+            title='Step 7 — Or just ask',
+            message=(
+                'In the chat (Tools → Chat sidebar) say it in words: <i>"make it half violins"</i>, '
+                '<i>"split by sex"</i>, <i>"one plot per day"</i>, <i>"compare everything to WT"</i>, '
+                '<i>"show the p values, not stars"</i>, <i>"what columns does this table have?"</i>, '
+                '<i>"add a table of mean ± SD per genotype"</i>.<br><br>'
+                'That\'s the tour. Click <b>Finish</b>.'
+            ),
+            completion_check=None,
+            auto_advance=False,
+        ),
+    ]
 
 def poster_steps(album=False) -> list[TutorialStep]:
     """The poster / collage designer (Tools → Poster / collage designer), or

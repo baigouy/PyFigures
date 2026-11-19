@@ -1568,22 +1568,22 @@ class EZFIG_GUI(QMainWindow):
         placeholder_grid_action.triggered.connect(self.add_placeholder_grid_action)
         insert_menu.addSeparator()
 
-        data_plot_action = QAction("Data plot from CSV…", self)
-        data_plot_action.setToolTip('Render a bar / box / violin / scatter / grouped plot from a '
-                                    'CSV of measurements, with automatic significance brackets '
-                                    '(needs the staplot package)')
+        data_plot_action = QAction("Data plot from a table…", self)
+        data_plot_action.setToolTip('A bar / box / violin / paired / line / scatter / grouped plot from a '
+                                    'table (CSV, TSV, TXT, Excel, SQLite), with automatic significance '
+                                    'brackets (needs the staplot package)')
         insert_menu.addAction(data_plot_action)
         data_plot_action.triggered.connect(self.add_data_plot_action)
 
-        seaborn_action = QAction("Seaborn plot from CSV…", self)
-        seaborn_action.setToolTip('Any seaborn plot of a tidy table, with facets like ggplot2 '
-                                  '(one plot per value of a column)')
+        seaborn_action = QAction("Seaborn plot from a table…", self)
+        seaborn_action.setToolTip('Any seaborn plot of a tidy table (CSV, Excel, SQLite), with facets '
+                                  'like ggplot2 (one plot per value of a column)')
         insert_menu.addAction(seaborn_action)
         seaborn_action.triggered.connect(self.add_seaborn_plot_action)
 
-        table_panel_action = QAction("Table from CSV…", self)
-        table_panel_action.setToolTip('A data table, or a summary of it (n, mean ± SD... per group), '
-                                      'as a live panel')
+        table_panel_action = QAction("Table panel…", self)
+        table_panel_action.setToolTip('A data table (CSV, Excel, SQLite), or a summary of it (n, mean ± SD... '
+                                      'per group), as a live panel')
         insert_menu.addAction(table_panel_action)
         table_panel_action.triggered.connect(self.add_table_panel_action)
 
@@ -2023,6 +2023,12 @@ class EZFIG_GUI(QMainWindow):
         stacks_tuto_action.triggered.connect(self.start_stacks_tutorial)
         help_menu.addAction(stacks_tuto_action)
 
+        plots_tuto_action = QAction('▶  Plots && Tables Tutorial', self)
+        plots_tuto_action.setToolTip('Data plots with statistics from a CSV, Excel or SQLite table, their '
+                                     'settings and code, seaborn plots and table panels')
+        plots_tuto_action.triggered.connect(self.start_plots_tutorial)
+        help_menu.addAction(plots_tuto_action)
+
         automation_tuto_action = QAction('▶  Automate: Drafts, Recipes && Library Tutorial', self)
         automation_tuto_action.triggered.connect(self.start_automation_tutorial)
         help_menu.addAction(automation_tuto_action)
@@ -2311,6 +2317,10 @@ class EZFIG_GUI(QMainWindow):
     def start_stacks_tutorial(self):
         from pyfigures.gui.tutorial import stacks_steps
         self._tutorial.start(stacks_steps())
+
+    def start_plots_tutorial(self):
+        from pyfigures.gui.tutorial import plots_steps
+        self._tutorial.start(plots_steps())
 
     def start_automation_tutorial(self):
         from pyfigures.gui.tutorial import automation_steps

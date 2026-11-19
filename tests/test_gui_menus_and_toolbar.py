@@ -606,7 +606,7 @@ def test_menu_layout_groups_what_adds_panels(gui):
     tops = [a.text() for a in gui.menuBar.actions()]
     assert tops == ["File", "Edit", "Insert", "Annotations", "QC", "Tools", "View", "Help"], tops
     insert = [a.text() for a in _menu_action(gui, "Insert").menu().actions() if not a.isSeparator()]
-    for item in ("Images from files", "Data plot from CSV…", "Multi-channel merge…", "Stack views",
+    for item in ("Images from files", "Data plot from a table…", "Multi-channel merge…", "Stack views",
                  "LUT colour bar…", "Add equation (LaTeX)…", "Add LaTeX code panel…",
                  "Add image from URL / OME-Zarr / OMERO…"):
         assert item in insert, (item, insert)

@@ -385,6 +385,12 @@ def test_sample_files_buttons_write_usable_files(empty_win, qapp, name):
             assert len(extract_comments(p)) == 2
         elif p.endswith(".pyf"):
             assert os.path.getsize(p) > 0
+        elif os.path.basename(p).startswith("plots_"):
+            # the same tidy table as CSV (with lines above it), Excel and SQLite
+            from staplot.api import read_table
+            for f in ("mice_export.csv", "mice.sqlite"):
+                df = read_table(os.path.join(p, f))
+                assert list(df.columns) == ["genotype", "sex", "day", "area"] and len(df) == 120, f
         elif "library" in p:
             idx = os.path.join(p, "index.json")
             index_figures(p, idx)
@@ -392,7 +398,7 @@ def test_sample_files_buttons_write_usable_files(empty_win, qapp, name):
         seen.append(step.title)
 
     _walk_with_setups(ctrl, qapp, win, on_step=on_step)
-    expected = {"publication": 1, "sharing": 3, "stacks": 1, "automation": 5}.get(name, 0)
+    expected = {"publication": 1, "sharing": 3, "stacks": 1, "automation": 5, "plots": 1}.get(name, 0)
     assert len(seen) == expected, seen
 
 

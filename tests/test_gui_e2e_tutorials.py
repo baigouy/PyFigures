@@ -33,6 +33,7 @@ TUTORIAL_KEYS = {
     "menu: Help > ▶  Sharing, Review & Accessibility Tutorial": "sharing",
     "menu: Help > ▶  Stacks, Channels & Movies Tutorial": "stacks",
     "menu: Help > ▶  Automate: Drafts, Recipes & Library Tutorial": "automation",
+    "menu: Help > ▶  Plots & Tables Tutorial": "plots",
 }
 # the poster / album tutorials run in their own windows:
 ELSEWHERE = {
@@ -361,7 +362,6 @@ PERFORM = {
     "Scale bar on every panel": _menu("menu: Annotations > Add scale bar to all panels…"),
     "Tidy text typography": _menu("menu: Annotations > Tidy text typography (×, °, units, ranges…)"),
     "Add a LUT colour bar": _menu("menu: Insert > LUT colour bar…"),
-    "Add a data plot from a CSV": _menu("menu: Insert > Data plot from CSV…"),
     "Audit the figure": _menu("menu: QC > Audit figure (missing scale bars / labels)"),
     "Check print resolution": _menu("menu: QC > Check print resolution…"),
     "Enforce a minimum font size": _menu("menu: QC > Enforce minimum font size…"),
@@ -390,6 +390,8 @@ PERFORM = {
     "Orthogonal views": _on_panel("_is_z_panel", "menu: Insert > Stack views > Orthogonal views (XZ / YZ)…"),
     "Merge separate channel files": _menu("menu: Insert > Multi-channel merge…"),
     "Export a movie": _menu("menu: File > Export As > Video (animate time-stacks)…"),
+    # plots
+    "Add a data plot from a table": _menu("menu: Insert > Data plot from a table…"),
     # automation
     "Draft a figure from a folder": _menu("menu: File > Draft figure from folder…"),
     "Build a figure from a recipe": _menu("menu: File > Build figure from recipe…"),

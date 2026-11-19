@@ -52,9 +52,9 @@ Every action reachable in the figure editor and the tests that run it and check 
 | Insert > Images from files > To a column with the selected panel… | `test_gui_e2e_menus.py::test_menu_action` |
 | Insert > Images from files > Stack as a montage of frames… | `test_gui_e2e_menus.py::test_menu_action` |
 | Insert > Add image from URL / OME-Zarr / OMERO… | `test_gui_e2e_menus.py::test_menu_action` |
-| Insert > Data plot from CSV… | `test_gui_e2e_menus.py::test_menu_action` |
-| Insert > Seaborn plot from CSV… | `test_gui_e2e_menus.py::test_menu_action` |
-| Insert > Table from CSV… | `test_gui_e2e_menus.py::test_menu_action` |
+| Insert > Data plot from a table… | `test_gui_e2e_menus.py::test_menu_action` |
+| Insert > Seaborn plot from a table… | `test_gui_e2e_menus.py::test_menu_action` |
+| Insert > Table panel… | `test_gui_e2e_menus.py::test_menu_action` |
 | Insert > Multi-channel merge… | `test_gui_e2e_menus.py::test_menu_action` |
 | Insert > Stack views > Montage of frames (time / Z)… | `test_gui_e2e_menus.py::test_menu_action` |
 | Insert > Stack views > Channel split (each channel + merge)… | `test_gui_e2e_menus.py::test_menu_action` |

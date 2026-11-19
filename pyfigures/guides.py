@@ -459,13 +459,14 @@ GUIDES: dict[str, dict] = {
         "mcp": "add_corner_labels",
     },
     "add_data_plot": {
-        "title": "Add a data plot from a CSV",
-        "summary": "Make a box/bar/scatter plot panel (with statistics) from a CSV file.",
-        "keywords": ["plot", "graph", "chart", "csv", "box plot", "bar plot", "statistics", "stats"],
+        "title": "Add a data plot from a table",
+        "summary": "Make a box/bar/violin/scatter plot panel (with statistics) from a CSV, Excel or SQLite table.",
+        "keywords": ["plot", "graph", "chart", "csv", "excel", "sqlite", "table", "box plot", "bar plot",
+                     "violin", "statistics", "stats"],
         "steps": [
-            {"menu": ["Insert", "Data plot from CSV…"]},
-            {"dialog": "Pick the CSV, the plot type and the statistics options, then click "
-                       "<b>Ok</b>. The plot is added as a new panel."},
+            {"menu": ["Insert", "Data plot from a table…"]},
+            {"dialog": "Pick the table (CSV, Excel or SQLite), the plot type and the statistics options, "
+                       "then click <b>Ok</b>. The plot is added as a new panel."},
         ],
         "alternative": "",
         "done": "panel_added",

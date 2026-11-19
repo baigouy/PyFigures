@@ -1491,7 +1491,7 @@ server, and edited afterwards in either.
 | `crop` | Edit Image | `transform_image` |
 | `scale_bar`, `px_to_unit` | Annotations → Add scale bar to all panels…; Edit Image | `set_scale_bar`, `set_scale_bar_all` |
 | `label` | Edit Image (text tool) | `add_annotation`, `set_annotation_text` |
-| `plot` | Insert → Data plot from CSV… | `add_data_plot` |
+| `plot` | Insert → Data plot from a table… | `add_data_plot` |
 | `montage` | Insert → Stack views → Montage of frames (time / Z)… | `add_stack_montage` |
 | `split` | Insert → Stack views → Channel split (each channel + merge)… | `add_channel_split` |
 | `arrows` | Annotations → Add arrow pointing at a feature… | `add_arrow` |
