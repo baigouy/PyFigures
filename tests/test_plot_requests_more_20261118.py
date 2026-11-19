@@ -506,3 +506,13 @@ def test_table_settings_from_the_right_click_menu(qapp, monkeypatch, tidy, tmp_p
     spec = parse([s for s in g.paint.EZFIG_panel.shapes_to_draw if isinstance(s, Image2D)][-1].custom_loading_script)
     assert spec["by"] == ["genotype", "sex"] and spec["where"] == "day == 7"
     g._dirty = False
+
+
+def test_only_show_some_brackets(pyf, tidy):
+    out = C.add_data_plot(pyf, [], tidy, kind="box", columns=["genotype", "area_um2"], pairs=[["wt", "mutA"]],
+                          only_significant=False)
+    assert not out.startswith("ERROR"), out
+    assert "pairs=[['WT', 'mutA']]" in _scripts(pyf)[-1]
+    _draw(_scripts(pyf)[-1])
+    assert C.edit_data_plot(pyf, [], 0, pairs=[["WT", "KO"]]).startswith("ERROR: no group")
+    assert "pairs [['WT', 'mutA']] -> None" in C.edit_data_plot(pyf, [], 0, pairs=[])

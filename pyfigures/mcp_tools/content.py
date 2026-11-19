@@ -408,7 +408,8 @@ else:
 # the layout / size settings of a data plot (staplot.api.plot), in the order they are written
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
-                    "show_n", "show_mean", "p_format", "hlines", "control", "point_style", "normalize")
+                    "show_n", "show_mean", "p_format", "hlines", "control", "point_style", "normalize",
+                    "pairs")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -546,6 +547,26 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
             value = {**(out.get("rename") or {}), **value}
         elif key in ("show_n", "show_mean"):
             value = bool(value)
+        elif key == "pairs":
+            if kind not in ("bar", "box", "violin", "paired"):
+                return {}, "pairs (the brackets drawn) applies to bar, box, violin and paired plots"
+            if not isinstance(value, (list, tuple)) or not all(isinstance(p, (list, tuple)) and len(p) == 2
+                                                               for p in value):
+                return {}, 'pairs must be [["WT", "mutA"], ...]: two group names each'
+            try:
+                from staplot import api as _api
+                names = [c.name for c in _api.table_from_csv(csv_abs, **_sel({"columns": columns, "where": where,
+                                                                               "skip_rows": skip_rows})).columns]
+            except ImportError:
+                names = None
+            except Exception as e:
+                return {}, f"cannot read the groups of {csv_abs}: {e}"
+            if names is not None:
+                low = {n.lower(): n for n in names}
+                bad = [p for p in value if str(p[0]).lower() not in low or str(p[1]).lower() not in low]
+                if bad:
+                    return {}, f"no group in {bad}; the groups are {names}"
+                value = [[low[str(a).lower()], low[str(b).lower()]] for a, b in value]
         elif key == "point_style":
             value = {"beeswarm": "swarm", "bee swarm": "swarm", "swarmplot": "swarm", "random": "jitter",
                      "column": "line", "aligned": "line", "straight": "line"}.get(str(value).strip().lower(),
@@ -933,6 +954,7 @@ def add_data_plot(
     control: str | None = None,
     point_style: str | None = None,
     normalize: str | None = None,
+    pairs: list[list[str]] | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -979,6 +1001,8 @@ def add_data_plot(
       overlapping) or "line" (one column).
     *normalize*: a group's name: the values as a % of its mean ("normalise to WT", "% of
       control"); the y label says so unless given.
+    *pairs*: brackets only for these pairs ([["WT", "mutA"]]: "only show WT vs mutA"); the
+      p-values stay those of the whole test.
     The axis labels come from the table when not given: the value column's name on y
       (a long table, or columns=), the factor on x, the split / colour factor as the
       legend title.
@@ -1098,7 +1122,7 @@ def add_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize},
+                                "normalize": normalize, "pairs": pairs},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -1973,6 +1997,7 @@ def edit_data_plot(
     control: str | None = None,
     point_style: str | None = None,
     normalize: str | None = None,
+    pairs: list[list[str]] | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -2034,6 +2059,7 @@ def edit_data_plot(
     *point_style*: "swarm" (points side by side, a beeswarm), "line" (one column),
       "jitter" (random, the default).
     *normalize*: values as a % of this group's mean ("% of WT"); "" = the raw values.
+    *pairs*: brackets only for these pairs ([["WT", "mutA"]]); [] = every significant pair.
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2122,7 +2148,7 @@ def edit_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize}, current,
+                                "normalize": normalize, "pairs": pairs}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
