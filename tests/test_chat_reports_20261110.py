@@ -143,8 +143,8 @@ def test_a_background_for_a_panel_is_not_its_letters_box():
     assert live_mcp._names_letters("put a black box behind the letter g")
     assert live_mcp._names_letters("white labels on a black background")
     assert not live_mcp._is_colour("none") and not live_mcp._is_colour(None) and live_mcp._is_colour("#000000")
-    from pyfigures.assistant.categorized_mcp import build_server
-    text = build_server(live_mcp.mcp, live_mcp.request).instructions
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
+    text = all_guidance(build_server(live_mcp.mcp, live_mcp.request))
     assert "PANEL background" in text and "fill_color" in text and "ask which one" in text
     # short words that fit several things of a panel ("the colour of a"): ask, change nothing first
     assert '"the colour of a"' in text and "when several fit, ask which one" in text

@@ -56,7 +56,7 @@ def category_for(name):
         return 'quality'
     if name in ('templatify_figure', 'write_xml'):
         return 'create_export'
-    if name in ('index_image_folder', 'search_images'):return 'images'
+    if name in ('index_image_folder', 'search_images', 'add_folder_files'):return 'images'
     if name in ('inspect_annotation_objects','edit_annotation_properties','open_annotation_properties'):return 'annotations'
     if name=='restyle_texts':return 'lettering'
     if name=='review_submission_readiness':return 'quality'
@@ -105,7 +105,263 @@ def category_for(name):
     return 'setup'
 
 
-_PLOT_OPTIONS = 'edit_data_plot(panel_ref, kind="violin"|"box"|"bar"|"scatter"|"grouped"|"split_violin" (two conditions, e.g. sex, as the two halves of each violin; a two-factor table)|"paired" (before / after on the same subjects: a line per subject, paired tests)|"line" (a time course: mean ± error per group across days / doses, columns=[group, x, value]), error, only_significant, annotate_stats, stats_mode, ylabel, aspect=width/height only when asked: "wider" = 1.5-2, "taller" = 0.6-0.8; a plot can take any shape, unlike an image; text size: font_pt = the plot\'s text in the printed figure (default 7 pt; "bigger text" 8-9, "like the letters" their pt); size: width/height in inches; layout: order=[group names], ylim=[low, high] ([0, null] = y from 0; on a plot "the scale", "the scale bar", "the range", "start at 0 and go to 50" mean its y axis: ylim=[0, 50]; a plot has no scale bar; the plot just discussed is the one meant), log_y, xtick_rotation=45 for overlapping names (degrees ANTICLOCKWISE, unlike image rotation: "rotate left" = +45, names rising "/"; "rotate right" = -45), rename={"mutA": "mutant A"} for a group\'s shown name (never ask the user to edit the table), show_points=False ("remove the point cloud"), point_style="swarm" (points side by side, a beeswarm) | "line" | "jitter", violin_inner="box" ("a box plot within the violin") | "lines" | "none", violin_side="left" ("half violins", points on the other side) | "right" | "both" ("what can I put in / change on my plot?": list_data_plot_kinds lists every option per kind), legend="inside"|"outside"|"none", element_colors={"points": "black", "median": "red", "edges": "none", "brackets": "grey"} (colour of PARTS of the plot; the groups\' own colours = colors=[...]), columns=[x, (split,) value] of a tidy table, where="day == 14" (only some rows), control="WT" ("compare everything to WT": Dunnett\'s test), normalize="WT" ("as % of control"), pairs=[["WT", "mutA"]] ("only show WT vs mutA"; [] = every significant pair), stats_text=True (grouped / split / line: the two-way ANOVA written under the axes; off by default, stars only; "remove the stats text at the bottom" = stats_text=False, NOT annotate_stats=False which removes the stars too), show_n=True ("add the n"), p_format="p" ("p values instead of stars"), show_mean=True, hlines=[1.0] (a dashed reference line; [{"y": 100, "label": "control"}]), facet="day" (one plot per day, each tested; facet_row="sex" a grid; "split plots" / "facets"), skip_rows=3 (lines above the table; found automatically otherwise); 0 / "" / [] resets one; seaborn plots: edit_seaborn_plot height/aspect, title, palette={"female": "red", "male": "blue"} (a colour per group), legend="outside"|"top"|"inside"|"none", xlim/ylim=[low, high], col/row facets, rename={"weight_g": "weight (g)"} for column or value names, where, options={"cumulative": true, "element": "step", "fill": false} = cumulative histogram (function="histplot"; or "ecdfplot")) for a DATA PLOT; add_table_panel(group_path, csv_path, by=["genotype"], value="area", stats=["n", "mean±sd"]) = a TABLE as a figure panel (raw rows, or a summary per group; edit_table_panel changes it), describe_table(csv_path, sheet) = a table\'s columns, types, levels, first rows and the plots that fit (use it before add_seaborn_plot / add_data_plot when the columns are not known; never search for it), list_factor_columns(csv_path, sheet) = the columns that can split / colour / facet the data, with their levels, summarize_table(csv_path, value, by, where) = n / mean / sd / median per group (a DATA PLOT is a panel whose panel_references "code" says type data_plot; its statistics and p-values are there too; list_data_plot_kinds lists the kinds; never set_script on a data plot).'
+_PLOT_OPTIONS = 'edit_data_plot(panel_ref, kind="violin"|"box"|"bar"|"scatter"|"grouped"|"split_violin" (two conditions, e.g. sex, as the two halves of each violin; a two-factor table)|"paired" (before / after on the same subjects: a line per subject, paired tests)|"line" (a time course: mean ± error per group across days / doses, columns=[group, x, value]), error, only_significant, annotate_stats, stats_mode, ylabel, aspect=width/height only when asked: "wider" = 1.5-2, "taller" = 0.6-0.8; a plot can take any shape, unlike an image; text size: font_pt = the plot\'s text in the printed figure (default the labels\' size, else 7 pt; "bigger text" 8-9, "like the letters" their pt; "labels" = the labels\' size again); font_family="Verdana" ("labels" = the labels\' font, the default); size: width/height in inches; layout: order=[group names], ylim=[low, high] ([0, null] = y from 0; on a plot "the scale", "the scale bar", "the range", "start at 0 and go to 50" mean its y axis: ylim=[0, 50]; a plot has no scale bar; the plot just discussed is the one meant), log_y, xtick_rotation=45 for overlapping names (degrees ANTICLOCKWISE, unlike image rotation: "rotate left" = +45, names rising "/"; "rotate right" = -45), rename={"mutA": "mutant A"} for a group\'s shown name (never ask the user to edit the table), show_points=False ("remove the point cloud"), point_style="swarm" (points side by side, a beeswarm) | "line" | "jitter", violin_inner="box" ("a box plot within the violin") | "lines" | "none", violin_side="left" ("half violins", points on the other side) | "right" | "both" ("what can I put in / change on my plot?": list_data_plot_kinds lists every option per kind), legend="inside"|"outside"|"none", element_colors={"points": "black", "median": "red", "edges": "none", "brackets": "grey"} (colour of PARTS of the plot; the groups\' own colours = colors=[...]), columns=[x, (split,) value] of a tidy table, where="day == 14" (only some rows), control="WT" ("compare everything to WT": Dunnett\'s test), normalize="WT" ("as % of control"), pairs=[["WT", "mutA"]] ("only show WT vs mutA"; [] = every significant pair), stats_text=True (grouped / split / line: the two-way ANOVA written under the axes; off by default, stars only; "remove the stats text at the bottom" = stats_text=False, NOT annotate_stats=False which removes the stars too), show_n=True ("add the n"), p_format="p" ("p values instead of stars"), show_mean=True, hlines=[1.0] (a dashed reference line; [{"y": 100, "label": "control"}]), facet="day" (one plot per day, each tested; facet_row="sex" a grid; "split plots" / "facets"), skip_rows=3 (lines above the table; found automatically otherwise); 0 / "" / [] resets one; seaborn plots: edit_seaborn_plot height/aspect, title, palette={"female": "red", "male": "blue"} (a colour per group), legend="outside"|"top"|"inside"|"none", xlim/ylim=[low, high], col/row facets, rename={"weight_g": "weight (g)"} for column or value names, where, options={"cumulative": true, "element": "step", "fill": false} = cumulative histogram (function="histplot"; or "ecdfplot")) for a DATA PLOT; add_table_panel(group_path, csv_path, by=["genotype"], value="area", stats=["n", "mean±sd"]) = a TABLE as a figure panel (raw rows, or a summary per group; edit_table_panel changes it), describe_table(csv_path, sheet) = a table\'s columns, types, levels, first rows and the plots that fit (use it before add_seaborn_plot / add_data_plot when the columns are not known; never search for it), list_factor_columns(csv_path, sheet) = the columns that can split / colour / facet the data, with their levels, summarize_table(csv_path, value, by, where) = n / mean / sd / median per group (a DATA PLOT is a panel whose panel_references "code" says type data_plot; its statistics and p-values are there too; list_data_plot_kinds lists the kinds; never set_script on a data plot).'
+
+
+# The rules of one topic, said by find_pyfigures_tools when the search words fit it
+# (they were all in the server instructions, 18 kB on every turn: user 2026-11-19,
+# "first messages small and explicit, then upon request the details").
+TOPIC_RULES = (
+    ({'swap', 'swaps', 'exchange', 'switch', 'interchange'},
+     'SWAPS: "swap q and o" swaps the image PANELS with those letters (swap_live_panels, target=images); letter '
+     'TEXT swaps only on an explicit swap-the-letters request. A missing or non-unique reference: STOP and ask; '
+     'never substitute a panel or retry with other references. Both references the same panel: report no change. '
+     'Repeating a reference is not evidence of duplicate letters (use duplicate_letter_references from the state). '
+     'Never delete / recreate letters to swap or relabel.'),
+    ({'letter', 'letters', 'lettering', 'label', 'labels', 'abc', 'font', 'fonts', 'consistent', 'same'},
+     'LETTERS: edit_panel_letters once at the intended scope (placement, family, size, bold / italic / underline, '
+     'colour, background), never per-image loops. Letters stay alike: a style asked for one letter ("I can\'t see '
+     'the letter b") goes to every letter; only when the user explicitly wants some different ("only b bold") use '
+     'scope=panels with panel_ids and only_these_letters_request quoting them. Removal only on an explicit request '
+     '(removal_request quotes it). inspect_panel_letters verifies after the edit; zero letters = say they are '
+     'absent. Explicit white stays white; background="none" is transparent. A "bg" asked for a panel named by its letter ("add a black bg to g") is the PANEL background (set_image_property fill_color), not the letter background, unless the words name the letter. "Consistent / the same letters": the '
+     'same font, size, bold, italic, underline and box for all; if one was made different on purpose, ask whether '
+     'to spread it or undo it. All texts stay coherent: scale-bar labels alike (restyle_texts target="scale_bars"), '
+     'every text but the letters in one font; check_text_consistency checks it. Is a font available? '
+     'list_fonts(query=the_font), answer from font_check.'),
+    ({'background', 'backgrounds', 'bg', 'fill', 'behind', 'box'},
+     'BACKGROUND: asked for a panel named by its letter ("add a black bg to g") it is the PANEL background, '
+     'behind the image, seen once it is rotated: set_image_property property_name="fill_color" (black "0", white '
+     '"16777215", "None" removes it; "auto" = the colour of the image\'s own background, read from its edge pixels (a plot\'s too, as drawn; a '
+     'plot\'s element_colors background is inside the plot, not behind its rotated corners); '
+     'all panels = one call with batch). Only words naming the letter or label ("black box behind the letter g") '
+     'mean the letter background (edit_panel_letters background, background_request quoting them). When the words '
+     'fit both, ask which one before changing anything. There is no pixel-sampling tool.'),
+    ({'ready', 'readiness', 'submission', 'submit', 'journal', 'publication', 'publish'},
+     'READINESS: review_submission_readiness (actual resolution AND journal checks); audit_figure is an '
+     'inventory, not readiness. Report measured blockers and missing evidence; never infer readiness from labels '
+     'or export DPI.'),
+    ({'how', 'help', 'where', 'show', 'teach', 'menu', 'menus', 'click', 'manual', 'tutorial', 'guide'},
+     'HOW-TO: human GUI steps by default: explain_how or list_how_to_guides (or explain_live_interaction), their '
+     'authored menu / right-click paths; code or recipe only when asked; teaching is not permission to edit. '
+     'Whenever you list choices for a change (always for a HELP request such as "help me change the channel '
+     'colours of e"), add "show me where to click". End every answer that tells how to do something in the GUI '
+     'with: "Should I **highlight where to click**, or **open it for me**?". Highlight = show_me_where with EVERY '
+     'route (menu bar, right-click menu of the object at the right level, panel editor tab + buttons), outlined '
+     'at once; say what the yellow selection outline surrounds and what to click first. Open it for me = the same call with '
+     'open_menus=true (only when asked); never perform the edit itself. A feature with no operation: native_gui '
+     '(inspect the real menu / dialog controls, invoke their ids, verify; queued is not success). Cancelling a '
+     'drag: release the mouse, then Ignore or dismiss the menu. Panel-by-panel joining is ONE drop with ordered '
+     'contents.'),
+    ({'row', 'rows', 'column', 'columns', 'arrange', 'grid', 'rearrange', 'group', 'groups', 'ungroup', 'reverse',
+      'invert', 'heading', 'headers', 'header', 'layout'},
+     'ROWS: rearranging EXISTING images into rows / columns: arrange_live_images once (columns, or row_counts '
+     'when equal rows are impossible: ask which split, e.g. 9 images in 4 rows = [3, 2, 2, 2]); order and letters '
+     'kept; never per-image move loops. NEW rows: add_group, then use its returned path; requested row numbers are '
+     'not group paths; on a missing-container error inspect / create it, never fall back into another row. '
+     'Reverse the selected row: reverse_selected_row (missing or several rows selected: ask). Delete the last N '
+     'rows: delete_last_rows once (more than exist = all, report the actual number). Ungroup all / every image '
+     'loose: ungroup_all_images once. Never guess shifted indices after an error. Column headers or a heading '
+     'above / below a row: add_label_row(group_path=[row], labels=[one per image] or one string); beside a row: '
+     'add_side_label; add_annotation writes INSIDE an image. Zero columns or a negative size: ask.'),
+    ({'scale', 'scalebar', 'scalebars', 'bar', 'bars'},
+     'SCALE BARS: all of them = set_scale_bar_all / remove_scale_bar_all once ("add scale bars to all" with no '
+     'length = no bar_width_in_units: each image gets a round one). Single-panel tools only for named panels; a '
+     'named panel, even mistyped, never authorizes the _all tools: resolve it or ask.'),
+    ({'channel', 'channels', 'colour', 'colours', 'color', 'colors', 'lut', 'luts', 'magenta', 'green', 'red',
+      'blue', 'cyan', 'yellow', 'unnatural', 'weird', 'original', 'normal', 'default'},
+     'COLOURS: channels cannot be reordered, but each channel colour can be set (set_lut; null keeps a channel): '
+     'for "swap channels 3->1, 1->2" permute the panel\'s channel_colours ([RED, GREEN, BLUE] with 1<->2 = '
+     'luts=["GREEN", "RED", "BLUE"]) or show the GUI way (right-click > Appearance > Set LUT(s); Annotations > '
+     'Figure colours…). The channels property is only show / hide. Colours named without a target ("use magenta '
+     'and green") on a figure whose only coloured things are multichannel images = the CHANNEL colours '
+     '(set_figure_colors, one per channel); if ROIs, arrows or text are coloured too, ask which. Unnatural colours '
+     'or "back to the original / default colours": first offer (or apply on "restore") the file\'s own colours, '
+     'file_colours in the panel state: set_lut with "NONE" for each channel; name them; other LUTs after. LUT '
+     'names: list_luts(query) (pass its exact_key); colour names: list_colors(query).'),
+    ({'roi', 'rois', 'cell', 'cells', 'nucleus', 'nuclei', 'detect', 'count', 'objects', 'embryos', 'boxes',
+      'ellipses', 'squares', 'arrow', 'arrows', 'move', 'inset', 'insets', 'zoom'},
+     'ROIs: over every cell / nucleus ("how many cells"): detect_objects(panel_ref) in one call (dry_run=true '
+     'counts; region=[x0, y0, x1, y1] from preview_panel\'s rulers for one part, never crop to aim; nuclei in '
+     'stained cells: the nuclei channel, number from 1 or its colour); then preview_panel to check, and say it is '
+     'an automatic threshold the user can fix in the editor. Remove several: remove_rois(panel_ref) once '
+     '(shapes=[...], annotation_indexes=[...], or max_size for the tiny ones), never one remove_annotation each. '
+     'Move: move_annotations(panel_ref, dx, dy, annotation_indexes) (dy negative = up). An INSET sits in a corner '
+     'of its panel and cannot be moved freely: offer another corner (set_inset_property placement) or moving its '
+     'ROI (state: insets with roi_annotation_index and shows_region). Coordinates come from preview_panel(panel_ref) '
+     'rulers (the panel\'s own pixels; never preview_figure). get_annotations text_index is for style_annotation / '
+     'set_annotation_text; annotation_index is the full list index for ROI / removal tools. Arrows / arrowheads '
+     'AT a feature: add_arrow(panel_ref, tip_x, tip_y, from_direction, style="arrowhead" for the head alone), the '
+     'tip read once off preview_panel(panel_ref) rulers; several = one call with batch.'),
+    ({'duplicate', 'duplicated', 'duplicates', 'identical', 'reused', 'reuse', 'integrity', 'inverted', 'flipped',
+      'investigate', 'compare', 'similar', 'copy', 'copies'},
+     'INTEGRITY: "are n and o the same image?", "investigate n and o", duplicated / reused / flipped / inverted '
+     'panels: check_image_integrity once (whole figure: exact file reuse, cross-panel duplicates including '
+     'flipped, rotated and contrast-INVERTED ones, clones inside a panel) and report its findings by panel letter; '
+     'previews alone miss an inverted copy. Say a match is a red flag to check, not proof of misconduct.'),
+    ({'illustrate', 'illustration', 'diagram', 'schematic', 'scheme', 'sketch', 'cartoon', 'drawing'},
+     'DRAWINGS: a schematic / diagram / cartoon (bars for chromosomes, arrows between boxes, a model): '
+     'add_scripted_image(group_path, script) = ONE new panel drawn by matplotlib code you write (patches, lines, '
+     'text); set_script redraws it. Never build it from ROIs on an image or from placeholders. Say what you drew.'),
+    ({'text', 'note', 'write', 'annotation', 'annotations', 'edit', 'editor', 'myself', 'manually', 'adjust'},
+     'TEXT / EDITOR: text the user supplies ("write ... on b"): add_annotation; opening an editor does not do it. '
+     '"I want to edit / adjust X", "let me edit the b crop", "so I can do it myself": '
+     'open_annotation_editor(panel_ref, tab="crop" for a crop or rotation, "scale" for the scale bar or channel '
+     'colours, "text" for texts, else "annotations") and change nothing: the panel the user names, never the '
+     'selected one instead.'),
+    ({'procedure', 'procedures', 'macro', 'repeat', 'replay'},
+     'PROCEDURES: "save what we did as a procedure / macro": save_chat_procedure(procedure_path=document.folder + '
+     '"/" + document.name + "_procedure.json") once (it runs with Tools > Run a procedure… or by dropping the file '
+     'on a figure); "run my procedure on this figure": run_procedure_here(procedure_path).'),
+    ({'save', 'export', 'pdf', 'png', 'tif', 'tiff', 'svg', 'pptx', 'name', 'file'},
+     'FILES: the open figure\'s file is document in the state ("export it with the same name as the pyf" = '
+     'document.folder + document.name + the extension). Recovery copies are automatic but are not saving: say '
+     'which.'),
+    ({'fake', 'dummy', 'placeholder', 'placeholders', 'empty', 'slots', 'template'},
+     'PLACEHOLDERS: fake / dummy images or a layout before the images exist ("3 rows of 2 panels"): '
+     'add_placeholder_grid once, never invented scripted images; the user fills the slots later.'),
+    ({'caption', 'legend', 'italic', 'italics'},
+     'CAPTION: set_figure_caption keeps the supplied wording and punctuation; italics go in caption_markdown.'),
+    ({'select', 'selected', 'selection', 'highlight'},
+     'SELECTION: an edit does not select its target in the GUI: select-plus-edit requests need '
+     'select_live_objects too; check the final outline.'),
+    ({'files', 'folder', 'folders', 'directory'},
+     'FOLDERS: "the (first N) files of a folder" are all its files, tables too: add_folder_files(folder, '
+     'first=N) once, never add_image batches (it adds tables as data plots, in the folder\'s order); '
+     '"images" of a folder = add_image. Say once that a table panel is possible.'),
+)
+
+
+# the operations each topic governs: their rules come with a search that finds them,
+# and an edit made with one before the model got its rules is answered with them first
+TOPIC_TOOLS = {
+    'SWAPS': {'swap_live_panels', 'swap_rows'},
+    'LETTERS': {'edit_panel_letters', 'restyle_texts', 'set_panel_letter_position', 'set_panel_letter_layout',
+                'add_corner_labels', 'set_label_background'},
+    'BACKGROUND': {'set_image_property:fill_color', 'edit_panel_letters:background', 'set_label_background'},
+    'ROWS': {'arrange_live_images', 'add_group', 'delete_last_rows', 'ungroup_all_images', 'reverse_selected_row',
+             'add_label_row', 'add_side_label', 'move_image'},
+    'SCALE BARS': {'set_scale_bar', 'set_scale_bar_all', 'remove_scale_bar', 'remove_scale_bar_all'},
+    'COLOURS': {'set_lut', 'set_figure_colors'},
+    'ROIs': {'detect_objects', 'remove_rois', 'move_annotations', 'set_inset_property', 'add_arrow'},
+    'TEXT / EDITOR': {'add_annotation'},
+    'PROCEDURES': {'save_chat_procedure', 'run_procedure_here'},
+    'PLACEHOLDERS': {'add_placeholder_grid'},
+    'CAPTION': {'set_figure_caption'},
+    'DRAWINGS': {'add_scripted_image'},
+    'INTEGRITY': {'check_image_integrity'},
+    'FOLDERS': {'scan_folder', 'add_folder_files'},
+}
+
+
+# Hold an edit once to hand the model its topic's rules first. OFF by default (user,
+# 2026-11-19: "if we can get one call less and good results I'd prefer that"): over the
+# 82 turns of a live Mistral replay with and without it, the run without had 2 wrong
+# turns, with it 5, and every held edit costs one more call. Searches still return the
+# rules of the operations they find. PYFIGURES_RULES_FIRST=1 turns the hold back on.
+RULES_FIRST = os.environ.get('PYFIGURES_RULES_FIRST') == '1'
+
+
+def _topic(rule: str) -> str:
+    return rule.split(':', 1)[0]
+
+
+def topics_of(tool_name: str, arguments: dict | None = None) -> list[str]:
+    """The topics whose rules govern this call."""
+    names = {tool_name}
+    prop = str((arguments or {}).get('property_name') or '')
+    if prop:
+        names.add(f'{tool_name}:{prop}')
+    # an argument names a topic too: a letter background is also a BACKGROUND question
+    # (Mistral 2026-11-19: "add a black bg to g" went to edit_panel_letters, never told
+    # that a panel named by its letter means the PANEL background)
+    names.update(f'{tool_name}:{key}' for key in (arguments or {}))
+    return [t for t, tools in TOPIC_TOOLS.items() if names & tools]
+
+
+def rules_of(topics) -> str:
+    return ' '.join(rule for _k, rule in TOPIC_RULES if _topic(rule) in set(topics))
+
+
+def _stem(word: str) -> str:
+    """swap / swapping / swapped, save / saved, label / labelling, colour / coloured: one stem."""
+    w = word.lower()
+    for suffix in ('ing', 'ed', 'es', 's'):
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            w = w[:-len(suffix)]
+            break
+    if len(w) > 3 and w[-1] == w[-2] and w[-1] not in 'aeiou':
+        w = w[:-1]                      # swapp -> swap, labell -> label
+    return w[:-1] if len(w) > 3 and w.endswith('e') else w
+
+
+def _fits(words, keys) -> bool:
+    stems = {_stem(w) for w in words}
+    return bool(set(words) & keys or stems & {_stem(k) for k in keys})
+
+
+def topic_rules(words) -> str:
+    """The rules of every topic the search words fit (any form of the word)."""
+    words = set(words)
+    return ' '.join(rule for keys, rule in TOPIC_RULES if _fits(words, keys))
+
+
+def request_rules(text: str, earlier: str = '') -> str:
+    """The topic rules a user's request calls for, sent by the chat WITH the request
+    (2026-11-19 benchmark: with the rules only in search results, Mistral previewed
+    panel e seven times for "draw ROIs over every cell in e" and never learned that
+    detect_objects does it in one call). Only the topics its words fit: a follow-up
+    with no topic words ("you did not finish", "two bars side by side") takes the previous
+    request's. Empty when nothing fits, so the first message stays small."""
+    words = re.findall(r'[a-z0-9]+', str(text or '').lower())
+    topics = _request_topics(words)
+    if not topics:                  # a follow-up ("continue", "two bars side by side"): the previous request's
+        topics = _request_topics(re.findall(r'[a-z0-9]+', str(earlier or '').lower()))
+    return rules_of(topics)
+
+
+# The user's own words that call for a topic. Stricter than the search keys: a user's
+# sentence is not a search query ("not bad" is no NOTE, "two bars side by side" no
+# scale bar, "same of the second image" no lettering rule), and a wrong rule sent with
+# a request misleads more than none.
+REQUEST_KEYS = {
+    'SWAPS': {'swap', 'exchange', 'switch', 'interchange'},
+    'LETTERS': {'letter', 'lettering', 'abc', 'label'},
+    'BACKGROUND': {'background', 'bg'},
+    'READINESS': {'submission', 'submit', 'journal', 'publication', 'ready'},
+    'HOW-TO': {'how', 'help', 'where', 'teach', 'menu', 'tutorial', 'manual', 'guide', 'click'},
+    'ROWS': {'row', 'column', 'arrange', 'grid', 'rearrange', 'ungroup', 'heading', 'header'},
+    'SCALE BARS': {'scale', 'scalebar'},
+    'COLOURS': {'channel', 'lut', 'colour', 'color', 'colormap', 'colourmap', 'magenta', 'green', 'red', 'blue',
+                'cyan', 'yellow'},
+    'ROIs': {'roi', 'cell', 'nucleus', 'nuclei', 'detect', 'segment', 'embryo', 'inset', 'arrow', 'arrowhead',
+             'ellipse', 'square', 'triangle', 'polygon'},
+    'TEXT / EDITOR': {'annotation', 'edit', 'editor', 'myself', 'manually', 'write', 'text', 'adjust', 'tweak',
+                      'refine'},
+    'PROCEDURES': {'procedure', 'macro'},
+    'FILES': {'save', 'export', 'pdf', 'png', 'tif', 'tiff', 'svg', 'pptx', 'ppt'},
+    'PLACEHOLDERS': {'fake', 'dummy', 'placeholder', 'template'},
+    'CAPTION': {'caption', 'legend'},
+    'SELECTION': {'select', 'selected', 'selection'},
+    'DRAWINGS': {'illustrate', 'illustration', 'diagram', 'schematic', 'scheme', 'sketch', 'cartoon'},
+    'INTEGRITY': {'duplicate', 'identical', 'reused', 'integrity', 'inverted', 'investigate', 'similar'},
+    'FOLDERS': {'files', 'folder', 'directory'},
+}
+
+
+def _request_topics(words) -> list[str]:
+    """Topics whose keys a word of the request is, or starts (letters, coloured, arrowheads)."""
+    found = []
+    for topic, keys in REQUEST_KEYS.items():
+        if any(w in keys or (w.endswith('s') and w[:-1] in keys)                      # luts, rois
+               or any(len(k) >= 4 and w.startswith(k) for k in keys) for w in words):
+            found.append(topic)
+    return found
+
+
+def all_guidance(server) -> str:
+    """The server instructions and every topic rule (what a model can be told)."""
+    return (server.instructions or '') + ' ' + ' '.join(rule for _k, rule in TOPIC_RULES)
 
 
 def topic_note(words):
@@ -113,6 +369,11 @@ def topic_note(words):
     said at once, before the tool list (2026-11-12: "make the 2nd row a little taller"
     took thirty calls and ended in a row wider than the figure; "show the next z" was
     searched eight times)."""
+    words = set(words)
+    return _special_note(words) + topic_rules(words)
+
+
+def _special_note(words):
     words = set(words)
     if (words & {'same', 'equal', 'uniform', 'equalize', 'equalise', 'consistent'}
             and words & {'size', 'sizes', 'width', 'widths', 'scale'}
@@ -186,111 +447,35 @@ def build_server(full_server, send):
     # because Qwen 9B then skipped discovery and picked the wrong scope (swap_rows for a within-row reverse).
     common = os.environ.get('PYFIGURES_COMMON_CONTRACTS', '0') == '1'
     server = FastMCP('PyFigures categorized live prototype', instructions=(
-        'Edit scientific figures in the open PyFigures GUI. Start with a small tool surface. '
-        'Only the seven advertised top-level functions are directly callable. Other names returned by find_pyfigures_tools are inner operations, NOT callable functions. Invoke them through use_pyfigures_tool(tool_name=the_discovered_name, arguments=the_exact_arguments). This applies equally to read-only explain_live_interaction and other guide operations. '
-        'inspect_figure.selection contains the live user-selected panels, groups and containing row paths. Use it for this/selected row or image; do not ask users to repeat an unambiguous selection. Reverse/invert the selected row with reverse_selected_row. Reject missing or multi-row selection, never guess. '
-        'For manual drag cancellation: release the mouse, then choose Ignore or dismiss the opened context menu. Escape is verified for the open menu, not during the active drag; do not invent clicking empty canvas as cancellation. '
-        'For manual questions use explain_live_interaction with the actual topic or explain_how; follow returned current menu paths. Manual teaching never authorizes editing. API examples inside tool descriptions are developer references, not user-facing instructions: omit them unless code or recipe is explicitly requested. Panel-by-panel joining is ONE drop/operation with ordered contents. '
-        'HOW-TO requests mean human GUI instructions by default: discover explain_how or list_how_to_guides, give authored menu/right-click paths, and offer to do the edit from natural language. Show commands only if the user explicitly asks for code or recipe; teaching is not permission to edit. '
-        'RELATIVE requests (bigger, smaller, thicker, thinner, a bit more, too much, brighter) carry no number and need none: change the current value by a moderate step (about a third; half that for "a bit"), say the old and the new value, and offer to go further. Never ask for a number first. Misspelt words are read as the obvious word ("mak lettrs biger" = make the letters bigger). '
-        'An invalid quantity or unsupported value requires clarification. For row deletion, a count larger than available means delete all available rows and report the ACTUAL number removed, using the bulk operation once. Do not turn zero columns into one, change a negative size to a positive size, or choose a substitute LUT/corner after validation fails. Explain the valid range and ask the user for a corrected value. '
-        'A missing or ambiguous named panel is unresolved user intent, not an instruction to choose another panel. After UNKNOWN_PANEL_REFERENCE or AMBIGUOUS_PANEL_REFERENCE, ask for the corrected target and stop that edit. Never replace a failed letter with guessed numeric coordinates, an ordinal, or the last panel; inspection cannot establish which replacement the user intended. '
-        'SWAPS: swap q and o means swap image PANELS identified by those letters. Default target=images. '
-        'Letter TEXT swaps require an explicit swap-the-letters/labels request; do not ask images-versus-letters for normal swaps. If a reference is missing or non-unique, STOP and ask; never substitute an existing panel or retry the swap with other references. '
-        'A uniquely named panel wins over a positional/visual description; act on that name and mention the discrepancy. Never edit then undo to ask. '
-        'If both swap references identify the same panel (including a letter and its equivalent panel ID), report no change. Repeating a reference is not evidence of duplicate panel letters; use actual duplicate_letter_references from state before claiming ambiguity. '
-        'Use swap_live_panels; never delete/recreate letters to swap or relabel. '
-        'Removal is only for an explicit user request to remove letters; removal_request must quote it. '
-        'Readiness requires review_submission_readiness: actual resolution AND journal checks. audit_figure is inventory, not readiness. Report measured blockers and incomplete evidence; never infer readiness from labels or export DPI. '
-        'For multi-clause requests, satisfy and verify every clause before saying done. A named target in edit arguments does not select it in the GUI: explicit select-plus-edit requests need select_live_objects as well as the edit. Preserve the selection and check the final outline/state. '
-        'A successful tool call is not task success. Report verified after-state; if counts show zero letters, '
-        'say letters are absent, never claim a lettering swap succeeded. '
-        'When the human supplies annotation content, such as write a text note on a named panel, create the ordinary annotation with add_annotation. Merely opening an editor does not fulfill a request to write the supplied content. Offer/open the editor for unspecified content or an explicit editor request. '
-        'Whenever you list choices for a change (and always for a HELP request such as "help me change the channel colours of e"), add one more choice: "show me where to click", which teaches the GUI. On that choice call show_me_where with EVERY route that does it (menu bar, right-click menu of the object at the right level: image or whole row, or the panel editor tab + buttons): all are outlined at once and cleared when it worked. Say what the yellow selection outline surrounds and what to click first. Open menus for the user (open_menus=true) only when they explicitly ask to be shown the menu; never click for them in that mode. '
-        'End every answer that tells how to do something in the GUI with: "Should I **highlight where to click**, or **open it for me**?". Highlight = show_me_where with every route of that answer; open it for me = the same call with open_menus=true (menus opened down to the entry to click, or where=editor: the panel editor opened on its tab, buttons outlined). Never perform the edit itself. '
-        'When no dedicated operation covers a GUI feature, discover native_gui: inspect actual native menu/dialog controls, invoke their exact IDs, complete or cancel the dialog, then verify jobs and document state. Queued is not success. Never substitute code for a normal manual how-to request. '
-        'For rearranging EXISTING images into regular rows/columns, prefer arrange_live_images once. Derive columns from current image count when a row count is requested; when equal rows are impossible, ask which split the human wants, then pass it as row_counts (e.g. 9 images in 4 rows: row_counts=[3, 2, 2, 2]) in that ONE call. Reading order and letters are kept. Do not rebuild existing rows with per-image move loops. '
-        'To construct NEW rows/columns, call add_group and use its returned path before adding images/plots. Requested row numbers are not existing group paths. On a missing-container error inspect/create the intended container; never fall back into an unrelated existing row. '
-        'Discover relevant operations with find_pyfigures_tools; its results include exact '
-        'argument schemas. Execute the selected operation with use_pyfigures_tool. '
-        'For named live panels, prefer panel_ref on native image/annotation tools; omit numeric group_path/image_index so current GUI state resolves the address. get_annotations text_index is the index for style_annotation/set_annotation_text, while annotation_index is the full list index for ROI/removal tools. The live text wrappers accept text_index explicitly. '
-        'Never guess argument names. Discover the exact schema before first use'
-        + (', except the common operations listed in use_pyfigures_tool, which you may call through use_pyfigures_tool after checking their scope' if common else '')
-        + '. select_live_objects(clear=true) and undo_redo are directly available and also searchable; do not repeatedly search after a no-match. '
-        'Category descriptions are guidance, not restrictions: search by words across all '
-        'categories if needed. All original functions remain available underneath. '
-        'Figure targets default to live; explicit paths retain file-based behavior. Caption metadata uses set_figure_caption; preserve the supplied wording and punctuation and put requested italics in caption_markdown. '
-        'For figure/group LETTER edits, removal or restoration prefer edit_panel_letters '
-        'once at the intended scope, not per-image add/remove/style loops. That tool supports placement, family, size, bold/italic/underline, foreground and background; letters stay consistent: a style asked for one letter ("I can\'t see the letter b") goes to every letter; only when the user explicitly wants some letters different ("only b bold", "bold on the rotated panels only") use scope=panels with panel_ids and only_these_letters_request quoting those words. '
-        'For ALL scale bars use remove_scale_bar_all or set_scale_bar_all once; "add scale bars to all" with no length given is set_scale_bar_all with no bar_width_in_units (each image gets its own round length). '
-        'For deleting last N rows use delete_last_rows in one call. Never guess shifted indices after an error; verify actual removed targets before claiming success. '
-        'For ungroup all / images as single images / move all to free canvas use ungroup_all_images once; never consolidate into one group or loop over shifting indices. '
-        'Single-panel scale-bar tools are for an explicitly limited panel, not figure-wide loops. A named panel, even a short or mistyped name, never authorizes set_scale_bar_all. Resolve the panel or ask; bulk only when all/every/whole figure was requested. '
-        'inspect_panel_letters verifies text/color/background/placement after refresh. '
-        'Explicit white stays white; background="none" means transparent, black does not. '
-        'A "background" asked for a panel named by its letter ("add a black bg to g") is the PANEL background, the area '
-        'behind the image that shows once it is rotated: set_image_property property_name="fill_color" (black "0", white '
-        '"16777215", "None" removes it). Only words naming the letter or label ("black box behind the letter g") mean the '
-        'letter background (edit_panel_letters background, with background_request quoting them). When the words fit both, '
-        'ask which one before changing anything. '
-        'The same holds for every short request that fits several things of the named panel: "the colour of a", "make g '
-        'bigger", "delete g", "the text" can mean the panel letter, the image itself, a channel colour, a border, a scale '
-        'bar or an annotation. When only one of them exists or fits, do it and say which; when several fit, ask which one '
-        'in one short question and change nothing first. '
-        'Recovery copies are automatic but differ from saving: report persistence state '
-        'accurately. save_live_figure makes a saved copy inside the prototype. '
-        'Session IDs/revisions are internal: do not supply remembered values. '
-        'On GUI_OFFLINE stop and ask the user to reopen it; never repeat destructive loops. '
-        'For edits pass only properties explicitly requested plus required target arguments. Readback records contain fields that setters may not accept: use the exact discovered arguments_schema, not the inspection shape. Omitted styling properties preserve accepted appearance. '
-        'Is a font available? Use list_fonts(query=the_font), answer from font_check. '
-        'Fake, dummy or placeholder images, or a layout before the images exist ("3 rows of 2 panels"): add_placeholder_grid in one call, never invented scripted images; the user fills the grey slots later (fill_template or drag and drop). '
-        'figure_summary in the state answers "what is in the figure?". When it says empty=true, reply at once from its answer and how_to_add_content, without calling tools or previewing. '
-        'PyFigures cannot reorder channels, but every channel colour can be set on its own, which gives the same picture. For "swap channels 3->1, 1->2, 2->3" say so, then offer: do it now (set_lut with the channel_colours of the panel permuted: what each channel shows now, its LUT or else the own colour of the file; [RED, GREEN, BLUE] swapped 1<->2 is luts=["GREEN", "RED", "BLUE"]), or how to do it yourself in the GUI (right-click the image > Appearance > Set LUT(s); double-click it > File Infos + Scale tab > Set LUTs; Annotations > Figure colours… for every image), with a chat example such as "make channel 1 blue, channel 2 red, channel 3 green". The channels property is only show/hide. '
-        'Colours named without a target ("use magenta and green"): on a figure whose only coloured things are multichannel images they mean the CHANNEL colours (set_figure_colors, one per channel in channel order). If it also has coloured ROIs, arrows or text, or the colours could fit several things, ASK which ones the user means before changing anything. Which colour names work? list_colors(query=the_colour), answer from color_check. '
-        '"Restore it as it was", "put it back", "revert / cancel that", "go back" just after your edit: use undo_redo(action="undo"), once per edit of that request, not a new edit that rebuilds the old values. If the user already undid your change with its undo button, do not undo again: that would remove an older step. '
-        '"I want to edit / adjust X", "let me edit it", "so I can do it myself": the user edits by hand. Open the editor for them (open_annotation_editor on that panel) and change nothing. '
-        'All texts of a figure stay coherent: the panel letters alike, the scale-bar labels alike (restyle_texts target="scale_bars" styles them all), every text but the letters in one font (the letters may have their own); check_text_consistency checks it. '
-        '"Consistent / the same letters (fonts)": every letter gets the same font, size, bold, italic, underline and background box; if one letter was made different on purpose, ask whether to spread that change to all letters or undo it on that one. '
-        'Insets (magnified views) of each panel are listed in the state under insets, with the ROI they show. '
-        'To judge how a panel LOOKS ("the scale bar does not read well", "is the letter visible", "what colour is it now", '
-        'after a colour or overlay change) use preview_panel(panel_ref, view="figure"): the panel as drawn in the figure '
-        'with its letter, texts, scale bar and ROIs, plus a measured line per overlay (place, colour, background, contrast '
-        'ratio) that a model without vision can read; letters/texts/scale_bar/rois=False hide that kind in the preview only. '
-        'Never say what a panel looks like without it. '
-        'To see a panel\'s own pixels use preview_panel(panel_ref), never preview_figure (the whole figure, each panel small): '
-        'coordinates for crops, ROIs and arrows are read off its source-pixel rulers, region=[x0,y0,x1,y1] zooms, and it draws '
-        'the panel\'s ROIs to check where they landed. "ROIs over every cell / each nucleus / all the embryos", "how many cells": '
-        'SAME OPERATION ON MANY ITEMS (recolour 26 ROIs, add 20 polygons, move 10 arrows): ONE use_pyfigures_tool call with '
-        'arguments = the shared fields and batch = [{fields of item 1}, {item 2}, ...], never one call per item (each call is a slow step). '
-        'detect_objects(panel_ref) boxes them all in one call (dry_run=true only counts; for objects in one part of the panel '
-        '("the white stuff in the mouth") pass region=[x0, y0, x1, y1] from preview_panel\'s rulers, never crop the panel to aim it; for nuclei inside stained cells pass '
-        'the nuclei channel: its number, counted from 1, or the colour it is shown in from channel_colours, e.g. "blue", '
-        'as all channels together outline whole cells); then preview_panel to check and say '
-        'it is an automatic threshold whose odd ROIs the user can fix in the editor. Place objects one by one by eye only for a few named ones. '
-        'Removing several ROIs ("remove the boxes", "replace the ellipses by squares"): remove_rois(panel_ref) once '
-        '(shapes=["ellipse"] for only the ellipses), never one remove_annotation per ROI; then detect_objects again with the new shape. '
-        'Only some of them, still one call: remove_rois(panel_ref, annotation_indexes=[...]) or, for "remove the tiny ROIs", '
-        'max_size=<longest side in px> chosen from the sizes in inspect_annotation_objects. '
-        'A panel\'s background (fill_color, seen around a rotated image) in the colour of the image\'s OWN background '
-        '("fit / match the bg of each image"): set_image_property(property_name="fill_color", value="auto") reads it '
-        'from the image\'s edge pixels; all panels = one call with batch. There is no pixel-sampling tool: never search for one. '
-        '"Save what we did as a procedure / macro", "I want to do the same on my other figures": '
-        'save_chat_procedure(procedure_path=document.folder + "/" + document.name + "_procedure.json") saves this chat\'s '
-        'edits (not the reads, failed or undone ones) in one call; say it runs with Tools > Run a procedure… or by dropping the file on a figure. '
-        '"Apply / run my procedure (file) to this figure": run_procedure_here(procedure_path) runs all its steps on the open figure. '
-        'The open figure\'s file is document in the state: "export it with the same name as the pyf" = '
-        'document.folder + document.name + the extension; no search needed. '
-        '"Move the box / ROI / arrow 100 px to the right": move_annotations(panel_ref, dx=100, annotation_indexes=[...]) '
-        '(dy negative = up; all of them when no index). An INSET cannot be moved freely: it sits in a corner of its panel; '
-        'say so and offer another corner (set_inset_property placement) or moving the ROI it shows (the inset follows). '
-        '"Move the ROI of the (smallest) inset": the state lists each inset with roi_annotation_index and shows_region '
-        '(the smallest inset shows the smallest region); move_annotations(panel_ref, annotation_indexes=[that index], dx, dy). '
-        'When you must ask which object or what change, give choices and always include "open the panel editor so you do it yourself" among them. '
-        'In replies, call a panel by its name in the panel state: its visible letter, else its canvas number "#3" (shown when the panel is selected). Never by a panel_id such as "1/1"; a letter it no longer has may only be added ("#5, formerly E"). '
-        'Colours that look unnatural, weird, wrong, or "back to normal / the original / default colours", with no colour named: the FIRST option to offer (or to apply when the user asks to restore) is the image file\'s own colours, file_colours in the panel state: set_lut with "NONE" for each channel. Name those colours in the offer; other LUTs come after it. '
-        'Which LUTs/colour tables exist, or is a LUT available? Use list_luts(query=the_name), answer from lut_check and pass its exact_key to set_lut. In set_lut, null keeps a channel unchanged. '
-        'Column headers or a heading above/below a row: add_label_row(group_path=[row index], labels=[one per image] or one string). A label left/right of a row: add_side_label. add_annotation writes text INSIDE an image, not beside a row. '
-        'Unknown-name suggestions require human confirmation; never substitute one silently. For completed edits report brief verified changes, not full state dumps unless asked. Do not ask the human to name tools. Inspect/preview to verify actual outcomes.'))
+        'Edit scientific figures in the open PyFigures GUI. Only the seven listed functions are callable. '
+        'Find an operation with find_pyfigures_tools (search with the user\'s words: the result gives its exact '
+        'argument schema AND the rules for that topic: follow them), then run it with '
+        'use_pyfigures_tool(tool_name=..., arguments=...). Never guess argument names'
+        + (', except the common operations listed in use_pyfigures_tool, after checking their scope' if common else '')
+        + '; do not search again after a no-match. '
+        'For a named panel pass panel_ref (its letter, or "#3"), not group_path/image_index. Call a panel by its '
+        'letter, else "#3", never by a panel_id such as "1/1". inspect_figure.selection is what the user selected '
+        '("this row", "the selected image"): use it, do not ask again. figure_summary in the state answers "what is '
+        'in the figure?"; when it says empty=true, reply at once from it, without calling tools. '
+        'A missing, unknown or ambiguous panel (UNKNOWN_PANEL_REFERENCE / AMBIGUOUS_PANEL_REFERENCE): ask which one '
+        'and stop that edit; never substitute another panel or guess coordinates. A uniquely named panel wins over '
+        'a positional description. Short requests that fit several things of a panel ("the colour of a", "make g '
+        'bigger", "delete g", "the text": the letter, the image, a channel colour, a scale bar, an annotation): when '
+        'only one exists or fits, do it and say which; when several fit, ask which one in one short question and '
+        'change nothing first; offer "open the panel editor so you do it yourself" among the choices. Never edit '
+        'then undo to ask. An invalid or unsupported value: explain the valid range and ask; never substitute one. '
+        'RELATIVE requests (bigger, thicker, a bit more, brighter) need no number: change the current value by '
+        'about a third (half for "a bit"), say the old and new value, offer to go further. Never ask for a number '
+        'first. Misspelt words are read as the obvious word ("mak lettrs biger" = make the letters bigger). '
+        'Pass only the properties asked for plus the target. The SAME OPERATION ON MANY ITEMS (all panels, 20 '
+        'ROIs): ONE use_pyfigures_tool call with batch=[{item 1}, {item 2}, ...], never one call per item; '
+        'figure-wide operations (*_all, arrange_live_images, edit_panel_letters) once, never loops. '
+        'HOW-TO and HELP requests ("how do I…", "help me change the channel colours of e") get GUI steps (explain_how), not code, change nothing, and end by offering to highlight where to click (search "how" for that rule). '
+        'To say how a panel LOOKS use preview_panel(panel_ref, view="figure") first. Never say what a panel looks like without it. '
+        'A successful call is not task success: verify every clause of the request, report the verified change '
+        'briefly. "Put it back / undo that" just after your edit: undo_redo(action="undo"). On GUI_OFFLINE stop and '
+        'ask the user to reopen the window. Session ids and revisions are internal. Recovery copies are not saving '
+        '(save_live_figure saves).'))
 
     @server.tool()
     def inspect_figure() -> dict:
@@ -329,6 +514,17 @@ def build_server(full_server, send):
             return summary['answer'] + ' ' + summary['how_to_add_content']
         result = call_live('preview')
         return Image(path=result['path'])
+
+    panel_preview = available.get('preview_panel')
+    if panel_preview is not None:
+        # Offered directly like preview_figure: behind use_pyfigures_tool, Qwen 27B looked at
+        # the whole figure (each panel small) 92 times and at one panel 25 times in a replay,
+        # Mistral the other way round (user, 2026-11-19: "seeing could solve a lot of issues").
+        @server.tool()
+        def preview_panel(panel_ref: str, view: str = 'source', region: list[float] | None = None,
+                          brighten: bool = True) -> list:
+            """See ONE panel full size. view='source': its whole source image with pixel rulers (crops, ROIs, arrows, finding or counting objects); view='figure': the panel as shown in the figure (letters, texts, scale bar), with contrast measures. region=[x0, y0, x1, y1] in source pixels zooms in. Look before acting on what an image shows, and after, to check it."""
+            return panel_preview.fn(panel_ref=panel_ref, view=view, region=region, brighten=brighten)
 
     @server.tool()
     def undo_redo(action: str = 'undo') -> dict:
@@ -574,7 +770,15 @@ def build_server(full_server, send):
             if bounded and used+size>budget:break
             bounded.append(entry);used+=size
         found=bounded
-        return {'manual_guides':manual_guides,'guidance': topic_note(words) + ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Missing or non-unique references require clarification: stop, never substitute an existing panel or retry with other references. Never remove letters as a swap workaround.'
+        said = [_topic(rule) for keys, rule in TOPIC_RULES if _fits(set(words), keys)]
+        found_topics = []
+        for entry in found:
+            for t in topics_of(entry.get('name', '')):
+                if t not in said and t not in found_topics:
+                    found_topics.append(t)
+        for t in said + found_topics:
+            rules_given[t] = calls['n']
+        return {'manual_guides':manual_guides,'guidance': topic_note(words) + rules_of(found_topics) + ('Swap references identify IMAGE PANELS by default. Use target=images; target=letters only for explicit letter-text requests. Missing or non-unique references require clarification: stop, never substitute an existing panel or retry with other references. Never remove letters as a swap workaround.'
                              if any(w in ('swap', 'exchange', 'switch') for w in words) else
                              'Report verified after-state, not merely native success text. Ordinary text/captions are NOT automatic panel letters: inspect get_annotations and remove_annotation for quoted text, preserving letters. removal_request must quote the actual human request verbatim, never an invented clearer request.'),
                 'total_matches': len(ranked), 'offset': offset,
@@ -586,6 +790,33 @@ def build_server(full_server, send):
     # batch runs them all in one call, and a repeated call is told to batch the rest.
     repeats = {'key': None, 'count': 0}
     BATCH_LIMIT = 400
+    # topic -> the call number when its rules were last given; edits held once for their rules
+    rules_given, held, calls = {}, set(), {'n': 0}
+    RULES_RECENT = 40          # calls after which the rules count as forgotten (a new conversation)
+
+    def _rules_first(tool_name, arguments, batch):
+        """The rules of an edit's topic when the model has not had them recently: the
+        call is held once (the same call sent again runs)."""
+        if not RULES_FIRST or tool_name.startswith(('get_', 'list_', 'inspect_', 'describe_', 'check_', 'find_',
+                                                    'preview_', 'explain', 'render_')):
+            return None
+        topics = topics_of(tool_name, arguments) or [t for item in (batch or [])[:1]
+                                                     for t in topics_of(tool_name, {**arguments, **item})]
+        missing = [t for t in topics if calls['n'] - rules_given.get(t, -10 ** 6) > RULES_RECENT]
+        if not missing:
+            return None
+        key = json.dumps([tool_name, arguments, batch], sort_keys=True, default=str)
+        if key in held:
+            return None
+        held.add(key)
+        for t in missing:
+            rules_given[t] = calls['n']
+        return {'not_run': True, 'document_changed': False,
+                'rules': rules_of(missing),
+                'next_step': (f'{tool_name} was NOT run: first read these rules ({", ".join(missing)}). If the call '
+                              'still fits them, send exactly the same call again: it will run. If they change what '
+                              'to do (ask the user first, another operation, one call instead of several), do that '
+                              'instead.')}
 
     def _short(value, limit=160):
         text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
@@ -608,6 +839,10 @@ def build_server(full_server, send):
         if not tool_name:
             raise ValueError('tool_name is missing. It is a top-level field beside arguments, not inside it: '
                              'use_pyfigures_tool(tool_name="remove_image", arguments={"panel_ref": "h"}).')
+        calls['n'] += 1
+        first = _rules_first(tool_name, arguments, batch)
+        if first is not None:
+            return first
         # several panels for a one-panel tool ("remove h, f, m, r, x"): one batch, its
         # letters all read before the first edit (chat 2026-11-17: removed one by one)
         refs = arguments.get('panel_refs')
@@ -620,6 +855,14 @@ def build_server(full_server, send):
         if batch:
             if not isinstance(batch, list) or not all(isinstance(item, dict) for item in batch):
                 raise ValueError('batch is a list of argument objects, e.g. [{"annotation_index": 1}, {"annotation_index": 2}]')
+            # arguments are shared by every item; one that EVERY item replaces by another value was
+            # an item of its own (chat 2026-11-19: the first of 20 files, put beside the batch,
+            # was silently dropped and re-added last)
+            own = {k: v for k, v in arguments.items()
+                   if all(k in item and item[k] != v for item in batch)}
+            if own:
+                arguments = {k: v for k, v in arguments.items() if k not in own}
+                batch = [own] + list(batch)
             if len(batch) > BATCH_LIMIT:
                 raise ValueError(f'batch holds at most {BATCH_LIMIT} items; split it in two calls')
             if tool_name.startswith(('preview_', 'render_', 'export_')):
@@ -737,6 +980,11 @@ def build_server(full_server, send):
             raise ValueError('Unknown argument(s): ' + ', '.join(sorted(unknown)) + '.' + hint
                              + ' Exact arguments_schema: ' + json.dumps(tool.parameters))
         kwargs = dict(arguments)
+        if ('group_path' in properties and 'group_path' not in kwargs
+                and 'group_path' in tool.parameters.get('required', [])):
+            # the figure itself (chat 2026-11-19: every add_image of a batch of 21 failed on it,
+            # then "Retrying with group_path=[]" was shown to the user)
+            kwargs['group_path'] = []
         if 'session_id' in properties:
             state = send('inspect')
             for key, value in [('session_id', state['session_id']),

@@ -195,8 +195,9 @@ def test_file_import_menu(gui):
     file_menu = next(a.menu() for a in gui.menuBar.actions() if a.text() == "File")
     imp = next(a.menu() for a in file_menu.actions() if a.text() == "Import")
     texts = [a.text() for a in imp.actions()]
+    # "Data plot from CSV" became "Data plot from a table…" (CSV, Excel or SQLite, 2026-11-18)
     assert "Images from files" in texts and any("OME-Zarr" in t for t in texts) \
-        and any("CSV" in t for t in texts)
+        and any("table" in t for t in texts)
 
 
 def test_vector_pdf_entry_shows_its_state(gui, monkeypatch):

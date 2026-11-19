@@ -62,7 +62,22 @@ def is_plot_table(path: str) -> bool:
     # DBs"; "the magic sign at the beginning of the file should be checked")
     if is_sqlite_file(path):
         return True
-    if not low.endswith((".txt", ".dat")):
+    from batoolset.img import has_no_extension
+    if has_no_extension(path):
+        # no extension (macOS): a workbook by its content, else a text table below
+        try:
+            from staplot.api import is_excel
+            if is_excel(str(path)):
+                return True
+        except ImportError:
+            pass
+        try:
+            with open(path, "rb") as f:
+                if b"\x00" in f.read(4096):        # binary: not a text table
+                    return False
+        except OSError:
+            return False
+    elif not low.endswith((".txt", ".dat")):
         return False
     try:
         from staplot.api import read_table

@@ -205,6 +205,26 @@ def _finish_svg(svg_path, collector=None, size_pt=None):
 # can I use this also to render offline a drawing on an image --> try it maybe
 # how do I know the size of this stuff ??? --> need update its size according to its content and probably the zoom --> TODO
 
+_CHECKER = None
+
+
+def _checker_brush(cell=8):
+    """The canvas background on screen: a light grey checkerboard, the usual sign of
+    'nothing here' (made once, a 2-cell tile Qt repeats)."""
+    global _CHECKER
+    if _CHECKER is None:
+        from qtpy.QtGui import QPixmap
+        tile = QPixmap(2 * cell, 2 * cell)
+        tile.fill(QColor(205, 205, 205))
+        p = QPainter(tile)
+        dark = QColor(175, 175, 175)
+        p.fillRect(0, 0, cell, cell, dark)
+        p.fillRect(cell, cell, cell, cell, dark)
+        p.end()
+        _CHECKER = QBrush(tile)
+    return _CHECKER
+
+
 class MyWidget(QWidget):
     # NB all signals are gathered in: finalize_and_update(self): # gather all the possible signals in there
 
@@ -545,6 +565,11 @@ class MyWidget(QWidget):
 
         painter = QPainter(self)
         try:
+            # behind the figure, on screen only: a checkerboard, so what a panel leaves
+            # empty (the corners of a rotated panel) reads as empty, not as grey (user,
+            # 2026-11-19: "better than my uniform grey"). A tiled 16 px pixmap: Qt repeats
+            # it natively, as cheap as the flat fill; exports never paint it.
+            painter.fillRect(event.rect(), _checker_brush())
             self._paint(painter)
         finally:
             # an exception while painting left the painter active, and Qt

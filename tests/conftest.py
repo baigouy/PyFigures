@@ -354,3 +354,18 @@ def all_pyf_files(sample_dir):
         for f in os.listdir(sample_dir)
         if f.endswith('.pyf')
     )
+
+
+@pytest.fixture(autouse=True)
+def _chat_rules_first_off(request, monkeypatch):
+    """The chat server holds an edit once to give the model that topic's rules
+    (categorized_mcp.RULES_FIRST, off unless PYFIGURES_RULES_FIRST=1); tests calling
+    operations directly run them at once, while tests/test_rules_first_*.py turn the
+    hold on to test it."""
+    try:
+        import pyfigures.assistant.categorized_mcp as C
+    except Exception:
+        yield
+        return
+    monkeypatch.setattr(C, "RULES_FIRST", "test_rules_first" in request.node.nodeid)
+    yield

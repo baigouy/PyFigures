@@ -75,6 +75,55 @@ def digest(path):
     return result.hexdigest()
 
 
+def _panel_rects(shapes):
+    from batoolset.drawings.shapes.group import Group
+    out = []
+    for shape in shapes:
+        if isinstance(shape, Group):
+            out += _panel_rects(shape.content)
+        else:
+            r = shape.getRect(all=True)
+            out.append((round(r.x()), round(r.width()), round(r.height())))
+    return out
+
+
+def _fit_rows_to_width(window, canvas, width, rounds=3):
+    """Fit every row to the figure width, as the width spinner does, then draw the
+    figure and fit again until no panel moves: a data plot's shape changes when its
+    text is fitted to the page at its new size."""
+    for _ in range(rounds):
+        for shape in list(canvas.shapes_to_draw):
+            try:
+                if getattr(shape, 'content', None):
+                    window.update_size_of_object(shape, width)
+            except Exception:
+                pass
+        canvas.repack_all()
+        laid_out = _panel_rects(canvas.shapes_to_draw)
+        try:
+            canvas.grab()                     # the screen's own drawing fits the plots
+        except Exception:
+            return
+        if _panel_rects(canvas.shapes_to_draw) == laid_out:
+            return
+
+
+def settle_drawn_plots(window):
+    """After a document reload: draw the figure once; if drawing changed a panel's shape
+    (a data plot's text fitted to the page at its size), fit the rows to the figure width
+    again until it holds still. Nothing is touched when drawing changes nothing."""
+    canvas = window.paint.EZFIG_panel
+    laid_out = _panel_rects(canvas.shapes_to_draw)
+    try:
+        canvas.grab()
+    except Exception:
+        return
+    if _panel_rects(canvas.shapes_to_draw) != laid_out:
+        _fit_rows_to_width(window, canvas, window.size_spinbox.value())
+        window.update_letters()
+        canvas.update_size()
+
+
 def adopt(session, path):
     from qtpy.QtCore import QSignalBlocker
     w = session.window
@@ -93,6 +142,15 @@ def adopt(session, path):
     canvas.set_current_selection(None)
     canvas.update()
     canvas.repack_all()
+    # a row whose panel changed size (a plot's text made bigger: its shape changes) kept
+    # its old widths: the spacing went wrong until the width spinner was nudged (user,
+    # 2026-11-19). The spinner's own step: each row fitted to the figure width again,
+    # every row: a row can keep its total width while its panels overlap (two plots of
+    # a row edited at once, 2026-11-19).
+    # A plot's text is fitted to the page when it is drawn, which changes its shape once
+    # more (14 pt text: 105 -> 121 px wide, the two plots of a row overlapped): draw,
+    # refit, until the panels hold still (one round settles it).
+    _fit_rows_to_width(w, canvas, meta['width'])
     w.update_letters()
     canvas.update_size()
     canvas.repaint()

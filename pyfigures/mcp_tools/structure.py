@@ -2455,6 +2455,15 @@ def set_image_property(
     err = _check_property_value(property_name, raw)
     if err:
         return err
+    kept = None
+    if property_name == "theta":
+        # a cropped image keeps showing the same region, turned (user 2026-11-19)
+        from .core import keep_crop_on_rotation
+        try:
+            angle = float(raw) if raw not in (None, "", "None") else 0.0
+        except (TypeError, ValueError):
+            angle = None
+        kept = keep_crop_on_rotation(imgs[image_index], angle) if angle is not None else None
     _set_child_text(imgs[image_index], property_name, raw)
     if property_name.startswith("crop_"):
         # the same check as transform_image: a crop wider than the image
@@ -2465,7 +2474,8 @@ def set_image_property(
     _save(tree, pyf_path)
     stored = _stored_image_property(pyf_path, group_path, image_index, property_name)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Image {image_index} in {loc}: {property_name} = {stored} (read back from the saved file)"
+    return (f"Image {image_index} in {loc}: {property_name} = {stored} (read back from the saved file)"
+            + (f"; {kept}" if kept else ""))
 
 
 @mcp.tool()

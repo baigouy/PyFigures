@@ -35,3 +35,16 @@ def test_plot_tools_have_their_own_category():
         assert category_for(n) == "plots", n
     setup = sorted(n for n in (t.name for t in asyncio.run(m.mcp.list_tools())) if category_for(n) == "setup")
     assert "remove_rois" not in setup and "match_display_range" not in setup and len(setup) <= 15, setup
+
+
+def test_the_chat_instructions_stay_small():
+    """User, 2026-11-19 ("this is key"): the first messages small and explicit, the details
+    on request. The instructions were 18 kB; each topic's rules now come with a search."""
+    from pyfigures.assistant import live_mcp
+    from pyfigures.assistant.categorized_mcp import build_server, topic_note
+    server = build_server(live_mcp.mcp, live_mcp.request)
+    assert len(server.instructions) < 4000, len(server.instructions)
+    assert "find_pyfigures_tools" in server.instructions and "RELATIVE requests" in server.instructions
+    assert topic_note({"swap", "b", "c"}).startswith("SWAPS:")
+    assert "set_scale_bar_all" in topic_note({"scale", "bars", "all"})
+    assert topic_note({"rotate"}) == ""

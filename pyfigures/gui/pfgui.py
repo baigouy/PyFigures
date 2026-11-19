@@ -271,6 +271,29 @@ class _DroppedFile:
         self.kind = kind            # 'table' | 'script'
 
 
+def _folder_drop_items(folder):
+    """What a dropped folder brings, in the file browser's order (sub-folders too):
+    image paths and its tables (a _DroppedFile each, made a plot at its place),
+    plus the names of the files it cannot place. A file with no extension is
+    judged by its content (macOS; user, 2026-11-19: "files must have been in")."""
+    from batoolset.img import sorted_like_file_browser
+    paths = []
+    for root, _dirs, names in os.walk(folder):
+        paths.extend(os.path.join(root, n) for n in names
+                     if not n.startswith(('.', '~$')) and n.lower() not in ('thumbs.db', 'desktop.ini'))
+    items, left_out = [], []
+    for path in sorted_like_file_browser(paths):
+        if is_forbidden_image_file(path):
+            continue
+        if is_image_file(path):
+            items.append(path)
+        elif _is_plot_table(path):
+            items.append(_DroppedFile(path, 'table'))
+        else:
+            left_out.append(os.path.basename(path))
+    return items, left_out
+
+
 def _qt_alive(obj):
     """False once the C++ side of a Qt wrapper has been destroyed — a queued
     loader callback arriving after its window was deleted must not touch it
@@ -939,6 +962,12 @@ class EZFIG_GUI(QMainWindow):
 
         # plain letters (no box): black or white, picked from the image under them
         self.serializable_font = SerializableQFont(background=None)
+        # data plots that follow the labels read their font and size from this figure
+        # (weakly: a strong reference kept every closed window alive, timers and all)
+        import weakref
+        from batoolset.drawings.shapes import image2d as _image2d
+        _style = weakref.WeakMethod(self._label_text_style)
+        _image2d.label_text_style_source = lambda: (_style() or (lambda: None))()
 
         self.list = []  # now this is the currently dragged object
 
@@ -2395,6 +2424,22 @@ class EZFIG_GUI(QMainWindow):
         self.color_assistant.show()
 
 
+    def _label_text_style(self):
+        """{'family', 'size'} of this figure's labels (the texts other than the panel
+        letters; with none, the letters' font): what a data plot that follows them uses."""
+        from pyfigures.text_fonts import label_style
+        try:
+            canvas = self.paint.EZFIG_panel
+            canvas.objectName()                    # a closed window's canvas: RuntimeError
+        except (AttributeError, RuntimeError):
+            return None
+        font = getattr(self, 'serializable_font', None)
+        try:
+            family = font.family() if font is not None else None
+        except Exception:
+            family = None
+        return label_style(canvas.shapes_to_draw, family)
+
     def update_size_of_object(self, cur_sel, value=None):
 
         # print('I am called', cur_sel, value)
@@ -2545,7 +2590,8 @@ class EZFIG_GUI(QMainWindow):
                 if os.path.isdir(url):
                     # a dropped folder loads every image within it (recursively),
                     # then the usual drop menu (row/column/panel/single) is offered
-                    found = list_image_files_in_folder(url)
+                    found, left_out = _folder_drop_items(url)
+                    unsupported.extend(left_out)
                     if found:
                         self.list.extend(found)
                     else:

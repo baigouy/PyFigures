@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from textwrap import indent
 from mcp.server.fastmcp import FastMCP, Image
-from batoolset.img import is_image_file
+from batoolset.img import is_image_file, sorted_like_file_browser, has_no_extension
 from .app import (
     mcp,
 )
@@ -138,18 +138,14 @@ def _collect_image_files(
     pattern: str = "*",
     recursive: bool = False,
 ) -> list[str]:
-    """Return naturally sorted image files in *folder* matching *pattern*.
+    """Return the image files in *folder* matching *pattern*, in the order the
+    system's file browser shows them ("the first 20 files" = the first 20 there).
 
     When *pattern* is the catch-all ``"*"``, files are further filtered to
     known image extensions.  Provide an explicit pattern like ``"*.tif"`` to
     bypass that extension filter.
     *recursive*: when True, also descend into immediate sub-directories.
     """
-    try:
-        from natsort import natsorted  # already a project dependency
-    except ImportError:
-        natsorted = sorted  # type: ignore[assignment]
-
     folder = os.path.normpath(folder)
     if not os.path.isdir(folder):
         return []
@@ -165,10 +161,54 @@ def _collect_image_files(
                 continue
             if not fnmatch.fnmatch(name.lower(), pattern.lower()):
                 continue
-            if catch_all and not is_image_file(name):       # the formats the GUI drop takes
+            if catch_all and not is_image_file(fpath):      # the formats the GUI drop takes (no extension: by content)
                 continue
             files.append(fpath)
-    return natsorted(files)
+    return _browser_order(files)
+
+
+def _browser_order(paths: list[str]) -> list[str]:
+    """The file browser's order (Explorer: case-insensitive, numbers by value);
+    a case-sensitive sort put every lowercase name after all capitalised ones."""
+    return sorted_like_file_browser(paths)
+
+
+def _file_kind(path: str) -> str:
+    """What a non-image file is to a figure: "table" (a plot or a table panel),
+    "script" (a panel drawn by Python), "text", or "other" (cannot be placed).
+    A file with no extension is judged by its content."""
+    from pyfigures.plot_tables import is_plot_table
+    low = path.lower()
+    if is_plot_table(path):
+        return "table"
+    if low.endswith(".py"):
+        return "script"
+    if low.endswith((".txt", ".md", ".tex", ".json", ".xml", ".log")):
+        return "text"
+    if has_no_extension(path):
+        try:
+            with open(path, "rb") as f:
+                head = f.read(4096)
+            head.decode("utf-8")
+            return "text" if b"\x00" not in head else "other"
+        except (OSError, UnicodeDecodeError):
+            return "other"
+    return "other"
+
+
+_TABLE_EXTS = (".csv", ".tsv", ".xlsx", ".xlsm", ".xls")
+
+
+def _other_files(folder: str) -> list[str]:
+    """The folder's files that are not images (tables, text, movies PyFigures
+    cannot open...), lock and hidden files left out."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    return _browser_order([os.path.join(folder, n) for n in names
+                           if not n.startswith(("~$", ".")) and os.path.isfile(os.path.join(folder, n))
+                           and not is_image_file(os.path.join(folder, n))])
 
 
 MAX_AUTO_COLUMNS = 5          # images per row chosen automatically (more only when asked)
@@ -282,8 +322,22 @@ def scan_folder(folder: str, pattern: str = "*", sample: int = 0, seed: int | No
                 "groups": {k: len(v) for k, v in subfolders.items()},
             })
 
-    out = {"folder": folder, "count": n, "files": files,
-           "subfolders": subfolders, "layout_suggestions": suggestions}
+    out = {"folder": folder}
+    others = _other_files(folder) if pattern.strip() in ("*", "**", "") else []
+    if others:
+        # "the first 20 files" took 20 images: the spreadsheets among them were never seen, and
+        # a note after the 57 paths was not read either (chats 2026-11-19): it comes first
+        kinds = [_file_kind(f) for f in others]
+        tables = [os.path.basename(f) for f, k in zip(others, kinds) if k == "table"]
+        out["other_files_note"] = (
+            f"files lists the {n} images only; the folder also holds {len(others)} other file(s)"
+            + (f", tables among them: {', '.join(tables[:10])}" if tables else "")
+            + ". When the user says files (not images), add them with add_folder_files(folder, "
+            "first=N) in one call: it takes all_files_in_order, tables as data plots. A file "
+            "with no extension is judged by its content.")
+        out["other_files"] = [{"file": f, "kind": k} for f, k in zip(others, kinds)]
+        out["all_files_in_order"] = [os.path.basename(f) for f in _browser_order(files + others)]
+    out.update({"count": n, "files": files, "subfolders": subfolders, "layout_suggestions": suggestions})
     if sample and sample > 0:
         # "10 randomly selected images": a model took the first files of the sorted list
         import random
@@ -292,6 +346,73 @@ def scan_folder(folder: str, pattern: str = "*", sample: int = 0, seed: int | No
                                      + (f" (seed {seed})" if seed is not None else "")
                                      + ": add exactly these, in one add_image batch.")
     return json.dumps(out, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def add_folder_files(pyf_path: str, folder: str, first: int = 0, names: list[str] | None = None) -> str:
+    """Add a folder's FILES to the figure in one call: images as image panels, tables
+    (CSV, TSV, Excel, also with no extension) as data plots, in the file browser's order.
+
+    "the first 20 files of this folder" = first=20 (every file counts, a table too);
+    *names*: only these files (their names, in the order given); neither = every file.
+    Files that cannot be placed (notes, XML...) are named in the reply, not added.
+    Then add_table_panel / edit_data_plot change a table's panel if asked.
+    """
+    # chats 2026-11-19: told three times that "files" include the tables, the model still
+    # added 20 images; one operation that takes the files in their order cannot skip them
+    if not os.path.isdir(folder):
+        return f"ERROR: Folder not found: {folder}"
+    everything = _browser_order(_collect_image_files(folder) + _other_files(folder))
+    if names:
+        by_name = {os.path.basename(p).lower(): p for p in everything}
+        missing = [n for n in names if os.path.basename(str(n)).lower() not in by_name]
+        if missing:
+            return (f"ERROR: not in {folder}: {', '.join(map(str, missing[:10]))}. "
+                    f"Its files: {', '.join(os.path.basename(p) for p in everything[:40])}")
+        chosen = [by_name[os.path.basename(str(n)).lower()] for n in names]
+    elif first and int(first) > 0:
+        chosen = everything[:int(first)]
+    else:
+        chosen = everything
+    if not chosen:
+        return f"ERROR: {folder} holds no files."
+    added, plots, tables, left_out, failed = [], [], [], [], []
+    for path in chosen:
+        name = os.path.basename(path)
+        if is_image_file(path):
+            res = add_image(pyf_path, [], path)
+        elif _file_kind(path) == "table":
+            res = add_data_plot(pyf_path, [], path)
+            if not str(res).startswith("ERROR"):
+                plots.append(name)
+            else:
+                # no plot fits it on its own (several measures): its numbers as a table panel,
+                # so the file is still in; the reply says which plot needs a measure named
+                from .content import add_table_panel
+                why = str(res)[7:].split("\n")[0][:160]
+                res = add_table_panel(pyf_path, [], path, max_rows=12)
+                if not str(res).startswith("ERROR"):
+                    tables.append(f"{name} ({why})")
+        else:
+            left_out.append(f"{name} ({_file_kind(path)})")
+            continue
+        if str(res).startswith("ERROR"):
+            failed.append(f"{name}: {str(res)[7:].split(chr(10))[0][:160]}")
+        else:
+            added.append(name)
+    lines = [f"Added {len(added)} of the {len(chosen)} file(s) from {folder}, in the folder's order: "
+             + ", ".join(added)]
+    if plots:
+        lines.append(f"Data plots made from the tables: {', '.join(plots)} (add_table_panel instead if a table "
+                     "of the numbers is wanted).")
+    if tables:
+        lines.append("Shown as a table panel, no plot fitting it on its own: " + "; ".join(tables)
+                     + ". Ask the user which measure to plot (add_data_plot with columns) if a plot is wanted.")
+    if left_out:
+        lines.append(f"Not placed (not an image or a table): {', '.join(left_out)}.")
+    if failed:
+        lines.append("ERRORS: " + "; ".join(failed[:10]))
+    return "\n".join(lines)
 
 
 @mcp.tool()

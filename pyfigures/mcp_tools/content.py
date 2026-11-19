@@ -687,7 +687,32 @@ def _plot_text_on_page(img, font_pt: float | None = None) -> None:
     _set_child_text(img, "publication_style", "True")
     _set_child_text(img, "publication_font_on_page", "True")
     _set_child_text(img, "publication_font_size", f"{float(font_pt or PLOT_TEXT_PT):g}")
+    _set_child_text(img, "publication_font_size_from_labels", "False")
     _set_child_text(img, "publication_line_width", f"{PLOT_LINE_PT:g}")
+
+
+FOLLOW_LABELS = "figure"          # = batoolset.drawings.shapes.image2d.FOLLOW_LABELS
+# the words that ask for a plot's text "like the labels" (font_family / font_pt)
+_LIKE_LABELS = ("", "auto", "labels", "label", "figure", "default", "like the labels")
+
+
+def _plot_text_like_labels(img, root, family: bool = True, size: bool = True) -> None:
+    """The plot's text in the font (*family*) and at the size (*size*) of the figure's
+    labels, the texts other than the panel letters (user, 2026-11-19: "use the same font
+    for the graph as the image fonts", "the size of the label font", "label font is
+    normally smaller than letter font"). Read again each time the plot is drawn, so the
+    plot follows the labels when they change. The size kept in the file is the labels'
+    size now, else 7 pt (never the letters' size)."""
+    from .core import _other_text_size
+    _set_child_text(img, "publication_style", "True")
+    _set_child_text(img, "publication_font_on_page", "True")
+    if img.find("publication_line_width") is None:
+        _set_child_text(img, "publication_line_width", f"{PLOT_LINE_PT:g}")
+    if family:
+        _set_child_text(img, "publication_font", _encode_str(FOLLOW_LABELS))
+    if size:
+        _set_child_text(img, "publication_font_size", f"{float(_other_text_size(root) or PLOT_TEXT_PT):g}")
+        _set_child_text(img, "publication_font_size_from_labels", "True")
 
 
 def _plot_colours(colors) -> tuple[list | None, str]:
@@ -817,6 +842,17 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
 _EXCEL = (".xlsx", ".xlsm", ".xls")
 
 
+def _is_excel(path: str) -> bool:
+    """A workbook by its extension, or by its content when it has none (macOS)."""
+    if str(path).lower().endswith(_EXCEL):
+        return True
+    try:
+        from staplot.api import is_excel
+    except ImportError:
+        return False
+    return is_excel(str(path))
+
+
 def _table_path(path: str, sheet=None) -> tuple[str, str]:
     """(absolute table path, error) for a plot's table: a CSV / TSV / TXT, or an Excel
     workbook whose *sheet* (name or number from 1) is kept as "book.xlsx::Sheet" —
@@ -849,7 +885,7 @@ def _table_path(path: str, sheet=None) -> tuple[str, str]:
                         f"cannot read {sheet!r} from {os.path.basename(path)} ({type(e).__name__}: {e}); "
                         f"its tables are {', '.join(names)}")
         return table, ""
-    excel = path.lower().endswith(_EXCEL)
+    excel = _is_excel(path)
     if sheet not in (None, "") and not excel:
         return "", (f"sheet applies to Excel files (.xlsx, .xls) and SQLite databases only, not "
                     f"{os.path.basename(path)}")
@@ -885,7 +921,7 @@ def _csv_number_count(path: str, skip_rows=None) -> int:
             pass
         except Exception:
             return 0
-    if "::" in str(path) or str(path).lower().endswith(_EXCEL) or is_sqlite_file(str(path)):
+    if "::" in str(path) or _is_excel(str(path)) or is_sqlite_file(str(path)):
         try:
             import pandas as pd
             from staplot.api import read_table
@@ -943,7 +979,8 @@ def add_data_plot(
     log_y: bool | None = None,
     xtick_rotation: float | None = None,
     legend: str | None = None,
-    font_pt: float | None = None,
+    font_pt: float | str | None = None,
+    font_family: str | None = None,
     rename: dict[str, str] | None = None,
     show_points: bool | None = None,
     violin_inner: str | None = None,
@@ -1054,9 +1091,10 @@ def add_data_plot(
     *kind="split_violin"*: two conditions as the two halves of each violin ("split by
       sex", "half violins per condition"): a two-factor table (e.g. genotype, sex, value)
       where one factor has two levels; a legend names the halves, each pair is tested.
-    *font_pt*: the size of the plot's text in the printed figure, in points (default
-      7 pt, within every journal's 5-8 pt range, whatever the panel's size); only
-      when the user asks for a size.
+    *font_pt*: the size of the plot's text in the printed figure, in points; only when
+      the user asks for a size. Default: the size of the figure's labels (not the
+      letters), else 7 pt, whatever the panel's size; the plot follows the labels.
+    *font_family*: the plot's font; default the font of the figure's labels (followed).
     *colors*: one colour per group, in the CSV's order (names such as magenta /
       green or #rrggbb); groups beyond the list keep the default palette. Or by name:
       {"WT": "black", "mutA": "red"} (the groups not named keep theirs).
@@ -1163,7 +1201,19 @@ def add_data_plot(
     img = _new_image2d("__data_plot__")
     img.find("filename").text = "None"
     _set_child_text(img, "custom_loading_script", _encode_str(script))
-    _plot_text_on_page(img, font_pt)
+    like_labels = font_pt is None or (isinstance(font_pt, str) and font_pt.strip().lower() in _LIKE_LABELS)
+    if not like_labels:
+        try:
+            font_pt = float(font_pt)
+        except (TypeError, ValueError):
+            return (f"ERROR: font_pt is the plot's text size in points on the page, or \"labels\" (the size "
+                    f"of the figure's labels); got {font_pt!r}. Nothing was changed.")
+    _plot_text_on_page(img, None if like_labels else font_pt)
+    _plot_text_like_labels(img, root, size=like_labels)
+    if font_family and font_family.strip().lower() not in _LIKE_LABELS:
+        from .core import _warn_missing_font
+        _set_child_text(img, "publication_font", _encode_str(font_family.strip()))
+        _warn_missing_font(font_family.strip())
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
     container, group_path = _append_new_panel(root, container, img, group_path)
@@ -1523,7 +1573,7 @@ def describe_table(csv_path: str, sheet: str | None = None, rows: int = 5,
         from staplot.api import list_sheets
         others = list_sheets(file)
         if others:
-            lines.append(("Sheets: " if file.lower().endswith(_EXCEL) else "Tables / views: ")
+            lines.append(("Sheets: " if _is_excel(file) else "Tables / views: ")
                          + ", ".join(others))
     except Exception:
         pass
@@ -1878,6 +1928,7 @@ def add_seaborn_plot(
         return f"ERROR: {err}"
     img = _new_image2d("__seaborn_plot__")
     _plot_text_on_page(img)
+    _plot_text_like_labels(img, root)
     img.find("filename").text = "None"
     _set_child_text(img, "custom_loading_script", _encode_str(make_script(spec)))
     if label:
@@ -1995,7 +2046,8 @@ def edit_data_plot(
     log_y: bool | None = None,
     xtick_rotation: float | None = None,
     legend: str | None = None,
-    font_pt: float | None = None,
+    font_pt: float | str | None = None,
+    font_family: str | None = None,
     rename: dict[str, str] | None = None,
     show_points: bool | None = None,
     violin_inner: str | None = None,
@@ -2037,8 +2089,11 @@ def edit_data_plot(
       A plot, unlike an image, can take any shape: in a row it is as tall as its
       neighbours, so a larger aspect gives it more of the row.
     Text size: *font_pt* = the size of ALL the plot's text in the printed figure, in
-      points ("bigger text" 8 or 9, "like the panel letters" their size, "7 pt"). The
-      default is 7 pt on the page whatever the panel's size (journals ask 5-8 pt).
+      points ("bigger text" 8 or 9, "like the panel letters" their size, "7 pt"). By
+      default a plot's text has the size of the figure's labels (not the letters), else
+      7 pt, and follows them; "labels" = back to the labels' size.
+    *font_family*: the plot's font ("Verdana", "Times New Roman"); "labels" = the font of
+      the figure's labels, the default, which follows them.
     Size: *width* / *height* in inches ("make the plot smaller / bigger").
       *font_scale*: relative sizes inside the plot only; for "bigger text" use font_pt.
     Layout: *order*: the groups in this order (names; groups left out are dropped and
@@ -2200,15 +2255,43 @@ def edit_data_plot(
                                     layout=layout)
     _set_child_text(img, "custom_loading_script", _encode_str(script))
     font_note = []
+    if font_family is not None:
+        from .core import _decode
+        old_family = _decode(_child_text(img, "publication_font") or "") or "?"
+        wanted = str(font_family).strip()
+        if wanted.lower() in _LIKE_LABELS:
+            _plot_text_like_labels(img, root, size=False)
+            new_family = "the labels' font"
+        else:
+            from .core import _warn_missing_font
+            _set_child_text(img, "publication_font", _encode_str(wanted))
+            _warn_missing_font(wanted)
+            new_family = wanted
+        if old_family == FOLLOW_LABELS:
+            old_family = "the labels' font"
+        if old_family != new_family:
+            font_note.append(f"font {old_family} -> {new_family}")
+    if isinstance(font_pt, str) and font_pt.strip().lower() in _LIKE_LABELS:
+        old_pt = _child_text(img, "publication_font_size")
+        _plot_text_like_labels(img, root, family=False)
+        font_note.append(f"text {old_pt or '?'} pt -> the labels' size "
+                         f"({_child_text(img, 'publication_font_size')} pt now)")
+        font_pt = None
     if font_pt is not None:
+        try:
+            font_pt = float(font_pt)
+        except (TypeError, ValueError):
+            return (f"ERROR: font_pt is the plot's text size in points on the page, or \"labels\" (the size "
+                    f"of the figure's labels); got {font_pt!r}. Nothing was changed.")
         if not 3 <= float(font_pt) <= 72:
             return "ERROR: font_pt is the plot's text size in the printed figure, 3 to 72 points. Nothing was changed."
         old_pt = _child_text(img, "publication_font_size")
         on_page = str(_child_text(img, "publication_font_on_page")) == "True"
+        followed = str(_child_text(img, "publication_font_size_from_labels")) == "True"
         _plot_text_on_page(img, font_pt)
-        if not on_page or str(old_pt) != f"{float(font_pt):g}":
-            font_note = [f"text {old_pt or '?'} pt{'' if on_page else ' (plot points)'} -> {float(font_pt):g} pt "
-                         f"on the page"]
+        if not on_page or followed or str(old_pt) != f"{float(font_pt):g}":
+            font_note.append(f"text {old_pt or '?'} pt{'' if on_page else ' (plot points)'}"
+                             f"{' (the labels’ size)' if followed else ''} -> {float(font_pt):g} pt on the page")
     _save(tree, pyf_path, recompute=True)
     changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
                ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv",
@@ -2307,6 +2390,12 @@ def transform_image(
 
     # --- native PyFigures fields ---
     if rotation is not None:
+        if all(c is None for c in (crop_left, crop_right, crop_top, crop_bottom)):
+            # a cropped image keeps showing the same region, turned (user 2026-11-19)
+            from .core import keep_crop_on_rotation
+            kept = keep_crop_on_rotation(img, float(rotation))
+            if kept:
+                changed.append(kept)
         _set_child_text(img, "theta", str(float(rotation)) if rotation != 0 else "None")
         # the direction in words: a model asked for "25° clockwise" sent -25 (maths
         # convention) and reported it as clockwise (chat log 2026-11-17)

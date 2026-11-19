@@ -509,6 +509,13 @@ def _crop_fit_error(img: ET.Element) -> str | None:
             return 0
 
     crop = {k: _c(f"crop_{k}") for k in ("left", "right", "top", "bottom")}
+    try:
+        theta = float(_child_text(img, "theta") or 0)
+    except (TypeError, ValueError):
+        theta = 0.0
+    if theta:                       # a crop is counted on the rotated image, which is larger
+        rw, rh = _rotated_size(size[0], size[1], theta)
+        size = (int(rw), int(rh))
     return crop_size_error(size, crop, "crop_{}={}")
 
 
@@ -1144,6 +1151,47 @@ def _other_text_family(root: ET.Element) -> str | None:
     return _figure_font(root).get("font_family")
 
 
+def _html_font_pt(html: str) -> float | None:
+    """The point size a rich-text string gives its text (its first text span with a
+    size, else its body), None when it gives none."""
+    import re
+    if not html or html == "None":
+        return None
+    found = None
+    body = re.search(r"<body[^>]*style=\"([^\"]*)\"", html)
+    if body:
+        m = re.findall(r"font-size\s*:\s*([\d.]+)\s*pt", body.group(1))
+        found = m[-1] if m else None
+    for css, inner in re.findall(r"<span[^>]*style=\"([^\"]*)\"[^>]*>(.*?)</span>", html, flags=re.S):
+        if re.sub(r"<[^>]+>", "", inner).strip():
+            m = re.findall(r"font-size\s*:\s*([\d.]+)\s*pt", css)
+            if m:
+                found = m[-1]
+                break
+    try:
+        value = float(found) if found else None
+    except ValueError:
+        return None
+    return value if value and value > 0 else None
+
+
+def _other_text_size(root: ET.Element) -> float | None:
+    """The size, in points on the page, most of the figure's texts other than the panel
+    letters use (labels, legends, scale-bar labels); None when there are none."""
+    from collections import Counter
+    counts: Counter = Counter()
+    for ta in root.iter("TAText2D"):
+        if (ta.findtext("is_letter") or "") != "True":
+            s = _html_font_pt(_decode(ta.findtext("text") or ""))
+            if s:
+                counts[s] += 1
+    for sb in root.iter("ScaleBar"):
+        s = _html_font_pt(_decode(sb.findtext("legend") or ""))
+        if s:
+            counts[s] += 1
+    return counts.most_common(1)[0][0] if counts else None
+
+
 def _scale_bars_in_text_font(root: ET.Element) -> int:
     """Give every scale-bar label that has no font of its own the font of the other
     texts (they were saved in Qt's generic "Sans Serif", drawn in another font than
@@ -1664,6 +1712,12 @@ def _unreadable_image(filename: str) -> str | None:
     name = str(filename)
     if filename is None or not name.strip():
         return "the filename is empty: give the path of the image file"
+    if any(ord(ch) < 32 for ch in name):
+        # "C:\Users\...\blobs.gif" written in a normal (not raw) string: \b, \t became
+        # control characters, which no path holds and XML cannot store (the figure file
+        # was written unreadable, 2026-11-19)
+        return (f"{name!r} holds control characters (\\t, \\b...): backslashes were read as escapes. "
+                "Write the path with forward slashes (C:/Users/...) or doubled backslashes")
     from batoolset.ome_zarr import is_zarr_path
     if is_zarr_path(name):                # OME-Zarr: a folder or URL, read by its own reader
         return _unreadable_zarr(name)
@@ -3154,3 +3208,65 @@ def _iter_panel_elements(root: ET.Element):
                 break
         if not skip:
             yield img
+
+
+def _rotated_size(w: float, h: float, theta: float) -> tuple[float, float]:
+    """Size of an image of w x h once rotated by theta degrees (its bounding box, as
+    batoolset's rotate_image makes it)."""
+    a = math.radians(theta or 0.0)
+    c, s = abs(math.cos(a)), abs(math.sin(a))
+    return w * c + h * s, w * s + h * c
+
+
+def crops_for_new_rotation(size, theta0, crops: dict, theta1) -> dict:
+    """The crop (pixels removed per side) that keeps the SAME part of the image visible
+    when its rotation goes from theta0 to theta1.
+
+    A crop is counted on the rotated image (the panel editor's Rotate + Crop tab crops
+    what is shown, so the blank corners of a rotation can be cut away). Changing the
+    angle of a cropped image used to keep the numbers, which then cut a different,
+    larger region of the newly rotated image (user 2026-11-19: "crops got messed up
+    by the rotation, I don't see why the crop size should change"). Here the window
+    keeps its size (so the panel keeps its size and zoom) and stays centred on the
+    same point of the image, which turns under it."""
+    w, h = float(size[0]), float(size[1])
+    w0, h0 = _rotated_size(w, h, theta0)
+    w1, h1 = _rotated_size(w, h, theta1)
+    l, r = float(crops.get("left", 0) or 0), float(crops.get("right", 0) or 0)
+    t, b = float(crops.get("top", 0) or 0), float(crops.get("bottom", 0) or 0)
+    kw, kh = w0 - l - r, h0 - t - b                  # the window: its size stays
+    a0, a1 = math.radians(theta0 or 0.0), math.radians(theta1 or 0.0)
+    # its centre: rotated(theta0) -> source (undo a clockwise-as-seen turn) -> rotated(theta1)
+    dx, dy = l + kw / 2 - w0 / 2, t + kh / 2 - h0 / 2
+    sx = dx * math.cos(-a0) - dy * math.sin(-a0)
+    sy = dx * math.sin(-a0) + dy * math.cos(-a0)
+    cx = sx * math.cos(a1) - sy * math.sin(a1) + w1 / 2
+    cy = sx * math.sin(a1) + sy * math.cos(a1) + h1 / 2
+    left, top = round(cx - kw / 2), round(cy - kh / 2)
+    right, bottom = round(w1 - (cx + kw / 2)), round(h1 - (cy + kh / 2))
+    return {"left": max(0, left), "top": max(0, top), "right": max(0, right), "bottom": max(0, bottom)}
+
+
+def keep_crop_on_rotation(img: ET.Element, new_theta) -> str | None:
+    """Rewrite the crop of *img* so a new rotation keeps the same region visible; a
+    note for the tool's reply, or None when there is nothing to convert."""
+    def _num(name):
+        try:
+            v = _child_text(img, name)
+            return float(v) if v not in (None, "", "None") else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+    crops = {k: _num(f"crop_{k}") for k in ("left", "right", "top", "bottom")}
+    if not any(crops.values()):
+        return None
+    t0, t1 = _num("theta"), float(new_theta or 0.0)
+    if abs(t0 - t1) < 1e-9:
+        return None
+    size = _raw_size_from_file(_first_filename(img))
+    if not size:
+        return None
+    new = crops_for_new_rotation(size, t0, crops, t1)
+    for k, v in new.items():
+        _set_child_text(img, f"crop_{k}", str(int(v)))
+    return ("the crop was converted so the same region stays visible, turned: "
+            + ", ".join(f"crop_{k}={int(v)}" for k, v in new.items()))

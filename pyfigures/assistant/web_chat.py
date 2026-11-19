@@ -233,6 +233,13 @@ def instructions_prompt(tools, server_instructions, state=None, request=None):
         lines += ['', 'The figure now (inspect_figure):',
                   _no_markers(_truncate(json.dumps(state, ensure_ascii=False), 8000))]
     if request:
+        # the rules its words call for, as the app's own chat sends them with each request
+        # (later requests are typed in the page, which PyFigures does not read: those get
+        # their rules from searches and from an edit held once for them)
+        from .categorized_mcp import request_rules
+        rules = request_rules(request)
+        if rules:
+            lines += ['', 'Rules for this request: ' + rules]
         lines += ['', 'My request: ' + _no_markers(request.strip())]
     else:
         lines += ['', 'Reply "Ready" and wait for my request.']

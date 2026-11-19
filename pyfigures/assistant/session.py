@@ -322,6 +322,10 @@ class Session:
         if req['operation'] == 'manual_guide':
             from .manual_help import explain
             return explain(req.get('arguments', {}).get('topic', 'overview'))
+        if req['operation'] == 'request_rules':           # read-only: the rules the request's words call for
+            from .categorized_mcp import request_rules
+            args = req.get('arguments', {})
+            return {'rules': request_rules(args.get('text', ''), args.get('earlier', ''))}
         if not getattr(self, '_action_passthrough', False):
             op = req['operation']
             controls = {'action_begin', 'action_finish', 'action_apply', 'action_discard', 'action_undo', 'action_redo', 'action_recover', 'action_continue'}
@@ -938,6 +942,10 @@ class Session:
                     group = supplied.get('group_path')
                     w.edit_panel_letters(background=supplied.get('color', 'black'),
                         scope='group' if group else 'all', group_path=group)
+                # a plot edit (bigger text) changes the plot's shape once more when it is
+                # drawn: the two plots of a row overlapped (user, 2026-11-19)
+                from .assistant_actions import settle_drawn_plots
+                settle_drawn_plots(w)
                 w.paint.EZFIG_panel.repaint()
                 from .live_structure import verify_adoption
                 verify_adoption(path.read_bytes(),w.paint.EZFIG_panel.shapes_to_draw)

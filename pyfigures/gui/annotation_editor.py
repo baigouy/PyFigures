@@ -1533,7 +1533,15 @@ class MainWindow(QWidget):
             self.publication_font_size_spinbox.setSingleStep(0.5)
             self.publication_font_size_spinbox.setValue(12)
             self.publication_font_size_spinbox.setSuffix(' pt')
-            pub_params_layout.addRow('Font size:', self.publication_font_size_spinbox)
+            # a data plot's text at the size of the figure's labels (not the letters)
+            self.publication_size_labels_check = QCheckBox("Labels' size")
+            self.publication_size_labels_check.setToolTip(
+                "The size of the figure's labels (the texts other than the panel letters), "
+                "followed when they change; 7 pt when the figure has no labels")
+            size_row = QHBoxLayout()
+            size_row.addWidget(self.publication_font_size_spinbox)
+            size_row.addWidget(self.publication_size_labels_check)
+            pub_params_layout.addRow('Font size:', size_row)
 
             self.publication_line_width_spinbox = QDoubleSpinBox()
             self.publication_line_width_spinbox.setDecimals(2)
@@ -1550,9 +1558,15 @@ class MainWindow(QWidget):
             self.publication_font_button_group = QButtonGroup(self)
             self.publication_font_radio_helvetica = QRadioButton('Sans-serif (Helvetica / Arial)')
             self.publication_font_radio_keep = QRadioButton('Keep figure font')
+            self.publication_font_radio_labels = QRadioButton("The figure's label font")
+            self.publication_font_radio_labels.setToolTip(
+                "The font of the figure's labels (the texts other than the panel letters), "
+                "followed when they change")
             self.publication_font_button_group.addButton(self.publication_font_radio_helvetica, 0)
             self.publication_font_button_group.addButton(self.publication_font_radio_keep, 1)
+            self.publication_font_button_group.addButton(self.publication_font_radio_labels, 2)
             self.publication_font_radio_helvetica.setChecked(True)
+            font_radio_layout.addWidget(self.publication_font_radio_labels)
             font_radio_layout.addWidget(self.publication_font_radio_helvetica)
 
             font_name_row = QHBoxLayout()
@@ -1590,6 +1604,7 @@ class MainWindow(QWidget):
 
             self.publication_style_checkbox.toggled.connect(self.on_publication_style_changed)
             self.publication_font_size_spinbox.valueChanged.connect(self.on_publication_style_changed)
+            self.publication_size_labels_check.toggled.connect(self.on_publication_style_changed)
             self.publication_line_width_spinbox.valueChanged.connect(self.on_publication_style_changed)
             self.publication_font_edit.editingFinished.connect(self.on_publication_style_changed)
             self.publication_font_button_group.buttonClicked.connect(self.on_publication_font_radio_changed)
@@ -3263,8 +3278,16 @@ class MainWindow(QWidget):
             self.publication_style_checkbox.setChecked(getattr(bg, 'publication_style', True))
             self.publication_font_size_spinbox.setValue(getattr(bg, 'publication_font_size', 12))
             self.publication_line_width_spinbox.setValue(getattr(bg, 'publication_line_width', 0.65))
+            from qtpy.QtCore import QSignalBlocker
+            with QSignalBlocker(self.publication_size_labels_check):
+                self.publication_size_labels_check.setChecked(
+                    bool(getattr(bg, 'publication_font_size_from_labels', False)))
+            self.publication_font_size_spinbox.setEnabled(not self.publication_size_labels_check.isChecked())
             pub_font = getattr(bg, 'publication_font', None)
-            if pub_font:
+            if pub_font == 'figure':
+                self.publication_font_radio_labels.setChecked(True)
+                self.publication_font_edit.setText('')
+            elif pub_font:
                 self.publication_font_radio_helvetica.setChecked(True)
                 self.publication_font_edit.setText(pub_font)
             else:
@@ -3598,8 +3621,12 @@ class MainWindow(QWidget):
             bg = self.qt_viewer.background
             bg.publication_style = self.publication_style_checkbox.isChecked()
             bg.publication_font_size = self.publication_font_size_spinbox.value()
+            bg.publication_font_size_from_labels = self.publication_size_labels_check.isChecked()
+            self.publication_font_size_spinbox.setEnabled(not bg.publication_font_size_from_labels)
             bg.publication_line_width = self.publication_line_width_spinbox.value()
-            if self.publication_font_radio_helvetica.isChecked():
+            if self.publication_font_radio_labels.isChecked():
+                bg.publication_font = 'figure'
+            elif self.publication_font_radio_helvetica.isChecked():
                 font_text = self.publication_font_edit.text().strip()
                 bg.publication_font = font_text if font_text else None
             else:

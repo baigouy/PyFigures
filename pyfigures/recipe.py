@@ -120,7 +120,7 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "annotate_stats", "only_significant", "label", "latex", "colors", "sheet", "aspect",
               # layout and size (only when asked)
               "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend",
-              "rename", "font_pt", "show_points", "violin_inner",
+              "rename", "font_pt", "font_family", "show_points", "violin_inner",
               "violin_side", "columns", "where", "skip_rows", "element_colors",
               "facet", "facet_row", "facet_ncols", "show_n", "show_mean", "p_format", "hlines",
               "control", "point_style", "normalize", "pairs", "stats_text"}

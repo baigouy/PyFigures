@@ -364,7 +364,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **208 tools** (about a sixth of them for the poster designer).
+The server currently exposes **209 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -417,6 +417,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `update_latex_panels(pyf_path, force)` | Recompile the panels made from `.tex` documents whose `.tex` changed since they were compiled (`force=True`: all of them), keeping which figure/table each one shows. Returns the panels updated and any that failed. GUI: right-click → Recompile from .tex, and an offer when the figure is opened |
 | `install_latex(check_only)` | **Install LaTeX** for PyFigures: downloads TinyTeX (a small TeX Live, ~75 MB; ~400 MB on disk) into the user's folder (no admin rights, PATH unchanged) with every package PyFigures uses; packages a document needs later are added automatically. `check_only=True` only reports which LaTeX tools are found. GUI: Help → Install LaTeX for PyFigures… |
 | `scan_folder(folder, pattern)` | Scan a folder for image files and return layout suggestions as JSON |
+| `add_folder_files(pyf_path, folder, first, names)` | Add a folder's **files** in one call, in the file browser's order: images as image panels, tables (CSV, TSV, Excel, also with no extension) as data plots. `first=20` = the first 20 files (a table counts as a file); `names` = only these files, in that order. Files that cannot be placed (notes, XML…) are named in the reply, not added |
 | `list_chat_steps(chat_path, include_reads)` | The operations a recorded chat ran (the chat sidebar's `.jsonl` log or its `sidecar-debug` zip), with the request each answered; no path: the recent chats. GUI: Tools → Replay a chat… |
 | `save_chat_procedure(procedure_path, chat_path)` | Save a chat's steps that changed the figure as a procedure (`.json`); without `chat_path` the current (newest) chat, so in the chat sidebar "save what we did as a procedure" works; paths under its figure's folder / with its name become `{folder}` / `{name}` |
 | `make_chat_video(chat_path, output_path, first_request, last_request, video_format, step_seconds, final_seconds, intermediate_messages, max_seconds)` | A demo video (MP4 and/or GIF) of requests *first*–*last* of a past chat, without the model (at most *max_seconds*, 60 by default: steps and answers shortened alike): filmed off-screen from the copy of the figure saved before the first request, each request typed in the chat sidebar, the recorded edits run again one by one, the recorded answers shown. GUI: Tools → Make a demo video from a chat…; CLI `python -m pyfigures.assistant.chat_video chat.jsonl --from 2 --to 4 -o demo.mp4` |

@@ -231,7 +231,7 @@ def test_a_value_for_a_tab_bar_sets_it_without_naming_the_operation(qapp, gui, r
 def test_discovery_finds_the_operation_at_once(query, first):
     import asyncio
     from pyfigures.assistant import live_mcp
-    from pyfigures.assistant.categorized_mcp import build_server
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
     server = build_server(live_mcp.mcp, live_mcp.request)
     result = asyncio.run(server.call_tool("find_pyfigures_tools", {"query": query}))
     text = result[0][0].text if isinstance(result, tuple) else result[0].text
@@ -390,7 +390,7 @@ def _guidance(query):
     import asyncio
     import json
     from pyfigures.assistant import live_mcp
-    from pyfigures.assistant.categorized_mcp import build_server
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
     server = build_server(live_mcp.mcp, live_mcp.request)
     result = asyncio.run(server.call_tool("find_pyfigures_tools", {"query": query}))
     return json.loads(result[0][0].text if isinstance(result, tuple) else result[0].text)["guidance"]
@@ -764,7 +764,7 @@ def test_discovery_finds_the_corner_order(query):
     import asyncio
     import json
     from pyfigures.assistant import live_mcp
-    from pyfigures.assistant.categorized_mcp import build_server
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
     server = build_server(live_mcp.mcp, live_mcp.request)
     result = asyncio.run(server.call_tool("find_pyfigures_tools", {"query": query}))
     names = [t["name"] for t in json.loads(result[0][0].text if isinstance(result, tuple) else result[0].text)["tools"]]
@@ -777,8 +777,8 @@ def test_the_file_own_colours_are_offered_for_unnatural_colours():
     from types import SimpleNamespace
     from pyfigures.assistant.session import channel_colours, file_colours
     from pyfigures.assistant import live_mcp
-    from pyfigures.assistant.categorized_mcp import build_server
-    text = build_server(live_mcp.mcp, live_mcp.request).instructions
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
+    text = all_guidance(build_server(live_mcp.mcp, live_mcp.request))
     img = SimpleNamespace(metadata={'LUTs': ['RED', 'GREEN', None]})
     panel = SimpleNamespace(LUTs=['RED_HOT', None, 'BLUE'], img=img)
     assert channel_colours(panel) == ['RED_HOT', 'GREEN', 'BLUE']    # what it shows now
@@ -790,8 +790,8 @@ def test_the_file_own_colours_are_offered_for_unnatural_colours():
 def test_bigger_needs_no_number():
     """'mak lettrs biger' was answered twice with "what size?"."""
     from pyfigures.assistant import live_mcp
-    from pyfigures.assistant.categorized_mcp import build_server
-    rules = build_server(live_mcp.mcp, live_mcp.request).instructions
+    from pyfigures.assistant.categorized_mcp import build_server, all_guidance
+    rules = all_guidance(build_server(live_mcp.mcp, live_mcp.request))
     assert "RELATIVE requests" in rules and "Never ask for a number first" in rules and "Misspelt" in rules
 
 

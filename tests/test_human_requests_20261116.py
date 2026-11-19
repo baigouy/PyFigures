@@ -152,9 +152,9 @@ def test_an_object_cut_by_the_region_is_kept_one_cut_by_the_image_edge_is_not():
 def test_the_chat_is_told_to_add_all_bars_in_one_call_and_to_aim_detection_with_a_region():
     import inspect
     from pyfigures.assistant import categorized_mcp as C
-    src = inspect.getsource(C)
-    assert "no bar_width_in_units (each image gets its own round length)" in src
-    assert "never crop the panel to aim it" in src
+    # said with the search for that topic (2026-11-19: no longer in the instructions)
+    assert "no bar_width_in_units: each image gets a round one" in C.topic_note({"add", "scale", "bars", "all"})
+    assert "never crop to aim" in C.topic_note({"detect", "cells"})
     assert "ONE call" in (M.set_scale_bar_all.__doc__ or "")
     assert "region" in (M.detect_objects.__doc__ or "")
 

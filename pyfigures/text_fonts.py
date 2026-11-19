@@ -47,6 +47,26 @@ def other_text_family(items, fallback=None):
     return fallback
 
 
+def other_text_size(items):
+    """The size (points on the page) most texts other than letters use in *items*, else None."""
+    from .mcp_tools.core import _html_font_pt
+    counts = Counter()
+    for text in _texts(items):
+        try:
+            size = _html_font_pt(text.getHtmlText())
+        except Exception:
+            size = None
+        if size:
+            counts[size] += 1
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def label_style(items, figure_family=None):
+    """{'family', 'size'} of the figure's labels (texts other than the letters): what a
+    data plot that follows the labels is drawn with."""
+    return {'family': other_text_family(items, figure_family), 'size': other_text_size(items)}
+
+
 def open_figure_items():
     """(shapes, figure font family) of the open PyFigures window, else ([], None)."""
     from qtpy.QtWidgets import QApplication

@@ -42,7 +42,20 @@ def border_colour(panel, width=4):
     along the edges of its visible (cropped) part. An int 0xRRGGBB. ("fit the panel's
     background to the image's background", 2026-11-13: the chat had no way to read it.)"""
     import numpy as np
-    rgb = panel_rgb(panel)
+    try:
+        rgb = panel_rgb(panel)
+    except ValueError:
+        # a plot has no pixel image: its colour is read from the plot as drawn (chat
+        # 2026-11-19: "auto" on every panel failed on the two plots, which stayed
+        # without a background behind their rotated corners)
+        rgb = plot_rgb(panel)
+        if rgb is None:
+            raise
+        k = max(1, min(width, rgb.shape[0] // 4, rgb.shape[1] // 4))
+        edges = np.concatenate([rgb[:k].reshape(-1, 3), rgb[-k:].reshape(-1, 3),
+                                rgb[:, :k].reshape(-1, 3), rgb[:, -k:].reshape(-1, 3)])
+        r, g, b = (int(v) for v in np.median(edges, axis=0))
+        return (r << 16) | (g << 8) | b
     h, w = rgb.shape[:2]
     left, top, right, bottom = panel_crop(panel)
     view = rgb[top:max(top + 1, h - bottom), left:max(left + 1, w - right)]
@@ -156,6 +169,28 @@ def panel_rois(panel):
         except (AttributeError, TypeError):
             continue
     return out
+
+
+def plot_rgb(panel):
+    """The pixels of a plot panel (a matplotlib figure) as drawn, on white; None for
+    a panel that is not a plot."""
+    import numpy as np
+    from matplotlib.figure import Figure
+    if getattr(panel, 'img', None) is None and hasattr(panel, 'load_img'):
+        try:
+            panel.load_img()
+        except Exception:
+            return None
+    if not isinstance(getattr(panel, 'img', None), Figure) or not hasattr(panel, '_toBuffer'):
+        return None
+    from PIL import Image
+    buf = panel._toBuffer(bufferType='raster')
+    if buf is None:
+        return None
+    im = Image.open(buf).convert('RGBA')
+    page = Image.new('RGBA', im.size, (255, 255, 255, 255))
+    page.alpha_composite(im)
+    return np.asarray(page.convert('RGB'))
 
 
 def panel_rgb(panel):
@@ -276,12 +311,13 @@ def _overlay_kind(annotation):
     return 'roi'
 
 
-def _draw_panel(panel, view, zoom, size, subset, original):
+def _draw_panel(panel, view, zoom, size, subset, original, transparent=False):
     """*panel* drawn with only the overlays in *subset*, the *view* part (scene units)
-    magnified by *zoom* into a QImage of *size*; its annotations are put back."""
+    magnified by *zoom* into a QImage of *size*; its annotations are put back.
+    *transparent*: on nothing, so the parts the panel leaves empty stay empty."""
     from qtpy.QtGui import QImage, QPainter, QColor
     image = QImage(size[0], size[1], QImage.Format.Format_RGBA8888)
-    image.fill(QColor(255, 255, 255))
+    image.fill(QColor(0, 0, 0, 0) if transparent else QColor(255, 255, 255))
     painter = QPainter(image)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -295,6 +331,34 @@ def _draw_panel(panel, view, zoom, size, subset, original):
         painter.end()
         panel.annotations = original
     return image
+
+
+def _empty_share(image):
+    """The share of a QImage drawn on nothing that stayed empty (alpha 0)."""
+    import numpy as np
+    from qtpy.QtGui import QImage
+    q = image.convertToFormat(QImage.Format.Format_RGBA8888)
+    w, h = q.width(), q.height()
+    ptr = q.constBits()
+    ptr.setsize(q.bytesPerLine() * h)
+    rows = np.frombuffer(ptr, np.uint8).reshape(h, q.bytesPerLine())
+    alpha = rows[:, :w * 4].reshape(h, w, 4)[..., 3]
+    return float((alpha == 0).mean()) if alpha.size else 0.0
+
+
+def _on_checkerboard(image, cell=8):
+    """*image* (drawn on nothing) over a light grey checkerboard: empty parts read as empty."""
+    from qtpy.QtGui import QImage, QPainter, QColor
+    out = QImage(image.width(), image.height(), QImage.Format.Format_RGB32)
+    out.fill(QColor(205, 205, 205))
+    p = QPainter(out)
+    dark = QColor(160, 160, 160)
+    for y in range(0, image.height(), cell):
+        for x in range((y // cell) % 2 * cell, image.width(), 2 * cell):
+            p.fillRect(x, y, cell, cell, dark)
+    p.drawImage(0, 0, image)
+    p.end()
+    return out
 
 
 def overlay_contrast(panel, max_side=400, max_overlays=12):
@@ -427,7 +491,12 @@ def preview_panel_as_shown(panel, out_path, title='', region=None, letters=True,
     if export:
         panel.enter_export_mode()                # full-resolution pixels, not the screen cache
     try:
-        image = draw(shown)
+        # drawn on nothing: what the panel leaves empty (the corners of a rotated panel
+        # without a background) shows on a checkerboard, as empty, not as white (chat
+        # 2026-11-19: the preview said "96% white" while the user saw empty corners)
+        image = _draw_panel(panel, view, zoom, size, shown, original, transparent=True)
+        empty = _empty_share(image)
+        image = _on_checkerboard(image)
         # what each overlay looks like, measured, for models that cannot see images:
         # the plain panel, then the panel with ONE overlay; the pixels that change
         # are that overlay, the plain render gives what is behind it
@@ -452,6 +521,10 @@ def preview_panel_as_shown(panel, out_path, title='', region=None, letters=True,
              f"crop and colours included. Drawn: {_list(counts)}. Left out of this preview only: {_list(hidden)}. "
              f"No rulers here: for crop/ROI coordinates use view='source'.",
              'Image: ' + describe_pixels(plain)]
+    if empty >= 0.005:
+        lines.append(f"EMPTY: {empty:.0%} of the panel is not drawn (shown as a grey checkerboard): no panel "
+                     "background behind it (the corners of a rotated panel); the page shows through there. "
+                     "set_image_property fill_color fills it.")
     for a, with_one in measured:
         lines.append(describe_overlay(a, plain, with_one))
     return '\n'.join(lines)

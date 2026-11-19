@@ -165,7 +165,11 @@ def test_matplotlib_panel_curves_stay_inside_their_axes(qapp):
     a = _qimage_array(im.renderer, int(vb.width() * 2), int(vb.height() * 2))
     top = int(y * 2)
     assert _red(a[top + 4:int((y + h) * 2)]).any()                          # the curve, in the axes
-    assert not _red(a[:top - 2]).any()                                       # nothing above them
+    # nothing above them; max(): with the 0.01 inch panel pad (2026-11-19) the cropped figure
+    # starts right at the axes, so top - 2 can be negative (a[:-1] = nearly the whole image)
+    assert not _red(a[:max(top - 2, 0)]).any()
+    ys = np.nonzero(_red(a))[0]
+    assert ys.min() >= top - 2                                               # the clipped curve stops at the axes
     plt.close(fig)
 
 

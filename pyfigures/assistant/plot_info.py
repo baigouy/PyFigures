@@ -289,7 +289,7 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
             out['code'] = call
             out['full_code_with'] = 'data_plot_code'
         out['change_it_with'] = ('edit_data_plot (kind, error bars, only_significant, stats on/off, stats_mode, '
-                                 'labels, colours, csv_path, sheet; text size font_pt; layout and size: aspect, width, height, '
+                                 'labels, colours, csv_path, sheet; text size font_pt, font font_family; layout and size: aspect, width, height, '
                                  'order, rename (group names shown), show_points, violin_inner, violin_side (half violins), ylim (its "scale" / "range": a plot has no scale bar), '
                                  'log_y, xtick_rotation (anticlockwise: left = +), legend) — never set_script on a data plot')
         return out

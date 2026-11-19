@@ -463,7 +463,8 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `skip_rows` | number | Lines above the table to skip (an instrument's header, a title). By default they are found and skipped, and the build says which. |
 | `element_colors` | mapping | Colours of parts of the plot: `{points: black, median: red, edges: none, brackets: grey}`; also `error_bars`, `whiskers`, `outliers`, `inner`, `fit`, `axes`, `background`. |
 | `columns` | list of column names | The columns used from a wider (tidy) table: `[genotype, area]` (group, value) for bar / box / violin; `[genotype, sex, area]` (x, halves or colour, value) for `split_violin` / `grouped`. |
-| `font_pt` | points | The plot's text in the printed figure (default 7 pt, whatever the panel's size). |
+| `font_pt` | points | The plot's text in the printed figure (default: the size of the figure's labels, else 7 pt, whatever the panel's size). |
+| `font_family` | font name | The plot's font (default: the font of the figure's labels). |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 
 CSV formats:
