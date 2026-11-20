@@ -99,6 +99,13 @@ def audit_report(raw):
                               for e in wrong_text),
                   "   The figure shows a wrong scale: fix the text or the length in the panel's editor, "
                   "unless that text was meant.", ""]
+    turned = d.get("plots_turned") or []
+    if turned:
+        lines += [f"! {len(turned)} graph{'s are' if len(turned) > 1 else ' is'} rotated or mirrored: "
+                  + "; ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} ({e['how']})"
+                              for e in turned),
+                  "   A turned graph hardly ever makes sense (tilted axes, mirrored text): set its rotation "
+                  "back to 0 and its flips off in the panel's editor, unless it is meant.", ""]
     small = d.get("scale_bars_too_small") or []
     if small:
         lines += [f"! {len(small)} scale bar{'s are' if len(small) > 1 else ' is'} very small (under 5 % of "

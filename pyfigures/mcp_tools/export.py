@@ -425,6 +425,8 @@ def audit_figure(pyf_path: str) -> str:
     ``scale_bars_text_mismatch`` lists bars whose text names another length than the
     bar itself ("200 µm" on a 50 µm bar): a wrong scale unless the user asked for that
     text — tell the user, never change it unasked.
+    ``plots_turned`` lists data plots that are rotated or mirrored (``how``): a turned
+    graph hardly ever makes sense — tell the user.
     ``panels_with_tiny_rois`` lists ROIs under 1 % of their image's larger side
     in both directions (``size_px``): possibly a slip of the mouse — ask the user
     whether they are wanted (arrowheads alone are not listed).
@@ -555,6 +557,13 @@ def audit_figure(pyf_path: str) -> str:
         msg = scale_bar_label_mismatch(info.get("label_plain") or "", width)
         if msg:
             text_mismatch.append(dict(_where(p), warning=msg))
+    # a rotated or mirrored data plot hardly ever makes sense (user, 2026-11-20)
+    from .content import turned_plot
+    turned_plots = []
+    for p, el in zip(panels, elems):
+        how = turned_plot(el)
+        if how:
+            turned_plots.append(dict(_where(p), how=how))
     # micrographs with no pixel size, with or without a bar: no scale can be shown
     # (vector files, scripted panels such as plots, text and placeholders need none)
     no_px = []
@@ -578,6 +587,7 @@ def audit_figure(pyf_path: str) -> str:
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
         "scale_bars_too_small": too_small,
         "scale_bars_text_mismatch": text_mismatch,
+        "plots_turned": turned_plots,
         "images_without_pixel_size": no_px,
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,

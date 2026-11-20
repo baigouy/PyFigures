@@ -2313,6 +2313,25 @@ def _flip_state(img) -> tuple[bool, bool]:
     return tuple(str(_child_text(img, tag)).strip().lower() == "true" for tag in ("flip_h", "flip_v"))
 
 
+def turned_plot(img) -> str | None:
+    """'rotated 25°' / 'mirrored' / both when *img* is a data plot that is turned: a
+    rotated or mirrored graph hardly ever makes sense (tilted axes, mirrored text), so
+    QC flags it and transform_image warns (user, 2026-11-20). None otherwise."""
+    script = _child_text(img, "custom_loading_script") or ""
+    if "from staplot import api" not in str(script):
+        return None
+    what = []
+    try:
+        theta = float(_child_text(img, "theta") or 0)
+    except (TypeError, ValueError):
+        theta = 0.0
+    if theta % 360:
+        what.append(f"rotated {theta:g}°")
+    if any(_flip_state(img)):
+        what.append("mirrored")
+    return " and ".join(what) or None
+
+
 @mcp.tool()
 def transform_image(
     pyf_path: str,
@@ -2447,7 +2466,11 @@ def transform_image(
         return "Nothing changed — supply at least one transform parameter."
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
-    return f"Image {image_index} in {loc}: {', '.join(changed)}."
+    turned = turned_plot(img)
+    note = (f"\nWARNING: this panel is a data plot, now {turned}: a turned graph hardly ever makes sense "
+            f"(tilted axes, mirrored text). Unless the user asked for it, undo it (rotation=0, flips "
+            f"off); otherwise tell the user." if turned else "")
+    return f"Image {image_index} in {loc}: {', '.join(changed)}." + note
 
 
 _FIJI_LUT_NEAREST = {
