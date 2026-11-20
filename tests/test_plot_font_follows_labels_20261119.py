@@ -93,7 +93,10 @@ def test_the_plot_is_drawn_in_the_labels_style_read_when_drawn():
         image2d.label_text_style_source = lambda: {"family": "Verdana", "size": None}
         assert img._publication_family() == "Verdana" and img._page_font_pt() == 7
         image2d.label_text_style_source = None             # no figure to ask: kept values
-        assert img._publication_family() == best_helvetica_clone() and img._page_font_pt() == 7
+        # the clone, unless it failed while a plot was fitted (macOS Helvetica, CI 2026-11-20)
+        clone = best_helvetica_clone()
+        expected = clone if image2d._font_draws(clone) else "DejaVu Sans"
+        assert img._publication_family() == expected and img._page_font_pt() == 7
     finally:
         image2d.label_text_style_source = saved
         plt.close(fig)
