@@ -122,7 +122,13 @@ def register_all(server, send):
                             if ref is None and native_params[key].default is not inspect.Parameter.empty:
                                 kwargs[key]=native_params[key].default
                             elif ref is None:
-                                raise ValueError('Supply panel_ref for a named live panel, or both group_path and image_index')
+                                # "make all bars 10-15 % of the width": Qwen sent set_scale_bar with no
+                                # panel 4 times (replay 2026-11-20); the tool for every panel is named
+                                from pyfigures import mcp_server as _m
+                                every = f'{name}_all' if hasattr(_m, f'{name}_all') else None
+                                raise ValueError('Supply panel_ref for a named live panel, or both group_path and image_index'
+                                                 + (f'. For EVERY panel at once ("all bars", "all panels"), call {every} '
+                                                    'instead: one call, no panel_ref.' if every else ''))
                 if text_indexed and kwargs.get('annotation_index') is None:
                     raise ValueError('Supply text_index from get_annotations (text tools count texts, not all annotations)')
                 target = kwargs.get(parameter, 'live') if parameter else None
