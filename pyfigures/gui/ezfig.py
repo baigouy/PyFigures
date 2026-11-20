@@ -250,6 +250,7 @@ class MyWidget(QWidget):
 
         self.shapes_to_draw = []
         self._help_arrow_x = None   # cached x for the empty-canvas hint arrow
+        self._chat_arrow_x = None   # and for the arrow to the chat's robot button
         self.lastPoint = None
         self.firstPoint = None
         # self.resizable = resizable
@@ -524,7 +525,20 @@ class MyWidget(QWidget):
 
     def _compute_help_arrow_x(self):
         """Compute and cache the x position of the Help menu button in this widget's coords.
-        Must be called outside paintEvent to avoid Wayland global-coord call restrictions."""
+        Must be called outside paintEvent to avoid Wayland global-coord call restrictions.
+        The chat's robot button too: its arrow was drawn at a fixed x, left of the button
+        (user, 2026-11-20: "the arrow for the AI is not well centered")."""
+        self._chat_arrow_x = None
+        try:
+            main_win = self.window()
+            bar = getattr(main_win, 'mainToolBar', None)
+            action = getattr(main_win, 'chat_toolbar_action', None)
+            button = bar.widgetForAction(action) if bar is not None and action is not None else None
+            if button is not None and button.isVisible():
+                centre = button.mapToGlobal(QPoint(button.width() // 2, 0))
+                self._chat_arrow_x = self.mapFromGlobal(centre).x()
+        except Exception:
+            pass
         try:
             main_win = self.window()
             if hasattr(main_win, 'menuBar') and main_win.menuBar is not None:
@@ -733,17 +747,22 @@ class MyWidget(QWidget):
             label_font = QFont(painter.font())
             label_font.setPointSize(9)
             painter.setFont(label_font)
-            painter.drawText(QRect(arrow_x - 90, 42, 180, 20),
+            painter.drawText(QRect(arrow_x - 90, 33, 180, 20),
                              Qt.AlignHCenter | Qt.AlignVCenter,
                              'Help  →  Interactive Tutorials')
 
             # the chat: its robot is the first button of the toolbar, above
             # the canvas's left end (the user's wish: everyone should see it)
+            # the arrow on the button's centre, its text right under the arrow (it was
+            # drawn at a fixed x left of the button, its text further right; user 2026-11-20)
+            chat_x = self._chat_arrow_x if self._chat_arrow_x is not None else 28
+            chat_x = max(16, chat_x)
             painter.setFont(arrow_font)
-            painter.drawText(QRect(8, 6, 40, 34), Qt.AlignHCenter | Qt.AlignVCenter, '↑')
+            painter.drawText(QRect(chat_x - 20, 6, 40, 34), Qt.AlignHCenter | Qt.AlignVCenter, '↑')
             painter.setFont(label_font)
-            room = max(0, min(320, arrow_x - 90 - 40 - 16))    # never over the Help hint
-            painter.drawText(QRect(40, 42, room, 20), Qt.AlignLeft | Qt.AlignVCenter,   # right of the ruler
+            left = max(4, chat_x - 8)
+            room = max(0, min(320, arrow_x - 90 - left - 16))  # never over the Help hint
+            painter.drawText(QRect(left, 33, room, 20), Qt.AlignLeft | Qt.AlignVCenter,
                              painter.fontMetrics().elidedText('Chat: a model builds it for you',
                                                               Qt.ElideRight, room))
 
