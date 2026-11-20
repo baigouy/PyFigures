@@ -126,6 +126,25 @@ What is cleaned up for you, and said in the reply:
   are `title`, `axis_labels`, `ticks` (tick labels: group names, numbers) and `legend`; a part
   set to `null` follows the whole plot again. In the panel editor: the publication style tab,
   *Parts of the text*.
+- Several views of the same data: `layers=["mean_line"]` (a line through the means over
+  the points), `"median_line"`, `"mean_error"` (mean ± error over a box or violin).
+- A second measure on a right-hand axis: `y2={"columns": ["genotype", "cells"], "kind":
+  "line", "label": "cells per field"}` (`"csv"`: another table or sheet, `"book.xlsx::Sheet2"`;
+  default the plot's own). QC reports every graph with two y axes: they are easily misread.
+- `invert_y=True` / `invert_x=True`: an axis upside down / right to left.
+- `ybreak=[20, 350]`: a broken y axis (one tall group no longer flattens the others).
+- `y_step=50`, `y_format="sci"` / `"percent"` / `"{:.1f}"`, `log_base=2`: the y ticks.
+- `error_side="up"`: one-sided error bars.
+- `subject="animal"` with `columns=[group, value]`: several values per animal / embryo; the
+  animals are the replicates (the tests use each animal's mean, a SuperPlot: a large dot per
+  animal), and a linear mixed model is recorded too.
+- More kinds: `stacked` (counts per category stacked, `percent=True` for 100 % bars; a
+  chi-square or Fisher test), `dose_response` (the dose column, then one column per
+  response: mean ± error per dose and a 4-parameter logistic fit, EC50 in the legend;
+  `log_x=False` for a linear dose axis), `histogram` (`bins`), `heatmap` (`cmap`).
+- An image as a graph, its x / y axes around it (a mask, a label image, a heat map):
+  `add_image_plot(group_path, image_path, pixel_size=0.2, unit="µm", cmap="viridis",
+  colorbar=True, contour_path=mask)`.
 
 Colours are colour-blind safe by default (the Wong palette), and every series also gets its
 own marker shape.

@@ -11,14 +11,15 @@ import json
 # arguments under another name
 _SPEC_TO_PLOT = {"annotate_stats": "annotate"}
 _PLOT_TO_EDIT = {v: k for k, v in _SPEC_TO_PLOT.items()}
-_NOT_PLOT_ARGS = {"csv", "kind", "latex", "grouped_table", "columns", "where", "skip_rows",
+_NOT_PLOT_ARGS = {"csv", "kind", "latex", "grouped_table", "columns", "where", "skip_rows", "subject",
                   "facet", "facet_row", "facet_ncols"}
 # staplot's defaults: a setting at its default is not written
 _DEFAULTS = {"error": "sd", "annotate": True, "only_significant": True, "stats_mode": "auto",
              "show_ylabel": True, "show_xlabel": True, "show_points": True, "title": "",
              "ylabel": "", "xlabel": "", "violin_inner": "lines", "violin_side": "both",
              "point_style": "jitter", "p_format": "stars", "log_y": False, "show_n": False,
-             "show_mean": False, "stats_text": False}
+             "show_mean": False, "stats_text": False, "error_side": "both", "percent": False, "log_x": True,
+             "invert_y": False, "invert_x": False}
 
 
 def staplot_editor_available() -> bool:
@@ -52,7 +53,7 @@ def editor_arguments(spec: dict) -> dict:
             continue
         kwargs[key] = value
     kwargs["show_title"] = bool(spec.get("title"))
-    table = {k: spec[k] for k in ("columns", "where", "skip_rows") if spec.get(k) not in (None, "", [])}
+    table = {k: spec[k] for k in ("columns", "where", "skip_rows", "subject") if spec.get(k) not in (None, "", [])}
     facet = {k: spec[k] for k in ("facet", "facet_row") if spec.get(k)}
     if facet and spec.get("facet_ncols"):
         facet["ncols"] = spec["facet_ncols"]

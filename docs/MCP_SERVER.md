@@ -364,7 +364,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **209 tools** (about a sixth of them for the poster designer).
+The server currently exposes **210 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -589,6 +589,7 @@ Methods output.
 | Tool | Description |
 |------|-------------|
 | `add_data_plot(pyf_path, group_path, csv_path, kind, error, annotate_stats, stats_mode, ...)` | Add a **live** plot panel (`bar` / `box` / `violin` (whole or half: `violin_side`) / `scatter` / `grouped` / `split_violin` / `paired` / `line`; `columns=` picks the columns of a tidy table, `where=` the rows, `skip_rows=` the lines above the table, `facet=` / `facet_row=` one plot per level) from a CSV, Excel sheet or SQLite table / query; re-renders when the CSV changes. bar/box/violin auto-add significance brackets (Welch t / Mann-Whitney for 2 groups; ANOVA+Tukey / Kruskal+Dunn for >2); scatter shows correlation r/R²/p; grouped runs two-way ANOVA. `latex=True` typesets the plot's text with LaTeX (sans-serif; siunitx in labels) |
+| `add_image_plot(pyf_path, group_path, image_path, pixel_size, unit, cmap, colorbar, contour_path, ...)` | Add an image (a mask, a segmentation, a map) drawn **inside a plot**, with coordinate axes around it in pixels or in `unit` when `pixel_size` is given; optional colour bar and a mask's outline (`contour_path`) |
 | `edit_data_plot(pyf_path, image_path, ...)` | Change any option of a data plot (kind, columns, rows, facets, colours, `element_colors`, `control`, `pairs`, `normalize`, `p_format`, `show_n`, labels...) and re-render it; the full list is in [PLOTS.md](PLOTS.md) |
 | `data_plot_code(pyf_path, image_path)` | The Python code of a plot panel: a data plot's staplot code plus its statistics rerun with pandas + scipy / statsmodels alone (each facet separately); a seaborn plot's seaborn code; a table panel's pandas code |
 | `list_data_plot_kinds()` | The data-plot kinds, the table layout each needs, the test each runs and the options |

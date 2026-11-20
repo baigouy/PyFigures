@@ -427,6 +427,8 @@ def audit_figure(pyf_path: str) -> str:
     text — tell the user, never change it unasked.
     ``plots_turned`` lists data plots that are rotated or mirrored (``how``): a turned
     graph hardly ever makes sense — tell the user.
+    ``plots_dual_axis`` lists data plots with a right-hand y axis (``right_axis``): two
+    y axes are easily misread — mention it, never remove it unasked.
     ``panels_with_tiny_rois`` lists ROIs under 1 % of their image's larger side
     in both directions (``size_px``): possibly a slip of the mouse — ask the user
     whether they are wanted (arrowheads alone are not listed).
@@ -564,6 +566,14 @@ def audit_figure(pyf_path: str) -> str:
         how = turned_plot(el)
         if how:
             turned_plots.append(dict(_where(p), how=how))
+    # two y axes are easily misread (user, 2026-11-20): said, never refused
+    from pyfigures.assistant.plot_info import parse_data_plot
+    dual_axis = []
+    for p, el in zip(panels, elems):
+        spec = parse_data_plot(_child_text(el, "custom_loading_script") or "")
+        if spec and spec.get("y2"):
+            dual_axis.append(dict(_where(p), right_axis=str(spec["y2"].get("label")
+                                                            or (spec["y2"].get("columns") or ["?"])[-1])))
     # micrographs with no pixel size, with or without a bar: no scale can be shown
     # (vector files, scripted panels such as plots, text and placeholders need none)
     no_px = []
@@ -588,6 +598,7 @@ def audit_figure(pyf_path: str) -> str:
         "scale_bars_too_small": too_small,
         "scale_bars_text_mismatch": text_mismatch,
         "plots_turned": turned_plots,
+        "plots_dual_axis": dual_axis,
         "images_without_pixel_size": no_px,
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,

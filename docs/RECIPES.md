@@ -445,6 +445,15 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `order` | list of group names | The groups in this order (bar, box, violin); groups left out are not drawn nor tested. |
 | `ylim` | `[low, high]` | The y range; `null` keeps an end automatic (`[0, null]`: y from 0). |
 | `log_y` | `true` / `false` | A log y axis. |
+| `log_base`, `log_x` | number; `true` / `false` | The log axis base (`2`: ×2 steps); `log_x`: a log x axis (dose_response: on by default). |
+| `y_step`, `y_format` | number; format | A y tick every `y_step`; tick text such as `{:.1f}` or `{:.0%}`. |
+| `invert_y`, `invert_x` | `true` / `false` | The axis runs the other way (depth, rank). |
+| `ybreak` | `[low, high]` | A broken y axis: the values between low and high are cut out (one tall group beside small ones). |
+| `error_side` | `both` (default), `up`, `down` | `up`: only the upper half of each error bar. |
+| `layers` | list | Marks over the plot: `mean_line`, `median_line` (lines joining the groups), `mean_error` (mean ± error). |
+| `y2` | mapping | A second measure on a right-hand axis: `{csv: weights.csv, columns: [group, weight], kind: line, label: "Weight (g)"}`; `kind` is `line`, `points` or `bar`. |
+| `percent`, `bins`, `cmap` | bool; number; colormap | Stacked bars as % of each bar; histogram bin count; heatmap colours. |
+| `subject` | column name | The animal / patient column: its means are the replicates (tests on them, a SuperPlot, plus a mixed model). |
 | `xtick_rotation` | degrees | Tilted group names when they overlap, anticlockwise: `45` rises "/" (rotated left), `-45` falls "\" (rotated right). |
 | `rename` | mapping | The name a group shows (`{mutA: mutant A}`): axis, legend and statistics; the table is unchanged. |
 | `show_points` | `true` / `false` | `false`: no individual points on bar, box and violin plots. |

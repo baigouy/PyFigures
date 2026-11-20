@@ -106,6 +106,13 @@ def audit_report(raw):
                               for e in turned),
                   "   A turned graph hardly ever makes sense (tilted axes, mirrored text): set its rotation "
                   "back to 0 and its flips off in the panel's editor, unless it is meant.", ""]
+    dual = d.get("plots_dual_axis") or []
+    if dual:
+        lines += [f"! {len(dual)} graph{'s have' if len(dual) > 1 else ' has'} two y axes: "
+                  + "; ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} (right: {e['right_axis']})"
+                              for e in dual),
+                  "   Two y axes are easily misread (which line goes with which scale?): keep them only for "
+                  "two measures with different units, each axis coloured as its data.", ""]
     small = d.get("scale_bars_too_small") or []
     if small:
         lines += [f"! {len(small)} scale bar{'s are' if len(small) > 1 else ' is'} very small (under 5 % of "

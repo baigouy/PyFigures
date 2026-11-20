@@ -123,7 +123,9 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "rename", "font_pt", "font_family", "show_points", "violin_inner",
               "violin_side", "columns", "where", "skip_rows", "element_colors",
               "facet", "facet_row", "facet_ncols", "show_n", "show_mean", "p_format", "hlines",
-              "control", "point_style", "normalize", "pairs", "stats_text", "text_pt", "text_font"}
+              "control", "point_style", "normalize", "pairs", "stats_text", "text_pt", "text_font",
+              "layers", "y2", "invert_y", "invert_x", "ybreak", "y_step", "y_format", "log_base",
+              "error_side", "percent", "bins", "cmap", "log_x"}
 # a stack shown as several panels is opt-in: `montage:` / `split:` panels
 _MONTAGE_KEYS = {"axis", "frames", "columns", "projection", "z_range", "z_slice", "channel", "lut",
                  "interval", "unit", "stamps", "stamp_format", "stamp_placement",

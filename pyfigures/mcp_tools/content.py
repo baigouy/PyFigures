@@ -254,13 +254,14 @@ def add_channel_merge(
     )
 
 
-_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin", "paired", "line")
+_DATA_PLOT_KINDS = ("bar", "box", "violin", "scatter", "grouped", "split_violin", "paired", "line",
+                    "stacked", "dose_response", "histogram", "heatmap")
 # the kinds drawn from a two-factor table (factor A, factor B, value)
-_TWO_FACTOR_KINDS = ("grouped", "split_violin", "line")
+_TWO_FACTOR_KINDS = ("grouped", "split_violin", "line", "stacked")
 
 
 # how a plot reads its table: some columns, some rows, lines skipped above the table
-_TABLE_KEYS = ("columns", "where", "skip_rows")
+_TABLE_KEYS = ("columns", "where", "skip_rows", "subject")
 # facets of a data plot (staplot.api.plot_facets): the column, a second one for rows, per row
 _FACET_KEYS = ("facet", "facet_row", "facet_ncols")
 
@@ -342,13 +343,15 @@ def _make_data_plot_script(csv_path: str, kind: str, error: str, annotate: bool,
     aspect_kw = "".join(f", {k}={layout[k]!r}" for k in PLOT_LAYOUT_KEYS
                         if layout.get(k) not in (None, False, [], ""))
     # an axis label removed: none at all, not staplot's automatic "Value"
-    aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel", "show_points")
+    aspect_kw += "".join(f", {k}=False" for k in ("show_ylabel", "show_xlabel", "show_points", "log_x")
                          if layout.get(k) is False)
     # the columns of a wider (tidy) table the plot uses ("split by sex" from a sheet
     # holding genotype, treatment, sex, day, area)
     cols_kw = f", columns={list(layout['columns'])!r}" if layout.get("columns") else ""
     # only some rows ("only day 14", "only the males"): a pandas query on the table
     cols_kw += f", where={str(layout['where'])!r}" if layout.get("where") else ""
+    # several values per animal / embryo: the subjects are the replicates (SuperPlot)
+    cols_kw += f", subject={str(layout['subject'])!r}" if layout.get("subject") else ""
     # lines above the table skipped by hand (else found by staplot)
     cols_kw += f", skip_rows={int(layout['skip_rows'])}" if layout.get("skip_rows") is not None else ""
     # facets: one plot per value of a column ("one plot per day"), each with its statistics
@@ -409,7 +412,8 @@ else:
 PLOT_LAYOUT_KEYS = ("aspect", "width", "height", "font_scale", "order", "ylim", "log_y",
                     "xtick_rotation", "legend", "rename", "violin_inner", "violin_side", "element_colors",
                     "show_n", "show_mean", "p_format", "hlines", "control", "point_style", "normalize",
-                    "pairs", "stats_text")
+                    "pairs", "stats_text", "layers", "y2", "invert_y", "invert_x", "ybreak", "y_step",
+                    "y_format", "log_base", "error_side", "percent", "bins", "cmap", "log_x")
 _LAYOUT_LIMITS = {"aspect": (0.2, 6), "width": (0.5, 20), "height": (0.5, 20), "font_scale": (0.3, 4)}
 
 
@@ -470,6 +474,15 @@ def _plot_columns(csv_abs: str, kind: str, columns, skip_rows=None) -> tuple[lis
     return cols, ""
 
 
+def _plot_subject(kind: str, columns) -> str:
+    """'' or why subject= does not fit the plot."""
+    if kind not in ("bar", "box", "violin"):
+        return "subject (several values per animal) applies to bar, box and violin plots"
+    if not columns or len(columns) != 2:
+        return "subject needs columns=[group, value] (the subject column is named by subject)"
+    return ""
+
+
 def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = None,
                  columns=None, where=None, skip_rows=None) -> tuple[dict, str]:
     """(layout, error) for a data plot: *current* with the given *values* changed.
@@ -479,7 +492,7 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
     for key, value in values.items():
         if value is None:
             continue
-        if value is False or (not isinstance(value, bool) and value in (0, "", [], {})):
+        if (value is False and key != "log_x") or (not isinstance(value, bool) and value in (0, "", [], {})):
             out.pop(key, None)
             continue
         if key in _LAYOUT_LIMITS:
@@ -545,7 +558,64 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                 value = {low[str(k).lower()]: str(v) for k, v in value.items()}
             # names given before stay, the new ones are added
             value = {**(out.get("rename") or {}), **value}
-        elif key in ("show_n", "show_mean", "stats_text"):
+        elif key == "layers":
+            # several views of the same data: lines through the means / medians, mean ± error
+            if kind not in ("bar", "box", "violin", "paired"):
+                return {}, "layers (lines through the means, mean ± error) go over a bar, box, violin or paired plot"
+            value = [value] if isinstance(value, str) else [str(v).strip().lower() for v in value]
+            ok = ("mean_line", "median_line", "mean_error")
+            if any(v not in ok for v in value):
+                return {}, f"layers are {list(ok)} (a line through the means / medians, mean ± error)"
+        elif key == "y2":
+            # a second measure on a right-hand axis, at the plot's x (groups or x values)
+            if not isinstance(value, dict) or not value.get("columns"):
+                return {}, ('y2 is {"columns": [x, value], "kind": "line"|"points"|"bar", "label": ..., '
+                            '"color": ...}: the x column holds the plot\'s groups (or x values); '
+                            '"csv" another table (default: the plot\'s)')
+            value = dict(value)
+            value["csv"] = os.path.abspath(value["csv"]) if value.get("csv") else csv_abs
+            if (value.get("kind") or "line") not in ("line", "points", "bar"):
+                return {}, 'y2 "kind" is "line", "points" or "bar"'
+            if kind not in _TWO_FACTOR_KINDS + ("bar", "box", "violin", "paired"):
+                return {}, "y2 (a right-hand axis) goes on bar, box, violin, paired, grouped or line plots"
+        elif key == "ybreak":
+            try:
+                value = [float(v) for v in value]
+            except (TypeError, ValueError):
+                return {}, "ybreak is [low, high]: the y axis jumps from low to high (e.g. [20, 350])"
+            if len(value) != 2 or not value[0] < value[1]:
+                return {}, "ybreak is [low, high] with low below high"
+        elif key in ("y_step", "log_base", "bins"):
+            try:
+                value = float(value) if key != "bins" else int(value)
+            except (TypeError, ValueError):
+                return {}, f"{key} must be a number"
+            if value <= 0 or (key == "log_base" and value == 1):
+                return {}, f"{key} must be positive" + (" and not 1" if key == "log_base" else "")
+        elif key == "y_format":
+            value = str(value).strip()
+            if value not in ("plain", "sci", "percent") and "{" not in value and "%" not in value:
+                return {}, 'y_format is "plain", "sci" (×10ⁿ), "percent" or a format such as "{:.1f}"'
+        elif key == "error_side":
+            value = str(value).strip().lower()
+            if value not in ("both", "up", "down"):
+                return {}, 'error_side is "up" (only above the mean), "down" or "both"'
+            if value == "both":
+                out.pop(key, None)
+                continue
+        elif key == "cmap":
+            import matplotlib
+            if str(value) not in matplotlib.colormaps:
+                return {}, f"no colour map {value!r} (e.g. viridis, magma, RdBu_r, gray)"
+        elif key == "log_x":
+            # a dose axis is logarithmic by default: only False is written
+            value = bool(value)
+            if value:
+                out.pop(key, None)
+                continue
+            out[key] = False
+            continue
+        elif key in ("show_n", "show_mean", "stats_text", "invert_y", "invert_x", "percent"):
             value = bool(value)
             if key == "stats_text" and value and kind not in _TWO_FACTOR_KINDS:
                 return {}, "stats_text (the two-way ANOVA written under the axes) applies to grouped, split_violin and line plots"
@@ -766,7 +836,7 @@ def _check_colour_names(csv_abs: str, kind: str, colors, sel: dict) -> str:
 
 def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True,
                           stats_mode: str = "auto", label=None, columns=None, where=None, skip_rows=None,
-                          facet=None, facet_row=None, control=None):
+                          facet=None, facet_row=None, control=None, subject=None):
     """(the figure's stats-provenance entry or None, a note for the reply, warnings) of a
     data plot: pairwise tests for bar/box/violin, two-way ANOVA for grouped, a
     correlation for scatter. Shared by add_data_plot and the GUI's dropped tables."""
@@ -775,7 +845,7 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
     _mode = {"auto": None, "parametric": True, "nonparametric": False}.get(stats_mode)
     try:
         from staplot import api as _api
-        _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows})
+        _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows, "subject": subject})
         if facet:
             recs = _api.facet_stats(csv_abs, kind, facet, facet_row, only_significant=only_significant,
                                     stats_mode=stats_mode, **_ckw, **({"control": control} if control else {}))
@@ -791,9 +861,33 @@ def data_plot_stats_entry(csv_abs: str, kind: str, only_significant: bool = True
             rec = _api.paired_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
                                    parametric=_mode)
         elif kind in ("bar", "box", "violin"):
-            rec = _api.auto_test(_api.table_from_csv(csv_abs, **_ckw), only_significant=only_significant,
+            _t = _api.table_from_csv(csv_abs, **_ckw)
+            if subject:
+                from staplot.stats.nested import means_table
+                _t = means_table(_t)
+            rec = _api.auto_test(_t, only_significant=only_significant,
                                  **({"control": control} if control else {}),
                                  parametric=_mode)
+        elif kind == "stacked":
+            from staplot.plots.extras import chi_square, plot_stacked
+            import matplotlib.pyplot as _plt
+            _fig, counts = plot_stacked(_api.grouped_table_from_csv(csv_abs, **_ckw))
+            _plt.close(_fig)
+            rec = chi_square(counts["counts"])
+            if "error" not in rec:
+                entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
+                         "test": rec["test"], "p": rec["p"], "counts": counts["counts"], **_ckw}
+                return entry, f" — {rec['test']} of the counts, p={rec['p']:.3g}", []
+            return None, f" (no test: {rec['error']})", []
+        elif kind == "dose_response":
+            from staplot.plots.extras import fit_logistic4
+            groups = _api.table_from_csv(csv_abs, **_ckw).group_arrays()
+            names = list(groups)
+            fits = {n: fit_logistic4(groups[names[0]], groups[n]) for n in names[1:]}
+            entry = {"source": "data_plot", "panel_label": label, "csv": csv_abs, "kind": kind,
+                     "test": "4-parameter logistic fit", "fits": fits, **_ckw}
+            ok = [f"{n}: EC50 {f['ec50']:.3g}" for n, f in fits.items() if "error" not in f]
+            return entry, (" — " + "; ".join(ok)) if ok else " (the fit did not converge)", []
         elif kind in _TWO_FACTOR_KINDS:
             gt = _api.grouped_table_from_csv(csv_abs, **_ckw)
             rec = _api.two_way_test(gt)
@@ -1001,6 +1095,20 @@ def add_data_plot(
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
     stats_text: bool | None = None,
+    layers: list[str] | None = None,
+    y2: dict | None = None,
+    invert_y: bool | None = None,
+    invert_x: bool | None = None,
+    ybreak: list[float] | None = None,
+    y_step: float | None = None,
+    y_format: str | None = None,
+    log_base: float | None = None,
+    error_side: str | None = None,
+    percent: bool | None = None,
+    bins: int | None = None,
+    cmap: str | None = None,
+    log_x: bool | None = None,
+    subject: str | None = None,
     text_pt: dict[str, float | None] | None = None,
     text_font: dict[str, str | None] | None = None,
 ) -> str:
@@ -1151,7 +1259,7 @@ def add_data_plot(
     where, bad = _plot_where(csv_abs, where, skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
-    _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows})
+    _ckw = _sel({"columns": columns, "where": where, "skip_rows": skip_rows, "subject": subject})
     if kind in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
@@ -1177,7 +1285,11 @@ def add_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text},
+                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text,
+                                "layers": layers, "y2": y2, "invert_y": invert_y, "invert_x": invert_x,
+                                "ybreak": ybreak, "y_step": y_step, "y_format": y_format, "log_base": log_base,
+                                "error_side": error_side, "percent": percent, "bins": bins, "cmap": cmap,
+                                "log_x": log_x},
                                columns=columns, where=where, skip_rows=skip_rows)
     if bad:
         return f"ERROR: {bad}; nothing was added."
@@ -1189,6 +1301,11 @@ def add_data_plot(
         layout["where"] = where
     if skip_rows is not None:
         layout["skip_rows"] = skip_rows
+    if subject:
+        bad = _plot_subject(kind, columns)
+        if bad:
+            return f"ERROR: {bad}; nothing was added."
+        layout["subject"] = subject
     facets, bad = _plot_facet(csv_abs, {"facet": facet, "facet_row": facet_row, "facet_ncols": facet_ncols},
                               {}, skip_rows, where)
     if bad:
@@ -2076,6 +2193,20 @@ def edit_data_plot(
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
     stats_text: bool | None = None,
+    layers: list[str] | None = None,
+    y2: dict | None = None,
+    invert_y: bool | None = None,
+    invert_x: bool | None = None,
+    ybreak: list[float] | None = None,
+    y_step: float | None = None,
+    y_format: str | None = None,
+    log_base: float | None = None,
+    error_side: str | None = None,
+    percent: bool | None = None,
+    bins: int | None = None,
+    cmap: str | None = None,
+    log_x: bool | None = None,
+    subject: str | None = None,
     text_pt: dict[str, float | None] | None = None,
     text_font: dict[str, str | None] | None = None,
 ) -> str:
@@ -2149,6 +2280,27 @@ def edit_data_plot(
     *normalize*: values as a % of this group's mean ("% of WT"); "" = the raw values.
     *pairs*: brackets only for these pairs ([["WT", "mutA"]]); [] = every significant pair.
     *stats_text*: True = the two-way ANOVA written under the axes; False = stars only (default).
+    *layers*: several views of the same data over the groups (bar / box / violin / paired):
+      ["mean_line"] a line through the means ("points and a line"), "median_line",
+      "mean_error" (mean ± the plot's error); [] removes them.
+    *y2*: a second measure on a RIGHT-HAND y axis ("dual y axis"), at the plot's x:
+      {"columns": [x, value], "kind": "line"|"points"|"bar", "label": "cells", "color": "red",
+      "csv": another table (default: the plot's)}; the x column holds the plot's group names
+      (or a line plot's x values). {} removes it. QC warns: two y axes are easily misread.
+    *invert_y* / *invert_x*: True = that axis upside down / right to left ("invert the y
+      axis", depth, rank); False back to normal.
+    *subject*: the column naming the animal / embryo / experiment each value comes from
+      (several cells per animal): the groups are compared on the subjects' means (the
+      subjects are the replicates), each subject's mean drawn as a large dot, a mixed
+      model reported; needs columns=[group, value]; bar / box / violin. "" removes it.
+    *ybreak*: [low, high] = a BROKEN y axis jumping from low to high (one tall group
+      flattening the others); [] removes it.
+    *y_step*: distance between y ticks; *y_format*: "plain" | "sci" (×10ⁿ) | "percent" |
+      "{:.1f}"; *log_base*: 2 / 10 (a log y axis in that base).
+    *error_side*: "up" | "down" = one-sided error bars; "both" the default.
+    Kinds stacked (percent=True: each bar 100 %; chi-square / Fisher test of the counts),
+    dose_response (dose column then responses: 4-parameter logistic fit, EC50; log_x=False
+    for a linear dose axis), histogram (bins), heatmap (cmap).
     *sheet*: another sheet of the Excel workbook (name or number from 1), or another
       table / SQL query of an SQLite database.
     *group_path* / *image_index*: the panel, as for the other image tools.
@@ -2215,6 +2367,12 @@ def edit_data_plot(
                                     new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
+    # the subjects (several values per animal): "" removes them
+    new["subject"] = (subject if subject is not None else spec.get("subject")) or None
+    if new["subject"]:
+        bad = _plot_subject(new["kind"], new["columns"])
+        if bad:
+            return f"ERROR: {bad}. Nothing was changed."
     if new["kind"] in _TWO_FACTOR_KINDS:
         try:
             from staplot import api as _api
@@ -2237,7 +2395,11 @@ def edit_data_plot(
                                 "violin_side": violin_side, "element_colors": element_colors,
                                 "show_n": show_n, "show_mean": show_mean, "p_format": p_format,
                                 "hlines": hlines, "control": control, "point_style": point_style,
-                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text}, current,
+                                "normalize": normalize, "pairs": pairs, "stats_text": stats_text,
+                                "layers": layers, "y2": y2, "invert_y": invert_y, "invert_x": invert_x,
+                                "ybreak": ybreak, "y_step": y_step, "y_format": y_format, "log_base": log_base,
+                                "error_side": error_side, "percent": percent, "bins": bins, "cmap": cmap,
+                                "log_x": log_x}, current,
                                columns=new["columns"], where=new["where"], skip_rows=new["skip_rows"])
     if bad:
         return f"ERROR: {bad}. Nothing was changed."
@@ -3447,3 +3609,75 @@ def configure_image(
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"
     return f"Image {image_index} in {loc}: {', '.join(changed)}."
+
+
+def _image_plot_script(image_path: str, options: dict) -> str:
+    """The script of an image-plot panel (staplot.api.image_plot)."""
+    kw = "".join(f", {k}={v!r}" for k, v in options.items() if v not in (None, "", False))
+    return f"""\
+# an image drawn with its coordinate axes (add_image_plot)
+try:
+    from staplot import api as _api
+except Exception as _e:
+    fig, ax = plt.subplots(figsize=(4.0, 2.2))
+    ax.axis('off')
+    ax.text(0.5, 0.5, 'This panel needs the "staplot" package.\\n' + repr(_e), ha='center', va='center', fontsize=8)
+    self.img = fig
+else:
+    fig = _api.image_plot({image_path!r}{kw})
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as _Agg
+    import matplotlib.pyplot as _plt
+    _Agg(fig)
+    _plt.close(fig)
+    self.img = fig
+"""
+
+
+@mcp.tool()
+def add_image_plot(
+    pyf_path: str,
+    group_path: list[int],
+    image_path: str,
+    pixel_size: float | None = None,
+    unit: str = "µm",
+    cmap: str = "gray",
+    colorbar: bool = False,
+    colorbar_label: str = "",
+    contour_path: str | None = None,
+    contour_color: str = "#ff3b30",
+    vmin: float | None = None,
+    vmax: float | None = None,
+    title: str = "",
+    label: str = "",
+) -> str:
+    """Add an image drawn as a GRAPH: with x / y coordinate axes around it (as matplotlib's
+    imshow), e.g. a segmentation mask, a label image, a heat map or a micrograph whose
+    pixel coordinates matter ("show the mask with its axes", "image with coordinates").
+    A normal image panel (add_image) has no axes; use this only when axes are wanted.
+
+    *pixel_size*: the size of one pixel in *unit* (axes in µm); none = axes in pixels.
+    *cmap*: colour map (gray, viridis, magma...); *colorbar*: a calibration bar beside it
+    (*colorbar_label*); *vmin* / *vmax*: the display range.
+    *contour_path*: a mask whose outlines are drawn on top (*contour_color*).
+    A stack is shown as its maximum projection. Its text follows the figure's fonts.
+    """
+    import matplotlib
+    from .structure import add_scripted_image
+    path = os.path.abspath(str(image_path))
+    if not os.path.isfile(path):
+        return f"ERROR: no image file {path}."
+    if contour_path and not os.path.isfile(os.path.abspath(contour_path)):
+        return f"ERROR: no mask file {contour_path}."
+    if cmap not in matplotlib.colormaps:
+        return f"ERROR: no colour map {cmap!r} (e.g. gray, viridis, magma, RdBu_r)."
+    if pixel_size is not None and not (isinstance(pixel_size, (int, float)) and pixel_size > 0):
+        return "ERROR: pixel_size must be a positive number (the size of one pixel in unit)."
+    options = {"pixel_size": pixel_size, "unit": unit if pixel_size else None, "cmap": cmap,
+               "colorbar": bool(colorbar), "colorbar_label": colorbar_label,
+               "contour": os.path.abspath(contour_path) if contour_path else None,
+               "contour_color": contour_color if contour_path else None, "vmin": vmin, "vmax": vmax,
+               "title": title}
+    out = add_scripted_image(pyf_path, group_path, _image_plot_script(path, options), label=label)
+    if out.startswith("ERROR"):
+        return out
+    return out + f" It shows {os.path.basename(path)} with its axes in {unit if pixel_size else 'pixels'}."

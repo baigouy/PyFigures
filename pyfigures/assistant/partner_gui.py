@@ -447,9 +447,9 @@ class PartnerGUI(BaseGUI):
                     # the left" and on "add a second inset" (replay 2026-11-20)
                     raise ValueError(f'ALREADY_HAS_INSET: ROI {index0} already has its inset (annotation_index {j}); nothing was '
                                      'added, do not resend this call. To show ANOTHER REGION in it ("more to the left / up"): '
-                                     f'move the ROI: edit_annotation_properties on annotation {index0} with changes '
-                                     '{"geometry": [x, y, width, height]} in source pixels (token from '
-                                     'inspect_annotation_objects); the inset and its leader lines follow. To resize the inset: '
+                                     f'move the ROI in one call: move_annotations(annotation_indexes=[{index0}], dx=..., '
+                                     'dy=...) in source pixels (or to_x / to_y); the inset and its leader lines follow. '
+                                     'Never remove and redraw them. To resize the inset: '
                                      f'changes {{"size_fraction": ...}} on annotation {j}. For a SECOND inset: draw its box '
                                      'first (add_roi_rect), then roi_to_inset with that box\'s annotation_index.')
         if validate_only:

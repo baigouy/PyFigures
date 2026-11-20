@@ -1007,6 +1007,28 @@ def add_corner_labels(
     return f"Added {len(added)} label(s) to image {image_index} in {loc}: {'; '.join(added)}{note}."
 
 
+def _shown_by_inset(children, el) -> bool:
+    """Whether the ROI *el* is the region an inset of the same panel shows (its link_id
+    is followed, or an unlinked inset's crop starts at its corner)."""
+    if el.tag not in _ROI_KINDS["rect"]:
+        return False
+    insets = [c for c in children if c.tag == "Image2D"]
+    if not insets:
+        return False
+
+    def num(e, key):
+        try:
+            return float(_plain(_child_text(e, key)) or 0)
+        except ValueError:
+            return 0.0
+    ident = _plain(_child_text(el, "link_id"))
+    followed = {_plain(_child_text(c, "follows_roi")) for c in insets} - {"", "None"}
+    if ident and ident in followed:
+        return True
+    return any(abs(num(el, "x") - num(c, "crop_left")) <= 2 and abs(num(el, "y") - num(c, "crop_top")) <= 2
+               for c in insets)
+
+
 @mcp.tool()
 def remove_annotation(
     pyf_path: str,
@@ -1043,6 +1065,13 @@ def remove_annotation(
             "which is protected. Use the dedicated remove_scale_bar or "
             "remove_inset tool instead."
         )
+    if _shown_by_inset(children, target):
+        # replay 2026-11-20: "the region is more to the left" -> the model removed the box and
+        # its leader lines one by one to redraw them (14 calls); the inset was left orphaned
+        return (f"ERROR: annotation {annotation_index} is the box an inset shows. To show ANOTHER REGION "
+                f"(\"more to the left\", \"a bit up\"), MOVE it in one call: move_annotations("
+                f"annotation_indexes=[{annotation_index}], dx=..., dy=...) (or to_x / to_y); the inset and its "
+                "leader lines follow. To remove the inset as well: remove_inset first. Nothing was removed.")
     annots.remove(target)
     _save(tree, pyf_path)
     loc = "canvas" if not group_path else f"group {group_path}"

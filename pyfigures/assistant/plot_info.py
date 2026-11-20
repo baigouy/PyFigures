@@ -25,10 +25,17 @@ PLOT_KINDS = {
               't-test / Wilcoxon, repeated-measures ANOVA / Friedman',
     'split_violin': 'two conditions (e.g. sex) as the two halves of each violin, a legend naming them; '
                     'each pair tested, two-way ANOVA (needs a two-factor table with a two-level factor)',
+    'stacked': 'stacked bars of counts per category (percent=True: each bar 100 %); chi-square / Fisher '
+               'test (a table: bars, categories, count)',
+    'dose_response': 'mean ± error per dose and a 4-parameter logistic fit, EC50 in the legend (a table: '
+                     'dose, then one column per response)',
+    'histogram': 'the distribution of each column as a histogram (bins)',
+    'heatmap': 'the table\'s values as coloured cells (cmap)',
 }
 _LAYOUT_KEYS = ('aspect', 'width', 'height', 'font_scale', 'order', 'ylim', 'log_y', 'xtick_rotation', 'legend',
                 'rename', 'violin_inner', 'violin_side', 'element_colors', 'show_n', 'show_mean', 'p_format',
-                'hlines', 'control', 'point_style', 'normalize', 'pairs', 'stats_text')
+                'hlines', 'control', 'point_style', 'normalize', 'pairs', 'stats_text', 'layers', 'y2', 'invert_y', 'invert_x', 'ybreak', 'y_step', 'y_format',
+                'log_base', 'error_side', 'percent', 'bins', 'cmap', 'log_x')
 SCRIPT_CHARS = 2500           # the code shown for a script panel (the rest: get_script)
 _STATS_CACHE: dict = {}        # (csv, mtime, size, kind, only_significant, stats_mode) -> record
 
@@ -47,7 +54,7 @@ def _table_file(path):
 
 def _sel(spec: dict) -> dict:
     """How the plot reads its table: columns, where, skip_rows (those set)."""
-    return {k: spec[k] for k in ('columns', 'where', 'skip_rows')
+    return {k: spec[k] for k in ('columns', 'where', 'skip_rows', 'subject')
             if spec.get(k) is not None and spec.get(k) not in ('', [])}
 
 
@@ -71,7 +78,7 @@ def parse_data_plot(script: str) -> dict | None:
             if node.func.attr in ('table_from_csv', 'grouped_table_from_csv'):
                 spec['grouped_table'] = node.func.attr == 'grouped_table_from_csv'
                 for kw in node.keywords:
-                    if kw.arg in ('columns', 'where', 'skip_rows'):
+                    if kw.arg in ('columns', 'where', 'skip_rows', 'subject'):
                         try:
                             spec[kw.arg] = ast.literal_eval(kw.value)
                         except ValueError:
@@ -103,6 +110,8 @@ def parse_data_plot(script: str) -> dict | None:
             'where': spec.get('where'),
             # lines skipped above the table by hand (None: found automatically)
             'skip_rows': spec.get('skip_rows'),
+            # the column naming each value's subject (animal): the subjects are the replicates
+            'subject': spec.get('subject'),
             # facets: one plot per value of a column (staplot.api.plot_facets)
             'facet': spec.get('facet'), 'facet_row': spec.get('facet_row'),
             'facet_ncols': spec.get('facet_ncols')}
