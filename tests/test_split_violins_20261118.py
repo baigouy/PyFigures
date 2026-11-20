@@ -118,8 +118,9 @@ def test_split_violins_faceted_with_seaborn(pyf, mice):
                              hue="sex", col="treatment", options={"split": True})
     assert "faceted by treatment" in out, out
     fig = _draw(_scripts(pyf)[-1])
-    legend = fig.legends[0].get_window_extent(fig.canvas.get_renderer())
-    last = fig.axes[-1].get_window_extent(fig.canvas.get_renderer())
+    from batoolset.matplolibs.tools import figure_renderer  # macOS: Figure() has no get_renderer
+    legend = fig.legends[0].get_window_extent(figure_renderer(fig))
+    last = fig.axes[-1].get_window_extent(figure_renderer(fig))
     assert legend.x0 >= last.x1 - 1                 # the legend beside the facets, not on one
 
 

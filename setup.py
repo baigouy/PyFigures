@@ -88,8 +88,8 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batoolset>=0.2.3",          # 0.2.3: images with no extension recognised by content; folder order as the file browser
-        "batoolset-gui>=0.2.6",      # Qt layer; 0.2.6: plots follow the label font and size
+        "batoolset>=0.2.4",          # 0.2.4: figures without pyplot measured (figure_renderer); 0.2.3: files with no extension
+        "batoolset-gui>=0.2.7",      # Qt layer; 0.2.7: plots fitted on every canvas; 0.2.6: plots follow the label font
         "staplot>=0.1.1",            # data-plot panels and stats brackets (staplot.api); 0.1.1: stats_text, pairs, normalize
         "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)
         "openpyxl",                  # plots from Excel .xlsx sheets (MIT)

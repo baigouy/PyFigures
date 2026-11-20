@@ -8,7 +8,7 @@ import threading
 
 from test_assistant_live import gui, runtime  # noqa: F401  (fixtures)
 
-PG = os.path.join(os.path.dirname(__file__), "..", "demo_figures", "plots_playground")
+from _tables import measurements_xlsx  # noqa: E402  (the playground file is not in the repository)
 
 
 def test_a_plot_edit_keeps_every_row_at_the_figure_width(qapp, gui, runtime, tmp_path):  # noqa: F811
@@ -36,7 +36,7 @@ def test_a_plot_edit_keeps_every_row_at_the_figure_width(qapp, gui, runtime, tmp
         return box['out']
 
     for _ in range(2):                                    # two plots in one row, like c and d
-        out = call('add_data_plot', {'group_path': [0], 'csv_path': os.path.join(PG, 'measurements.xlsx')})
+        out = call('add_data_plot', {'group_path': [0], 'csv_path': measurements_xlsx(tmp_path)})
         assert 'ERROR' not in str(out), out
     width = g.size_spinbox.value()
     from pyfigures.assistant.partner_gui import panels

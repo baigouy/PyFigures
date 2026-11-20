@@ -281,12 +281,12 @@ def test_plot_text_is_seven_points_on_the_page(pyf, book, qapp):
     for scale in (1.0, 2.5):
         panel = create_object("Image2D", props.get("Image2D", props))
         panel.scale = scale
-        from batoolset.matplolibs.tools import get_fig_rect, figure_pad_inches
+        from batoolset.matplolibs.tools import get_fig_rect, figure_pad_inches, figure_renderer
         shown_pt = get_fig_rect(panel.img).width() / scale
         saved = panel._apply_publication_style()
         try:
             fig = panel.img
-            drawn_pt = fig.get_tightbbox(fig.canvas.get_renderer()).padded(figure_pad_inches(fig)).width * 72
+            drawn_pt = fig.get_tightbbox(figure_renderer(fig)).padded(figure_pad_inches(fig)).width * 72
             tick = fig.axes[0].get_yticklabels()[0].get_fontsize()
             assert abs(tick * shown_pt / drawn_pt - 9) < 0.3, (scale, tick * shown_pt / drawn_pt)
         finally:
@@ -361,8 +361,9 @@ def test_rename_a_group_and_rotate_its_name_left(pyf, book):
     from pyfigures.assistant.plot_info import parse_data_plot, staplot_call
     assert "rename={'mutA': 'mutant A'}" in staplot_call(parse_data_plot(_scripts(pyf)[-1]))
     assert "rename {'mutA': 'mutant A'} -> None" in C.edit_data_plot(pyf, [], 0, rename={})
-    doc = C.edit_data_plot.__doc__
-    assert '"rotate\n      left" / "anticlockwise" = positive' in doc
+    # whitespace collapsed: Python 3.13 strips docstrings' indentation (CI macOS 3.13)
+    doc = " ".join(C.edit_data_plot.__doc__.split())
+    assert '"rotate left" / "anticlockwise" = positive' in doc
     from pyfigures.assistant.categorized_mcp import __file__ as hints_file
     assert '"rotate left" = +45' in open(hints_file, encoding="utf-8").read()
 

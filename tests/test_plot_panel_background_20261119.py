@@ -8,7 +8,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-PG = os.path.join(os.path.dirname(__file__), "..", "demo_figures", "plots_playground")
+from _tables import measurements_xlsx  # noqa: E402  (the playground file is not in the repository)
 
 
 def _plot_figure(tmp_path):
@@ -61,7 +61,7 @@ def test_a_box_plot_with_brackets_fills_its_panel(tmp_path):
     pyf = str(tmp_path / "row.pyf")
     create_figure(pyf, mode="groups", num_groups=1, orientation="X", spacing=3)
     add_image(pyf, [0], str(img))
-    out = add_data_plot(pyf, [0], os.path.join(PG, "measurements.xlsx"))
+    out = add_data_plot(pyf, [0], measurements_xlsx(tmp_path))
     assert "bracketed" in out, out                                   # the plot has brackets
     text, _img = preview_panel_source(pyf, [0], 1, view="figure")
     assert "EMPTY:" not in text, text

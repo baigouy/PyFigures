@@ -7,8 +7,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-PG = os.path.join(os.path.dirname(__file__), "..", "demo_figures", "plots_playground")
-TABLE = os.path.join(PG, "measurements.xlsx")
+from _tables import measurements_xlsx  # noqa: E402  (the playground file is not in the repository)
 LABEL = "<span style=\"font-family:'Times New Roman'; font-size:6pt;\">ctrl</span>"
 
 
@@ -48,7 +47,7 @@ def _plot(pyf):
 def test_a_new_plot_takes_the_labels_font_and_size(tmp_path):
     from pyfigures.mcp_server import add_data_plot
     pyf = _figure(tmp_path)
-    assert "ERROR" not in add_data_plot(pyf, [], TABLE)
+    assert "ERROR" not in add_data_plot(pyf, [], measurements_xlsx(tmp_path))
     p = _plot(pyf)
     assert p["publication_font"] == "figure"
     assert float(p["publication_font_size"]) == 6 and p["publication_font_size_from_labels"] is True
@@ -57,7 +56,7 @@ def test_a_new_plot_takes_the_labels_font_and_size(tmp_path):
 def test_with_no_labels_the_size_is_7_pt_not_the_letters(tmp_path):
     from pyfigures.mcp_server import add_data_plot
     pyf = _figure(tmp_path, label=False)
-    add_data_plot(pyf, [], TABLE)
+    add_data_plot(pyf, [], measurements_xlsx(tmp_path))
     p = _plot(pyf)
     assert float(p["publication_font_size"]) == 7 and p["publication_font_size_from_labels"] is True
 
@@ -65,7 +64,7 @@ def test_with_no_labels_the_size_is_7_pt_not_the_letters(tmp_path):
 def test_edit_sets_and_gives_back_the_font_and_size(tmp_path):
     from pyfigures.mcp_server import add_data_plot, edit_data_plot
     pyf = _figure(tmp_path)
-    add_data_plot(pyf, [], TABLE)
+    add_data_plot(pyf, [], measurements_xlsx(tmp_path))
     out = edit_data_plot(pyf, [], 1, font_family="Verdana", font_pt=9)
     assert "Verdana" in out, out
     p = _plot(pyf)

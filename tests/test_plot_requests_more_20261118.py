@@ -279,7 +279,8 @@ def test_seaborn_colour_per_group_legend_and_axis_range(pyf, tidy):
     # seaborn desaturates box colours a little: orange (female) and blue (male) all the same
     female, male = (to_rgba(h.get_facecolor()) for h in leg.legend_handles[:2])
     assert female[0] > female[2] and male[2] > male[0]
-    renderer = fig.canvas.get_renderer()
+    from batoolset.matplolibs.tools import figure_renderer  # macOS: Figure() has no get_renderer
+    renderer = figure_renderer(fig)
     assert leg.get_window_extent(renderer).y0 >= fig.axes[0].get_window_extent(renderer).y1 - 1    # above
     out = C.edit_seaborn_plot(pyf, [], 0, legend="none", remove=["ylim"])
     assert "legend 'top' -> 'none'" in out
