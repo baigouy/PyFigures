@@ -122,7 +122,7 @@ _PLOT_KEYS = {"kind", "error", "ylabel", "xlabel", "title", "stats_mode",
               "width", "height", "font_scale", "order", "ylim", "log_y", "xtick_rotation", "legend",
               "rename", "font_pt", "font_family", "show_points", "violin_inner",
               "violin_side", "columns", "where", "skip_rows", "element_colors",
-              "facet", "facet_row", "facet_ncols", "show_n", "show_mean", "p_format", "hlines",
+              "facet", "facet_row", "facet_ncols", "facet_panels", "show_n", "show_mean", "p_format", "hlines",
               "control", "point_style", "normalize", "pairs", "stats_text", "text_pt", "text_font",
               "layers", "y2", "invert_y", "invert_x", "ybreak", "y_step", "y_format", "log_base",
               "error_side", "percent", "bins", "cmap", "log_x"}

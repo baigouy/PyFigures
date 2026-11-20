@@ -107,6 +107,9 @@ What is cleaned up for you, and said in the reply:
 
 - `facet="day"`: one plot per day side by side, each with its own test, one y axis;
 - `facet_row="sex"`: a grid; `facet_ncols`: facets per row; the `title` goes over all of them.
+- `facet_panels=True` (with `facet`): the facets as **separate panels** side by side in one
+  row instead of one panel, each with its own title (the facet's value), statistics and
+  **letter** (the figure's lettering, in its font and size), on one shared y range.
 
 **Labels, colours, layout**
 

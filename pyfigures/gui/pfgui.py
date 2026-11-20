@@ -6912,6 +6912,12 @@ class EZFIG_GUI(QMainWindow):
         facet_combo = QComboBox(more_row)
         facet_combo.setToolTip('One plot per value of this column, side by side, each with its own '
                                'statistics (e.g. one per day)')
+        # the facets as separate panels side by side, each with its own figure letter (user,
+        # 2026-11-20: "side by side but still split"); add_data_plot(facet_panels=True)
+        facet_panels_cb = QCheckBox('separate panels', more_row)
+        facet_panels_cb.setToolTip('One panel per facet value, side by side in a row, each with its own '
+                                   'letter, title and statistics, on one shared y axis range '
+                                   '(a plot dropped with other files stays one panel)')
         where_edit = QLineEdit('', more_row)
         where_edit.setPlaceholderText("only rows where... e.g. day == 14")
         where_edit.setToolTip("Keep only the rows matching this condition (pandas query): day == 14, "
@@ -6923,7 +6929,7 @@ class EZFIG_GUI(QMainWindow):
         skip_spin.setPrefix('skip ')
         skip_spin.setToolTip('Lines above the table to skip (an instrument header, a title). '
                              '"auto" finds them.')
-        for w in (facet_combo, where_edit, skip_spin):
+        for w in (facet_combo, facet_panels_cb, where_edit, skip_spin):
             more_lay.addWidget(w)
         grid.addWidget(more_row, 13, 1)
 
@@ -6964,6 +6970,8 @@ class EZFIG_GUI(QMainWindow):
             out = {}
             if facet_combo.currentIndex() > 0:
                 out['facet'] = facet_combo.currentText()
+                if facet_panels_cb.isChecked():
+                    out['facet_panels'] = True
             if where_edit.text().strip():
                 out['where'] = where_edit.text().strip()
             if skip_spin.value() >= 0:

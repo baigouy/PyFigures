@@ -408,7 +408,8 @@ def _special_note(words):
                 'true}). Do not search further. ')
     if words & {'facet', 'facets', 'faceted'}:
         return ('FACETS: add_data_plot / edit_data_plot(facet="day") = one plot per value, each with its '
-                'statistics (facet_row for a grid); seaborn: col= / row=. Do not search further. ')
+                'statistics (facet_row for a grid); add_data_plot(facet="day", facet_panels=True) = one '
+                'separate panel per value, each with its own letter; seaborn: col= / row=. Do not search further. ')
     if words & {'plot', 'plots', 'chart', 'graph', 'violin', 'violins', 'boxplot', 'histogram', 'seaborn',
                 'anova', 'stars', 'stats', 'statistics', 'significance', 'pvalue', 'pvalues', 'swarm'}:
         # the plot options, said only when the model asks about plots: they were 8 kB of the

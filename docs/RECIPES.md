@@ -460,6 +460,7 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `violin_inner` | `lines` (default), `box`, `none` | Inside each violin: range, quartiles and median; a mini box plot; or nothing. |
 | `violin_side` | `both` (default), `left`, `right` | Half violins: only that half, the points on the other side (a "raincloud"). |
 | `facet`, `facet_row`, `facet_ncols` | column names, number | One plot per value of `facet` (side by side, a shared y axis, each with its own statistics), a row of them per value of `facet_row`; `facet_ncols` facets per row. The `title` goes over all of them. |
+| `facet_panels` | `true` / `false` | With `facet`: one separate panel per value, side by side, each with its own title, statistics and figure letter, on one shared y range (instead of the facets inside one panel). |
 | `point_style` | `jitter` (default), `swarm`, `line` | The individual points spread at random, side by side without overlap (a beeswarm), or in one column. |
 | `stats_text` | bool | Grouped / split violin / line: the two-way ANOVA also written under the axes (off by default: stars only, the ANOVA in the stats record for the legend). |
 | `pairs` | list of pairs | Brackets only for these pairs (`[[WT, mutA]]`); the p-values stay those of the whole test. |

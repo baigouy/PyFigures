@@ -1046,6 +1046,91 @@ def _csv_number_count(path: str, skip_rows=None) -> int:
     return n
 
 
+def _plot_y_range(script: str):
+    """(low, high) of the y axis a data-plot script draws (brackets included), or None."""
+    import matplotlib.pyplot as plt
+
+    class _Panel:
+        img = None
+    holder = _Panel()
+    try:
+        exec(script, {"self": holder, "plt": plt})
+        fig = holder.img
+        fig.canvas.draw()                      # the brackets are stacked at draw time
+        return tuple(float(v) for v in fig.axes[0].get_ylim())
+    except Exception:
+        return None
+
+
+def _facets_as_panels(args: dict) -> str:
+    """add_data_plot(facet=..., facet_panels=True): one panel per facet value, side by side
+    (user, 2026-11-20: several graphs "side by side but still split", each with its letter)."""
+    import json as _json
+    pyf_path, group_path = args["pyf_path"], list(args["group_path"] or [])
+    if not args.get("facet"):
+        return "ERROR: facet_panels needs facet (the column whose values get a panel each). Nothing was added."
+    if args.get("facet_row"):
+        return ("ERROR: facet_panels splits one facet column into panels side by side; facet_row is for "
+                "facets drawn inside one panel. Nothing was added.")
+    if args.get("ybreak"):
+        return "ERROR: facet_panels cannot share a broken y axis; leave ybreak out. Nothing was added."
+    csv_path, bad = _table_path(args["csv_path"], args.get("sheet"))
+    if bad:
+        return f"ERROR: {bad}"
+    skip_rows, bad = _plot_skip(args.get("skip_rows"))
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    where, bad = _plot_where(csv_path, args.get("where"), skip_rows)
+    if bad:
+        return f"ERROR: {bad}; nothing was added."
+    try:
+        from staplot.api import facet_levels
+        column, levels = facet_levels(csv_path, str(args["facet"]), where, skip_rows)
+    except ImportError:
+        return "ERROR: facet_panels needs the staplot package (pip install staplot). Nothing was added."
+    except ValueError as e:
+        return f"ERROR: {e}. Nothing was added."
+    if len(levels) < 2:
+        return f"ERROR: {column} has {len(levels)} value(s): nothing to split into panels. Nothing was added."
+    base = {k: v for k, v in args.items() if k not in ("facet", "facet_row", "facet_ncols", "facet_panels")}
+    base["label"] = None                         # the figure's letters name the panels
+    path, added, notes = group_path, [], []
+    for level in levels:
+        rows = f"`{column}` == {level!r}"
+        one = dict(base, group_path=path, title=f"{args['title']}: {level}" if args.get("title") else str(level),
+                   where=f"({where}) and {rows}" if where else rows)
+        reply = add_data_plot(**one)
+        if reply.startswith("ERROR"):
+            return (f"{reply}\n(facet_panels: {len(added)} of {len(levels)} panels were added before this; "
+                    f"remove them or try again.)" if added else reply)
+        notes += [line for line in reply.splitlines()[1:] if line.startswith(("NOTE", "DATA"))]
+        tree, root = _load(pyf_path)
+        if not path:                             # a figure of rows: the first panel made a new row
+            from .core import _top_groups
+            tops = _top_groups(root)
+            if tops and any(c.tag == "Image2D" for c in tops[-1].find("content")):
+                path = [len(tops) - 1]
+        container, err = _get_container(root, path)
+        added.append(len([c for c in container if c.tag == "Image2D"]) - 1)
+    # one y range for all, so the panels can be compared (as staplot's facets share it)
+    shared = ""
+    if args.get("ylim") is None and args.get("kind") not in ("heatmap",):
+        tree, root = _load(pyf_path)
+        container, _ = _get_container(root, path)
+        panels = [c for c in container if c.tag == "Image2D"]
+        ranges = [_plot_y_range(_decode_text(_child_text(panels[i], "custom_loading_script"))) for i in added]
+        ranges = [r for r in ranges if r]
+        if len(ranges) == len(added):
+            low, high = min(min(r) for r in ranges), max(max(r) for r in ranges)   # inverted: (high, low)
+            for i in added:
+                edit_data_plot(pyf_path, path, i, ylim=[round(low, 6), round(high, 6)])
+            shared = f", one shared y range {low:g} to {high:g}"
+    loc = "canvas" if not path else f"group {path}"
+    return (f"{len(added)} data-plot panels added side by side in {loc} (indexes {added}), one per {column}: "
+            f"{_json.dumps([str(v) for v in levels])}, each with its own title, letter and statistics{shared}."
+            + "".join(f"\n{n}" for n in dict.fromkeys(notes)))
+
+
 @mcp.tool()
 def add_data_plot(
     pyf_path: str,
@@ -1111,6 +1196,7 @@ def add_data_plot(
     subject: str | None = None,
     text_pt: dict[str, float | None] | None = None,
     text_font: dict[str, str | None] | None = None,
+    facet_panels: bool = False,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -1148,6 +1234,9 @@ def add_data_plot(
       *facet_row*: a second column, one row of facets per value (facet_grid);
       *facet_ncols*: facets per row (default up to 4). The facet columns are not among
       *columns*. The title goes over all the facets.
+      *facet_panels*=True: the facets as SEPARATE panels instead, side by side in
+      *group_path* (a row), each with its own letter, title (the facet's value) and
+      statistics, on one shared y range ("one plot per day, each its own panel letter").
     Journal details: *show_n* the n of each group under its name; *show_mean* a mean
       marker (box, violin); *p_format* "p" writes the p-values on the brackets instead
       of stars; *hlines* reference lines: [1.0] or [{"y": 100, "label": "control"}].
@@ -1225,6 +1314,8 @@ def add_data_plot(
         add_data_plot("fig.pyf", [0], "counts.csv", kind="box",
                       ylabel="cells / field", label="D")
     """
+    if facet_panels:
+        return _facets_as_panels(dict(locals()))
     kind = (kind or "auto").lower()
     if kind not in _DATA_PLOT_KINDS + ("auto",):
         return f"ERROR: kind must be 'auto' or one of {_DATA_PLOT_KINDS}."
