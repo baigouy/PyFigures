@@ -2866,6 +2866,10 @@ class MyWidget(QWidget):
                             # its settings, as edit_data_plot changes them (GUI = MCP)
                             plot_settings = self.contextMenu.addAction("Plot settings…")
                             plot_settings.triggered.connect(lambda: gui.edit_data_plot_dialog(_plot_shape))
+                            from pyfigures.gui.staplot_editor import staplot_editor_available
+                            if staplot_editor_available() and hasattr(gui, 'edit_plot_in_staplot'):
+                                in_staplot = self.contextMenu.addAction("Edit in staplot…")
+                                in_staplot.triggered.connect(lambda: gui.edit_plot_in_staplot(_plot_shape))
                         from pyfigures.table_panel import parse as _parse_table
                         if _parse_table(getattr(_plot_shape, 'custom_loading_script', '') or '') \
                                 and hasattr(gui, 'edit_table_panel_dialog'):
@@ -4745,6 +4749,16 @@ class MyWidget(QWidget):
 
                         # a plot (data plot, seaborn plot, any panel drawn by a script) opens on its
                         # Script tab: its code is what one changes (user, 2026-11-18)
+                        # a data plot opens in staplot's editor: its table beside it, a click
+                        # on any part to change it; its button gives the annotations / script
+                        # (user, 2026-11-20)
+                        from pyfigures.assistant.plot_info import parse_data_plot
+                        from pyfigures.gui.staplot_editor import staplot_editor_available
+                        gui = self.window()
+                        if parse_data_plot(getattr(image2d, 'custom_loading_script', '') or '') \
+                                and hasattr(gui, 'edit_plot_in_staplot') and staplot_editor_available():
+                            gui.edit_plot_in_staplot(image2d)
+                            return
                         from pyfigures.plot_tables import is_drawn_by_script
                         self.update_image_annotations(image2d=image2d,
                                                       tab='Script' if is_drawn_by_script(image2d) else None)

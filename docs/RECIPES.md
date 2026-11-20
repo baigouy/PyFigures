@@ -911,7 +911,8 @@ Keys: `vmin` (0), `vmax` (255), `label`, `orientation` (`vertical` /
 `horizontal`), `ticks`, `tick_labels`, `panel_label`.
 
 **`script`** — a panel drawn by Python code, e.g. a matplotlib model or a
-schematic. The code must set `self.img` to a NumPy image:
+schematic. The code must set `self.img` to a matplotlib Figure (best: vector) or a
+NumPy image (the full contract, for a person or an LLM writing one: SCRIPT_PANELS.md):
 
 ```yaml
 allow_scripts: true          # required: a script panel runs Python code

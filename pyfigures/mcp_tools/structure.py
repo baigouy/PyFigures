@@ -2610,7 +2610,11 @@ def add_scripted_image(
                you later call set_image_filename to link data)
     =========  ==============================================
 
-    The script **must** end with ``self.img = fig`` (or equivalent).
+    The script **must** end with ``self.img = fig`` (or equivalent): a matplotlib
+    Figure (best: vector, its text follows the figure's fonts), a NumPy image, or the
+    path of an SVG / PDF file it wrote. It may define functions (recursive ones too, e.g.
+    a tree drawer). It is run once before it is added: a failing script is refused with
+    its error. Plots PyFigures has no tool for (phylogenetic trees, maps...) go here.
 
     *group_path*: [] for free-canvas, [0] for top-level group 0, [0,1] sub-group.
     *script*: complete Python script text.
@@ -2639,6 +2643,13 @@ def add_scripted_image(
     bad = _script_syntax_error(script) if str(script).strip() else "the script is empty"
     if bad:
         return f"ERROR: {bad}."
+    # run as PyFigures will: a script that fails is not added (an empty panel helped no one)
+    from pyfigures.script_panels import check_script, failure_message
+    report = check_script(script)
+    if not report["ok"]:
+        return (f"ERROR: the panel script failed: {failure_message(report)}\nNothing was added. The script must "
+                "set self.img to a matplotlib Figure (best: vector, its text follows the figure's fonts), "
+                "a NumPy image or the path of an SVG / PDF file it wrote; plt, np, self, file_path are defined.")
     tree, root = _load(pyf_path)
     container, err = _get_container(root, group_path, refuse_label_rows=True)
     if err:

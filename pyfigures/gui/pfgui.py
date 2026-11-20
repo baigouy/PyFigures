@@ -6374,6 +6374,18 @@ class EZFIG_GUI(QMainWindow):
         self._run_mcp_mutation(set_figure_colors, f"Figure colours: {', '.join(names)}.",
                                colors=names)
 
+    def edit_plot_in_staplot(self, panel):
+        """Double-click a data plot (or right-click -> Edit in staplot…): its table beside
+        it, a click on any part of the plot to change it (gui/staplot_editor.py). Its
+        "Annotations & script…" button opens the usual panel editor instead."""
+        from pyfigures.gui.staplot_editor import open_editor
+        result = open_editor(self, panel)
+        if result == 'annotations':
+            from pyfigures.plot_tables import is_drawn_by_script
+            self.paint.EZFIG_panel.update_image_annotations(
+                image2d=panel, tab='Script' if is_drawn_by_script(panel) else None)
+        return result
+
     def edit_data_plot_dialog(self, panel):
         """Right-click a data plot -> Plot settings…: its kind, error bars, labels, violins,
         points, statistics details, comparisons with a control, facets and rows, changed

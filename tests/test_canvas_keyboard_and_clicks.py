@@ -240,6 +240,23 @@ def test_double_click_on_a_plot_opens_the_editor_on_its_script(gui, ui, monkeypa
     assert opened == [(plot, "Script"), (picture, None)]
 
 
+def test_double_click_on_a_data_plot_opens_staplot_editor(gui, ui, monkeypatch):
+    """User, 2026-11-20: a staplot graph double-clicked is edited "with staplot visually"."""
+    pytest.importorskip("staplot.ui.plot_editor")
+    panel = gui.paint.EZFIG_panel
+    opened, edited = [], []
+    monkeypatch.setattr(panel, "update_image_annotations",
+                        lambda image2d=None, tab=None, draw_tool=True: opened.append((image2d, tab)))
+    monkeypatch.setattr(gui, "edit_plot_in_staplot", lambda p: edited.append(p))
+    plot = images(rows(gui)[0])[0]
+    monkeypatch.setattr(plot, "custom_loading_script",
+                        "_csv = 'x.csv'\nfig, _r = _api.plot(_tbl, kind='bar')\nself.img = fig")
+    monkeypatch.setattr(plot, "filename", None)
+    _mouse(panel, "dbl", _center(panel, plot))
+    _process()
+    assert edited == [plot] and opened == []
+
+
 def test_double_click_empty_space_does_nothing(gui, ui):
     panel = gui.paint.EZFIG_panel
     b = panel.updateBounds()

@@ -8,11 +8,23 @@ Everything here can be done three ways, with the same options:
 
 | | Where |
 |---|---|
-| **GUI** | Insert → *Data plot from a table…*, *Seaborn plot from a table…*, *Table panel…*; right-click a plot → *Plot settings…*, *Show plot code…*; right-click a table → *Table settings…* |
+| **GUI** | Insert → *Data plot from a table…*, *Seaborn plot from a table…*, *Table panel…*; double-click a plot to edit it visually (below); right-click a plot → *Plot settings…*, *Edit in staplot…*, *Show plot code…*; right-click a table → *Table settings…* |
 | **Chat** (Tools → Chat sidebar) | say it in words: "make it half violins", "one plot per day", "compare everything to WT" |
 | **MCP / recipes** | `add_data_plot` / `edit_data_plot`, `add_seaborn_plot` / `edit_seaborn_plot`, `add_table_panel` / `edit_table_panel`; `plot:`, `seaborn:`, `table:` panels in a recipe ([RECIPES.md](RECIPES.md)) |
 
 Help → *▶ Plots & Tables Tutorial* walks through it with sample tables.
+
+**Editing a data plot visually.** Double-click a data plot (or right-click → *Edit in
+staplot…*): its table on the left, the plot on the right. Click any part of the plot — a
+group's bar / box / violin, the points, the median, the brackets, the title, an axis label,
+the tick labels, the legend, the empty plot area — and its settings show under the plot:
+colour, the group's shown name, the text, the size and font of that kind of text, the y
+range, log scale, background. The toolbar switches the plot type, error bars, statistics
+and points; Undo / Redo / *Back to the start* undo any step. Cells of a CSV table can be
+changed in place (the plot follows; *Save the data* writes the file). OK applies the
+changes as `edit_data_plot` would; *Annotations & script…* opens the usual panel editor.
+A plot PyFigures has no tool for (a phylogenetic tree...) is a script panel:
+[SCRIPT_PANELS.md](SCRIPT_PANELS.md).
 
 ---
 
