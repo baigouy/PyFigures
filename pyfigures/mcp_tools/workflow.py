@@ -415,6 +415,12 @@ def add_folder_files(pyf_path: str, folder: str, first: int = 0, names: list[str
     return "\n".join(lines)
 
 
+# (count, "first" | "random") set by draft_figure for create_figure_from_folder: how many of
+# the folder's images it lays out
+from contextvars import ContextVar
+_PICK: ContextVar = ContextVar("pyfigures_draft_pick", default=None)
+
+
 @mcp.tool()
 def create_figure_from_folder(
     pyf_path: str,
@@ -479,6 +485,18 @@ def create_figure_from_folder(
     # For subfolder grouping, images may live entirely in sub-directories;
     # defer the "no files" check until after we've scanned those sub-dirs.
     files = _readable(_collect_image_files(folder, pattern))
+    pick = _PICK.get()
+    if pick and files:
+        # draft_figure(count=5, pick="random"): only that many (replay 2026-11-20: "5 images
+        # (random)" drafted all 9, and the model then tried to delete 6 of them)
+        count, how = pick
+        if 0 < count < len(files):
+            if how == "random":
+                import random
+                keep = set(random.sample(files, count))
+                files = [f for f in files if f in keep]          # in the folder's order
+            else:
+                files = files[:count]
     if not files and group_by != "subfolder":
         return (f"ERROR: No readable image files found in {folder!r} (pattern={pattern!r})."
                 + (f" Unreadable: {'; '.join(skipped[:10])}" if skipped else ""))
@@ -741,9 +759,14 @@ def draft_figure(
     scale_bar_unit: str = "µm",
     letter_panels: bool = True,
     caption: bool = True,
+    count: int = 0,
+    pick: str = "first",
 ) -> str:
     """**Draft a complete multi-panel figure from a folder of results, in one
     call** — the fastest path from data to a first-pass figure.
+
+    *count*: how many images ("a figure with 5 images": count=5; 0 = all);
+    *pick*: "first" (the folder's order) or "random" ("5 random images").
 
     Point it at a folder of images (and/or CSVs) and it assembles a ready-to-open
     ``.pyf``: it lays the images out in a grid, turns each CSV into a data-plot
@@ -785,6 +808,12 @@ def draft_figure(
         return "ERROR: out_pyf must end in .pyf."
     if plot_kind != "auto" and plot_kind not in _DATA_PLOT_KINDS:
         return f"ERROR: plot_kind must be 'auto' or one of {_DATA_PLOT_KINDS}."
+    if pick not in ("first", "random"):
+        return f"ERROR: pick must be 'first' or 'random' (got {pick!r}). Nothing was changed."
+    try:
+        count = max(0, int(count or 0))
+    except (TypeError, ValueError):
+        return f"ERROR: count is a number of images (got {count!r}). Nothing was changed."
     out_pyf = os.path.abspath(out_pyf)
 
     def _csvs_in(d):
@@ -814,9 +843,13 @@ def draft_figure(
     warnings = []
     n_laid_out = 0
     if images:
-        r = create_figure_from_folder(out_pyf, folder, pattern=pattern,
-                                      group_by=group_by,
-                                      label_from_filename=(not letter_panels))
+        token = _PICK.set((count, pick) if count else None)
+        try:
+            r = create_figure_from_folder(out_pyf, folder, pattern=pattern,
+                                          group_by=group_by,
+                                          label_from_filename=(not letter_panels))
+        finally:
+            _PICK.reset(token)
         if isinstance(r, str) and r.startswith("ERROR"):
             if not csvs:
                 return r

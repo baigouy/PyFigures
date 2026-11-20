@@ -642,6 +642,52 @@ def test_an_empty_figure_gets_a_short_answer(qapp, gui, runtime, tmp_path):
     assert not summary["empty"] and summary["answer"].startswith("2 image panel(s)")
 
 
+def test_a_scale_bar_is_not_the_roi_of_an_inset(qapp, gui, runtime, tmp_path):
+    """Replay 2026-11-20: on a panel with a scale bar and no box, roi_to_inset took the scale
+    bar (a Rectangle2D too) as the ROI; the inset showed its corner and connect_roi_to_inset
+    then found no ROI (Qwen tried 30 indexes). The box is now drawn where the user clicked."""
+    import uuid
+    from qtpy.QtCore import QPointF
+    from batoolset.drawings.shapes.rectangle2d import Rectangle2D
+    from batoolset.drawings.shapes.scalebar import ScaleBar
+    from pyfigures.assistant import launch
+    from pyfigures.assistant.partner_gui import panels
+    g = gui(shareable=True)
+    g.reload_state(_figure(tmp_path), append=False)
+    session = launch.start_live_session(g)
+    canvas = g.paint.EZFIG_panel
+    panel = [p for _, _, p in panels(canvas.shapes_to_draw)][1]
+    panel.annotations = [ScaleBar(bar_width_in_units=5, unit_to_pixel_conversion_factor=1)]
+    rect = panel.getRect(all=True)
+    zoom = float(canvas.scale)
+    session.pointer.capture(QPointF((rect.x() + 30 / float(panel.scale)) * zoom,
+                                    (rect.y() + 20 / float(panel.scale)) * zoom))
+    s = session.snapshot()
+    report = session.execute(dict(operation="roi_to_inset", arguments=dict(panel_ref="0/1", box_size=16),
+                                  request_id=str(uuid.uuid4()), session_id=s["session_id"],
+                                  expected_revision=s["revision"]))["operation_result"]
+    assert report["roi_from_last_click"]["x"] == pytest.approx(22)
+    roi = panel.annotations[report["source_roi_index"]]
+    assert isinstance(roi, Rectangle2D) and not isinstance(roi, ScaleBar)
+
+
+def test_connect_names_the_annotations_when_there_is_no_roi(tmp_path):
+    """The same replay: "annotation N is not a rectangle ROI" made the model try N = 1..30.
+    The error now lists what the panel has and says not to try other indexes."""
+    import numpy as np
+    from PIL import Image
+    from pyfigures.mcp_server import create_figure, add_image, set_scale_bar, connect_roi_to_inset
+    png = tmp_path / "a.png"
+    Image.fromarray(np.zeros((40, 50), np.uint8)).save(png)
+    pyf = str(tmp_path / "g.pyf")
+    create_figure(pyf, mode="groups", num_groups=1)
+    add_image(pyf, [0], str(png))
+    set_scale_bar(pyf, [0], 0, 10)
+    out = connect_roi_to_inset(pyf, [0], 0, roi_index=1)
+    assert out.startswith("ERROR") and "no rectangle ROI" in out and "scale bar" in out, out
+    assert "do not try other indexes" in out and "Nothing was changed" in out
+
+
 def test_inset_where_the_user_clicked_and_readiness_target_from_words(qapp, gui, runtime, tmp_path):
     """Figure 3 through the chat (2026-11-02): "magnify the region where I just
     clicked" had no tool (models opened the annotation editor and were then

@@ -8347,6 +8347,19 @@ class EZFIG_GUI(QMainWindow):
                                "(WT_..., KO_...) or put each condition in its own sub-folder to "
                                "get one row per condition.")
         grid.addWidget(group_combo, 5, 1)
+        # how many images (MCP draft_figure count / pick)
+        grid.addWidget(QLabel('Images:', frame), 6, 0)
+        count_row = QHBoxLayout()
+        count_spin = QSpinBox(frame)
+        count_spin.setRange(0, 999)
+        count_spin.setSpecialValueText('all')
+        count_spin.setToolTip("How many of the folder's images to use; 'all' = every image")
+        pick_combo = QComboBox(frame)
+        pick_combo.addItem('the first ones', 'first')
+        pick_combo.addItem('picked at random', 'random')
+        count_row.addWidget(count_spin)
+        count_row.addWidget(pick_combo)
+        grid.addLayout(count_row, 6, 1)
 
         cd = CustomDialog(title="Draft figure from folder",
                           message=(f"{os.path.basename(folder)} — images become rows of panels, "
@@ -8358,6 +8371,9 @@ class EZFIG_GUI(QMainWindow):
             return
 
         kwargs = {"plot_kind": kind_combo.currentText(), "group_by": group_combo.currentData()}
+        if count_spin.value():
+            kwargs["count"] = count_spin.value()
+            kwargs["pick"] = pick_combo.currentData()
         if journal_combo.currentText() != '(none)':
             kwargs["journal"] = journal_combo.currentText()
             kwargs["column"] = column_combo.currentData() or "single"

@@ -56,6 +56,22 @@ def test_draft_images_only(tmp_path):
     assert r["bytes"] > 0
 
 
+def test_draft_only_the_number_of_images_asked(tmp_path):
+    """Replay 2026-11-20: "build a figure with 5 images (random) from <folder>" drafted all
+    9 images (draft_figure had no count) and the model then tried to delete 6 of them."""
+    from pyfigures.mcp_server import draft_figure
+    d = str(tmp_path)
+    names = [f"{c}.tif" for c in "abcdefg"]
+    folder = _img_folder(d, names)
+    res = json.loads(draft_figure(folder, os.path.join(d, "first.pyf"), count=3))
+    assert res["n_images"] == 3 and _letters(os.path.join(d, "first.pyf")) == ["A", "B", "C"]
+    res = json.loads(draft_figure(folder, os.path.join(d, "random.pyf"), count=5, pick="random"))
+    assert res["n_images"] == 5
+    res = json.loads(draft_figure(folder, os.path.join(d, "all.pyf"), count=0))
+    assert res["n_images"] == 7
+    assert draft_figure(folder, os.path.join(d, "x.pyf"), count=2, pick="best").startswith("ERROR")
+
+
 def test_draft_images_and_csv(tmp_path):
     from pyfigures.mcp_server import draft_figure
     d = str(tmp_path)

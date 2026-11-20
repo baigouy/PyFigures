@@ -3545,7 +3545,12 @@ class MainWindow(QWidget):
             return
 
 
-        if not isinstance(self.qt_viewer.selected_shape[0], Rectangle2D):
+        from batoolset.drawings.shapes.scalebar import ScaleBar
+        from batoolset.drawings.shapes.image2d import Image2D as _Inset
+        from batoolset.drawings.shapes.txt2d import TAText2D as _Text
+        # a scale bar, a text or an inset is a Rectangle2D too, not an ROI
+        shape = self.qt_viewer.selected_shape[0]
+        if not isinstance(shape, Rectangle2D) or isinstance(shape, (ScaleBar, _Inset, _Text)):
             self.show_warning("Draw a rectangular ROI and select it before pressing this button")
             # print('Draw a rectangular ROI and select it before pressing this button')
             return

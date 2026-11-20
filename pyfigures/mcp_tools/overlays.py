@@ -1325,14 +1325,23 @@ def connect_roi_to_inset(
     items = list(annots) if annots is not None else []
     rects = [(i, a) for i, a in enumerate(items) if a.tag == "Rectangle2D"]
     insets = [a for a in items if a.tag == "Image2D"]
+    # the choices, in the error: a model told only "annotation 1 is not a rectangle ROI"
+    # tried every index from 1 to 30 (replay 2026-11-20); the panel had none
+    kinds = {"TAText2D": "text", "ScaleBar": "scale bar", "Image2D": "inset", "Rectangle2D": "rectangle ROI"}
+    present = ", ".join(f"{i} {kinds.get(a.tag, a.tag)}" for i, a in enumerate(items)) or "none"
+    no_rect = ("this panel has no rectangle ROI (its annotations: " + present + "), so there is "
+               "nothing to join; do not try other indexes. Draw the box first (add_roi_rect), or tell the user.")
+    if roi_index is not None and not any(i == roi_index for i, _ in rects):
+        if not rects:
+            return f"ERROR: {no_rect} Nothing was changed."
+        return (f"ERROR: annotation {roi_index} is not a rectangle ROI; the rectangle ROIs are "
+                f"{[i for i, _ in rects]} (annotations: {present}). Nothing was changed.")
     if roi_index is not None:
         rects = [(i, a) for i, a in rects if i == roi_index]
-        if not rects:
-            return f"ERROR: annotation {roi_index} is not a rectangle ROI (see get_annotations)."
     if len(rects) != 1:
-        return ("ERROR: " + ("this panel has no rectangle ROI." if not rects else
+        return ("ERROR: " + (no_rect if not rects else
                 f"the panel has {len(rects)} rectangle ROIs: give roi_index "
-                f"(one of {[i for i, _ in rects]})."))
+                f"(one of {[i for i, _ in rects]}).") + " Nothing was changed.")
     # the inset made from this ROI shows its region: with two insets the lines went to
     # the other one (user chat 2026-11-12: "connected to the wrong inset")
     made_from = [k for k, ins in enumerate(insets) if _inset_shows(ins, _rect_box(rects[0][1]))]

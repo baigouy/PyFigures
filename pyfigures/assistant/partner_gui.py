@@ -417,8 +417,11 @@ class PartnerGUI(BaseGUI):
         from batoolset.serializations.tools import clone_object
         from batoolset.pyqts.tools import get_original_shape_from_rect_and_angle
         panel = resolve_panel(self, panel_ref)
+        from batoolset.drawings.shapes.scalebar import ScaleBar
+        # a scale bar is a Rectangle2D too: it was taken as the ROI (replay 2026-11-20: the
+        # inset showed the scale bar's corner, and connect_roi_to_inset found no ROI)
         candidates = [(i, a) for i, a in enumerate(panel.annotations or []) if isinstance(a, Rectangle2D)
-                      and not isinstance(a, (Image2D, TAText2D))]
+                      and not isinstance(a, (Image2D, TAText2D, ScaleBar))]
         at_click = None
         if annotation_index is not None:
             candidates = [(i, a) for i, a in candidates if i == annotation_index]
@@ -440,9 +443,15 @@ class PartnerGUI(BaseGUI):
             for j, a in enumerate(panel.annotations or []):
                 if isinstance(a, Image2D) and ((roi_id and getattr(a, 'follows_roi', None) == roi_id)
                                                or (a.crop_left, a.crop_right, a.crop_top, a.crop_bottom) == tuple(crop0)):
+                    # what to do instead, by request: Qwen resent this call 3 times on "the region is more to
+                    # the left" and on "add a second inset" (replay 2026-11-20)
                     raise ValueError(f'ALREADY_HAS_INSET: ROI {index0} already has its inset (annotation_index {j}); nothing was '
-                                     'added. To change it: edit_annotation_properties on that inset; to let the user edit it '
-                                     'by hand: open_annotation_editor. Make a second inset only if the user asks for another one.')
+                                     'added, do not resend this call. To show ANOTHER REGION in it ("more to the left / up"): '
+                                     f'move the ROI: edit_annotation_properties on annotation {index0} with changes '
+                                     '{"geometry": [x, y, width, height]} in source pixels (token from '
+                                     'inspect_annotation_objects); the inset and its leader lines follow. To resize the inset: '
+                                     f'changes {{"size_fraction": ...}} on annotation {j}. For a SECOND inset: draw its box '
+                                     'first (add_roi_rect), then roi_to_inset with that box\'s annotation_index.')
         if validate_only:
             return
         if at_click is not None:
