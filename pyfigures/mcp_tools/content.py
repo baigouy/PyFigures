@@ -1001,6 +1001,8 @@ def add_data_plot(
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
     stats_text: bool | None = None,
+    text_pt: dict[str, float | None] | None = None,
+    text_font: dict[str, str | None] | None = None,
 ) -> str:
     """Add a **data-plot panel** rendered from a CSV of measurements — a real
     statistical chart (bar / box / violin / scatter / grouped bar) as a figure
@@ -1095,6 +1097,8 @@ def add_data_plot(
       the user asks for a size. Default: the size of the figure's labels (not the
       letters), else 7 pt, whatever the panel's size; the plot follows the labels.
     *font_family*: the plot's font; default the font of the figure's labels (followed).
+    *text_pt* / *text_font*: one part's own size / font, {"title" | "axis_labels" |
+      "ticks" | "legend": value} (edit_data_plot has the same).
     *colors*: one colour per group, in the CSV's order (names such as magenta /
       green or #rrggbb); groups beyond the list keep the default palette. Or by name:
       {"WT": "black", "mutA": "red"} (the groups not named keep theirs).
@@ -1214,6 +1218,10 @@ def add_data_plot(
         from .core import _warn_missing_font
         _set_child_text(img, "publication_font", _encode_str(font_family.strip()))
         _warn_missing_font(font_family.strip())
+    if text_pt is not None or text_font is not None:
+        _note, bad = _set_text_parts(img, text_pt, text_font)
+        if bad:
+            return f"ERROR: {bad} Nothing was changed."
     if label:
         img.find("annotations").append(_new_tatext2d(label, label_placement))
     container, group_path = _append_new_panel(root, container, img, group_path)
@@ -2068,6 +2076,8 @@ def edit_data_plot(
     normalize: str | None = None,
     pairs: list[list[str]] | None = None,
     stats_text: bool | None = None,
+    text_pt: dict[str, float | None] | None = None,
+    text_font: dict[str, str | None] | None = None,
 ) -> str:
     """Change an existing **data-plot panel** (one made by add_data_plot from a CSV):
     switch its kind ("make it a violin plot", "a bar plot instead"), its error bars, its
@@ -2094,6 +2104,11 @@ def edit_data_plot(
       7 pt, and follows them; "labels" = back to the labels' size.
     *font_family*: the plot's font ("Verdana", "Times New Roman"); "labels" = the font of
       the figure's labels, the default, which follows them.
+    One PART of the text only: *text_pt* {part: points on the page} and *text_font*
+      {part: font}, parts "title", "axis_labels", "ticks" (tick labels: group names,
+      numbers), "legend" ("make the title bigger": text_pt={"title": 9} when the text is
+      7 pt; "smaller numbers on the axes": {"ticks": 6}). A part set to null or "" follows
+      the whole plot again. font_pt / font_family stay the whole plot's.
     Size: *width* / *height* in inches ("make the plot smaller / bigger").
       *font_scale*: relative sizes inside the plot only; for "bigger text" use font_pt.
     Layout: *order*: the groups in this order (names; groups left out are dropped and
@@ -2292,6 +2307,12 @@ def edit_data_plot(
         if not on_page or followed or str(old_pt) != f"{float(font_pt):g}":
             font_note.append(f"text {old_pt or '?'} pt{'' if on_page else ' (plot points)'}"
                              f"{' (the labels’ size)' if followed else ''} -> {float(font_pt):g} pt on the page")
+    if text_pt is not None or text_font is not None:
+        note, bad = _set_text_parts(img, text_pt, text_font)
+        if bad:
+            return f"ERROR: {bad} Nothing was changed."
+        if note:
+            font_note.append(note)
     _save(tree, pyf_path, recompute=True)
     changed = font_note + [f"{k} {spec.get(k)!r} -> {new.get(k)!r}" for k in
                ("kind", "error", "annotate_stats", "only_significant", "stats_mode", "title", "ylabel", "xlabel", "csv",
@@ -2311,6 +2332,69 @@ def _flip_state(img) -> tuple[bool, bool]:
     if legacy is not None:
         return legacy
     return tuple(str(_child_text(img, tag)).strip().lower() == "true" for tag in ("flip_h", "flip_v"))
+
+
+PLOT_TEXT_PARTS = ("title", "axis_labels", "ticks", "legend")
+_PART_WORDS = {"titles": "title", "axis_label": "axis_labels", "axes_labels": "axis_labels",
+               "labels": "axis_labels", "axis_titles": "axis_labels", "tick_labels": "ticks",
+               "tick": "ticks", "numbers": "ticks", "legends": "legend"}
+
+
+def text_parts_of(img) -> dict:
+    """{part: {'pt', 'font'}} of a plot panel element (publication_text_parts)."""
+    raw = _child_text(img, "publication_text_parts")
+    if raw in (None, "", "None"):
+        return {}
+    try:
+        data = json.loads(str(raw))
+    except ValueError:
+        return {}
+    return {p: s for p, s in data.items() if p in PLOT_TEXT_PARTS and isinstance(s, dict) and s} \
+        if isinstance(data, dict) else {}
+
+
+def _set_text_parts(img, text_pt: dict | None, text_font: dict | None) -> tuple[str, str | None]:
+    """Set the size / font of parts of a plot's text (title, axis labels, tick labels,
+    legend) on *img*. Returns (what changed, error)."""
+    parts = {p: dict(s) for p, s in text_parts_of(img).items()}
+    before = {p: dict(s) for p, s in parts.items()}
+    for given, key in ((text_pt, "pt"), (text_font, "font")):
+        if given is None:
+            continue
+        if not isinstance(given, dict):
+            return "", (f"text_{key} is {{part: value}} with parts {', '.join(PLOT_TEXT_PARTS)} "
+                        f"(got {given!r}).")
+        for name, value in given.items():
+            part = _PART_WORDS.get(str(name).strip().lower(), str(name).strip().lower())
+            if part not in PLOT_TEXT_PARTS:
+                return "", f"unknown part {name!r}: the parts are {', '.join(PLOT_TEXT_PARTS)}."
+            style = parts.setdefault(part, {})
+            if value in (None, "", 0) or (isinstance(value, str) and value.strip().lower() in ("none", "auto")):
+                style.pop(key, None)                     # follows the whole plot again
+                continue
+            if key == "pt":
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    return "", f"text_pt[{part!r}] must be a size in points on the page (got {value!r})."
+                if not 3 <= value <= 72:
+                    return "", f"text_pt[{part!r}] is a size on the page, 3 to 72 points (got {value:g})."
+                style["pt"] = value
+            else:
+                from .core import _warn_missing_font
+                style["font"] = str(value).strip()
+                _warn_missing_font(style["font"])
+    parts = {p: s for p, s in parts.items() if s}
+    _set_child_text(img, "publication_text_parts",
+                    _encode_str(json.dumps(parts, ensure_ascii=False)) if parts else "None")
+    if parts == before:
+        return "", None
+
+    def show(styles):
+        return "; ".join(f"{p} " + ", ".join(f"{s['pt']:g} pt" if k == "pt" else s["font"]
+                                             for k in ("pt", "font") if k in s)
+                         for p, s in styles.items()) or "all as the whole plot"
+    return f"text parts {show(before)} -> {show(parts)}", None
 
 
 def turned_plot(img) -> str | None:

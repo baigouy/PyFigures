@@ -89,7 +89,7 @@ setuptools.setup(
         "Deprecated",
         "Requests",
         "batoolset>=0.2.6",          # 0.2.6: font check as Agg draws, missing font kept; 0.2.5: a font matplotlib cannot draw is never the plot font; 0.2.4: figure_renderer
-        "batoolset-gui>=0.2.9",      # 0.2.9: a font failing while fitted is dropped; Qt layer; 0.2.8: plot font falls back when it cannot draw; 0.2.7: plots fitted on every canvas
+        "batoolset-gui>=0.2.10",     # 0.2.10: text size / font per part of a plot; 0.2.9: a font failing while fitted is dropped; Qt layer; 0.2.8: plot font falls back when it cannot draw; 0.2.7: plots fitted on every canvas
         "staplot>=0.1.1",            # data-plot panels and stats brackets (staplot.api); 0.1.1: stats_text, pairs, normalize
         "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)
         "openpyxl",                  # plots from Excel .xlsx sheets (MIT)

@@ -109,6 +109,11 @@ What is cleaned up for you, and said in the reply:
 - `order=[...]`, `ylim=[0, null]`, `log_y`, `xtick_rotation=45`, `legend="outside"`;
 - `aspect`, `width`, `height`; `font_scale=1.3` (every text 30 % bigger; the plot's text is
   7 pt on the printed page by default).
+- Text: `font_pt` / `font_family` set the whole plot's text; `text_pt={"title": 9}` and
+  `text_font={"ticks": "Arial"}` give one part its own size on the page or font. The parts
+  are `title`, `axis_labels`, `ticks` (tick labels: group names, numbers) and `legend`; a part
+  set to `null` follows the whole plot again. In the panel editor: the publication style tab,
+  *Parts of the text*.
 
 Colours are colour-blind safe by default (the Wong palette), and every series also gets its
 own marker shape.

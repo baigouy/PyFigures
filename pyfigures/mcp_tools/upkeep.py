@@ -77,7 +77,7 @@ def check_source_changes(pyf_path: str, accept: bool = False) -> str:
 # 6. copy style from another figure
 # ---------------------------------------------------------------------------
 _STYLE_ASPECTS = ("fonts", "letters", "scale_bars", "spacing", "plots")
-_PLOT_STYLE_FIELDS = ("publication_style", "publication_font_size", "publication_line_width",
+_PLOT_STYLE_FIELDS = ("publication_style", "publication_font_size", "publication_line_width", "publication_text_parts",
                       "publication_font", "publication_svg_stroke_width")
 
 

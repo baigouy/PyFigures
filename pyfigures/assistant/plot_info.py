@@ -245,6 +245,26 @@ def data_cleaning(spec: dict) -> str | None:
     return _STATS_CACHE[key]
 
 
+def _plot_text_sizes(panel) -> dict | None:
+    """{'pt': whole plot's size on the page, 'font', 'parts': {part: {pt, font}}} of a
+    plot panel (a live Image2D); None when it cannot be told."""
+    try:
+        if not getattr(panel, 'publication_font_on_page', False):
+            return None
+        out = {'pt': float(panel._page_font_pt()) if hasattr(panel, '_page_font_pt')
+               else float(getattr(panel, 'publication_font_size', 0))}
+        family = panel._publication_family() if hasattr(panel, '_publication_family') else None
+        if family:
+            out['font'] = family
+        from batoolset.drawings.shapes.image2d import parse_text_parts
+        parts = parse_text_parts(getattr(panel, 'publication_text_parts', None))
+        if parts:
+            out['parts'] = parts
+        return out
+    except Exception:
+        return None
+
+
 def describe_code_panel(panel, statistics: bool = True) -> dict:
     """The part of panel_references that says what a code panel draws."""
     script = panel_script(panel)
@@ -280,6 +300,10 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
         if statistics and spec['annotate_stats'] or spec['kind'] == 'scatter':
             out['statistics'] = plot_statistics(spec)
         out['kinds_available'] = list(PLOT_KINDS)
+        # its text as drawn: "make the title bigger" needs the size it has now
+        text = _plot_text_sizes(panel)
+        if text:
+            out['text'] = text
         # the staplot call that draws it: every setting at a glance, in the words the
         # parameters have (user: "that could also be sent to the model and help it
         # modify the parameters"); the whole script (with the test redone in scipy)
@@ -289,7 +313,8 @@ def describe_code_panel(panel, statistics: bool = True) -> dict:
             out['code'] = call
             out['full_code_with'] = 'data_plot_code'
         out['change_it_with'] = ('edit_data_plot (kind, error bars, only_significant, stats on/off, stats_mode, '
-                                 'labels, colours, csv_path, sheet; text size font_pt, font font_family; layout and size: aspect, width, height, '
+                                 'labels, colours, csv_path, sheet; text size font_pt, font font_family (whole plot), '
+                                 'text_pt / text_font {title, axis_labels, ticks, legend} (one part); layout and size: aspect, width, height, '
                                  'order, rename (group names shown), show_points, violin_inner, violin_side (half violins), ylim (its "scale" / "range": a plot has no scale bar), '
                                  'log_y, xtick_rotation (anticlockwise: left = +), legend) — never set_script on a data plot')
         return out

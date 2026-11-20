@@ -1577,6 +1577,35 @@ class MainWindow(QWidget):
             font_radio_layout.addLayout(font_name_row)
             font_radio_layout.addWidget(self.publication_font_radio_keep)
             pub_layout.addLayout(font_radio_layout)
+
+            # one part of a plot's text with its own size / font (user, 2026-11-20: "make
+            # the title bigger" made all the text bigger); empty = as the whole plot
+            parts_box = QGroupBox('Parts of the text (empty = as above)')
+            parts_grid = QGridLayout(parts_box)
+            parts_grid.addWidget(QLabel('Size'), 0, 1)
+            parts_grid.addWidget(QLabel('Font'), 0, 2)
+            self.publication_part_size_spinboxes = {}
+            self.publication_part_font_edits = {}
+            for row, (part, name) in enumerate((('title', 'Title'), ('axis_labels', 'Axis labels'),
+                                                ('ticks', 'Tick labels'), ('legend', 'Legend')), start=1):
+                spin = QDoubleSpinBox()
+                spin.setDecimals(1)
+                spin.setRange(0, 72)
+                spin.setSingleStep(0.5)
+                spin.setSpecialValueText('as above')     # 0: the size of the whole plot
+                spin.setSuffix(' pt')
+                spin.setToolTip(f"The size of the plot's {name.lower()} on the page; 'as above' = the plot's size")
+                edit = QLineEdit()
+                edit.setPlaceholderText('as above')
+                edit.setToolTip(f"The font of the plot's {name.lower()}; empty = the plot's font")
+                parts_grid.addWidget(QLabel(name), row, 0)
+                parts_grid.addWidget(spin, row, 1)
+                parts_grid.addWidget(edit, row, 2)
+                self.publication_part_size_spinboxes[part] = spin
+                self.publication_part_font_edits[part] = edit
+                spin.valueChanged.connect(self.on_publication_style_changed)
+                edit.editingFinished.connect(self.on_publication_style_changed)
+            pub_layout.addWidget(parts_box)
             pub_main_layout.addWidget(pub_group)
 
             # SVG images
@@ -3275,6 +3304,10 @@ class MainWindow(QWidget):
             self.script_text_edit.setText(
                 self.qt_viewer.background.custom_loading_script if self.qt_viewer.background.custom_loading_script else '')
             bg = self.qt_viewer.background
+            # read first: setting the widgets below saves them all back into the panel
+            from batoolset.drawings.shapes.image2d import parse_text_parts
+            self._publication_parts_loaded = False
+            parts = parse_text_parts(getattr(bg, 'publication_text_parts', None))
             self.publication_style_checkbox.setChecked(getattr(bg, 'publication_style', True))
             self.publication_font_size_spinbox.setValue(getattr(bg, 'publication_font_size', 12))
             self.publication_line_width_spinbox.setValue(getattr(bg, 'publication_line_width', 0.65))
@@ -3293,6 +3326,12 @@ class MainWindow(QWidget):
             else:
                 self.publication_font_radio_keep.setChecked(True)
                 self.publication_font_edit.setText('')
+            for part, spin in self.publication_part_size_spinboxes.items():
+                with QSignalBlocker(spin):
+                    spin.setValue((parts.get(part) or {}).get('pt') or 0)
+                with QSignalBlocker(self.publication_part_font_edits[part]):
+                    self.publication_part_font_edits[part].setText((parts.get(part) or {}).get('font') or '')
+            self._publication_parts_loaded = True
             self.on_publication_font_radio_changed()
 
             svg_stroke = getattr(bg, 'publication_svg_stroke_width', 0.65)
@@ -3633,6 +3672,20 @@ class MainWindow(QWidget):
                 bg.publication_font = None
             bg.publication_svg_stroke_width = (self.publication_svg_stroke_spinbox.value()
                                                if self.publication_svg_stroke_check.isChecked() else None)
+            if not getattr(self, '_publication_parts_loaded', False):
+                return            # the editor is being set up: its part rows are not the panel's yet
+            parts = {}
+            for part, spin in getattr(self, 'publication_part_size_spinboxes', {}).items():
+                style = {}
+                if spin.value() > 0:
+                    style['pt'] = spin.value()
+                font = self.publication_part_font_edits[part].text().strip()
+                if font:
+                    style['font'] = font
+                if style:
+                    parts[part] = style
+            import json
+            bg.publication_text_parts = json.dumps(parts) if parts else None
 
     def match_image_background(self):
         """'From image': the panel's background colour = the median colour of the

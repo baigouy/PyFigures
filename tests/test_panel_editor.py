@@ -519,6 +519,27 @@ def test_publication_style_tab(fig, ui):
     assert img.publication_svg_stroke_width is None
 
 
+def test_publication_text_parts(fig, ui):
+    """2026-11-20: one part of a plot's text (title, axis labels, ticks, legend) with its
+    own size and font, set in the panel editor; empty = as the whole plot."""
+    import json
+
+    def do(ed):
+        ed.publication_part_size_spinboxes["title"].setValue(10)
+        ed.publication_part_font_edits["ticks"].setText("Arial")
+        ed.publication_part_font_edits["ticks"].editingFinished.emit()
+    img = edit(fig, ui, "gray", do)
+    assert json.loads(img.publication_text_parts) == {"title": {"pt": 10.0}, "ticks": {"font": "Arial"}}
+
+    def clear(ed):
+        assert ed.publication_part_size_spinboxes["title"].value() == 10      # read back
+        ed.publication_part_size_spinboxes["title"].setValue(0)
+        ed.publication_part_font_edits["ticks"].setText("")
+        ed.publication_part_font_edits["ticks"].editingFinished.emit()
+    img = edit(fig, ui, "gray", clear)
+    assert img.publication_text_parts is None
+
+
 def test_script_box_runs_after_confirmation(fig, ui):
     script = "self.img = Img(file_path)[::2, ::2]"
 

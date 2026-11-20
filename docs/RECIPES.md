@@ -465,6 +465,7 @@ sheet are ignored and numbers typed as text are read as numbers:
 | `columns` | list of column names | The columns used from a wider (tidy) table: `[genotype, area]` (group, value) for bar / box / violin; `[genotype, sex, area]` (x, halves or colour, value) for `split_violin` / `grouped`. |
 | `font_pt` | points | The plot's text in the printed figure (default: the size of the figure's labels, else 7 pt, whatever the panel's size). |
 | `font_family` | font name | The plot's font (default: the font of the figure's labels). |
+| `text_pt` / `text_font` | `{part: points}` / `{part: font}` | One part of the plot's text with its own size on the page or font: parts `title`, `axis_labels`, `ticks` (tick labels), `legend` (`text_pt: {title: 9}`). The other parts follow `font_pt` / `font_family`. |
 | `legend` | `inside`, `outside`, `none` | Where the legend goes (scatter, grouped). |
 
 CSV formats:
