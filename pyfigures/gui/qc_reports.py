@@ -91,6 +91,14 @@ def audit_report(raw):
                   f"scale can be shown): {who(no_px)}",
                   "   Set it in the panel's editor (px to unit) if it is a micrograph; drawings and "
                   "photos without a scale can stay as they are.", ""]
+    wrong_text = d.get("scale_bars_text_mismatch") or []
+    if wrong_text:
+        lines += [f"✗ {len(wrong_text)} scale bar{'s say' if len(wrong_text) > 1 else ' says'} another length "
+                  f"than {'they are' if len(wrong_text) > 1 else 'it is'}: "
+                  + "; ".join(f"{names.get((tuple(e['group_path']), e['image_index']), '?')} ({e['warning']})"
+                              for e in wrong_text),
+                  "   The figure shows a wrong scale: fix the text or the length in the panel's editor, "
+                  "unless that text was meant.", ""]
     small = d.get("scale_bars_too_small") or []
     if small:
         lines += [f"! {len(small)} scale bar{'s are' if len(small) > 1 else ' is'} very small (under 5 % of "

@@ -422,6 +422,9 @@ def audit_figure(pyf_path: str) -> str:
     files (SVG/PDF) and scripted panels (plots, colour bars) are not listed.
     ``scale_bars_too_small`` lists bars under 5 % of the shown image width
     (hard to see) with a round length of about 15 % (``suggested``).
+    ``scale_bars_text_mismatch`` lists bars whose text names another length than the
+    bar itself ("200 µm" on a 50 µm bar): a wrong scale unless the user asked for that
+    text — tell the user, never change it unasked.
     ``panels_with_tiny_rois`` lists ROIs under 1 % of their image's larger side
     in both directions (``size_px``): possibly a slip of the mouse — ask the user
     whether they are wanted (arrowheads alone are not listed).
@@ -535,9 +538,25 @@ def audit_figure(pyf_path: str) -> str:
         small = _scale_bar_too_small(el) if p["scale_bar"] else None
         if small:
             too_small.append(dict(_where(p), **small))
+    # a bar whose text names another length than the bar ("200 µm" on a 50 µm bar: a
+    # model wrote it, 2026-11-19): a wrong scale in the figure unless the user wanted it
+    from .core import _pixel_size, _is_empty_placeholder as _empty, scale_bar_label_mismatch, \
+        _find_scale_bar, _scalebar_info
+    text_mismatch = []
+    for p, el in zip(panels, elems):
+        bar = _find_scale_bar(el) if p["scale_bar"] else None
+        if bar is None or _pixel_size(el)[0] is None:
+            continue
+        info = _scalebar_info(bar)
+        try:
+            width = float(info.get("bar_width_in_units") or 0)
+        except (TypeError, ValueError):
+            continue
+        msg = scale_bar_label_mismatch(info.get("label_plain") or "", width)
+        if msg:
+            text_mismatch.append(dict(_where(p), warning=msg))
     # micrographs with no pixel size, with or without a bar: no scale can be shown
     # (vector files, scripted panels such as plots, text and placeholders need none)
-    from .core import _pixel_size, _is_empty_placeholder as _empty
     no_px = []
     for p, el in zip(panels, elems):
         fn = str(p["filename"] or "")
@@ -558,6 +577,7 @@ def audit_figure(pyf_path: str) -> str:
         "panels_with_tiny_rois": tiny,
         "n_with_scale_bar": sum(1 for p in panels if p["scale_bar"]),
         "scale_bars_too_small": too_small,
+        "scale_bars_text_mismatch": text_mismatch,
         "images_without_pixel_size": no_px,
         "n_with_label": sum(1 for p in panels if p["n_labels"]),
         "panels_missing_scale_bar": missing_bar,

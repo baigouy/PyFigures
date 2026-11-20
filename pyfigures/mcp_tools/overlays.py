@@ -338,7 +338,9 @@ def set_scale_bar(
     *bar_width_in_units*: numeric width of the bar in physical units (e.g. 10).
     *label*: text shown next to the bar. If omitted, auto-generated as
              "10 µm" (combining bar_width_in_units and unit). ``""`` (or
-             "none") is a bar WITHOUT text.
+             "none") is a bar WITHOUT text. Pass a text only when the user
+             gives one: a text naming another length than the bar is kept
+             but answered with a WARNING (and flagged by audit_figure).
     *bar_height_px*: thickness of the bar in pixels (default 3; "thinner" 2
                      or 1.5, "thicker" 5 or 6).
     *unit*: the unit of *bar_width_in_units* (and of *px_to_unit*), shown in
@@ -483,7 +485,35 @@ def set_scale_bar(
     return (
         f"Scale bar {action} on image {image_index} in {loc}: "
         f"{text}, {where}{thick}{px_note}." + chosen + colour_note + _uncalibrated_warning(uncal, unit) + small
+        + _label_mismatch_warning(bar, calibrated, [f"image {image_index}"])
     )
+
+
+def _label_mismatch_warning(bars, calibrated: bool, names: list[str]) -> str:
+    """A WARNING when a bar's text names another length than the bar (the text is kept:
+    the user may want it; a model must not invent one)."""
+    from .core import scale_bar_label_mismatch, _scalebar_info
+    if not calibrated:
+        return ""
+    if not isinstance(bars, (list, tuple)):
+        bars = [bars]
+    found = []
+    for bar, name in zip(bars, names):
+        if bar is None:
+            continue
+        info = _scalebar_info(bar)
+        try:
+            width = float(info.get("bar_width_in_units") or 0)
+        except (TypeError, ValueError):
+            continue
+        msg = scale_bar_label_mismatch(info.get("label_plain") or "", width)
+        if msg:
+            found.append(f"{name}: {msg}")
+    if not found:
+        return ""
+    return ("\nWARNING: the scale bar text does not match its length (" + "; ".join(found) + "). The text was "
+            "kept as given. Unless the user asked for this exact text, set the text from the length (leave "
+            "label out) or the length from the text; otherwise tell the user, the figure would show a wrong scale.")
 
 
 _BAR_CHOICES = (("white", 0xFFFFFF), ("black", 0x000000))
@@ -849,6 +879,10 @@ def set_scale_bar_all(
                            + "; ".join(f"{c}: {', '.join(n[:10])}" for c, n in picks.items()) + ".")
     elif bar_color_int is not None and touched:
         colour_note = _poor_bar_note([t[0] for t in touched], [t[1] for t in touched])
+    # a text that names another length than its bar: said, never refused (the user's call)
+    calibrated_bars = [(t[0], t[1]) for t in touched if _pixel_size(t[0])[0] is not None]
+    colour_note += _label_mismatch_warning([_find_scale_bar(i) for i, _ in calibrated_bars], True,
+                                           [n for _, n in calibrated_bars])
     if auto_length:
         if not total:
             return ("ERROR: no image width could be read for a scale bar: give the length in "

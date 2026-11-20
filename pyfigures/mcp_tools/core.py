@@ -1372,6 +1372,38 @@ def _length_unit_factor(unit) -> float | None:
     return _LENGTH_UNITS.get(str(unit or "").strip().lower().replace("μ", "µ"))
 
 
+_LABEL_LENGTH_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(nm|µm|μm|um|mm|cm|m)(?![a-zA-Zµμ])")
+
+
+def scale_bar_label_mismatch(label: str, bar_width_stored: float | None,
+                             calibrated: bool = True) -> str | None:
+    """A sentence when the text of a scale bar names a length other than the bar's own
+    (2026-11-19 replay: a model wrote "200 µm" next to bars of another length, twice, and
+    nothing said so). *bar_width_stored*: the bar's length in the pixel size's unit (µm).
+    None when they agree (within 1 %), the text names no length, or it cannot be told.
+    The text is the user's to choose: this is a warning, never a refusal."""
+    if not calibrated or not label or not bar_width_stored or bar_width_stored <= 0:
+        return None
+    m = _LABEL_LENGTH_RE.search(str(label))
+    if not m:
+        return None
+    factor = _length_unit_factor(m[2])
+    if not factor:
+        return None
+    said = float(m[1].replace(",", ".")) * factor
+    if said > 0 and abs(said / bar_width_stored - 1) <= 0.01:
+        return None
+    return f'the text says "{m[0]}" but the bar is {_um_text(bar_width_stored)} long'
+
+
+def _um_text(um: float) -> str:
+    """A length in µm written readably: 0.5 µm, 20 µm, 1.5 mm."""
+    for unit, per in (("mm", 1000.0), ("µm", 1.0), ("nm", 0.001)):
+        if um >= per or unit == "nm":
+            return f"{um / per:g} {unit}"
+    return f"{um:g} µm"
+
+
 def _scale_bar_length_error(img: ET.Element, bar_width_in_units: float,
                             px_to_unit: float | None, unit: str = "µm",
                             unit_factor: float = 1.0) -> str | None:
