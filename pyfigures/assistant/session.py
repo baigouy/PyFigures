@@ -328,14 +328,14 @@ class Session:
             return {'rules': request_rules(args.get('text', ''), args.get('earlier', ''))}
         if not getattr(self, '_action_passthrough', False):
             op = req['operation']
-            controls = {'action_begin', 'action_finish', 'action_apply', 'action_discard', 'action_undo', 'action_redo', 'action_recover', 'action_continue'}
+            controls = {'action_begin', 'action_finish', 'action_undo', 'action_redo', 'action_recover'}
             if op in controls:
                 if not hasattr(self, 'actions'):
                     from .assistant_actions import ActionManager
                     self.actions = ActionManager(self)
                 args = req.get('arguments', {})
-                method = {'action_begin': 'begin', 'action_finish': 'finish', 'action_apply': 'apply',
-                          'action_discard': 'discard', 'action_undo': 'undo', 'action_redo': 'redo', 'action_recover': 'recover', 'action_continue': 'continue_action'}[op]
+                method = {'action_begin': 'begin', 'action_finish': 'finish',
+                          'action_undo': 'undo', 'action_redo': 'redo', 'action_recover': 'recover'}[op]
                 return getattr(self.actions, method)(**args)
             if op in ('inspect_native_gui','use_native_gui','open_native_menu','native_gesture','native_drop_files','native_keys'):
                 if not hasattr(self,'native_gui'):

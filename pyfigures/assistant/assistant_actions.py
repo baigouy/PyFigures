@@ -1,4 +1,4 @@
-"""Prototype message checkpoints, optional hidden drafts and durable action journal."""
+"""Message checkpoints (Undo / Redo of one answer) and the durable action journal."""
 import hashlib
 import json
 import shutil
@@ -178,9 +178,9 @@ class ActionManager:
         a = self.active
         atomic_json(a['folder'] / 'journal.json', a['record'])
 
-    def begin(self, text='', preview=False):
+    def begin(self, text=''):
         if self.active:
-            raise ValueError('Apply/discard the pending preview before sending another edit.')
+            raise ValueError('Finish the current action before sending another edit.')
         self.session._turn_submission_target=None
         from .submission_review import target_from_text
         named = target_from_text(text)
@@ -191,51 +191,19 @@ class ActionManager:
         folder = self.root / ident
         folder.mkdir()
         before = folder / 'before.pyf'
-        baseline = capture(self.session, before, picture=preview)
-        record = dict(id=ident, request=text, status='running', preview=preview,
+        baseline = capture(self.session, before)
+        record = dict(id=ident, request=text, status='running',
                       before=str(before), baseline=baseline, operations=[], created_at=time.time())
-        self.active = dict(folder=folder, record=record, draft=None)
-        if preview:
-            from .session import EZFIG_GUI, Session
-            w = EZFIG_GUI()
-            w.resize(self.session.window.size())
-            draft = Session(w, recovery_dir=self.session.runtime / 'assistant_drafts')
-            adopt(draft, before)
-            # Copy selection by opaque scene address, never by Python identity.
-            from .partner_gui import selection_state
-            selected = selection_state(self.session.window).get('selected_objects', [])
-            objects = []
-            for item in selected:
-                try:
-                    parts = item['object_id'].split('/')
-                    obj = w.paint.EZFIG_panel.shapes_to_draw[int(parts[1])]
-                    for offset in range(2, len(parts), 2):
-                        obj = getattr(obj, parts[offset])[int(parts[offset + 1])]
-                    objects.append(obj)
-                except (AttributeError, ValueError, IndexError):
-                    pass
-            w.paint.EZFIG_panel.set_current_selection(objects[0] if len(objects) == 1 else objects or None)
-            self.active['draft'] = draft
-            record['draft_session'] = draft.id
+        self.active = dict(folder=folder, record=record)
         record['checkpoint_ms'] = round((time.monotonic() - start) * 1000, 1)
         self.persist()
-        return dict(id=ident, preview=preview, checkpoint_ms=record['checkpoint_ms'])
+        return dict(id=ident, checkpoint_ms=record['checkpoint_ms'])
 
     def dispatch(self, req):
         a = self.active
-        target = a['draft'] or self.session
+        target = self.session
         op = req['operation']
         mutating = op not in ('inspect', 'letter_state', 'preview', 'panel_source', 'overlay_contrast', 'readability', 'submission_review', 'inspect_annotation_objects')
-        name = req.get('arguments', {}).get('tool', '')
-        read_only_native = op == 'original_tool' and name.startswith(('get_', 'list_', 'describe_', 'inspect_', 'check_', 'explain_'))
-        if a['record'].get('resume_guard') and mutating and not read_only_native:
-            if any(prior['status'] in ('pending', 'uncertain') for prior in a['record']['operations']):
-                raise ValueError('UNCERTAIN_OPERATION: Inspect and review the recovered draft before further edits. Apply/discard it, then give explicit remaining instructions. No uncertain operation replayed.')
-            for prior in a['record']['operations']:
-                if prior['status'] == 'completed' and prior['operation'] == op and prior['arguments'] == req.get('arguments', {}):
-                    raise ValueError('ALREADY_COMPLETED: This operation was recorded as complete before interruption. Inspect current state; do not apply it twice. Ask for clarification if an identical repeated operation is intentional.')
-        if a['draft'] and (op == 'save_copy' or (op == 'original_tool' and req.get('arguments', {}).get('tool', '').startswith('export_'))):
-            raise ValueError('Export/save cannot be previewed. Apply the draft first, then request export.')
         item = None
         if mutating:
             item = dict(request_id=req['request_id'], operation=op, arguments=req.get('arguments', {}),
@@ -265,69 +233,24 @@ class ActionManager:
         a = self.active
         if not a:
             return {}
-        target = a['draft'] or self.session
         after = a['folder'] / 'after.pyf'
         a['record']['after'] = str(after)
-        a['record']['after_digest'] = capture(target, after, picture=bool(a['draft']))
+        a['record']['after_digest'] = capture(self.session, after)
         changed = a['record']['baseline'] != a['record']['after_digest']
         a['record']['changed'] = changed
-        a['record']['status'] = 'interrupted' if interrupted else 'preview' if a['draft'] and changed else 'applied' if changed else 'no_change'
+        a['record']['status'] = 'interrupted' if interrupted else 'applied' if changed else 'no_change'
         self.persist()
         record = dict(a['record'])
-        if not a['draft'] or not changed:
-            self.release()
-        return record
-
-    def release(self):
-        if self.active and self.active['draft']:
-            draft = self.active['draft']
-            draft.timer.stop()
-            draft.recovery_timer.stop()
-            draft.window._mark_clean()
-            draft.window.close()
-            draft.window.deleteLater()
         self.active = None
-
-    def apply(self):
-        a = self.active
-        if not a or not a['draft']:
-            raise ValueError('No draft to apply')
-        current = a['folder'] / 'current_main.pyf'
-        if capture(self.session, current) != a['record']['baseline']:
-            raise ValueError('The main figure changed after this preview began. Discard and retry; no draft applied.')
-        before = a['folder'] / 'before.pyf'
-        history = (list(self.session.window.undo_stack), list(self.session.window.redo_stack), self.session.window.current_index, self.session.window.last_called_state)
-        try:
-            self.session.window.save_state(show_popup=False)
-            adopt(self.session, Path(a['record']['after']))
-            self.session.window.save_state(show_popup=False)
-            a['record']['after_digest'] = capture(self.session, Path(a['record']['after']))
-            a['record']['status'] = 'applied'
-            self.persist()
-            result = dict(a['record'])
-        except Exception:
-            adopt(self.session, before)
-            w = self.session.window
-            w.undo_stack, w.redo_stack, w.current_index, w.last_called_state = history
-            raise
-        self.release()
-        return result
-
-    def discard(self):
-        if not self.active:
-            return {}
-        self.active['record']['status'] = 'discarded'
-        self.persist()
-        result = dict(self.active['record'])
-        self.release()
-        return result
+        return record
 
     def undo(self, ident):
         if self.active:
-            raise ValueError('Apply/discard the pending draft first')
+            raise ValueError('Finish the current action first')
         folder = self.folder(ident)
         record = json.loads((folder / 'journal.json').read_text())
-        if record['status'] not in ('applied', 'interrupted') or (record['status'] == 'interrupted' and record['preview']):
+        # an old journal's never-applied draft (the preview mode removed 2026-11-21) is not undone
+        if record['status'] not in ('applied', 'interrupted') or (record['status'] == 'interrupted' and record.get('preview')):
             raise ValueError('This action is not currently applied')
         if capture(self.session, folder / 'undo_check.pyf') != record['after_digest']:
             raise ValueError('Later edits exist. Undo those first; this message cannot be reversed without overwriting them.')
@@ -351,7 +274,7 @@ class ActionManager:
 
     def redo(self, ident=None):
         if self.active:
-            raise ValueError('Finish the current action or draft before redoing a message')
+            raise ValueError('Finish the current action before redoing a message')
         if ident is None:
             records = [json.loads(p.read_text()) for p in self.root.glob('*/journal.json')]
             undone = [r for r in records if r['status'] == 'undone']
@@ -389,49 +312,16 @@ class ActionManager:
             raise ValueError('Invalid action identity')
         return self.root / ident
 
-    def continue_action(self, ident):
-        if not self.active or self.active['record']['id'] != ident or not self.active['record'].get('recovered_from'):
-            raise ValueError('This recovered draft is no longer pending')
-        self.active['record']['resume_guard'] = True
-        self.active['record']['status'] = 'running'
-        self.persist()
-        return dict(self.active['record'])
-
     def recover(self, ident=None):
-        """Recover a draft for review; never replay a recorded operation."""
+        """An unfinished action (the application stopped mid-turn): its edits are already in
+        the figure, so it is reported for inspection; never replayed."""
         if self.active:
-            raise ValueError('Finish the current draft first')
+            raise ValueError('Finish the current action first')
         candidates = [self.folder(ident) / 'journal.json'] if ident else sorted(self.root.glob('*/journal.json'), key=lambda p: p.stat().st_mtime, reverse=True)
         for path in candidates:
             old = json.loads(path.read_text())
-            if old['status'] not in ('running', 'interrupted', 'preview'):
+            if old['status'] not in ('running', 'interrupted'):
                 continue
-            if not old['preview']:
-                return dict(status='inspect_only', request=old['request'], operations=old['operations'],
-                            note='Live edits may already exist. No operation replayed. Inspect current figure before asking for remaining work.')
-            if capture(self.session, path.parent / 'recovery_check.pyf') != old['baseline']:
-                return dict(status='conflict', request=old['request'], operations=old['operations'],
-                            note='Main figure differs from the original action checkpoint. Recovery was not applied or staged; inspect/export before choosing a version. No operation replayed.')
-            source = Path(old.get('recovery_snapshot') or old.get('after') or path.parent / 'latest.pyf')
-            if not source.is_file() or not source.resolve().is_relative_to(self.session.runtime.resolve()):
-                raise ValueError('Recovery draft unavailable; no replay attempted')
-            begin = self.begin(old['request'], preview=True)
-            draft = self.active['draft']
-            # Recovery snapshots have no .ui manifest; use the recorded action state.
-            recovered = self.active['folder'] / 'recovered.pyf'
-            shutil.copyfile(source, recovered)
-            ui = Path(old.get('after', old['before'])).with_suffix('.ui.json')
-            shutil.copyfile(ui, recovered.with_suffix('.ui.json'))
-            for suffix in SIDECARS:
-                if source.with_suffix(suffix).exists():
-                    shutil.copyfile(source.with_suffix(suffix), recovered.with_suffix(suffix))
-            adopt(draft, recovered)
-            self.active['record']['recovered_from'] = old['id']
-            self.active['record']['operations'] = old['operations']
-            result = self.finish(interrupted=True)
-            old['status'] = 'recovered'
-            old['recovered_as'] = result['id']
-            atomic_json(path, old)
-            result['note'] = 'Recovered draft for review. Completed operations were not replayed; pending/uncertain operations require fresh inspection and explicit remaining instructions.'
-            return result
+            return dict(status='inspect_only', request=old['request'], operations=old['operations'],
+                        note='Live edits may already exist. No operation replayed. Inspect current figure before asking for remaining work.')
         return dict(status='none', note='No unfinished action found')

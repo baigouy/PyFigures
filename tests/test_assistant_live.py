@@ -738,11 +738,11 @@ def test_inset_where_the_user_clicked_and_readiness_target_from_words(qapp, gui,
     with pytest.raises(ValueError, match="NO_TARGET"):            # nothing known: ask, never guess
         session.execute(dict(operation="submission_review", arguments={}))
     cmd("action_begin", text="Make it fit a Nature double column")
-    cmd("action_discard")
+    cmd("action_finish")
     assert session._named_submission_target == {"journal": "nature", "column": "double"}
     cmd("action_begin", text="is the figure ready for submission?")   # a later turn names no journal
     review = session.execute(dict(operation="submission_review", arguments={}))
-    cmd("action_discard")
+    cmd("action_finish")
     assert review["target"] == {"journal": "nature", "column": "double"}
 
 
