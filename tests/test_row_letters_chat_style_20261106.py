@@ -30,6 +30,7 @@ def gui(qapp):
     w._dirty = False
     w._stop_all_img_loaders()
     w.close()
+    w.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def test_style_on_row_letters_is_reported_as_a_change(gui, qapp, tmp_path):
