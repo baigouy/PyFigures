@@ -228,7 +228,9 @@ def test_auto_picks_the_kind_and_says_why(pyf, book, tmp_path):
         (g, t, d) for g in ("WT", "mut") for t in ("a", "b") for d in ("d1", "d2"))],
         columns=["genotype", "treatment", "day", "length", "width"]).to_csv(tidy, index=False)
     res = C.add_data_plot(pyf, [], str(tidy))                  # several factors: say so
-    assert res.startswith("ERROR: no plot kind fits this table on its own") and "seaborn" in res, res
+    # the call that draws it, with the table's own columns (it named a seaborn plot before)
+    assert res.startswith("ERROR: no plot kind fits this table on its own") and "columns=['genotype'" in res, res
+    assert "facet=" in res, res
 
 
 def test_remove_the_y_label_means_no_label(pyf, book):

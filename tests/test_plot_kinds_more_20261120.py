@@ -86,6 +86,12 @@ def test_an_image_drawn_with_its_axes(pyf, tmp_path):
     assert "ERROR" not in out and "µm" in out, out
     fig = _drawn(pyf)
     assert fig.axes[0].get_xlabel() == "x (µm)" and fig.axes[0].get_xlim() == (0, 30) and len(fig.axes) == 2
+    # its text at the labels' size on the printed page, like a data plot's (MCP check
+    # 2026-11-21: its axis text came out several times bigger than the other plots')
+    from pyfigures.mcp_tools.core import _load, _child_text
+    _t, root = _load(pyf)
+    panel = list(root.iter("Image2D"))[-1]
+    assert str(_child_text(panel, "publication_font_on_page")).strip("'\"") == "True"
     assert add_image_plot(pyf, [], str(tmp_path / "none.png")).startswith("ERROR")
     assert add_image_plot(pyf, [], str(tmp_path / "mask.png"), cmap="nope").startswith("ERROR")
     assert json  # noqa

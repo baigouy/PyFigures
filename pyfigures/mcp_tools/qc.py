@@ -603,6 +603,15 @@ def check_text_consistency(pyf_path: str) -> str:
         uses = {f: sorted({t["role"] for t in rest if _drawn_family(t.get("font")) == f}) for f in families}
         issues.append({"kind": "texts other than letters", "property": "font",
                        "differ": [f"{f}: {', '.join(r)}" for f, r in uses.items()]})
+    unnamed = [t for t in rest if t.get("font") and _drawn_family(t.get("font")) is None]
+    if families and unnamed:
+        # beside texts in a named font, those with none of their own are drawn in each computer's
+        # default sans-serif: "consistent ... in Arial" was said of a figure where 8 channel
+        # names had no font (MCP check 2026-11-21)
+        issues.append({"kind": "texts other than letters", "property": "font", "most_have": families[0],
+                       "differ": [f"{t['where']} ('{t['text']}'): no font of its own ({t.get('font')}), drawn "
+                                  f"in the computer's default" for t in unnamed],
+                       "fix": f"restyle_texts with font_family={families[0]!r}"})
     if issues:
         summary = (f"{len(issues)} inconsistenc{'y' if len(issues) == 1 else 'ies'}: " +
                    "; ".join(f"{i['kind']}: {names.get(i['property'], i['property'])} ({len(i['differ'])} differ)"

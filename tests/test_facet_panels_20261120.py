@@ -38,7 +38,7 @@ def test_one_panel_per_facet_side_by_side_on_one_y_range(tmp_path):
     assert "shared y range" in out
     specs = _panels(pyf)
     assert len(specs) == 3
-    assert [s["title"] for s in specs] == ["1", "7", "14"]
+    assert [s["title"] for s in specs] == ["day = 1", "day = 7", "day = 14"]
     assert all("`day` ==" in s["where"] for s in specs)
     assert not any(s.get("facet") for s in specs)
     assert len({tuple(s["ylim"]) for s in specs}) == 1                     # one y range
@@ -92,7 +92,7 @@ def test_a_recipe_splits_the_facets_into_panels(tmp_path, qapp):
                       encoding="utf-8")
     out = build_figure_from_recipe(str(recipe))
     assert '"warnings": []' in out, out
-    assert [s["title"] for s in _panels(str(tmp_path / "r.pyf"))] == ["1", "7", "14"]
+    assert [s["title"] for s in _panels(str(tmp_path / "r.pyf"))] == ["day = 1", "day = 7", "day = 14"]
 
 
 def test_the_gui_dialog_offers_separate_panels(qapp, monkeypatch, tmp_path):

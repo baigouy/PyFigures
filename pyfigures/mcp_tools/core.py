@@ -1588,7 +1588,22 @@ def _image_summary(img: ET.Element, idx: int, prefix: str = "") -> str:
         script_tag = "  [has script]" if script is not None else ""
         return f"{prefix}Image {idx}: <template slot>  [{ts}]{script_tag}  (use fill_template() to assign a file)"
     filename = _child_text(img, "filename") or ""
-    filename = Path(filename).name if filename else "<no file>"
+    filename = Path(filename).name if filename and str(filename) not in ("None", "__data_plot__") else ""
+    if not filename:
+        # what a scripted panel is ("<no file> [has script]" said nothing of a data plot)
+        code = _decode(_child_text(img, "custom_loading_script") or "")
+        if not isinstance(code, str):
+            code = ""
+        plot = re.search(r"_api\.plot(?:_facets)?\(\s*_tbl|_api\.plot_facets\(", code)
+        kind = re.search(r"kind=['\"](\w+)['\"]|\),\s*kind=\s*\n?\s*['\"]?(\w+)", code)
+        table = re.search(r"_csv = ['\"]([^'\"]+)['\"]", code)
+        if "image_plot" in code:
+            filename = "image graph (an image with its axes)"
+        elif plot or "from staplot import api as _api" in code:
+            what = (kind.group(1) or kind.group(2)) if kind else "plot"
+            filename = f"data plot ({what}" + (f", {Path(table.group(1)).name}" if table else "") + ")"
+        else:
+            filename = "<no file>"
     annotations = img.find("annotations")
     annot_parts = []
     if annotations is not None:
@@ -1960,6 +1975,16 @@ def _looks_like_panel_letter(text: str) -> bool:
 def _corner_brightness(img: ET.Element, placement: str) -> float | None:
     """corner_brightness() for a panel element of a .pyf file."""
     import ast
+    try:
+        theta = float(_child_text(img, "theta") or 0)
+    except (TypeError, ValueError):
+        theta = 0.0
+    fill = _child_text(img, "fill_color")
+    if theta % 90 and fill in (None, "None", ""):
+        # turned by other than a right angle: the corner is the page around the image, not
+        # the image (MCP check 2026-11-21: a white letter on the white corner of a rotated
+        # merge); a panel with a fill colour is judged by its pixels as before
+        return 1.0
     script = _child_text(img, "custom_loading_script")
     if isinstance(script, str) and script not in ("", "None"):
         return script_corner_brightness(script, placement)
@@ -3032,10 +3057,24 @@ def _resolve_target_mm(
     raise ValueError("specify a target width — one of: journal, width_mm, width_cm, width_in.")
 
 
+def _keep_links():
+    """Shapes loaded through the engine keep their link fields (an ROI's link_id, an
+    inset's follows_roi, a connector's ends) when saved again. Only the GUI installed
+    this: every MCP tool that re-saved through the engine (add_data_plot's layout update)
+    dropped the box-inset links of the whole figure, so an inset no longer followed its
+    box and the box could be removed under it (MCP check 2026-11-21)."""
+    try:
+        from pyfigures import connectors
+        connectors.install()
+    except Exception as e:                       # never block a tool on it
+        print(f"pyfigures-mcp: link fields not kept ({type(e).__name__}: {e})", file=sys.stderr)
+
+
 def _ensure_qapp():
     """The QApplication of in-process tools, created once and kept: a
     QApplication that is garbage-collected crashes (0xC0000409), and Qt's
     teardown at interpreter exit can crash too (pyfigures.qt_exit)."""
+    _keep_links()
     from qtpy.QtWidgets import QApplication as _QApp
     global _MCP_QAPP
     if _QApp.instance() is None:

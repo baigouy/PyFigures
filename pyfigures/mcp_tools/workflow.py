@@ -681,6 +681,11 @@ def _finalize_draft(pyf_path, letter_panels, placement, px_to_unit, sb_units,
     lettered = bars = i = 0
     new_letters = []                        # (annots, letter, brightness under it)
     for img in _iter_panel_elements(root):
+        # a text cell (a row of column titles) is no panel: no letter, no scale bar, and it
+        # takes no letter of the sequence (as the GUI's update_letters; MCP check
+        # 2026-11-21: "DAPI | GFP | RFP | Merge" took A-D, the images started at E)
+        if (_decode(img.findtext("isText")) or "False") not in ("False", "None", False):
+            continue
         fn = _decode(img.findtext("filename"))
         script = img.findtext("custom_loading_script")
         is_raster = (bool(fn and fn not in ("None", "@template@"))

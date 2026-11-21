@@ -329,7 +329,20 @@ def test_self_test_reports_the_web_engine(qapp):
     # optional in pip installs and the plain apps; required (by name) in the web chat app
     from pyfigures import self_test
     assert "web_engine" in self_test.CHECKS
-    assert self_test._check_web_engine().startswith("ok")
+    # in a fresh process, as the app and the CI self-test start it: Qt WebEngine created
+    # late in a test process that had already made hundreds of windows crashed it
+    # (access violation, full suite 2026-11-21; the file alone passes)
+    import subprocess
+    import sys
+    code = ("import sys\n"
+            "try:\n    from qtpy.QtWebEngineWidgets import QWebEngineView  # before the QApplication, as Qt requires\n"
+            "except Exception:\n    pass\n"
+            "from qtpy.QtWidgets import QApplication\napp = QApplication(sys.argv[:1])\n"
+            "from pyfigures import self_test\nprint(self_test._check_web_engine())\n")
+    out = subprocess.run([sys.executable, "-c", code],
+                         capture_output=True, text=True, timeout=180,
+                         env={**__import__("os").environ, "QT_QPA_PLATFORM": "offscreen"})
+    assert out.stdout.strip().splitlines()[-1].startswith("ok"), (out.stdout, out.stderr[-800:])
 
 
 def test_launch_flag_docks_the_web_chat(qapp, gui, runtime, monkeypatch):  # noqa: F811

@@ -739,6 +739,13 @@ def _plot_layout(kind: str, csv_abs: str, values: dict, current: dict | None = N
                     return {}, f"no group named {missing}; the groups are {names}"
                 value = [low[v.lower()] for v in value]
         out[key] = value
+    # a broken y axis cannot take these (staplot refuses them; they used to be dropped
+    # without a word, MCP check 2026-11-21): said now, before the plot is saved
+    if out.get("ybreak"):
+        clash = [k for k in ("y2", "invert_y", "log_y") if out.get(k)]
+        if clash:
+            return {}, (f"a broken y axis (ybreak) cannot be combined with {', '.join(clash)}: keep one "
+                        f"(ybreak=[] removes the break), or show the second measure in its own plot")
     return out, ""
 
 
@@ -1097,7 +1104,8 @@ def _facets_as_panels(args: dict) -> str:
     path, added, notes = group_path, [], []
     for level in levels:
         rows = f"`{column}` == {level!r}"
-        one = dict(base, group_path=path, title=f"{args['title']}: {level}" if args.get("title") else str(level),
+        name = f"{column} = {level}"                      # as plot_facets titles them
+        one = dict(base, group_path=path, title=f"{args['title']}: {name}" if args.get("title") else name,
                    where=f"({where}) and {rows}" if where else rows)
         reply = add_data_plot(**one)
         if reply.startswith("ERROR"):
@@ -1122,12 +1130,18 @@ def _facets_as_panels(args: dict) -> str:
         ranges = [r for r in ranges if r]
         if len(ranges) == len(added):
             low, high = min(min(r) for r in ranges), max(max(r) for r in ranges)   # inverted: (high, low)
+            # room above the highest bracket for its stars, under the title (MCP check
+            # 2026-11-21: the day-14 stars sat on its title once the range was fixed)
+            span = high - low
+            high += 0.08 * span if high > low else 0.0
+            low -= 0.08 * span if low > high else 0.0
             for i in added:
                 edit_data_plot(pyf_path, path, i, ylim=[round(low, 6), round(high, 6)])
             shared = f", one shared y range {low:g} to {high:g}"
     loc = "canvas" if not path else f"group {path}"
     return (f"{len(added)} data-plot panels added side by side in {loc} (indexes {added}), one per {column}: "
-            f"{_json.dumps([str(v) for v in levels])}, each with its own title, letter and statistics{shared}."
+            f"{_json.dumps([str(v) for v in levels])}, each with its own title and statistics (and its own "
+            f"letter when the figure is lettered){shared}."
             + "".join(f"\n{n}" for n in dict.fromkeys(notes)))
 
 
@@ -2522,6 +2536,13 @@ def edit_data_plot(
                                     new["stats_mode"], latex=new.get("latex", False), colors=plot_colors,
                                     layout=layout)
     _set_child_text(img, "custom_loading_script", _encode_str(script))
+    # measured again by the layout update, like a new plot: an edit that changes the plot's
+    # shape (a violin, a broken axis, a layer, a right axis) was drawn into the old frame and
+    # cut off at the bottom (MCP check 2026-11-21: x labels gone after edit_data_plot)
+    for key in ("width", "height"):
+        stale = img.find(key)
+        if stale is not None:
+            img.remove(stale)
     font_note = []
     if font_family is not None:
         from .core import _decode
@@ -3768,7 +3789,22 @@ def add_image_plot(
                "contour": os.path.abspath(contour_path) if contour_path else None,
                "contour_color": contour_color if contour_path else None, "vmin": vmin, "vmax": vmax,
                "title": title}
-    out = add_scripted_image(pyf_path, group_path, _image_plot_script(path, options), label=label)
+    script = _image_plot_script(path, options)
+    out = add_scripted_image(pyf_path, group_path, script, label=label)
     if out.startswith("ERROR"):
         return out
+    # its text at the size of the figure's labels on the printed page, like a data plot's
+    # (MCP check 2026-11-21: its axis text was several times the other plots' once scaled)
+    import re as _re
+    where = _re.search(r"index (\d+) in (?:group \[([\d, ]*)\]|canvas)", out)
+    if where:
+        tree, root = _load(pyf_path)
+        path_ = [int(v) for v in (where.group(2) or "").split(",") if v.strip()]
+        container, err = _get_container(root, path_)
+        panels = [c for c in container if c.tag == "Image2D"] if not err else []
+        if int(where.group(1)) < len(panels):
+            panel = panels[int(where.group(1))]
+            _plot_text_on_page(panel, None)
+            _plot_text_like_labels(panel, root, size=True)
+            _save(tree, pyf_path)
     return out + f" It shows {os.path.basename(path)} with its axes in {unit if pixel_size else 'pixels'}."

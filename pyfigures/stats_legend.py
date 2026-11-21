@@ -157,7 +157,9 @@ def _panels(pyf_path: str):
         file = csv.split("::")[0] if isinstance(csv, str) else csv
         if isinstance(file, str) and not os.path.isabs(file):
             spec["csv"] = os.path.join(folder, csv)
-        yield (_panel_letter_label(img) or rows.get(img) or ""), spec
+        # no letter: the plot's title names it ("day = 7"), else several sentences read alike
+        # and could not be told apart (MCP check 2026-11-21)
+        yield (_panel_letter_label(img) or rows.get(img) or str(spec.get("title") or "").strip()), spec
 
 
 def statistics_text(pyf_path: str) -> str:

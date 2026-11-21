@@ -1581,6 +1581,10 @@ def set_panel_letter_layout(
     before = letter_layout_of(root)
     align = normalise_align(row_letter_align) if row_letter_align is not None else before["row_letter_align"]
     _set_child_text(gui_el, "auto_lettering", "True")
+    if layout == "panel" and not _decode(gui_el.findtext("first_letter")) and not _panel_letters_of(root):
+        # lettering on draws letters only from a first letter: without one (a figure made by
+        # create_figure) "one in each panel" was answered and none was drawn (MCP check 2026-11-21)
+        _set_child_text(gui_el, "first_letter", _encode_str("A"))
     if layout == "row":
         if not _decode(gui_el.findtext("first_letter")):
             # the first letter (and its case) is read from the panels' letters
@@ -1603,8 +1607,10 @@ def set_panel_letter_layout(
             gui_el.remove(el)
     _save(tree, pyf_path)
     added = 0
-    if before["letter_layout"] == "row":
-        # the panels get their letters back (in the figure's corner and font)
+    # the panels get their letters back (in the figure's corner and font), and a figure that
+    # had none gets them: lettering on alone draws nothing (the letters are texts the panels
+    # carry), so "one in each panel" was answered with no letter drawn (MCP check 2026-11-21)
+    if before["letter_layout"] == "row" or not _panel_letters_of(root):
         from pyfigures.mcp_tools.workflow import _finalize_draft
         font_el = root.find("SerializableQFont")
         corner = _decode(font_el.findtext("placement")) if font_el is not None else None
