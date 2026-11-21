@@ -45,6 +45,7 @@ def gui(qapp, monkeypatch):
     g._close_dnd_menu()
     g._dirty = False
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _choices(panel):

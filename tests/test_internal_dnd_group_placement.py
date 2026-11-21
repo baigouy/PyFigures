@@ -37,6 +37,7 @@ def panel_with_four(qapp, sample_tif, monkeypatch):
     yield gui, panel, imgs
     gui._dirty = False  # avoid the unsaved-changes prompt on close in headless tests
     gui.close()
+    gui.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _layout(panel, imgs):

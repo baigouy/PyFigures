@@ -211,7 +211,7 @@ def test_a_value_for_a_tab_bar_sets_it_without_naming_the_operation(qapp, gui, r
     ident = native.register(tabs)
     assert native.describe(tabs)["operations"] == ["set", "keys"]
     native.operate(ident, value="Rotate + Crop", request_id="r1")       # operation left at its default
-    deadline = __import__("time").time() + 3
+    deadline = __import__("time").time() + 15        # queued: a slow CI runner took over 3 s
     while tabs.tabText(tabs.currentIndex()) != "Rotate + Crop" and __import__("time").time() < deadline:
         qapp.processEvents()
     assert tabs.tabText(tabs.currentIndex()) == "Rotate + Crop"

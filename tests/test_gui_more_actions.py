@@ -88,6 +88,7 @@ def gui(qapp, tmp_path, ui):
     g._dirty = False
     g._stop_all_img_loaders()
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 @pytest.mark.parametrize("method,orientation", [("combine_in_new_row", "X"), ("combine_in_new_col", "Y")])

@@ -63,6 +63,7 @@ def gui(qapp):
     g._dirty = False
     g._stop_all_img_loaders()
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _open(gui, qapp, pyf):

@@ -134,6 +134,7 @@ def gui(qapp, monkeypatch):
     yield g
     g._dirty = False
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def test_qc_runs_with_a_busy_bar(gui):

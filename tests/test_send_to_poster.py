@@ -38,6 +38,7 @@ def gui(qapp, tmp_path):
         pw.close()
     g._dirty = False
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
     qapp.processEvents()
 
 

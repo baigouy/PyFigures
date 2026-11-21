@@ -147,6 +147,7 @@ def gui(qapp, tmp_path, dialogs):
                 canvas.mark_saved()
             w.close()
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _images(g):

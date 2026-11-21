@@ -166,6 +166,7 @@ def gui(qapp, monkeypatch):
     yield g
     g._dirty = False
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def test_zoom_in_out_reset_and_fit(gui, tmp_path):

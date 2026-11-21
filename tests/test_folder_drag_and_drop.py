@@ -70,6 +70,7 @@ class TestFolderDrop:
         yield g
         g._dirty = False
         g.close()
+        g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
     @staticmethod
     def _drop(gui, path):

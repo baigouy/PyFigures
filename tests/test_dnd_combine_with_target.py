@@ -32,6 +32,7 @@ def gui(qapp, monkeypatch):
     yield g
     g._dirty = False  # avoid the unsaved-changes prompt on close in headless tests
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _labels(panel):

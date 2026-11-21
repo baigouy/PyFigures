@@ -90,6 +90,7 @@ class TestGuiAction:
         yield g
         g._dirty = False
         g.close()
+        g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
     def test_menu_has_action(self, gui):
         labels = []

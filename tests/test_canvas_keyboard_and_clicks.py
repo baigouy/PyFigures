@@ -459,6 +459,7 @@ def movie_gui(qapp, tmp_path, ui):
     g._dirty = False
     g._stop_all_img_loaders()
     g.close()
+    g.deleteLater()      # closed is not deleted: hidden windows ran Windows CI out of handles
 
 
 def _answer_frame_mode(monkeypatch, label):
