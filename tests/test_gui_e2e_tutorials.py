@@ -542,13 +542,14 @@ def _guide_context(c, guide_id):
 
 @pytest.mark.parametrize("key", list(GUIDE_KEYS))
 def test_show_me_how_guide(qapp, win, e2e_files, no_file_dialogs, menus, tmp_path, watch, monkeypatch, key,
-                           dwell=0.6):
+                           dwell=1.2):
     """The guide starts on a figure, every step highlights a real target,
     and doing what it says (select, menu + dialog, or the right-click /
     double-click route) completes it: the guide sees the result and ends."""
     from pyfigures.guides import GUIDES
     g = win
-    # the guide polls every 400 ms: a dialog answered in 15 ms is never seen open
+    # the guide polls every 400 ms: a dialog answered in 15 ms is never seen open, and 0.6 s
+    # (one or two polls) missed the pre-submission report on a busy Ubuntu runner (CI 2026-11-21)
     monkeypatch.setattr(H, "DIALOG_DWELL", dwell)
     out = tmp_path / "out"
     out.mkdir()
