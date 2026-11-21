@@ -372,3 +372,27 @@ def test_real_mcp_server_opens_and_closes_the_guide(win, qapp, tmp_path, monkeyp
     assert closed["status"] == "cancelled"
     assert not win._tutorial._bubble.isVisible()
     assert _sha(win._test_pyf) == before
+
+
+def test_a_dialog_closed_between_two_polls_is_still_seen(win, qapp):
+    """CI 2026-11-21: the guide looked for an open dialog only every 400 ms; the
+    pre-submission report (and the LUT editor) answered between two polls on a
+    busy runner was never seen and the guide waited for ever. A filter now
+    records every modal dialog the moment it is shown."""
+    from qtpy.QtCore import QTimer
+    from qtpy.QtWidgets import QDialog
+    runner = win._guides
+    win.show_me_how("presubmission_review")
+    _pump(qapp)
+    ctrl = win._tutorial
+    ctrl._poll.stop()                       # no poll can see the dialog while it is open
+    dlg = QDialog(win)
+    QTimer.singleShot(10, dlg.accept)
+    dlg.exec()
+    assert runner._shown_modals and runner._shown_modals[-1] is dlg
+    ctrl._check_completion()
+    _pump(qapp, 100)
+    assert runner.completed and runner.status()["user_result_detected"] is True
+    runner.stop()
+    assert runner._modal_watch is None and runner._shown_modals == []
+    dlg.deleteLater()

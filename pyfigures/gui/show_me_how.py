@@ -17,7 +17,7 @@ import os
 import time
 import uuid
 
-from qtpy.QtCore import QObject, Qt, QTimer
+from qtpy.QtCore import QEvent, QObject, Qt, QTimer
 from qtpy.QtWidgets import QApplication, QFrame
 
 from pyfigures import guides as _guides
@@ -87,6 +87,23 @@ def _modal_open():
     return QApplication.activeModalWidget() is not None
 
 
+class _ModalWatch(QObject):
+    """App event filter: reports every modal window as it is shown."""
+
+    def __init__(self, on_shown):
+        super().__init__()
+        self._on_shown = on_shown
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QEvent.Show and obj.isWidgetType() and obj.isWindow() \
+                    and obj.windowModality() != Qt.NonModal:
+                self._on_shown(obj)
+        except Exception:      # a filter must never raise into Qt (PyQt6 aborts)
+            pass
+        return False
+
+
 class GuideRunner:
     """Runs one guide at a time on the window's TutorialController."""
 
@@ -102,6 +119,9 @@ class GuideRunner:
         self._baseline = None
         self._saw_dialog = False
         self._image_state0 = None
+        self._used_modal = None
+        self._shown_modals = []
+        self._modal_watch = None
 
     # ---- results the guides watch for -----------------------------------
     def _snapshot(self):
@@ -189,9 +209,34 @@ class GuideRunner:
         ScaleBar inside it — were both ticked off by the editor alone)."""
         modal = QApplication.activeModalWidget()
         if modal is None or modal is self._used_modal:
-            return False
+            modal = self._take_shown_modal()
+            if modal is None:
+                return False
         self._used_modal = modal
         return True
+
+    def _take_shown_modal(self):
+        """A dialog the filter saw open since the last step, even if it is already closed:
+        the 400 ms poll alone missed a dialog answered quickly (a busy CI runner, a fast
+        user), and the guide waited for ever (CI 2026-11-21)."""
+        while self._shown_modals:
+            modal = self._shown_modals.pop(0)
+            if modal is not self._used_modal:
+                return modal
+        return None
+
+    def _shown_since_used(self):
+        """The menu entry opened its dialog, seen by the filter though it may be closed already."""
+        modal = QApplication.activeModalWidget() or self._take_shown_modal()
+        if modal is None:
+            return False
+        self._used_modal = modal
+        self._shown_modals = [m for m in self._shown_modals if m is not modal]
+        return True
+
+    def _on_modal_shown(self, modal):
+        self._saw_dialog = True
+        self._shown_modals.append(modal)
 
     def _current_version(self, img):
         """The panel now standing for *img*: the image editor (Ok) replaces
@@ -256,6 +301,9 @@ class GuideRunner:
         self.cancelled = False
         self._saw_dialog = False
         self._used_modal = None
+        self._shown_modals = []
+        self._modal_watch = _ModalWatch(self._on_modal_shown)
+        QApplication.instance().installEventFilter(self._modal_watch)
         self._target_image = None
         self._image_state0 = None
         self._baseline = self._snapshot()
@@ -289,7 +337,7 @@ class GuideRunner:
                                           completion_check=select_check, auto_advance=True))
             elif "menu" in spec:
                 steps.extend(self._menu_steps(
-                    spec["menu"], lambda w: _modal_open() or done_check(w)))
+                    spec["menu"], lambda w: self._shown_since_used() or done_check(w)))
             elif "context" in spec:
                 steps.append(TutorialStep("Open it from the image", spec["context"],
                                           get_target=canvas,
@@ -340,6 +388,12 @@ class GuideRunner:
         self._cleanup()
 
     def _cleanup(self):
+        if self._modal_watch is not None:
+            app = QApplication.instance()
+            if app is not None:
+                app.removeEventFilter(self._modal_watch)
+            self._modal_watch = None
+        self._shown_modals = []
         for a in self._anchors:
             a.hide()
             a.deleteLater()
