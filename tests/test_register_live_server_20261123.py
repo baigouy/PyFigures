@@ -57,9 +57,8 @@ def test_the_file_server_tells_how_to_reach_the_open_window(tmp_path, monkeypatc
     assert "live_window_setup" in INSTRUCTIONS
 
 
-def test_the_dialog_puts_the_open_window_first(home, qapp=None):
-    from qtpy.QtWidgets import QApplication, QLabel
-    QApplication.instance() or QApplication([])
+def test_the_dialog_puts_the_open_window_first(home, qapp):
+    from qtpy.QtWidgets import QLabel
     from pyfigures.gui.mcp_server_dialog import McpServerDialog
     dlg = McpServerDialog()
     texts = " ".join(l.text() for l in dlg.findChildren(QLabel))
