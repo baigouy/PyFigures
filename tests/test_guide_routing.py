@@ -19,6 +19,12 @@ from pyfigures.guides import find_guide
     ("reconnect missing images", "remap_images"),
     ("How do I calibrate a scale bar when I know the pixel size?", "set_pixel_size"),
     ("set the pixel size", "set_pixel_size"),
+    # chat 2026-11-23 (local Qwen 9B): no guide existed, it invented a Figure Properties dialog
+    ("don't change the layout and show me how to change fivure width", "figure_width"),
+    ("show me how to change the figure width", "figure_width"),
+    ("make the figure 29 cm wide", "figure_width"),
+    ("double the figure width", "figure_width"),
+    ("resize the figure for a journal column", "apply_journal"),
 ])
 def test_request_reaches_its_guide(query, guide):
     assert find_guide(query)[0] == guide

@@ -497,6 +497,26 @@ GUIDES: dict[str, dict] = {
         "done": "dialog_closed",
         "mcp": "check_journal_compliance",
     },
+    # chat 2026-11-23 (local Qwen 9B): "show me how to change the figure width" got an invented
+    # "right-click > Figure Properties > Width" dialog: no guide said where the width is
+    "figure_width": {
+        "title": "Change the figure width (layout kept)",
+        "summary": "Type the whole figure's width in the toolbar; every row is resized, the layout kept.",
+        "keywords": ["figure width", "change the width", "change width", "wider", "narrower", "cm wide",
+                     "mm wide", "inches wide", "double the width", "double width", "half the width",
+                     "figure size", "resize the figure", "resize figure", "width"],
+        "steps": [
+            {"context": "Click an empty part of the canvas, so nothing is selected (with a "
+                        "selection, the width applies to it only). In the toolbar, type the width "
+                        "in the <b>Width:</b> field and press "
+                        "<b>Enter</b> (or click ✓). It counts 72 px per inch: 1 cm ≈ 28.35 px, so "
+                        "29 cm ≈ 822, 18 cm ≈ 510; the printed size is shown beside it. Every row "
+                        "is resized; the panels keep their arrangement."},
+        ],
+        "alternative": "To a journal's column width: QC → Apply journal guidelines…",
+        "done": "figure_resized",
+        "mcp": "resize_figure",
+    },
     "apply_journal": {
         "title": "Resize a figure for a journal",
         "summary": "Resize to a journal column width and raise fonts to its minimum.",

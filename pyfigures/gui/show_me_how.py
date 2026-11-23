@@ -152,9 +152,14 @@ class GuideRunner:
         # (normalised: the same file with / or \ is not a new picture)
         files = tuple(_norm_file(getattr(i, "filename", None)) for i in imgs
                       if not (hasattr(i, "is_template") and i.is_template()))
+        try:            # the figure's width: "figure_resized"
+            rects = [s.getRect(all=True) for s in self.win.paint.EZFIG_panel.shapes_to_draw]
+            width = round(max(r.right() for r in rects) - min(r.left() for r in rects), 1) if rects else 0
+        except Exception:
+            width = 0
         return {"images": len(imgs), "insets": insets, "bars": bars, "splits": splits,
                 "order": order, "rows": rows, "structure": structure, "files": files,
-                "exports": getattr(self.win, "_exports_done", 0)}
+                "exports": getattr(self.win, "_exports_done", 0), "width": width}
 
     def _image_state(self, img):
         if img is None:
@@ -172,6 +177,8 @@ class GuideRunner:
             return bool(now["bars"]) and now["bars"] != b.get("bars", set())
         if kind == "file_exported":
             return now["exports"] > b.get("exports", 0)
+        if kind == "figure_resized":
+            return abs(now["width"] - b.get("width", now["width"])) > 0.5
         if kind == "inset_added":
             return now["insets"] > b.get("insets", 0)
         if kind == "panel_added":

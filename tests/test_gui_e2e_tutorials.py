@@ -530,6 +530,12 @@ def _guide_context(c, guide_id):
             # macOS its path matched exactly and the guide saw no new picture;
             # on Windows only the slashes differed)
             c.drop(["png2"], "⬜  Assign to template slot", where=H.centre(c.g, slot))
+    elif guide_id == "figure_width":
+        # nothing selected, a new width in the toolbar, ✓
+        _click_empty(c)
+        c.g.size_spinbox.setValue(c.g.size_spinbox.value() + 100)
+        c.g.force_update_layout_button.trigger()
+        H.settle(c.qapp, c.g)
     elif guide_id == "stack_in_row":
         # drag the selected panel onto an image of the other row
         c.menus.pick = "Stack with it (column in the row)"
