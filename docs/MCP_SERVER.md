@@ -68,6 +68,20 @@ python -m pyfigures.mcp_control snippet --format http
 python -m pyfigures.mcp_control stop                # stops it and every process it started
 ```
 
+**Three tools instead of 210** — every tool listed with its full description
+is about 99k tokens before the first question: too much for a local model's
+context. `--tools categories` (or `PYFIGURES_MCP_TOOLS=categories` in the
+client's environment) lists three instead, about 600 tokens:
+`list_pyfigures_categories` (the areas: layout, images, scale bars, plots…),
+`find_pyfigures_tools(query="the user's words")` (matching operations with their
+exact arguments) and `use_pyfigures_tool(tool_name, arguments)` (runs one). Every
+operation stays reachable; a misspelt name or a missing argument answers with the
+close names or the schema.
+
+```bash
+python -m pyfigures.mcp_server --tools categories
+```
+
 It listens on this computer only. ChatGPT on the web or in its desktop app only
 connects to servers on the public internet; use Codex (registered as above) for
 OpenAI models on this computer. The MCP tool `mcp_server_info` reports this set-up
@@ -285,7 +299,7 @@ model browser — without it the model will ignore tool calls entirely.
 
 | Limitation | Details |
 |------------|---------|
-| **Context window** | Large files returned by `get_xml` may exceed smaller models' context. Prefer `describe_figure`. |
+| **Context window** | The full tool list alone is ~99k tokens: start the server with `--tools categories` (three tools, ~600 tokens). Large files returned by `get_xml` may exceed smaller models' context. Prefer `describe_figure`. |
 | **Tool reliability** | Measured on the requests of the paper's Figure 3 plus three revisions (November 2026, three runs each): by recipe, Muse-Glimmer 28B got 17 of 18 steps right (3.5–4 min a run) and Qwen3.8 27B 16 of 18 (7–8 min); every miss kept a third colour when asked for "magenta and green" on a three-channel image. By individual tools the same models got 2 and 1 of 6. An 8B vision model failed every step (invented pixel size, crop margins read as coordinates). Ask models for a recipe (`build_figure_from_recipe`), and always check `render_preview`, above all pixel sizes and scale bars. |
 | **Multi-step plans** | May need explicit prompting: "first call describe_figure, then add scale bars". |
 | **Speed** | Each tool call is a round-trip; CPU-only inference can be slow for complex edits. |

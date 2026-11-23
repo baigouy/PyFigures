@@ -191,15 +191,23 @@ def main(argv=None):
     ap.add_argument("--transport", choices=["stdio", "http", "sse"], default="stdio")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--tools", choices=["all", "categories"],
+                    default=os.environ.get("PYFIGURES_MCP_TOOLS", "all"),
+                    help="all: every tool listed (~85k tokens of descriptions); categories: three "
+                         "tools (categories, search, run) that reach them all, details on request")
     a = ap.parse_args(argv)
     global _JOB
     _JOB = _children_die_with_me()
+    server = mcp
+    if a.tools == "categories":
+        from .mcp_tools.category_surface import build
+        server = build(mcp)
     if a.transport == "stdio":
-        run_stdio()
+        run_stdio(server)
         return
-    mcp.settings.host = a.host
-    mcp.settings.port = a.port
-    mcp.run(transport="streamable-http" if a.transport == "http" else "sse")
+    server.settings.host = a.host
+    server.settings.port = a.port
+    server.run(transport="streamable-http" if a.transport == "http" else "sse")
 
 
 _JOB = None
