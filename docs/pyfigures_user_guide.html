@@ -1094,7 +1094,9 @@
         model gave the expected result for 151 of 153 single requests and a 27-billion-parameter
         model for all of them; multi-step requests need the larger models.</li>
       <li>The chat's own <strong>Model Library</strong>, which downloads a model and its runtime
-        (llama-server).</li>
+        (llama-server). It offers Qwen3.8 27B, Qwen3.5 9B and Qwen3.5 4B and starts on the largest
+        one your computer runs (about 20 GB of graphics memory for 27B, 8 GB for 9B; on Apple Silicon,
+        the unified memory), with the Q4_K_M file selected.</li>
       <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter, Groq, Mistral or any OpenAI-compatible
         server) in the chat's connection settings, with your own key. The figure descriptions and
         previews the model asks for are then sent to that provider. Choosing

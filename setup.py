@@ -104,7 +104,7 @@ setuptools.setup(
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
         # the chat sidebar (Tools > Chat sidebar, a core part of PyFigures): a
         # local or API model edits the open figure through the MCP tools (BSD-2)
-        "qtpy-ai-sidecar>=0.1.18",   # 0.1.18: "edit it manually" opens the panel just edited, on its tab; 0.1.17: no preview-draft mode, a letter colour quotes the request; 0.1.16: prompt cache (stable prompt start, cache keys / marks); 0.1.15: a turn going in circles gets one last chance to act
+        "qtpy-ai-sidecar>=0.1.19",   # 0.1.19: the model library offers Qwen3.8 27B and starts on the model the graphics memory runs; 0.1.18: "edit it manually" opens the panel just edited, on its tab; 0.1.17: no preview-draft mode, a letter colour quotes the request; 0.1.16: prompt cache (stable prompt start, cache keys / marks); 0.1.15: a turn going in circles gets one last chance to act
         "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
     ]),
     extras_require=_extras({
@@ -138,11 +138,11 @@ setuptools.setup(
         # `pip install pyfigures[chat]` from older instructions still works
         'chat': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.18",
+            "qtpy-ai-sidecar>=0.1.19",
         ],
         'all': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.18",
+            "qtpy-ai-sidecar>=0.1.19",
             "av",
             "opencv-python-headless<5.1",    # see 'video'
             "pyimagej",
