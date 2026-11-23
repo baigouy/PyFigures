@@ -1761,8 +1761,12 @@ def resize_figure(
     group_path: list[int] | None = None,
     max_height_mm: float | None = None,
     fit_height: bool | str = True,
+    scale: float | None = None,
 ) -> str:
     """Resize all (or one) group(s) of a figure to a target physical width.
+
+    **scale**: relative to the figure's current width ("double the figure width" =
+    scale=2, "half as wide" = 0.5); the panels' arrangement is kept.
 
     This is the main tool for conforming a figure to journal submission
     guidelines.  Specify the target width in one of four ways —
@@ -1832,9 +1836,18 @@ def resize_figure(
     # (This used to set W_in * dpi canvas units — at 300 dpi figures came out
     # 4.17x too large and every pt font 4.17x too small once printed.)
     for name, value in (("width_mm", width_mm), ("width_cm", width_cm), ("width_in", width_in),
-                        ("width_px", width_px), ("max_height_mm", max_height_mm)):
+                        ("width_px", width_px), ("max_height_mm", max_height_mm), ("scale", scale)):
         if value is not None and not (math.isfinite(value) and value > 0):
             return f"ERROR: {name} must be a positive number (got {value})."
+    if scale is not None and journal is None and width_mm is None and width_cm is None \
+            and width_in is None and width_px is None:
+        # chat 2026-11-23 (Qwen 9B): "double figure width" became 4, then 8 columns: a
+        # relative size needs no width read first
+        from .core import _figure_size_mm
+        size = _figure_size_mm(pyf_path)
+        if not size:
+            return "ERROR: the figure has no laid-out rows to scale. Nothing was changed."
+        width_mm = round(size[0] * float(scale), 2)
     if journal is not None:
         try:
             target_mm, note = _journal_width(journal, column)
