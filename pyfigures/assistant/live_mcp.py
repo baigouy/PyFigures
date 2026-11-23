@@ -40,7 +40,10 @@ def request(operation, session_id=None, expected_revision=None, arguments=None, 
         raise LiveBridgeError('GUI_OFFLINE', 'The PyFigures window is closed or not sharing its figure (Tools > Share the open figure with the MCP server). Start it, then inspect the new session. No edit was submitted; do not repeat delete/add loops. '
                               f'(Looked for {descriptor}: {type(exc).__name__}: {exc}. {_folder_seen(descriptor.parent)})') from exc
     payload = dict(operation=operation, session_id=session_id, expected_revision=expected_revision,
-                   arguments=arguments or {}, request_id=request_id or str(uuid.uuid4()))
+                   arguments=arguments or {}, request_id=request_id or str(uuid.uuid4()),
+                   # the chat panel's own server runs with the sidecar's vision setting; any
+                   # other client (Hermes, Claude Desktop...) is an outside app
+                   origin='chat' if os.environ.get('QTPY_AI_SIDECAR_VISION') is not None else 'external')
     req = urllib.request.Request(connection['url'], data=json.dumps(payload).encode(),
                                  headers={'Authorization': 'Bearer ' + connection['token'], 'Content-Type': 'application/json'})
     try:

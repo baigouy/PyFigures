@@ -97,6 +97,10 @@ class busy_window:
 class Session:
     def __init__(self, window, recovery_dir=None):
         self.window = window
+        # (time, operation) of the last request from another AI app (Hermes, Claude...), not the
+        # chat panel: the panel says so (user 2026-11-23: it kept saying "Mistral" while Hermes
+        # drove the figure)
+        self.last_external = None
         self.id = str(uuid.uuid4())
         self.revision = 0
         self.fingerprint = None
@@ -1316,6 +1320,9 @@ def serve(session, token):
                 req = json.loads(self.rfile.read(size))
                 if not isinstance(req.get('request_id'), str) or len(req['request_id']) > 100:
                     raise ValueError('Invalid request ID')
+                if req.get('origin') == 'external':
+                    import time as _time
+                    session.last_external = (_time.time(), str(req.get('operation') or ''))
                 reply = queue.Queue(maxsize=1)
                 session.requests.put_nowait((req, reply))
                 result = reply.get(timeout=300 if req.get('operation') == 'original_tool' else 20)
