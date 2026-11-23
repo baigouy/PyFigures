@@ -66,3 +66,30 @@ def test_the_dialog_puts_the_open_window_first(home, qapp):
     assert dlg.share_button.text() == "Share this window\x27s figure" and not dlg.share_button.isEnabled()
     assert dlg.share_state.text() == "Not shared yet."
     dlg.deleteLater()
+
+
+def test_register_shares_the_window_at_every_start(home, qapp, monkeypatch):
+    """Hermes used pyfigures-live while the window was not shared, then built a file instead."""
+    from qtpy.QtWidgets import QMessageBox
+    from pyfigures.gui import user_prefs
+    from pyfigures.gui.mcp_server_dialog import McpServerDialog
+    user_prefs.save_share_at_start(False)                      # the tests' own settings file
+    assert user_prefs.load_share_at_start() is False
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes))
+    dlg = McpServerDialog()
+    res = dlg.toggle_registration("hermes")
+    assert res.startswith("Registered") and "shared at every start-up" in res
+    assert user_prefs.load_share_at_start() is True
+    dlg.toggle_registration("hermes")                           # removing does not switch it off
+    assert user_prefs.load_share_at_start() is True
+    user_prefs.save_share_at_start(False)
+    dlg.deleteLater()
+
+
+def test_an_unshared_window_makes_the_app_ask_not_build_a_file(tmp_path, monkeypatch):
+    from pyfigures.assistant import live_mcp
+    monkeypatch.setattr(live_mcp, "runtime_dir", lambda: tmp_path)          # no connection.json
+    with pytest.raises(live_mcp.LiveBridgeError) as err:
+        live_mcp.request("inspect")
+    text = str(err.value)
+    assert "Ask the user to open PyFigures and share it" in text and "do not build or edit .pyf files" in text

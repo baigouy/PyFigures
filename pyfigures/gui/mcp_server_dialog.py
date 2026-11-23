@@ -231,6 +231,16 @@ class McpServerDialog(QDialog):
             if answer != QMessageBox.StandardButton.Yes:
                 return None
         res = C.unregister(client) if removing else C.register(client)
+        if not removing and not str(res).startswith("ERROR"):
+            # the app should reach the open window from now on (user 2026-11-23: "I would always
+            # prefer interaction with the GUI"; Hermes built a file while the window was unshared)
+            from pyfigures.gui.user_prefs import save_share_at_start
+            save_share_at_start(True)
+            win = self._window()
+            if win is not None and hasattr(win, "share_at_start_action"):
+                win.share_at_start_action.setChecked(True)
+            res += (" The figure open in PyFigures is now shared at every start-up (View menu); "
+                    "click 'Share this window's figure' to share it now.")
         self._say(res)
         self.refresh()
         return res

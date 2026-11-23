@@ -63,6 +63,17 @@ def save_chat_at_start(value):
     _s().setValue('ui/chat_at_start', bool(value))
 
 
+def load_share_at_start():
+    """Share the open figure with AI apps (pyfigures-live) every time PyFigures starts (user
+    2026-11-23: Hermes used pyfigures-live but the window was not shared, so it built a file
+    instead). Off until chosen; Register in Tools > MCP server… turns it on."""
+    return _s().value('ui/share_at_start', False, type=bool)
+
+
+def save_share_at_start(value):
+    _s().setValue('ui/share_at_start', bool(value))
+
+
 # ── Adding images ────────────────────────────────────────────────────
 def load_max_project_z_stacks():
     """New Z stacks show their max projection (else the first slice)."""

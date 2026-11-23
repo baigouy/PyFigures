@@ -1978,6 +1978,15 @@ class EZFIG_GUI(QMainWindow):
                                              "of the toolbar) is open beside the figure")
         self.chat_at_start_action.toggled.connect(save_chat_at_start)
         view_menu.addAction(self.chat_at_start_action)
+        from pyfigures.gui.user_prefs import load_share_at_start, save_share_at_start
+        self.share_at_start_action = QAction("Share the open figure with AI apps at start-up", self)
+        self.share_at_start_action.setCheckable(True)
+        self.share_at_start_action.setChecked(load_share_at_start())
+        self.share_at_start_action.setToolTip("Every time PyFigures starts, AI apps registered in Tools → "
+                                              "MCP server… (Hermes, Claude, LM Studio…) can edit the figure "
+                                              "open in the window (pyfigures-live), on this computer only")
+        self.share_at_start_action.toggled.connect(save_share_at_start)
+        view_menu.addAction(self.share_at_start_action)
         view_menu.addSeparator()
         theme_menu = view_menu.addMenu('Theme')
         self._theme_actions = {}
@@ -2118,7 +2127,7 @@ class EZFIG_GUI(QMainWindow):
         if not ai_features_enabled():
             for act in (self.chat_toolbar_action, mcp_server_action, mcp_history_action,
                         self.share_figure_action, chat_action, web_chat_action,
-                        self.chat_at_start_action, chat_tuto_action, chat_video_action):
+                        self.chat_at_start_action, self.share_at_start_action, chat_tuto_action, chat_video_action):
                 act.setVisible(False)
 
     # Maps each persistent toolbar QAction to its qtawesome icon name.
