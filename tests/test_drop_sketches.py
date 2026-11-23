@@ -66,8 +66,8 @@ def test_figure_drop_menu_sketches_differ(gui, tmp_path):
     existing = Image2D(_png(tmp_path / "old.png", (50, 50)))
     panel.shapes_to_draw.append(existing)
     panel.update_size()
-    files = [_png(tmp_path / "a.png", (80, 40)), _png(tmp_path / "b.png", (80, 40)),
-             _png(tmp_path / "c.png", (80, 40))]
+    # 7 files: up to 5 the panel dialog opens on one row, which IS the row sketch (2026-11-23)
+    files = [_png(tmp_path / f"{c}.png", (80, 40)) for c in "abcdefg"]
     gui.add_image_from_an_external_source_context_menu(files, [existing])
     acts = _choices(panel)
     names = [a.text() for a in acts]
@@ -184,3 +184,23 @@ def test_poster_drop_menus_have_sketches(poster, tmp_path, monkeypatch):
     assert len(no_icon) == 2 and any("gallery" in t for t in no_icon), seen[-1]
     poster._offer_single_drop(paths[0], QPoint(0, 0))
     assert all(not null for _t, null in seen[-1]), seen[-1]
+
+
+def test_grid_panel_sketch_has_the_dialogs_default_shape(gui, tmp_path):
+    """User 2026-11-23: the grid dialog now opens on 3-5 images a row (13 -> 3 x 5), but the
+    drop menu's "To a grid panel" sketch still showed 2 rows of 7 ("add the test so they're
+    bound together from now on"). For every count, the sketch has the rows and columns the
+    dialog itself opens on."""
+    from pyfigures.gui.drop_sketch import _canvas_result
+    from pyfigures.gui.panelcreationwidget import PanelCreator
+    files = [_png(tmp_path / f"i{k}.png", (40, 30)) for k in range(24)]
+    for n in range(2, 25):
+        dialog = PanelCreator(None, n)
+        v = dialog.get_values()
+        dialog.deleteLater()
+        shapes, new_ids, _ = _canvas_result(gui.paint.EZFIG_panel, "panel", files[:n], None, None)
+        grid = shapes[-1]
+        rows = [r.content for r in grid.content] if v["num_rows"] > 1 else [grid.content]
+        assert (len(rows), len(rows[0])) == (v["num_rows"], v["num_cols"]), n
+        assert all(len(r) == v["num_cols"] for r in rows), n           # the last row padded
+        assert sum(id(p) in new_ids for r in rows for p in r) == n

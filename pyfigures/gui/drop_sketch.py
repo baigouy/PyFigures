@@ -15,7 +15,6 @@ Anything that cannot be told leaves the entry without a sketch.
 """
 from __future__ import annotations
 
-import math
 import os
 import traceback
 
@@ -134,10 +133,11 @@ def _canvas_result(canvas, op, files, target, montage):
             box._add_as_new_group([tc] + new, orientation="X" if op == "with_row" else "Y",
                                   remove_from_parents=True)
         elif op == "panel":
-            # the panel dialog opens on 2 rows, left to right, empty panels added
-            rows = min(2, len(new))
+            # the shape the panel dialog opens on (3-5 a row), left to right, empty panels added
+            from pyfigures.gui.panelcreationwidget import default_grid_shape
+            _rows, cols = default_grid_shape(len(new))
             size = (new[0].width(), new[0].height())
-            grp = _grid(new, math.ceil(len(new) / rows), size)
+            grp = _grid(new, cols, size)
             box.shapes_to_draw.append(grp)
             box.force_update_size_of_parent.emit(grp)
         else:                                # single images / max projections
