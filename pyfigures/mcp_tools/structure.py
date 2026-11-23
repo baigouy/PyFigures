@@ -1599,15 +1599,18 @@ def set_size(
     width_px: int,
     group_path: list[int] | None = None,
 ) -> str:
-    """Set the layout width (in pixels) of one or all groups and write fully-computed
-    geometry back to the file — identical to typing a value in the GUI size spinner.
+    """Width in canvas units (72 per inch, the GUI's Width field); a size in cm/mm/in: resize_figure.
+
+    For the figure's size in cm, mm or inches, a journal column, a height or "twice as
+    wide", use resize_figure instead (width_cm=20, height_mm=..., scale=2): it converts.
+    Here *width_px* is NOT pixels of an export: the canvas has 72 units per inch
+    whatever the export DPI (1 unit = 0.353 mm; 20 cm = 567, 89 mm = 252). Converting
+    with 300 DPI gives a figure 4.17x too wide (chat 2026-11-23: 20 cm became 833 mm).
 
     Uses PyFigures' own layout engine (set_to_width) so the saved XML contains correct
     x/y/width/height/scale values for every child, exactly as the GUI would produce.
 
-    *width_px*: desired width in pixels.
-      Tip — to convert cm to px:  round(cm * DPI / 2.54)
-      e.g. 17 cm at 300 DPI = round(17 * 300 / 2.54) = 2008 px
+    *width_px*: desired width in canvas units (72 per inch).
     *group_path*:
       - None (default) → resize ALL top-level groups to *width_px*.
       - [0] → resize only top-level group 0.
@@ -1695,7 +1698,8 @@ def set_size(
 
     n = len(targets)
     loc = f"group {group_path}" if group_path is not None else f"{n} top-level group(s)"
-    return f"Laid out {loc} at {width_px}px wide and saved computed geometry."
+    return (f"Laid out {loc} at {width_px:g} canvas units wide (= {width_px * 25.4 / 72:.1f} mm, "
+            f"{width_px / 72:.2f} in; 72 units per inch) and saved computed geometry.")
 
 
 @mcp.tool()
@@ -1762,11 +1766,20 @@ def resize_figure(
     max_height_mm: float | None = None,
     fit_height: bool | str = True,
     scale: float | None = None,
+    height_mm: float | None = None,
+    height_cm: float | None = None,
 ) -> str:
-    """Resize all (or one) group(s) of a figure to a target physical width.
+    """Set the figure's size: width in mm/cm/in, a journal column, a height, or scale=2.
+
+    The canvas has 72 units per inch whatever the export DPI: give the size in mm, cm
+    or inches here and never convert it yourself ("20 cm wide" = width_cm=20).
 
     **scale**: relative to the figure's current width ("double the figure width" =
     scale=2, "half as wide" = 0.5); the panels' arrangement is kept.
+
+    **height_mm** / **height_cm** (alone): the figure's height; its width follows,
+    aspect kept (the height comes from the panels' shapes, so width and height cannot
+    both be chosen: to change the aspect, change the layout or crop the panels).
 
     This is the main tool for conforming a figure to journal submission
     guidelines.  Specify the target width in one of four ways —
@@ -1836,14 +1849,26 @@ def resize_figure(
     # (This used to set W_in * dpi canvas units — at 300 dpi figures came out
     # 4.17x too large and every pt font 4.17x too small once printed.)
     for name, value in (("width_mm", width_mm), ("width_cm", width_cm), ("width_in", width_in),
-                        ("width_px", width_px), ("max_height_mm", max_height_mm), ("scale", scale)):
+                        ("width_px", width_px), ("max_height_mm", max_height_mm), ("scale", scale),
+                        ("height_mm", height_mm), ("height_cm", height_cm)):
         if value is not None and not (math.isfinite(value) and value > 0):
             return f"ERROR: {name} must be a positive number (got {value})."
+    widths_given = [n for n, v in (("journal", journal), ("width_mm", width_mm), ("width_cm", width_cm),
+                                   ("width_in", width_in), ("width_px", width_px), ("scale", scale))
+                    if v is not None]
+    if height_mm is None and height_cm is not None:
+        height_mm = float(height_cm) * 10
+    if height_mm is not None:
+        if widths_given:
+            return (f"ERROR: give the height or the width ({', '.join(widths_given)}), not both: the "
+                    "height follows from the width and the panels' shapes. Nothing was changed.")
+        if group_path is not None:
+            return "ERROR: a height applies to the whole figure (group_path=None). Nothing was changed."
+        return _resize_to_height(pyf_path, float(height_mm), dpi)
     if scale is not None and journal is None and width_mm is None and width_cm is None \
             and width_in is None and width_px is None:
         # chat 2026-11-23 (Qwen 9B): "double figure width" became 4, then 8 columns: a
         # relative size needs no width read first
-        from .core import _figure_size_mm
         size = _figure_size_mm(pyf_path)
         if not size:
             return "ERROR: the figure has no laid-out rows to scale. Nothing was changed."
@@ -1957,10 +1982,40 @@ def resize_figure(
     if group_path is None:          # the whole figure: remembered for the checks
         _store_target(pyf_path, journal, column, target_in * 25.4, fitted_to)
 
+    size = _figure_size_mm(pyf_path) if group_path is None else None
+    tall = f", {size[1]:.1f}mm tall" if size else ""
     return (
-        f"Figure resized to {target_in * 25.4:.1f}mm wide = {canvas_units:.1f} canvas pt; "
+        f"Figure resized to {target_in * 25.4:.1f}mm wide{tall} = {canvas_units:.1f} canvas pt; "
         f"an export at {dpi} DPI is {target_px}px wide  [{source}].{fit_note}  {result}"
     )
+
+
+def _resize_to_height(pyf_path: str, height_mm: float, dpi: int) -> str:
+    """The whole figure to *height_mm* tall, aspect kept: heights are not quite
+    proportional to the width (gaps and labels keep their size), so a few passes."""
+    size = _figure_size_mm(pyf_path)
+    if not size or size[1] <= 0:
+        return "ERROR: the figure has no laid-out rows to size. Nothing was changed."
+    width = size[0]
+    height = size[1]
+    result = ""
+    for _ in range(5):
+        if abs(height - height_mm) <= height_mm * 0.002:
+            break
+        width = width * height_mm / height
+        if width < _MIN_FIT_WIDTH_MM:
+            return (f"ERROR: to be {height_mm:g}mm tall the figure would be about {width:.0f}mm wide, "
+                    f"its panels too small to read. Nothing more was changed.")
+        result = set_size(pyf_path, width / 25.4 * 72.0, None)
+        if result.startswith("ERROR"):
+            return result
+        size = _figure_size_mm(pyf_path)
+        if not size:
+            break
+        width, height = size
+    _store_target(pyf_path, None, "single", width, None)
+    return (f"Figure resized to {height:.1f}mm tall, {width:.1f}mm wide (aspect kept); an export at "
+            f"{dpi} DPI is {round(width / 25.4 * dpi)}px wide  [height {height_mm:g}mm].  {result}")
 
 
 @mcp.tool()

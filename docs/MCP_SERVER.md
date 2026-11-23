@@ -464,7 +464,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 
 | Tool | Description |
 |------|-------------|
-| `resize_figure(pyf_path, ...)` | Resize figure to a target physical width — supports mm, cm, inches, pixels, named journal presets, and `scale` relative to the current width (`scale=2` doubles it, layout kept) |
+| `resize_figure(pyf_path, ...)` | Resize figure to a target physical width — supports mm, cm, inches, pixels, named journal presets, and `scale` relative to the current width (`scale=2` doubles it, layout kept); or `height_mm` / `height_cm` alone (width follows, aspect kept). `set_size` takes canvas units (72 per inch, 20 cm = 567), not export pixels |
 | `list_journal_presets()` | List the built-in journal size presets (single / 1.5 / double column) |
 | `recompute_layout(pyf_path)` | Re-run the PyFigures layout engine on all top-level groups |
 | `templatify_figure(pyf_path)` | Convert every image panel into an empty template slot (GUI: Template menu) |

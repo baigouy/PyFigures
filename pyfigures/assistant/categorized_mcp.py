@@ -234,8 +234,9 @@ TOPIC_RULES = (
      'first=N) once, never add_image batches (it adds tables as data plots, in the folder\'s order); '
      '"images" of a folder = add_image. Say once that a table panel is possible.'),
     ({'width', 'wide', 'wider', 'narrower', 'size', 'resize', 'height', 'tall', 'taller'},
-     'SIZE: the figure\'s width ("double / halve the figure width", "make it 180 mm wide") = '
-     'resize_figure(scale=2 / 0.5, or width_mm=...): the layout is kept; arrange_live_images and '
+     'SIZE: the figure\'s size ("double / halve the figure width", "20 cm wide", "8 cm tall") = '
+     'resize_figure(scale=2 / 0.5, width_cm=20, width_mm=..., height_cm=8): it converts, never compute '
+     'pixels yourself (set_size counts 72 units per inch); the layout is kept; arrange_live_images and '
      'columns change the layout, never the size.'),
     ({'random', 'randomly'},
      'RANDOM: "N random images (from a folder)" go in the open figure: add_folder_files(folder, first=N, '
@@ -360,7 +361,7 @@ REQUEST_KEYS = {
     'INTEGRITY': {'duplicate', 'identical', 'reused', 'integrity', 'inverted', 'investigate', 'similar'},
     'FOLDERS': {'files', 'folder', 'directory'},
     'RANDOM': {'random', 'randomly'},
-    'SIZE': {'width', 'wide', 'wider', 'narrower', 'resize'},
+    'SIZE': {'width', 'wide', 'wider', 'narrower', 'resize', 'tall', 'taller', 'shorter', 'cm'},
 }
 
 
