@@ -58,7 +58,9 @@ def test_hermes_register_keeps_its_comments_and_other_servers(home):
     text = open(path, encoding="utf-8").read()
     data = yaml.safe_load(text)
     assert "# my settings" in text and "# local" in text and data["display"] == {"theme": "dark"}
-    assert set(data["mcp_servers"]) == {"github", "pyfigures"}
+    assert set(data["mcp_servers"]) == {"github", "pyfigures", "pyfigures-live"}
+    assert data["mcp_servers"]["pyfigures-live"]["args"][-1] in ("pyfigures.assistant.live_mcp", "--live-mcp")
+    assert data["mcp_servers"]["pyfigures-live"]["env"]["PYFIGURES_MCP_SURFACE"] == "categories"
     assert data["mcp_servers"]["pyfigures"]["args"] == ["-m", "pyfigures.mcp_server", "--tools", "categories"]
     assert C.registration("hermes")["registered"] is True
     assert "already starts" in C.register("hermes", python="/usr/bin/python3")
@@ -74,12 +76,12 @@ def test_hermes_with_no_config_or_an_empty_server_list(home):
     import yaml
     path = C.client_config_path("hermes")
     C.register("hermes", python="python")                     # no file yet
-    assert set(yaml.safe_load(open(path, encoding="utf-8").read())["mcp_servers"]) == {"pyfigures"}
+    assert set(yaml.safe_load(open(path, encoding="utf-8").read())["mcp_servers"]) == {"pyfigures", "pyfigures-live"}
     with open(path, "w", encoding="utf-8") as f:
         f.write("model: x\nmcp_servers: {}\n")
     C.register("hermes", python="python")
     data = yaml.safe_load(open(path, encoding="utf-8").read())
-    assert data["model"] == "x" and set(data["mcp_servers"]) == {"pyfigures"}
+    assert data["model"] == "x" and set(data["mcp_servers"]) == {"pyfigures", "pyfigures-live"}
     with open(path, "w", encoding="utf-8") as f:
         f.write("model: [unclosed\n")
     assert C.register("hermes", python="python").startswith("ERROR")

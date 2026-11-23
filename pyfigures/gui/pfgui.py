@@ -7261,10 +7261,12 @@ class EZFIG_GUI(QMainWindow):
         import json
         config = json.dumps({"mcpServers": {"pyfigures-live": launch.mcp_server_entry()}}, indent=2)
         box = QMessageBox(QMessageBox.Icon.Information, 'Share the figure',
-                          "This window's figure is shared with the MCP server on this computer.\n\n"
-                          "Add the configuration below to your MCP client (Claude, LM Studio…), "
-                          "or use Tools > Chat sidebar. Edits appear here with one undo step "
-                          "each; nothing is saved to disk until you save.", QMessageBox.StandardButton.Ok, win)
+                          "This window's figure is shared on this computer.\n\n"
+                          "An AI app registered in Tools > MCP server… (Hermes, Claude, LM Studio…) "
+                          "edits it through its 'pyfigures-live' server; ask it to use that one. "
+                          "Another app: add the configuration below (Show Details). Edits appear "
+                          "here with one undo step each; nothing is saved to disk until you save.",
+                          QMessageBox.StandardButton.Ok, win)
         box.setDetailedText(config)
         box.exec()
         return win

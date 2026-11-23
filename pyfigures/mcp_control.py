@@ -43,6 +43,11 @@ import sys
 import time
 
 SERVER_NAME = "pyfigures"
+# registered with it (user 2026-11-23: "can this be made simpler"): the figure open in the
+# PyFigures window, live; it works while the window shares its figure (the chat panel does)
+LIVE_NAME = "pyfigures-live"
+LIVE_HELP = ("two servers: 'pyfigures' edits saved .pyf files, 'pyfigures-live' the figure open in the "
+             "PyFigures window (while its chat panel is open, or Tools > Share the open figure).")
 # shown under the chat and in the MCP server dialog: a model once replaced the
 # user's 1.24 µm/px by 0.1 and shrank the asked-for 100 µm bars to 5 µm
 # added under the chat only when the model is online (never for a local model):
@@ -126,27 +131,36 @@ def hermes_home() -> str:
 
 
 # Hermes lists its servers under the top-level "mcp_servers:" of config.yaml. The file is
-# edited as text, so its comments and layout stay: only the "  pyfigures:" block is added,
-# replaced or removed, and the result must still read as YAML.
-def _hermes_block(python: str | None) -> list[str]:
+# edited as text, so its comments and layout stay: only our blocks ("  pyfigures:" for files,
+# "  pyfigures-live:" for the open window) are added, replaced or removed, and the result must
+# still read as YAML.
+def _hermes_blocks(python: str | None) -> dict:
     entry = server_entry(python)
     # the three entry tools, not all 210 (a local model's context: ~100k tokens otherwise)
     args = entry["args"] + ["--tools", "categories"]
-    return [f"  {SERVER_NAME}:",
-            f"    command: {json.dumps(entry['command'])}",
-            f"    args: [{', '.join(json.dumps(a) for a in args)}]",
-            "    enabled: true"]
+    live = live_entry(python)
+    return {
+        SERVER_NAME: [f"  {SERVER_NAME}:",
+                      f"    command: {json.dumps(entry['command'])}",
+                      f"    args: [{', '.join(json.dumps(a) for a in args)}]",
+                      "    enabled: true"],
+        LIVE_NAME: [f"  {LIVE_NAME}:",
+                    f"    command: {json.dumps(live['command'])}",
+                    f"    args: [{', '.join(json.dumps(a) for a in live['args'])}]",
+                    "    env:"]
+                   + [f"      {k}: {json.dumps(v)}" for k, v in live.get("env", {}).items()]
+                   + ["    enabled: true"]}
 
 
-def _hermes_find(lines: list[str]):
-    """(index of the top-level 'mcp_servers:' line or None, (start, end) of our block or None)."""
+def _hermes_find(lines: list[str], name: str = SERVER_NAME):
+    """(index of the top-level 'mcp_servers:' line or None, (start, end) of *name*'s block or None)."""
     top = next((i for i, l in enumerate(lines) if re.match(r"mcp_servers\s*:", l)), None)
     if top is None:
         return None, None
     end_of_section = next((i for i in range(top + 1, len(lines))
                            if lines[i].strip() and not lines[i].startswith((" ", "\t", "#"))), len(lines))
     start = next((i for i in range(top + 1, end_of_section)
-                  if re.match(rf"\s{{1,4}}{re.escape(SERVER_NAME)}\s*:", lines[i])), None)
+                  if re.match(rf"\s{{1,4}}{re.escape(name)}\s*:", lines[i])), None)
     if start is None:
         return top, None
     indent = len(lines[start]) - len(lines[start].lstrip())
@@ -176,24 +190,27 @@ def _register_hermes(path: str, python: str | None) -> str:
     except Exception as e:
         return f"ERROR: {path} is not valid YAML ({e}); nothing was changed."
     lines = text.splitlines()
-    block = _hermes_block(python)
-    top, ours = _hermes_find(lines)
-    if ours is not None:
-        if lines[ours[0]:ours[1]] == block:
-            return f"{CLIENTS['hermes']} already starts the PyFigures MCP server ({path})."
-        lines[ours[0]:ours[1]] = block
-    elif top is not None:
-        if re.match(r"mcp_servers\s*:\s*(\{\s*\}|null|~)?\s*(#.*)?$", lines[top]):
-            lines[top] = "mcp_servers:"
-        lines[top + 1:top + 1] = block
-    else:
-        lines += ([""] if lines and lines[-1].strip() else []) + ["mcp_servers:"] + block
+    changed = False
+    for name, block in _hermes_blocks(python).items():
+        top, ours = _hermes_find(lines, name)
+        if ours is not None:
+            if lines[ours[0]:ours[1]] == block:
+                continue
+            lines[ours[0]:ours[1]] = block
+        elif top is not None:
+            if re.match(r"mcp_servers\s*:\s*(\{\s*\}|null|~)?\s*(#.*)?$", lines[top]):
+                lines[top] = "mcp_servers:"
+            lines[top + 1:top + 1] = block
+        else:
+            lines += ([""] if lines and lines[-1].strip() else []) + ["mcp_servers:"] + block
+        changed = True
+    if not changed:
+        return f"{CLIENTS['hermes']} already starts the PyFigures MCP server ({path})."
     try:
         backup = _write_text(path, "\n".join(lines) + "\n", _yaml_check)
     except Exception as e:
         return f"ERROR: the edited {path} would not read as YAML ({e}); nothing was changed."
-    return (f"Registered with {CLIENTS['hermes']} ({path}): it starts the server when it needs the "
-            "tools (the three entry tools, which suit local models). Restart Hermes, or type "
+    return (f"Registered with {CLIENTS['hermes']} ({path}): {LIVE_HELP} Restart Hermes, or type "
             "/reload-mcp in it." + (f" Previous file kept as {backup}." if backup else ""))
 
 
@@ -205,10 +222,14 @@ def _unregister_hermes(path: str) -> str:
         lines = []
     except OSError as e:
         return f"ERROR: cannot read {path} ({e}); nothing was changed."
-    _top, ours = _hermes_find(lines)
-    if ours is None:
+    found = False
+    for name in (SERVER_NAME, LIVE_NAME):
+        _top, ours = _hermes_find(lines, name)
+        if ours is not None:
+            del lines[ours[0]:ours[1]]
+            found = True
+    if not found:
         return f"{CLIENTS['hermes']} does not list the PyFigures MCP server ({path})."
-    del lines[ours[0]:ours[1]]
     backup = _write_text(path, "\n".join(lines) + "\n", _yaml_check)
     return (f"Removed from {CLIENTS['hermes']} ({path}). Restart Hermes to apply."
             + (f" Previous file kept as {backup}." if backup else ""))
@@ -222,6 +243,15 @@ def _wsl_path(path: str) -> str:
 def server_entry(python: str | None = None) -> dict:
     """The stdio entry a client needs to start the server."""
     return {"command": python or sys.executable, "args": ["-m", "pyfigures.mcp_server"]}
+
+
+def live_entry(python: str | None = None) -> dict:
+    """The stdio entry of the live server (the figure open in the PyFigures window)."""
+    from pyfigures.assistant import launch
+    entry = launch.mcp_server_entry()
+    if python:
+        entry = {**entry, "command": python, "args": ["-m", "pyfigures.assistant.live_mcp"]}
+    return entry
 
 
 def config_snippet(python: str | None = None, fmt: str = "json") -> str:
@@ -466,18 +496,21 @@ def register(client: str, python: str | None = None) -> str:
     servers = data.setdefault("mcpServers", {})
     if not isinstance(servers, dict):
         return f"ERROR: 'mcpServers' in {path} is not an object; nothing was changed."
-    entry = server_entry(python)
+    entry, live = server_entry(python), live_entry(python)
     if client == "claude_code":
         entry = {"type": "stdio", **entry, "env": {}}
-    if servers.get(SERVER_NAME) == entry:
+        live = {"type": "stdio", **live}
+    if servers.get(SERVER_NAME) == entry and servers.get(LIVE_NAME) == live:
         return f"{CLIENTS[client]} already starts the PyFigures MCP server ({path})."
     servers[SERVER_NAME] = entry
+    servers[LIVE_NAME] = live
     disabled = data.get("_mcpServersDisabled")
     if isinstance(disabled, dict):
         disabled.pop(SERVER_NAME, None)
+        disabled.pop(LIVE_NAME, None)
     backup = _write_json(path, data)
-    return (f"Registered with {CLIENTS[client]} ({path}): it starts the server when it needs "
-            f"the tools. Restart {CLIENTS[client]} to load it."
+    return (f"Registered with {CLIENTS[client]} ({path}): {LIVE_HELP} It starts them when it needs "
+            f"the tools. Restart {CLIENTS[client]} to load them."
             + (f" Previous file kept as {backup}." if backup else ""))
 
 
@@ -486,16 +519,25 @@ def _register_codex(path: str, python: str | None) -> str:
         text, data = _read_toml(path)
     except (ValueError, OSError) as e:
         return f"ERROR: cannot read {path} ({e}); nothing was changed."
-    entry = server_entry(python)
-    current = (data.get("mcp_servers") or {}).get(SERVER_NAME)
+    entry, live = server_entry(python), live_entry(python)
+    servers = data.get("mcp_servers") or {}
+    current, current_live = servers.get(SERVER_NAME), servers.get(LIVE_NAME)
     if current is not None and {k: current.get(k) for k in entry} == entry \
-            and current.get("enabled", True):
+            and current.get("enabled", True) and current_live is not None \
+            and {k: current_live.get(k) for k in live} == live:
         return f"{CLIENTS['codex']} already starts the PyFigures MCP server ({path})."
     text = _without_toml_table(text, f"mcp_servers.{SERVER_NAME}")
-    text = (text + "\n" if text else "") + config_snippet(python, fmt="codex")
+    text = _without_toml_table(text, f'mcp_servers."{LIVE_NAME}"')
+    text = _without_toml_table(text, f"mcp_servers.{LIVE_NAME}")
+    env = ", ".join(f"{k} = {json.dumps(v)}" for k, v in live.get("env", {}).items())
+    live_table = (f'[mcp_servers."{LIVE_NAME}"]\n'
+                  f"command = {json.dumps(live['command'])}\n"
+                  f"args = [{', '.join(json.dumps(a) for a in live['args'])}]\n"
+                  + (f"env = {{ {env} }}\n" if env else ""))
+    text = (text + "\n" if text else "") + config_snippet(python, fmt="codex") + "\n" + live_table
     backup = _write_text(path, text, _toml_load)
-    return (f"Registered with {CLIENTS['codex']} ({path}): it starts the server when it needs "
-            f"the tools. Restart Codex to load it."
+    return (f"Registered with {CLIENTS['codex']} ({path}): {LIVE_HELP} It starts them when it needs "
+            f"the tools. Restart Codex to load them."
             + (f" Previous file kept as {backup}." if backup else ""))
 
 
@@ -508,10 +550,12 @@ def unregister(client: str) -> str:
             text, data = _read_toml(path)
         except (ValueError, OSError) as e:
             return f"ERROR: cannot read {path} ({e}); nothing was changed."
-        if SERVER_NAME not in (data.get("mcp_servers") or {}):
+        listed = data.get("mcp_servers") or {}
+        if SERVER_NAME not in listed and LIVE_NAME not in listed:
             return f"{CLIENTS[client]} does not list the PyFigures MCP server ({path})."
-        backup = _write_text(path, _without_toml_table(text, f"mcp_servers.{SERVER_NAME}"),
-                             _toml_load)
+        text = _without_toml_table(text, f"mcp_servers.{SERVER_NAME}")
+        text = _without_toml_table(text, f'mcp_servers."{LIVE_NAME}"')
+        backup = _write_text(path, _without_toml_table(text, f"mcp_servers.{LIVE_NAME}"), _toml_load)
         return (f"Removed from {CLIENTS[client]} ({path}). Restart Codex to apply."
                 + (f" Previous file kept as {backup}." if backup else ""))
     try:
@@ -521,9 +565,10 @@ def unregister(client: str) -> str:
     found = False
     for key in ("mcpServers", "_mcpServersDisabled"):
         servers = data.get(key)
-        if isinstance(servers, dict) and SERVER_NAME in servers:
-            del servers[SERVER_NAME]
-            found = True
+        for name in (SERVER_NAME, LIVE_NAME):
+            if isinstance(servers, dict) and name in servers:
+                del servers[name]
+                found = True
     if not found:
         if client == "lm_studio" and SERVER_NAME in _commander_stash():
             return ("LM Studio's entry was switched off with MCP Commander, which keeps it; "

@@ -23,7 +23,8 @@ INSTRUCTIONS = (
     "find_pyfigures_tools(query=the user's words, in English) gives matching operations with their exact "
     "argument schema and guidance, use_pyfigures_tool(tool_name, arguments) runs one. "
     "Never guess an operation or argument name: search first; a wrong argument returns the schema. "
-    "Start with describe_figure on an existing figure, create_figure for a new one.")
+    "Start with describe_figure on an existing figure, create_figure for a new one. "
+    "The figure open in the PyFigures window (not a file): use_pyfigures_tool('live_window_setup').")
 
 # synonyms the users' words come in (the live chat's list, plus the file tools' own words)
 _ALIASES = {"gaps": "spacing", "gap": "spacing", "letters": "letter", "labels": "label", "rows": "row",

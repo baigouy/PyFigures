@@ -29,19 +29,33 @@ class McpServerDialog(QDialog):
 
         # the setup took too much guessing (LM Studio: where the entry goes,
         # the plug icon in the chat, which document is edited)
+        # user 2026-11-23: Hermes edited a saved file and the window showed nothing ("I didn't
+        # get it ... I would always prefer interaction with the GUI of PyFigures"): the live
+        # server (this window) comes first, the file server second
         howto = QLabel(
             "<b>How to use it</b><ol style='margin-top:2px'>"
-            "<li><b>Register</b> your client below (it merges one 'pyfigures' entry into its "
-            "configuration, keeping every other server; a backup is kept), then restart the "
-            "client.</li>"
+            "<li><b>Register</b> your AI app below, then restart it. Two servers are added: "
+            "<b>pyfigures-live</b>, which edits <b>the figure open in this window</b> (you see every "
+            "change here, one undo step each; recommended), and <b>pyfigures</b>, which edits "
+            "saved .pyf files without opening them.</li>"
+            "<li><b>Share this window's figure</b> (button below, or open the chat panel, which "
+            "shares it too). Then ask the app to use <b>pyfigures-live</b>.</li>"
             "<li><b>LM Studio</b>: in a chat, click the <b>plug / hammer icon</b> under the message "
-            "box and switch <b>mcp/pyfigures</b> on. Pick a model that can call tools; tool "
-            "descriptions use part of the context, so give it 32k tokens or more.</li>"
-            "<li>The MCP server works on <b>saved .pyf files</b>: give the model the file's path "
-            "(File → Save first). Reopen the file here to see its changes.</li></ol>")
+            "box and switch <b>mcp/pyfigures-live</b> on. Pick a model that can call tools.</li></ol>")
         howto.setWordWrap(True)
         howto.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(howto)
+        share_row = QFrame()
+        sl = QHBoxLayout(share_row)
+        sl.setContentsMargins(0, 0, 0, 0)
+        self.share_button = QPushButton("Share this window's figure")
+        self.share_button.setToolTip("Lets the registered AI apps edit the figure open in this window "
+                                     "(pyfigures-live), unsaved work included")
+        self.share_button.clicked.connect(self.share_window)
+        self.share_state = QLabel()
+        sl.addWidget(self.share_button)
+        sl.addWidget(self.share_state, 1)
+        lay.addWidget(share_row)
 
         reg_box = QGroupBox("MCP clients (they start the server when they need it, "
                             "and stop it when they quit)")
@@ -138,7 +152,35 @@ class McpServerDialog(QDialog):
         self.refresh()
 
     # ── state ────────────────────────────────────────────────────────
+    def _window(self):
+        return self.parent() if self.parent() is not None and hasattr(self.parent(), "share_figure_toggled") else None
+
+    def share_window(self):
+        """Share the figure of the window this dialog belongs to (Tools > Share the open figure)."""
+        win = self._window()
+        if win is None:
+            self._say("Open this window from PyFigures (Tools > MCP server…) to share its figure.")
+            return
+        from pyfigures.assistant import launch
+        if launch.is_sharing(win):
+            self.refresh()
+            return
+        # sharing may reopen the figure in a new window and close this one: this dialog
+        # closes first, then the window shares (and says what to paste where)
+        from qtpy.QtCore import QTimer
+        self.accept()
+        QTimer.singleShot(0, lambda: win.share_figure_toggled(True))
+
     def refresh(self):
+        win = self._window()
+        try:
+            from pyfigures.assistant import launch
+            sharing = win is not None and launch.is_sharing(win)
+        except Exception:
+            sharing = False
+        self.share_state.setText("Shared: AI apps using <b>pyfigures-live</b> edit this figure."
+                                 if sharing else "Not shared yet.")
+        self.share_button.setEnabled(win is not None and not sharing)
         for r in C.registrations():
             if r["error"]:
                 text = "configuration unreadable"

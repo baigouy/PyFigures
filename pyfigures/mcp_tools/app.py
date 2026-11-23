@@ -23,6 +23,7 @@ mcp = FastMCP(
     "pyfigures",
     instructions=(
         "Inspect, create, and edit PyFigures .pyf scientific-figure layout files. "
+        "The figure open in the PyFigures window (not a file): live_window_setup. "
         "Tools for reading: describe_figure, get_xml, get_annotations, list_images. "
         "Tools for creating: create_figure, add_group, add_image. "
         "Tools for editing: set_spacing, set_orientation, reorder_children, resize_figure, "

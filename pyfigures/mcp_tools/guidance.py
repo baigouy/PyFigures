@@ -50,6 +50,45 @@ def show_me_how(operation: str, pyf_path: str = "") -> str:
 
 
 @mcp.tool()
+def live_window_setup() -> str:
+    """Edit the figure OPEN in the PyFigures window (live, unsaved work included) instead of a
+    .pyf file: whether a window shares its figure now, and the MCP server entry to add."""
+    # user 2026-11-23: "can the MCP also directly guide a third party app to set up the MCP for
+    # live interaction with the GUI": an agent that configures itself (Hermes) adds the entry
+    import socket
+    from urllib.parse import urlsplit
+    from pyfigures.assistant import runtime_dir
+    from pyfigures.mcp_control import LIVE_NAME, live_entry
+    sharing = False
+    try:
+        address = urlsplit(json.loads((runtime_dir() / "connection.json").read_text(encoding="utf-8"))["url"])
+        with socket.create_connection((address.hostname, address.port), timeout=1):
+            sharing = True
+    except Exception:
+        pass
+    entry = live_entry()
+    env = entry.get("env", {})
+    yaml_lines = [f"  {LIVE_NAME}:", f"    command: {json.dumps(entry['command'])}",
+                  f"    args: [{', '.join(json.dumps(a) for a in entry['args'])}]", "    env:"]
+    yaml_lines += [f"      {k}: {json.dumps(v)}" for k, v in env.items()]
+    return _dump({
+        "window_sharing_now": sharing,
+        "server_name": LIVE_NAME,
+        "mcpServers_json": {LIVE_NAME: entry},
+        "hermes_yaml": "mcp_servers:\n" + "\n".join(yaml_lines) + "\n",
+        "steps": [
+            f"Add the '{LIVE_NAME}' entry to this client's MCP servers (JSON, or the YAML for Hermes "
+            "Agent), then reload its MCP servers. Or: in PyFigures, Tools > MCP server... > Register "
+            "adds it for Claude, LM Studio, Codex, Cursor, Gemini CLI, AnythingLLM and Hermes.",
+            "The window must share its figure: it does while its chat panel is open, or after "
+            "Tools > Share the open figure with the MCP server." + ("" if not sharing else
+                                                                  " (It shares it now.)"),
+            "Then use that server's tools: edits appear in the window, one undo step each; "
+            "nothing is saved until the user saves."],
+    })
+
+
+@mcp.tool()
 def guidance_status(pyf_path: str = "") -> str:
     """The open guide's state in the PyFigures window: guidance_shown (with the
     current step), completed (the user's result was detected), cancelled,

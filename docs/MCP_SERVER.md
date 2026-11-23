@@ -71,7 +71,7 @@ python -m pyfigures.mcp_control snippet --format http
 python -m pyfigures.mcp_control stop                # stops it and every process it started
 ```
 
-**Three tools instead of 210** — every tool listed with its full description
+**Three tools instead of 211** — every tool listed with its full description
 is about 99k tokens before the first question: too much for a local model's
 context. `--tools categories` (or `PYFIGURES_MCP_TOOLS=categories` in the
 client's environment) lists three instead, about 600 tokens:
@@ -381,7 +381,7 @@ and puts the results into the page's message box for the user to send
 
 ## 5. Available tools reference
 
-The server currently exposes **210 tools** (about a sixth of them for the poster designer).
+The server currently exposes **211 tools** (about a sixth of them for the poster designer).
 They are grouped below by purpose. Nearly every capability in the PyFigures GUI
 has an equivalent tool here.
 
@@ -708,6 +708,7 @@ result (a split row appears, the LUTs change…) and reports `completed`.
 | `list_how_to_guides()` | The guides: id, title, summary, and `do_it_tool` (the tool that does the same operation directly) |
 | `show_me_how(operation, pyf_path)` | Open a guide by id (`split_channels`, `crop_image`, `set_lut`, `zoom_inset`, `add_scale_bars`, `panel_letters`, `add_data_plot`, `channel_merge`, `journal_check`, `apply_journal`, `check_resolution`, `export_pptx`, `figure_caption`, `presubmission_review`, `colour_bar`, `colour_blind_preview`) or by the user's words ("how do I crop?"; an ambiguous request returns candidates). `pyf_path` picks the window when several are open. No window open → `gui_unavailable` plus the steps as text |
 | `guidance_status(pyf_path)` | `guidance_shown` (with the current step), `completed`, `cancelled`, `guidance_closed` or `no_guide` |
+| `live_window_setup()` | Edit the figure open in the PyFigures window instead of a file: whether a window shares its figure now, and the `pyfigures-live` entry (JSON, Hermes YAML) for the client to add |
 | `close_guidance(pyf_path)` | Close the guide; the figure is not changed |
 | `explain_how(operation)` | The same authored steps as text, no GUI needed |
 
