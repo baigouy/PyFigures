@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import sys
 import threading
 
 import numpy as np
@@ -102,7 +103,9 @@ def test_runtime_folder_is_outside_the_repository(monkeypatch):
     monkeypatch.delenv("PYFIGURES_LIVE_RUNTIME", raising=False)
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = str(runtime_dir())
-    assert not path.startswith(repo) and path.endswith(os.path.join("PyFigures", "assistant"))
+    # Windows: ~/.pyfigures/live, out of AppData (Store apps redirect AppData writes)
+    end = os.path.join(".pyfigures", "live") if sys.platform == "win32" else os.path.join("PyFigures", "assistant")
+    assert not path.startswith(repo) and path.endswith(end)
 
 
 def test_inspect_reports_pixel_size_scale_bars_and_luts(qapp, gui, runtime, tmp_path):

@@ -13,7 +13,7 @@ import os
 import secrets
 import sys
 
-from pyfigures.assistant import runtime_dir
+from pyfigures.assistant import legacy_runtime_dir, runtime_dir
 
 
 def shareable_window(window):
@@ -186,6 +186,11 @@ def sidecar_config(descriptor=None):
     from qtpy_ai_sidecar.config import Config
     descriptor = str(descriptor or runtime_dir() / 'connection.json')
     profile = os.environ.get('PYFIGURES_SIDECAR_CONFIG') or str(runtime_dir() / 'sidecar.json')
+    legacy = legacy_runtime_dir()
+    if (not os.path.isfile(profile) and not os.environ.get('PYFIGURES_SIDECAR_CONFIG')
+            and not os.environ.get('PYFIGURES_LIVE_RUNTIME') and legacy is not None
+            and (legacy / 'sidecar.json').is_file()):
+        profile = str(legacy / 'sidecar.json')          # a profile made before 0.2.25 (old folder)
     if not os.path.isfile(profile):
         # Config.load (not Config()) applies the model connection and settings
         # the user saved in the sidecar's own storage

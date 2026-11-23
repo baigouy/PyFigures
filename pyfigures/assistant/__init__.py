@@ -14,25 +14,50 @@ import sys
 from pathlib import Path
 
 
+def default_runtime_dir() -> Path:
+    """The runtime folder when PYFIGURES_LIVE_RUNTIME is not set. On Windows
+    ~/.pyfigures/live, not under AppData: a program started from a Microsoft
+    Store app (Claude, Codex, Hermes Agent...) has its AppData writes redirected
+    into that app's private copy, so a PyFigures started from one app wrote a
+    connection.json that an MCP server started by another app never saw
+    (user 2026-11-23, Hermes Agent: GUI_OFFLINE while the window was shared)."""
+    if sys.platform == "win32":
+        return Path.home() / ".pyfigures" / "live"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "PyFigures" / "assistant"
+    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "PyFigures" / "assistant"
+
+
+def legacy_runtime_dir():
+    """Where PyFigures 0.2.24 and older kept it on Windows (None elsewhere)."""
+    if sys.platform != "win32":
+        return None
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "PyFigures" / "assistant"
+
+
 def runtime_dir() -> Path:
     """Connection descriptor, recovery copies and transaction workspaces:
-    ``PYFIGURES_LIVE_RUNTIME`` if set, else the user's app-data folder
+    ``PYFIGURES_LIVE_RUNTIME`` if set, else default_runtime_dir()
     (never the repository, never the figure's folder)."""
     override = os.environ.get("PYFIGURES_LIVE_RUNTIME")
-    if override:
-        path = Path(override)
-    elif sys.platform == "win32":
-        path = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "PyFigures" / "assistant"
-    elif sys.platform == "darwin":
-        path = Path.home() / "Library" / "Application Support" / "PyFigures" / "assistant"
-    else:
-        path = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "PyFigures" / "assistant"
+    path = Path(override) if override else default_runtime_dir()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def descriptor_path() -> Path:
-    return runtime_dir() / "connection.json"
+    """The connection.json to read: in runtime_dir(), else in the default
+    folder. A client registered with 0.2.24 or older passes the old AppData
+    folder in PYFIGURES_LIVE_RUNTIME while the window now writes the default
+    one."""
+    first = runtime_dir() / "connection.json"
+    if first.is_file() or os.environ.get("PYFIGURES_LIVE_RUNTIME") is None:
+        return first
+    legacy = legacy_runtime_dir()
+    if legacy is not None and Path(os.environ["PYFIGURES_LIVE_RUNTIME"]) != legacy:
+        return first                     # a folder of its own (tests, replays): only that one
+    fallback = default_runtime_dir() / "connection.json"
+    return fallback if fallback.is_file() else first
 
 
 def sidecar_available() -> bool:

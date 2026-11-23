@@ -10,7 +10,7 @@ from pyfigures.assistant import live_mcp
 
 def _capture(monkeypatch, tmp_path):
     (tmp_path / 'connection.json').write_text(json.dumps({'url': 'http://127.0.0.1:9/', 'token': 't'}))
-    monkeypatch.setattr(live_mcp, 'runtime_dir', lambda: tmp_path)
+    monkeypatch.setattr(live_mcp, 'descriptor_path', lambda: tmp_path / 'connection.json')
     sent = []
 
     class Reply(io.BytesIO):

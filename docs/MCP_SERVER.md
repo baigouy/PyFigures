@@ -360,7 +360,11 @@ a chat beside the figure that drives the same server with a local model or an
 API model. It is the separate package `qtpy-ai-sidecar`
 (`pip install pyfigures[chat]` once it is published). Its profile is read from
 `PYFIGURES_SIDECAR_CONFIG` or `sidecar.json` in the live folder
-(`%LOCALAPPDATA%\PyFigures\assistant` on Windows); connection settings made in
+(`%USERPROFILE%\.pyfigures\live` on Windows: not under AppData, which Windows
+redirects for programs started from a Microsoft Store app such as Claude, Codex or
+Hermes Agent, so one app's PyFigures window stayed invisible to another app's MCP
+server; `~/Library/Application Support/PyFigures/assistant` on macOS,
+`~/.local/share/PyFigures/assistant` on Linux); connection settings made in
 the chat itself are remembered. While no model is set there, the chat uses the
 model LM Studio serves on this computer (`http://127.0.0.1:1234/v1`); without
 one, it says on opening how to get a model (Model Library, LM Studio or a cloud

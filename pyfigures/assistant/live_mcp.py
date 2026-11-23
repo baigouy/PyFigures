@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP, Image
 
-from pyfigures.assistant import runtime_dir
+from pyfigures.assistant import descriptor_path, runtime_dir
 mcp = FastMCP('PyFigures live', instructions='This controls PyFigures scientific figures, not Figma. All original PyFigures tools are exposed by name. Figure tools default their pyf_path to "live", meaning the open GUI document including unsaved work. Omit pyf_path when working on that document; explicit paths use native file behavior. Other tools retain original file/service semantics. Figure-document edits update the canvas with GUI undo; sidecars remain in the session workspace and exports write to specified paths. Prototype tools also support explicit session/revision checks. Inspect when needed to identify panels. No automatic save of the live source figure.')
 
 
@@ -30,7 +30,7 @@ def _folder_seen(folder):
 
 def request(operation, session_id=None, expected_revision=None, arguments=None, request_id=None):
     import urllib.error
-    descriptor = runtime_dir() / 'connection.json'
+    descriptor = descriptor_path()
     try:
         connection = json.loads(descriptor.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:

@@ -57,11 +57,11 @@ def live_window_setup() -> str:
     # live interaction with the GUI": an agent that configures itself (Hermes) adds the entry
     import socket
     from urllib.parse import urlsplit
-    from pyfigures.assistant import runtime_dir
+    from pyfigures.assistant import descriptor_path
     from pyfigures.mcp_control import LIVE_NAME, live_entry
     sharing = False
     try:
-        address = urlsplit(json.loads((runtime_dir() / "connection.json").read_text(encoding="utf-8"))["url"])
+        address = urlsplit(json.loads(descriptor_path().read_text(encoding="utf-8"))["url"])
         with socket.create_connection((address.hostname, address.port), timeout=1):
             sharing = True
     except Exception:
