@@ -63,7 +63,7 @@ def channel_plane(rgb, channel='all'):
 
 def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smooth=1.5,
            exclude_border=True, max_elongation=5.0, split_touching=True, channel='all',
-           edge=None):
+           edge=None, outline_grow=1):
     """Objects of *rgb* (h, w, 3 or h, w) inside *region* (x0, y0, x1, y1; None =
     whole image) as dicts x, y, width, height, area, in image pixels, top to
     bottom then left to right. *polarity*: 'auto', 'dark' (darker than the
@@ -124,11 +124,34 @@ def detect(rgb, region=None, polarity='auto', min_area=None, max_area=None, smoo
                                or (r1 == mask.shape[0] and cuts[3]) or (c1 == mask.shape[1] and cuts[2])):
             dropped['touching the edge'] += 1
             continue
-        objects.append({'x': c0 + x0, 'y': r0 + y0, 'width': c1 - c0, 'height': r1 - r0, 'area': int(prop.area)})
+        objects.append({'x': c0 + x0, 'y': r0 + y0, 'width': c1 - c0, 'height': r1 - r0, 'area': int(prop.area),
+                        'outline': _outline(prop, x0, y0, outline_grow, w, h)})
     objects.sort(key=lambda o: (o['y'], o['x']))
     return objects, {'channel': channel or 'all', 'polarity': polarity, 'threshold': round(threshold, 2), 'min_area': min_area,
                      'max_area': max_area, 'region': [x0, y0, x1, y1],
                      'dropped': {k: v for k, v in dropped.items() if v}}
+
+
+def _outline(prop, x0, y0, grow, w, h, tolerance=0.8):
+    """The object's contour as a polygon [[x, y], ...] in image pixels (pixel edges, as
+    the boxes), grown by *grow* pixels and simplified: an ROI that follows the object's
+    shape (user, 2026-11-23: polygons by default)."""
+    import numpy as np
+    from scipy import ndimage as ndi
+    from skimage.measure import approximate_polygon, find_contours
+    grow = max(0, int(grow))
+    mask = np.pad(prop.image, grow + 1)
+    if grow:
+        mask = ndi.binary_dilation(mask, iterations=grow)
+    contours = find_contours(mask.astype(float), 0.5)
+    if not contours:
+        return []
+    ring = approximate_polygon(max(contours, key=len), tolerance=tolerance)
+    r0, c0 = prop.bbox[:2]
+    off_x, off_y = c0 + x0 - grow - 1 + 0.5, r0 + y0 - grow - 1 + 0.5
+    pts = [[round(min(max(col + off_x, 0.0), w), 1), round(min(max(row + off_y, 0.0), h), 1)]
+           for row, col in ring[:-1]]                # find_contours closes the ring: drop the repeat
+    return pts if len(pts) >= 3 else []
 
 
 def padded(obj, padding, w, h):

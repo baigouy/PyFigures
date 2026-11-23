@@ -713,13 +713,13 @@ def detect_objects(
     pyf_path: str,
     group_path: list[int],
     image_index: int,
-    shape: str = "rect",
+    shape: str = "polygon",
     polarity: str = "auto",
     min_area: int | None = None,
     max_area: int | None = None,
     split_touching: bool = True,
     channel: str | int = "all",
-    padding: int = 3,
+    padding: int | None = None,
     color: str | int = "yellow",
     stroke: float = 0.65,
     dry_run: bool = False,
@@ -738,7 +738,8 @@ def detect_objects(
     preview_panel), which draws the ROIs, then remove or fix the odd ones.
     Only the visible (cropped) part of the image is searched.
 
-    *shape*: "rect" or "ellipse".
+    *shape*: "polygon" (default: follows each object's outline), "rect" or "ellipse"
+    (a box / an ellipse around each object, only when asked).
     *polarity*: "auto" (the minority class), "dark" (objects darker than the
     background: brightfield) or "bright" (fluorescence).
     *min_area* / *max_area*: object size limits in pixels (default 0.02 % / 25 %
@@ -750,7 +751,7 @@ def detect_objects(
     on an RGB picture, its blue). Nuclei shown blue inside green / red cells need
     the nuclei channel (all colours together outline the whole cells). The
     channel is taken as displayed: same z, time point, projection and range.
-    *padding*: pixels added around each object.
+    *padding*: pixels added around each object (default 1 for polygons, 3 for boxes).
     *color* / *stroke*: the ROIs' colour and line width in points on the page
     (default 0.65 pt, the usual paper line).
     *dry_run*: true only reports what was found (count, boxes); nothing is added.
@@ -767,8 +768,13 @@ def detect_objects(
     """
     from ..object_detection import detect, padded, visible_region
     from ..panel_source_preview import panel_rgb, panel_crop
-    if shape not in ("rect", "ellipse"):
-        return 'ERROR: shape is "rect" or "ellipse".'
+    shape = str(shape or "polygon").lower().strip()
+    shape = {"rectangle": "rect", "box": "rect", "circle": "ellipse", "oval": "ellipse",
+             "contour": "polygon", "outline": "polygon", "freehand": "polygon"}.get(shape, shape)
+    if shape not in ("polygon", "rect", "ellipse"):
+        return 'ERROR: shape is "polygon" (the outline, default), "rect" or "ellipse".'
+    if padding is None:
+        padding = 1 if shape == "polygon" else 3
     bad = _roi_style_error(color, None, stroke, 1.0)
     if bad:
         return f"ERROR: {bad}"
@@ -798,7 +804,8 @@ def detect_objects(
             search = (max(rx0, shown[0]), max(ry0, shown[1]), min(rx1, shown[2]), min(ry1, shown[3]))
         objects, info = detect(rgb if plane is None else plane, search,
                                polarity=polarity, min_area=min_area, max_area=max_area,
-                               split_touching=split_touching, edge=shown)
+                               split_touching=split_touching, edge=shown,
+                               outline_grow=max(0, int(padding)))
     except ValueError as e:
         return f"ERROR: {e}"
     info["channel"] = what
@@ -816,8 +823,13 @@ def detect_objects(
         c = _color_to_int(color)
         make = _new_roi_rect if shape == "rect" else _new_roi_ellipse
         first = len(list(annots))
-        for b in boxes:
-            annots.append(make(b["x"], b["y"], b["width"], b["height"], c, None, stroke, 1.0))
+        for b, o in zip(boxes, objects):
+            if shape == "polygon" and len(o.get("outline") or []) >= 3:
+                flat = [v for pt in o["outline"] for v in pt]
+                annots.append(_new_roi_polygon(flat, "Polygon2D", c, None, stroke, 1.0))
+            else:                                # a polygon too small to trace: its box
+                annots.append((_new_roi_rect if shape == "polygon" else make)(
+                    b["x"], b["y"], b["width"], b["height"], c, None, stroke, 1.0))
         _save(tree, pyf_path)
         result["added"] = len(boxes)
         result["annotation_indexes"] = [first, first + len(boxes) - 1]

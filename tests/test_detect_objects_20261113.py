@@ -38,7 +38,7 @@ def _figure(tmp_path, **kw):
 
 def _rois(p):
     img = ET.parse(p).getroot().find('.//Image2D')
-    return [a for a in img.find('annotations') if a.tag in ('Rectangle2D', 'Ellipse2D')]
+    return [a for a in img.find('annotations') if a.tag in ('Rectangle2D', 'Ellipse2D', 'Polygon2D')]
 
 
 def test_every_cell_gets_one_roi_and_the_scale_bar_none(tmp_path):

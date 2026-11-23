@@ -623,8 +623,8 @@ def _check_extras(opts, where, base):
     detect = opts.get("detect_objects")
     if detect is not None and detect is not True and detect is not False:
         _check_mapping(detect, _DETECT_KEYS, set(), where, "detect_objects")
-        if detect.get("shape", "rect") not in ("rect", "ellipse"):
-            raise RecipeError(f"{where}: detect_objects shape must be rect or ellipse")
+        if detect.get("shape", "polygon") not in ("polygon", "rect", "ellipse"):
+            raise RecipeError(f"{where}: detect_objects shape must be polygon (the outline, default), rect or ellipse")
         if detect.get("polarity", "auto") not in ("auto", "dark", "bright"):
             raise RecipeError(f"{where}: detect_objects polarity must be auto, dark or bright")
         ch = detect.get("channel", "all")

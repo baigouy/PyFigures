@@ -5636,7 +5636,7 @@ class EZFIG_GUI(QMainWindow):
         frame = QFrame(self)
         grid = QGridLayout(frame)
         shape = QComboBox(frame)
-        shape.addItems(['rectangles', 'ellipses'])
+        shape.addItems(['outlines (polygons)', 'rectangles', 'ellipses'])   # outlines first (2026-11-23)
         polarity = QComboBox(frame)
         polarity.addItems(['automatic', 'dark objects on a light background', 'bright objects on a dark background'])
         min_area = QSpinBox(frame)
@@ -5678,7 +5678,7 @@ class EZFIG_GUI(QMainWindow):
                               main_widget=frame, options=['Ok', 'Cancel'], parent=self, auto_adjust=True)
             if cd.exec_() != QDialog.Accepted:
                 return
-            values = dict(shape=('rect', 'ellipse')[shape.currentIndex()],
+            values = dict(shape=('polygon', 'rect', 'ellipse')[shape.currentIndex()],
                           polarity=('auto', 'dark', 'bright')[polarity.currentIndex()],
                           min_area=min_area.value() or None, split_touching=split.isChecked(),
                           channel=channel.currentData(),
