@@ -343,10 +343,11 @@ def set_orientation(pyf_path: str, group_path: list[int], orientation: str) -> s
 
 @mcp.tool()
 def reorder_children(pyf_path: str, group_path: list[int], new_order: list[int]) -> str:
-    """Reorder the children inside a group or the free-canvas.
+    """Reorder or swap the rows of the figure (group_path=[]), or the panels inside a row.
 
-    *group_path*: [] for free-canvas (reorders Image2D children of <list>),
-    [0] for top-level group 0's content, etc.
+    *group_path*: [] = the figure's rows (its top-level groups, in the order
+    describe_figure lists them; "swap the two rows" = new_order [1, 0]); on a
+    free-canvas figure (no rows) its loose images. [0] = the content of row 0, etc.
     *new_order*: permutation of [0, 1, …, n-1]. Example: [2, 0, 1] puts the
     third child first.
     """
@@ -354,6 +355,18 @@ def reorder_children(pyf_path: str, group_path: list[int], new_order: list[int])
     container, err = _get_container(root, group_path)
     if err:
         return f"ERROR: {err}"
+    groups = _top_groups(root)
+    if not group_path and groups:
+        # the rows (user 2026-11-23, Qwen A/B "Swap the two rows": [] only reordered loose
+        # canvas images, "permutation of 0..-1" on a figure made of rows; Mistral rewrote the XML)
+        if sorted(new_order) != list(range(len(groups))):
+            return (f"ERROR: new_order must be a permutation of 0..{len(groups) - 1} "
+                    f"(the figure has {len(groups)} rows). Nothing was changed.")
+        slots = [i for i, c in enumerate(root) if c.tag == "Group"]
+        for slot, i in zip(slots, new_order):
+            root[slot] = groups[i]
+        _save(tree, pyf_path, recompute=True)
+        return f"Rows reordered to {new_order}." + _actual_layout(pyf_path)
     if not group_path:
         # Free-canvas: reorder only Image2D children, leaving metadata in place
         imgs = [c for c in root if c.tag == "Image2D"]

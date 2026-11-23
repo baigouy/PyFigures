@@ -459,7 +459,7 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 | `templatify_figure(pyf_path)` | Convert every image panel into an empty template slot (GUI: Template menu) |
 | `set_spacing(pyf_path, group_path, spacing)` | Set pixel gap between panels |
 | `set_orientation(pyf_path, group_path, orientation)` | Switch group to `X` (row) or `Y` (column) |
-| `reorder_children(pyf_path, group_path, new_order)` | Reorder panels or groups |
+| `reorder_children(pyf_path, group_path, new_order)` | Reorder or swap the rows (group_path=[]) or the panels inside a row |
 | `move_image(pyf_path, ...)` | Move an image to a different position |
 | `stack_with_image(pyf_path, src_group_path, src_image_index, target_group_path, target_image_index)` | Stack an image with another inside its row: A \| B + C → A \| (B / C) (GUI drop choice "Stack with it (column in the row)") |
 | `set_size(pyf_path, group_path, image_index, width, height)` | Resize a panel |
