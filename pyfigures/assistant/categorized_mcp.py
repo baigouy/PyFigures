@@ -119,7 +119,7 @@ TOPIC_RULES = (
      'Repeating a reference is not evidence of duplicate letters (use duplicate_letter_references from the state). '
      'Never delete / recreate letters to swap or relabel.'),
     ({'letter', 'letters', 'lettering', 'label', 'labels', 'abc', 'font', 'fonts', 'consistent', 'same'},
-     'LETTERS: edit_panel_letters once at the intended scope (placement, family, size, bold / italic / underline, '
+     'LETTERS: a letter hard to read gets a contrasting box and letter colour, never bold, italic, another font or size unless asked (style_request quotes it). edit_panel_letters once at the intended scope (placement, family, size, bold / italic / underline, '
      'colour, background), never per-image loops. Letters stay alike: a style asked for one letter ("I can\'t see '
      'the letter b") goes to every letter; only when the user explicitly wants some different ("only b bold") use '
      'scope=panels with panel_ids and only_these_letters_request quoting them. Removal only on an explicit request '
