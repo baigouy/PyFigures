@@ -294,6 +294,28 @@ def _folder_drop_items(folder):
     return items, left_out
 
 
+import weakref as _weakref
+_OPEN_WINDOWS = _weakref.WeakSet()
+
+
+def _repack_after_plot_reshaped(panel):
+    """A plot fitted to its text sizes on the page (on its first paint) changed size after
+    its row was packed: the row's gaps were wrong until the user clicked it (images and
+    tables dropped "To row", user 2026-11-23). Each window repacks its rows once, after
+    the paint (repacking is a no-op for rows whose panels did not change)."""
+    for win in list(_OPEN_WINDOWS):
+        if not _qt_alive(win) or getattr(win, '_plot_repack_pending', False):
+            continue
+        win._plot_repack_pending = True
+
+        def repack(w=win):
+            w._plot_repack_pending = False
+            if _qt_alive(w):
+                w._lazy_size_drift = True
+                w._reflow_after_lazy_load()
+        QTimer.singleShot(0, repack)
+
+
 def _qt_alive(obj):
     """False once the C++ side of a Qt wrapper has been destroyed — a queued
     loader callback arriving after its window was deleted must not touch it
@@ -817,6 +839,8 @@ class EZFIG_GUI(QMainWindow):
         self._reload_toolbar_icons(load_saved_theme())
         self._active_img_loaders = []
         QApplication.instance().aboutToQuit.connect(self._stop_all_img_loaders)
+        _OPEN_WINDOWS.add(self)
+        Image2D.page_size_changed = _repack_after_plot_reshaped
         self.color_assistant = None  # Add this line
 
         self.activate_or_reset_undo_redo()

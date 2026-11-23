@@ -12,7 +12,9 @@ ALLOWED = {"test_tutorial_controller.py"}
 
 
 def _fixtures_that_only_close(path):
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text = path.read_text(encoding="utf-8")
+    makes_windows = re.search(r"EZFIG_GUI|PartnerGUI", text) is not None
+    lines = text.splitlines()
     found = []
     i = 0
     while i < len(lines):
@@ -24,6 +26,10 @@ def _fixtures_that_only_close(path):
                 made = re.search(r"(\w+)\s*=\s*(?:EZFIG_GUI|PartnerGUI)\(\)", s)
                 if made:
                     var = made.group(1)
+                # a window made by a helper (g = _new_gui(qapp); yield g), 2026-11-23
+                given = re.match(r"\s+yield\s+(\w+)\s*$", s)
+                if given and var is None and makes_windows:
+                    var = given.group(1)
                 yielded = yielded or s.strip().startswith("yield")
                 if var and yielded and re.fullmatch(rf"\s+{var}\.close\(\)\s*", s):
                     closed = k + 1
