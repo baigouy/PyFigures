@@ -88,8 +88,8 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batoolset>=0.2.6",          # 0.2.6: font check as Agg draws, missing font kept; 0.2.5: a font matplotlib cannot draw is never the plot font; 0.2.4: figure_renderer
-        "batoolset-gui>=0.2.10",     # 0.2.10: text size / font per part of a plot; 0.2.9: a font failing while fitted is dropped; Qt layer; 0.2.8: plot font falls back when it cannot draw; 0.2.7: plots fitted on every canvas
+        "batoolset>=0.2.7",          # 0.2.7: a cached Fiji starts quietly; 0.2.6: font check as Agg draws, missing font kept; 0.2.5: a font matplotlib cannot draw is never the plot font; 0.2.4: figure_renderer
+        "batoolset-gui>=0.2.11",     # 0.2.11: plots redrawn once their layout settles, page_size_changed hook; 0.2.10: text size / font per part of a plot; 0.2.9: a font failing while fitted is dropped; Qt layer; 0.2.8: plot font falls back when it cannot draw; 0.2.7: plots fitted on every canvas
         "staplot>=0.1.3",            # data-plot panels and stats brackets (staplot.api); 0.1.3: a broken axis refuses y2 / inversion, its label clear of the ticks; 0.1.2: layers, y2, inverted / broken axes, ticks, more kinds, subjects, image_plot, plot editor; 0.1.1: stats_text, pairs, normalize
         "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)
         "openpyxl",                  # plots from Excel .xlsx sheets (MIT)
@@ -104,7 +104,7 @@ setuptools.setup(
         "pypdfium2",       # PDF files as panels, rendered as images (Apache/BSD)
         # the chat sidebar (Tools > Chat sidebar, a core part of PyFigures): a
         # local or API model edits the open figure through the MCP tools (BSD-2)
-        "qtpy-ai-sidecar>=0.1.17",   # 0.1.17: no preview-draft mode, a letter colour quotes the request; 0.1.16: prompt cache (stable prompt start, cache keys / marks); 0.1.15: a turn going in circles gets one last chance to act
+        "qtpy-ai-sidecar>=0.1.18",   # 0.1.18: "edit it manually" opens the panel just edited, on its tab; 0.1.17: no preview-draft mode, a letter colour quotes the request; 0.1.16: prompt cache (stable prompt start, cache keys / marks); 0.1.15: a turn going in circles gets one last chance to act
         "mcp>=1.12,<2",    # MCP server (Claude, LM Studio…) and the sidebar's client; mcp 2 renamed FastMCP
     ]),
     extras_require=_extras({
@@ -138,11 +138,11 @@ setuptools.setup(
         # `pip install pyfigures[chat]` from older instructions still works
         'chat': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.17",
+            "qtpy-ai-sidecar>=0.1.18",
         ],
         'all': [
             "mcp>=1.12,<2",
-            "qtpy-ai-sidecar>=0.1.17",
+            "qtpy-ai-sidecar>=0.1.18",
             "av",
             "opencv-python-headless<5.1",    # see 'video'
             "pyimagej",
