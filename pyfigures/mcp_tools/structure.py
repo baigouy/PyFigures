@@ -35,6 +35,7 @@ from .core import (
     _journal_width,
     _journal_max_height,
     _figure_height_mm,
+    _figure_size_mm,
     _height_choices,
     _ROI_PROTECTED,
     _append_image,
@@ -81,8 +82,9 @@ from .core import (
 def describe_figure(pyf_path: str) -> str:
     """Return a human-readable tree summary of a .pyf figure's layout.
 
-    Shows groups (orientation, spacing, child count) and images (filename,
-    size, annotations). Use this first to understand a figure before editing.
+    Shows the figure's size in mm, groups (orientation, spacing, child count) and
+    images (filename, size, annotations). Use this first to understand a figure
+    before editing.
 
     Two layout modes are reported:
     - Free-canvas: Image2D elements sit directly under <list> (group_path=[]).
@@ -92,6 +94,9 @@ def describe_figure(pyf_path: str) -> str:
     canvas_imgs = [c for c in root if c.tag == "Image2D"]
     groups = _top_groups(root)
     lines = [f"Figure: {pyf_path}"]
+    size = _figure_size_mm(pyf_path) if groups else None
+    if size is not None:
+        lines.append(f"Size: {size[0]:.1f} mm wide x {size[1]:.1f} mm tall (resize_figure changes it)")
     rows = layout_rows(root)
     if rows and groups:
         lines.append("Actual layout (' | ' side by side, ' / ' stacked, '[file xN]' a channel "

@@ -2721,8 +2721,8 @@ def _height_choices(journal, width_mm: float, height_mm: float, max_mm: float) -
     return out
 
 
-def _figure_height_mm(pyf_path: str) -> float | None:
-    """Height of the laid-out figure (all top-level groups) in mm, or None."""
+def _figure_size_mm(pyf_path: str) -> tuple[float, float] | None:
+    """(width, height) of the laid-out figure (all top-level groups) in mm, or None."""
     try:
         objs, Group, _Image2D = _load_objects_lazy(pyf_path)
         rects = [o.getRect(all=True) for o in objs if isinstance(o, Group)]
@@ -2730,9 +2730,15 @@ def _figure_height_mm(pyf_path: str) -> float | None:
         return None
     if not rects:
         return None
-    top = min(r.top() for r in rects)
-    bottom = max(r.bottom() for r in rects)
-    return (bottom - top) / 72.0 * 25.4                   # canvas unit = 1 pt
+    w = max(r.right() for r in rects) - min(r.left() for r in rects)
+    h = max(r.bottom() for r in rects) - min(r.top() for r in rects)
+    return w / 72.0 * 25.4, h / 72.0 * 25.4               # canvas unit = 1 pt
+
+
+def _figure_height_mm(pyf_path: str) -> float | None:
+    """Height of the laid-out figure (all top-level groups) in mm, or None."""
+    size = _figure_size_mm(pyf_path)
+    return None if size is None else size[1]
 
 
 def _width_mm_for_journal(journal: str, column: str) -> float:

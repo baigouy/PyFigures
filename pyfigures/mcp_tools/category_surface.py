@@ -20,7 +20,7 @@ from pyfigures.assistant.categorized_mcp import CATEGORIES, category_for
 INSTRUCTIONS = (
     "Inspect, create and edit PyFigures .pyf scientific-figure files (and posters). "
     "Only three functions are listed: list_pyfigures_categories gives the areas, "
-    "find_pyfigures_tools(query=the user's words) gives matching operations with their exact "
+    "find_pyfigures_tools(query=the user's words, in English) gives matching operations with their exact "
     "argument schema and guidance, use_pyfigures_tool(tool_name, arguments) runs one. "
     "Never guess an operation or argument name: search first; a wrong argument returns the schema. "
     "Start with describe_figure on an existing figure, create_figure for a new one.")
@@ -32,8 +32,26 @@ _ALIASES = {"gaps": "spacing", "gap": "spacing", "letters": "letter", "labels": 
             "graph": "plot", "graphs": "plot", "chart": "plot", "bars": "bar", "insets": "inset"}
 
 
+# words that say nothing about the operation ("how wide IS THE figure, IN mm?")
+_STOP = {"a", "an", "the", "is", "are", "was", "be", "in", "on", "of", "to", "for", "and", "or", "it",
+         "its", "this", "that", "these", "my", "me", "i", "you", "can", "could", "please", "how", "what",
+         "which", "do", "does", "with", "by", "at", "from", "as", "all", "every", "some", "make", "get"}
+# what the user asks -> the word the operations use
+_ALIASES.update({"wide": "width", "tall": "height", "high": "height", "big": "size", "large": "size",
+                 "millimeters": "mm", "millimetres": "mm"})
+
+
+def _stem(w):
+    return w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
+
+
 def _words(text):
-    return [_ALIASES.get(w, w) for w in re.findall(r"[a-z0-9]+", (text or "").lower())]
+    return [_stem(_ALIASES.get(w, w)) for w in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if w not in _STOP]
+
+
+def _word_set(text):
+    return set(_words(text))
 
 
 def build(full: FastMCP) -> FastMCP:
@@ -41,6 +59,12 @@ def build(full: FastMCP) -> FastMCP:
     tools = full._tool_manager._tools
     categories = {key: desc for key, desc in CATEGORIES.items()
                   if any(category_for(n) == key for n in tools)}
+    # whole words (not substrings: "in" must not match "kinds"); the first docstring line
+    # counts more than the rest
+    index = {name: (_word_set(name.replace("_", " ")),
+                    _word_set((tool.description or "").split("\n", 1)[0]),
+                    _word_set(tool.description or ""))
+             for name, tool in tools.items()}
     server = FastMCP("pyfigures", instructions=INSTRUCTIONS)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -64,9 +88,10 @@ def build(full: FastMCP) -> FastMCP:
             cat = category_for(name)
             if category and cat != category:
                 continue
-            title = name.replace("_", " ")
-            desc = (tool.description or "").lower()
-            score = sum(5 * (w in title) + (w in desc) for w in words)
+            title, first, desc = index[name]
+            # every query word found counts most (an operation that covers the whole request
+            # beats one that repeats a single word), then the name, then the first line
+            score = sum(3 * (w in desc or w in title) + 5 * (w in title) + (w in first) for w in words)
             if q == name or re.search(r"(?<![a-z0-9_])" + re.escape(name) + r"(?![a-z0-9_])", q):
                 score += 1000          # named exactly: "set_scale_bar schema"
             if words and not score:

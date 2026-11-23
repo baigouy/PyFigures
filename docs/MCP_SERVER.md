@@ -410,11 +410,11 @@ opens on Windows without remapping. `find_moved_files` reports what was found.
 
 | Tool | Description |
 |------|-------------|
-| `describe_figure(pyf_path)` | Human-readable tree: groups, images, annotations, scale bars, insets, label rows |
+| `describe_figure(pyf_path)` | Human-readable tree: the figure size in mm, groups, images, annotations, scale bars, insets, label rows |
 | `get_xml(pyf_path)` | Raw XML content of the `.pyf` file |
 | `list_images(pyf_path)` | JSON list of all image paths with group/index addresses |
 | `get_annotations(pyf_path)` | ALL annotations and ROIs (text, rect, ellipse, line, polygon, …) with type and index |
-| `get_figure_properties(pyf_path)` | Figure-level font, background colour, default spacing |
+| `get_figure_properties(pyf_path)` | Figure size (width / height in mm and pt, the stored target width), figure-level font, background colour, default spacing |
 | `list_image_properties(pyf_path, group_path, image_index)` | All XML fields on an image |
 | `get_image_property(pyf_path, group_path, image_index, property_name)` | Single image field |
 | `audit_figure(pyf_path)` | Inventory every panel and flag what's missing — a quick QC pass (also scale bars under 5 % of the image width, with a ~15 % suggestion, and image panels with no pixel size — vector files and scripted panels excluded; and ROIs under 1 % of their image, possibly a slip of the mouse, for the user to check; and scale bars whose text names another length than the bar, e.g. "200 µm" on a 50 µm bar — `set_scale_bar` keeps such a text but warns; and data plots that are rotated or mirrored, which hardly ever makes sense — `transform_image` warns too) |

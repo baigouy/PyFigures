@@ -130,7 +130,7 @@ def _render_warning(out_path: str) -> str | None:
 
 @mcp.tool()
 def export_figure(pyf_path: str, out_path: str, dpi: int = 300) -> str:
-    """Render a .pyf figure to a final image file — the shippable deliverable.
+    """Export the figure to a PDF, SVG, PNG or TIFF file — the shippable deliverable.
 
     This produces exactly what the GUI's File -> Export produces (same layout,
     fonts, scale bars, labels), rendered off-screen.

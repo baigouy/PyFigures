@@ -23,6 +23,8 @@ from .app import (
     _warn,
 )
 from .core import (
+    _figure_size_mm,
+    _stored_target,
     _warn_missing_font,
     _restyle_html_batch,
     _roi_outside_error,
@@ -1377,17 +1379,28 @@ def batch_fill_templates(
 
 @mcp.tool()
 def get_figure_properties(pyf_path: str) -> str:
-    """Return the figure-level settings: global font and default spacing.
+    """How wide / tall the figure is (mm), plus its global font and default spacing.
 
-    These settings live in the ``<SerializableQFont>`` and
+    ``size``: the laid-out figure's width and height in mm (and canvas pt, 1 pt =
+    1/72 in), and the target width the figure was resized to (resize_figure), if any.
+    The font and spacing settings live in the ``<SerializableQFont>`` and
     ``<SerializableGUIparameters>`` elements at the root of the .pyf file.
     They control the default label font, background/foreground colours, and
     the default spacing between groups.
 
-    Use set_figure_properties() to change them.
+    Use set_figure_properties() to change them; resize_figure to change the size.
     """
     _, root = _load(pyf_path)
     result = {}
+    size = _figure_size_mm(pyf_path)
+    if size is not None:
+        result["size"] = {"width_mm": round(size[0], 1), "height_mm": round(size[1], 1),
+                          "width_pt": round(size[0] / 25.4 * 72, 1), "height_pt": round(size[1] / 25.4 * 72, 1)}
+        target = _stored_target(pyf_path)
+        if target:
+            result["size"]["target_width_mm"] = target.get("width_mm")
+            if target.get("journal"):
+                result["size"]["target_journal"] = target["journal"]
 
     font_el = root.find("SerializableQFont")
     if font_el is not None:
