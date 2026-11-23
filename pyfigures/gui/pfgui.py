@@ -7324,14 +7324,13 @@ class EZFIG_GUI(QMainWindow):
         if getattr(dock, 'needs_model', False):
             # said only after the first message before ("the model did not launch")
             QMessageBox.information(dock.parent(), 'Chat sidebar: choose a model',
-                                    "The chat has no model to talk to yet. Either:\n\n"
-                                    "• start LM Studio, load a model and open the chat again: "
-                                    "PyFigures uses it automatically; or\n"
-                                    "• in the chat's Model Library, download a model and its "
-                                    "runtime (llama-server); or\n"
-                                    "• in the chat's Connection settings, choose a cloud API "
-                                    "(OpenAI, Anthropic, OpenRouter) or another OpenAI-compatible "
-                                    "server.\n\nHelp → Chat & MCP Tutorial walks you through it.")
+                                    "The chat has no model to talk to yet. Click its Model button:\n\n"
+                                    "• On this computer: Set up automatically uses a model already "
+                                    "there (LM Studio, Ollama), else asks before downloading one; or\n"
+                                    "• LM Studio's or Ollama's server, when one is running; or\n"
+                                    "• Online service: Mistral, OpenRouter, OpenAI, Anthropic... "
+                                    "with your key.\n\nSending a first message offers the same. "
+                                    "Help → Chat & MCP Tutorial walks you through it.")
         return dock
 
     @staticmethod

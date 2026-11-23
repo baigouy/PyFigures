@@ -3274,15 +3274,15 @@ def chat_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 1 — Get a model',
             message=(
-                'The chat needs a model to talk to. Pick one:<br>'
-                '• <b>LM Studio</b> (free, runs on your computer, data stay private): install it, '
-                'download a model with tool use (a 9-billion-parameter Qwen works with 8 GB of '
-                'graphics memory; 27 billion parameters is more reliable), load it, and start its '
-                'server. PyFigures finds it by itself.<br>'
-                '• or the chat\'s own <b>Model Library</b>, which downloads a model and its runtime;<br>'
-                '• or a <b>cloud API</b> (OpenAI, Anthropic, OpenRouter) in the chat\'s connection '
-                'settings, with your own key; the figure descriptions and previews are then sent '
-                'to that provider.<br><br>'
+                'The chat needs a model to talk to. Its <b>Model</b> button asks where it runs:<br>'
+                '• <b>On this computer</b> (free, private): <b>Set up automatically</b> uses a model '
+                'already there (LM Studio, Ollama), else asks before downloading one, with a '
+                'progress bar (a 9-billion-parameter Qwen works with 8 GB of graphics memory; '
+                '27 billion parameters is more reliable);<br>'
+                '• <b>LM Studio\'s or Ollama\'s server</b>, when one runs on this computer;<br>'
+                '• or an <b>Online service</b> (Mistral, OpenRouter, OpenAI, Anthropic…) with your '
+                'own key; the figure descriptions and previews are then sent to that provider.<br><br>'
+                'Sending a first message with nothing set up offers the same.<br><br>'
                 'Click <b>Next</b>.'
             ),
             auto_advance=False,
@@ -3337,13 +3337,14 @@ def chat_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 6 — Use another MCP client',
             message=(
-                'To work from Claude Desktop, LM Studio\'s own chat or any MCP client instead, use '
-                '<b>Tools → Share the open figure with the MCP server</b>: it shows the '
-                'configuration to paste into the client, and the client then edits this window\'s '
-                'figure live, as the chat does. Untick it to stop sharing.<br><br>'
-                '<b>Tools → MCP server…</b> sets up the other way of working: the client edits '
-                'saved <code>.pyf</code> files without PyFigures open (see '
-                '<code>docs/MCP_SERVER.md</code>). Click <b>Next</b>.'
+                'To work from Hermes Agent, Claude Desktop, LM Studio\'s own chat or Codex instead, '
+                'open <b>Tools → MCP server…</b> (or the chat\'s <b>Model → Another AI app</b>) and '
+                'click <b>Register</b> beside the app, then restart it. It gets '
+                '<code>pyfigures-live</code>, which edits <i>this</i> window\'s figure live, as the '
+                'chat does, and <code>pyfigures</code> for saved <code>.pyf</code> files. The window '
+                'is then shared at every start-up; <b>Share this window\'s figure</b> shares it now.'
+                '<br><br>The chat\'s <b>Another AI app</b> also gives a prompt to paste into that app. '
+                'Click <b>Next</b>.'
             ),
             get_target=lambda win: win.menuBar,
             auto_advance=False,

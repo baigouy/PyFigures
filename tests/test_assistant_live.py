@@ -443,7 +443,7 @@ def test_chat_sidebar_says_how_to_get_a_model(qapp, gui, runtime, monkeypatch):
     monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: said.append(a[2]))
     g = gui(shareable=True)
     assert g.open_chat_sidebar() is not None
-    assert said and "LM Studio" in said[0] and "Model Library" in said[0]
+    assert said and "LM Studio" in said[0] and "Model button" in said[0] and "Set up automatically" in said[0]
 
 
 @_needs_sidecar

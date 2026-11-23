@@ -338,10 +338,14 @@ The tools above work on `.pyf` files. To let a client edit the figure **open in
 the PyFigures window** (unsaved work included, each edit one Undo step, nothing
 written to disk until you save):
 
-1. In PyFigures choose **Tools → Share the open figure with the MCP server**
-   (or start PyFigures with `python -m pyfigures --share`). The window serves its
-   figure on 127.0.0.1 only, behind a random token; one window at a time.
-2. Point the client at the live server (the dialog shows this configuration):
+1. Simplest: **Tools → MCP server… → Register** beside the client adds both
+   servers (`pyfigures-live` and `pyfigures`) and shares the window at every
+   start-up; restart the client. Otherwise share by hand: **Share this window's
+   figure** in that dialog, **Tools → Share the open figure with the MCP server**,
+   or `python -m pyfigures --share`. The window serves its figure on 127.0.0.1
+   only, behind a random token; one window at a time.
+2. Or point the client at the live server yourself (the dialog shows this
+   configuration; `live_window_setup` on the file server returns it too):
 
 ```json
 {"mcpServers": {"pyfigures-live": {
@@ -367,8 +371,8 @@ server; `~/Library/Application Support/PyFigures/assistant` on macOS,
 `~/.local/share/PyFigures/assistant` on Linux); connection settings made in
 the chat itself are remembered. While no model is set there, the chat uses the
 model LM Studio serves on this computer (`http://127.0.0.1:1234/v1`); without
-one, it says on opening how to get a model (Model Library, LM Studio or a cloud
-API). **Help → Chat & MCP Tutorial** walks through it.
+one, it says on opening how to get a model (its **Model** button: on this
+computer, LM Studio's or Ollama's server, or an online service). **Help → Chat & MCP Tutorial** walks through it.
 
 **Chat in a web page (experimental, not recommended; a last resort when
 neither the chat sidebar nor an MCP client is possible; check the chat site's

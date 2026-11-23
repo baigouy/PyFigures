@@ -587,7 +587,7 @@
         <tr><th>Entry</th><th>Description</th></tr>
         <tr><td><strong>Poster / collage designer… / Photo album designer…</strong></td><td>Separate tools for posters, photo-collage pages and photo albums, where images can be freely placed and rotated. Guide: <code>docs/poster.md</code>.</td></tr>
         <tr><td><strong>Send this figure to the poster designer</strong></td><td>Saves the figure, then places it on the poster as one block, as dropping its <code>.pyf</code> there would: shown from a 300 DPI render, drawn as vectors in the poster's PDF / SVG exports.</td></tr>
-        <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register or start the PyFigures MCP server; list every call it made on this figure and undo its last changes.</td></tr>
+        <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register PyFigures with an AI app (Claude Code, Claude Desktop, LM Studio, Codex, Hermes Agent, Cursor, Gemini CLI, AnythingLLM): it gets two servers, <code>pyfigures-live</code> for the figure open in this window (recommended) and <code>pyfigures</code> for saved <code>.pyf</code> files; <strong>Share this window's figure</strong> shares it now; or start the HTTP server. The call history lists every call made on this figure and undoes its last changes.</td></tr>
         <tr><td><strong>Share the open figure with the MCP server</strong></td><td>Lets an MCP client (Claude Desktop, LM Studio…) edit the figure open in this window live, unsaved changes included, one undo step per edit; shows the configuration to paste into the client. Untick to stop. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Chat sidebar (local model)…</strong></td><td>Docks a chat on the right: ask for changes in plain words and a language model makes them on this figure. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Replay a chat…</strong></td><td>Runs the operations of a recorded chat again on the open figure, without the model: pick a chat (the recent ones are listed; also a <em>sidecar-debug</em> zip or a saved procedure), then <em>Run this step</em> one at a time, <em>Run up to here</em> or <em>Run all</em>, watching the figure change. Each row shows the request it answered, the operation and its arguments, its result in the chat (<em>Then</em>) and now (<em>Now</em>); edit the arguments before running a step to try other values. <em>Reset the figure</em> puts it back as it was before the first step run. By default only the steps that changed the figure are listed (not the reads, the failed calls or the replies undone afterwards); tick <em>Show reads and failed calls</em> for all. <em>Save as procedure…</em> keeps those steps in a file. Edits you made by hand during the chat were not recorded and are not replayed. MCP <code>list_chat_steps</code>, <code>save_chat_procedure</code>.</td></tr>
@@ -646,7 +646,7 @@
         <tr><td><strong>▶ Stacks, Channels &amp; Movies Tutorial</strong></td><td>Projections, channel split, montages, kymographs, orthogonal views, channel merges and movie export.</td></tr>
         <tr><td><strong>▶ Plots &amp; Tables Tutorial</strong></td><td>Data plots with statistics from a CSV, Excel or SQLite table (columns, facets, rows), Plot settings, the statistics as scipy code, seaborn plots, table panels, and what to ask the chat.</td></tr>
         <tr><td><strong>▶ Automate: Drafts, Recipes &amp; Library Tutorial</strong></td><td>Draft a figure from a folder, build one from a recipe, search past figures.</td></tr>
-        <tr><td><strong>▶ Chat &amp; MCP Tutorial</strong></td><td>Getting a model (LM Studio, the chat's Model Library or a cloud API), the chat sidebar, a first request, undoing it, questions, other MCP clients and the call history. It first reopens the figure in a window that can share it.</td></tr>
+        <tr><td><strong>▶ Chat &amp; MCP Tutorial</strong></td><td>Getting a model (the chat's Model button: on this computer, LM Studio's or Ollama's server, or an online service), the chat sidebar, a first request, undoing it, questions, other MCP clients and the call history. It first reopens the figure in a window that can share it.</td></tr>
         <tr><td><strong>▶ Poster Tutorial</strong></td><td>Opens the poster / collage designer and guides you through it.</td></tr>
         <tr><td><strong>▶ Photo Album Tutorial</strong></td><td>Opens the photo album designer (front cover, spreads, back cover) and guides you through it.</td></tr>
       </table>
@@ -1087,18 +1087,23 @@
       it checks its own work with a rendered preview and a description of the figure. "How do I…?"
       questions are answered with the <em>Help → Show me how…</em> guides.
     </p>
-    <p><strong>Choosing a model.</strong> The chat needs a model to talk to:</p>
+    <p><strong>Choosing a model.</strong> The chat's <strong>Model</strong> button (or the model
+      line under its title, which says what runs now, e.g. "Model: Online · Mistral AI API ·
+      mistral-large-4") asks where the assistant runs, then shows only that choice's settings:</p>
     <ul style="margin: .6em 0 1em 1.4em;">
-      <li><strong>LM Studio</strong> (free; the model runs on your computer and your data stay
-        private): load a model that supports tool use and start LM Studio's server; when no model is
-        set in the chat, PyFigures uses the one LM Studio serves. As a guide, a 9-billion-parameter
-        model gave the expected result for 151 of 153 single requests and a 27-billion-parameter
-        model for all of them; multi-step requests need the larger models.</li>
-      <li>The chat's own <strong>Model Library</strong>, which downloads a model and its runtime
-        (llama-server). It offers Qwen3.8 27B, Qwen3.5 9B and Qwen3.5 4B and starts on the largest
-        one your computer runs (about 20 GB of graphics memory for 27B, 8 GB for 9B; on Apple Silicon,
-        the unified memory), with the Q4_K_M file selected.</li>
-      <li>A <strong>cloud API</strong> (OpenAI, Anthropic, OpenRouter, Groq, Mistral or any OpenAI-compatible
+      <li><strong>On this computer</strong> (free, private, no API key; fast with a graphics card):
+        <strong>Set up automatically</strong> uses a model and a llama-server already on the computer
+        (from LM Studio, Ollama or the Hugging Face cache, on Windows, macOS and Linux), else says what it
+        will download from the internet (size, site) and asks first, then shows the progress. It picks
+        the largest model the computer runs: Qwen3.8 27B from about 20 GB of graphics memory, Qwen3.5 9B
+        from 8 GB, else Qwen3.5 4B (on Apple Silicon, the unified memory). <strong>Or use a model already
+        on this computer</strong> lists every model found. Sending a first message with nothing set up does
+        the same. The model stops when PyFigures closes. As a guide, a 9-billion-parameter model gave
+        the expected result for 151 of 153 single requests and a 27-billion-parameter model for all of
+        them; multi-step requests need the larger models.</li>
+      <li><strong>LM Studio's or Ollama's server</strong>, when one is running on this computer: listed
+        with the model it has loaded; private, nothing is sent online.</li>
+      <li>An <strong>Online service</strong> (OpenAI, Anthropic, OpenRouter, Groq, Mistral or any OpenAI-compatible
         server) in the chat's connection settings, with your own key. The figure descriptions and
         previews the model asks for are then sent to that provider. Choosing
         <strong>OpenRouter</strong> (recommended) fills in its free router (<code>openrouter/free</code>), which
@@ -1116,7 +1121,15 @@
         Mistral Large 4 (<code>mistral-large-4</code>, sees the previews), with a paid Mistral key; the same
         key reaches the Z.ai GLM models Mistral serves (<strong>List models…</strong> marks the ones
         that read images).</li>
+      <li><strong>Another AI app</strong> (Hermes Agent, Claude Desktop, LM Studio's own chat, Codex…):
+        opens <em>Tools → MCP server…</em> to register PyFigures with it, then posts a prompt to paste
+        into that app (also copied, with a <strong>Copy the prompt</strong> button). While the app works
+        on the figure, the model line says so ("🔌 another AI app is using this figure through MCP").</li>
     </ul>
+    <p>
+      A local model has a limited context: when a conversation fills 60% of it, older dialogue is
+      summarised by itself. Online models use the provider's own limits.
+    </p>
     <p>
       The chat is the package <code>qtpy-ai-sidecar</code>, installed with PyFigures and included in the
       standalone apps. <strong>Help → Chat &amp; MCP Tutorial</strong> walks through all of this.
@@ -1228,10 +1241,17 @@
       it before the chat can continue.
     </p>
     <p>
-      <strong>Tools → Share the open figure with the MCP server</strong> does the same for any MCP
-      client (Claude Desktop, LM Studio's own chat…): it shows the configuration to paste into the
-      client, which then edits this window's figure live. It runs on this computer only
-      (127.0.0.1), one window at a time; untick it to stop. A plain window first reopens its figure,
+      <strong>Other AI apps on the open figure.</strong> <em>Tools → MCP server…</em> →
+      <strong>Register</strong> adds PyFigures to an AI app (Hermes Agent, Claude Desktop, LM Studio,
+      Codex…) as two servers: <code>pyfigures-live</code> edits the figure open in this window,
+      one undo step per edit, and <code>pyfigures</code> edits saved <code>.pyf</code> files. Register also
+      shares the window at every start-up (<em>View → Share the open figure with AI apps at
+      start-up</em>); <strong>Share this window's figure</strong> in the same dialog, or
+      <strong>Tools → Share the open figure with the MCP server</strong>, shares it now. Restart the
+      app after registering. An app asked to use a window that is not shared asks you to share it
+      instead of building a file; an app that sets itself up (Hermes) can call the
+      <code>live_window_setup</code> tool, which gives the entry to add. Sharing runs on this
+      computer only (127.0.0.1), one window at a time; untick it to stop. A plain window first reopens its figure,
       unsaved changes and undo history in a new window that can be shared. From the command line:
       <code>python -m pyfigures --share</code> or <code>--chat</code>.
     </p>
