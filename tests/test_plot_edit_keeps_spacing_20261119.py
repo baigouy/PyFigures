@@ -49,6 +49,15 @@ def test_a_plot_edit_keeps_every_row_at_the_figure_width(qapp, gui, runtime, tmp
     # drawn as the screen does: drawing fits the plots' text again, which changed their
     # shape after the layout (14 pt: each plot 105 -> 121 px, overlapping its neighbour)
     canvas.grab()
+    # since 2026-11-23 a screen paint refits the plots' text 400 ms later (Image2D
+    # PAGE_TEXT_REDRAW_DELAY_MS, no LaTeX redraw per paint) and the rows are repacked
+    # after it: check the layout the user sees once that settled
+    import time
+    end = time.time() + 1.5
+    while time.time() < end:
+        qapp.processEvents()
+        time.sleep(0.02)
+    canvas.grab()
     qapp.processEvents()
     for shape in canvas.shapes_to_draw:
         if getattr(shape, 'content', None):

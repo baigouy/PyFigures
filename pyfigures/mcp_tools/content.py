@@ -144,20 +144,78 @@ def _parse_channel_merge_script(script) -> dict | None:
             "normalization": norm}
 
 
+def _add_stack_merge(pyf_path, group_path, stack_path, colors, label, label_placement,
+                     projection, frame, series) -> str:
+    """The merge panel of ONE multi-channel stack (user 2026-11-23: after "split d into
+    its channels" without the merge, "make the split and merge its own row and put the
+    merge at the end" failed: a merge only took one file per channel)."""
+    from . import stacks as S           # stacks imports this module
+    info, err = S._stack(stack_path, series)
+    if err:
+        return f"ERROR: {err}"
+    n = info["sizes"].get("c", 1)
+    if "c" not in info["order"] or n < 2:
+        return (f"ERROR: {os.path.basename(stack_path)} has a single channel (dimensions "
+                f"{info['order']}); a merge needs channel_files, one image per channel.")
+    nt = info["sizes"].get("t", 1)
+    if not 0 <= int(frame) < nt:
+        return f"ERROR: frame {frame} out of range (the stack has {nt} time point(s): 0..{nt - 1})."
+    if isinstance(colors, dict):
+        return f"ERROR: colors must be an ordered list, one colour per channel ({n} here)."
+    colors = [str(c).lower() for c in colors] if colors else S._DEFAULT_SPLIT_COLORS.get(
+        n, (["red", "green", "blue", "gray", "cyan", "magenta", "yellow"] * 2)[:n])
+    if len(colors) != n:
+        return f"ERROR: {os.path.basename(stack_path)} has {n} channels but {len(colors)} colours were given."
+    bad = [c for c in colors if c not in S._COLOR_LUTS]
+    if bad:
+        return f"ERROR: unsupported colour(s) {bad}; use {sorted(set(S._COLOR_LUTS) - {'grey', 'white'})}."
+    try:
+        proj = S._projection_for(info, None, projection)
+    except ValueError as e:
+        return f"ERROR: {e}"
+    tree, root = _load(pyf_path)
+    container, err = _get_container(root, group_path, refuse_label_rows=True)
+    if err:
+        return f"ERROR: {err}"
+    fixed = {"t": frame} if "t" in info["order"] else {}
+    img = S._stack_panel(info, S._plane_values(info, fixed, proj), proj, [True] * n,
+                         [S._COLOR_LUTS[c] for c in colors], series,
+                         f"merge of {os.path.basename(stack_path)}")
+    if label:
+        img.find("annotations").append(_new_tatext2d(label, label_placement, is_letter=False, color=0xFFFFFF))
+    container, group_path = _append_new_panel(root, container, img, group_path)
+    _save(tree, pyf_path, recompute=True)
+    idx = len([c for c in container if c.tag == "Image2D"]) - 1
+    loc = "canvas" if not group_path else f"group {group_path}"
+    return (f"Merge panel of {os.path.basename(stack_path)} added as index {idx} (the last panel) in {loc}: "
+            + ", ".join(f"channel {i + 1} {c}" for i, c in enumerate(colors))
+            + (f", Z {proj}-projected" if proj else "") + ".")
+
+
 @mcp.tool()
 def add_channel_merge(
     pyf_path: str,
     group_path: list[int],
-    channel_files: list[str],
+    channel_files: list[str] | None = None,
     colors: list[str] | None = None,
     mode: str = "sum",
     label: str | None = None,
     label_placement: str = "top left",
     normalization: str = "per_channel",
+    stack_path: str | None = None,
+    projection: str | None = "max",
+    frame: int = 0,
+    series: int | None = None,
 ) -> str:
     """Add a multi-channel *merge / composite* panel — the microscopy staple of
     overlaying several single-channel images (e.g. DAPI + GFP + RFP) into one
     pseudo-coloured RGB image.
+
+    *stack_path*: ONE multi-channel image / stack instead of *channel_files*: its
+    merge panel (every channel in its colour), e.g. to add the merge at the end of
+    an existing channel-split row (group_path = that row); *projection* / *frame* /
+    *series* as for add_channel_split (match the split's). Default colours = the
+    split's (2 channels: green + magenta).
 
     Each channel file is tinted with its colour and combined. The panel is a
     scripted Image2D, so it re-renders from the source files whenever the figure
@@ -185,6 +243,11 @@ def add_channel_merge(
                 f"wins), not {mode!r}; channel colours go in 'colors'.")
     if normalization not in _MERGE_NORMALIZATIONS:
         return "ERROR: normalization must be 'per_channel' or 'none'."
+    if stack_path and channel_files:
+        return "ERROR: give either stack_path (one multi-channel image) or channel_files, not both."
+    if stack_path:
+        return _add_stack_merge(pyf_path, group_path, stack_path, colors, label, label_placement,
+                                projection, frame, series)
     if not channel_files or len(channel_files) < 2:
         # one file "merged" drew a blank panel; one image in a colour is a LUT
         return ("ERROR: a merge needs at least two channel files; to show one image "
