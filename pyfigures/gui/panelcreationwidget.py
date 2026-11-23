@@ -4,6 +4,27 @@ import sys
 from qtpy.QtWidgets import QApplication, QWidget, QGridLayout, QRadioButton, QSpinBox, QVBoxLayout, QPushButton, QLabel,QCheckBox,QButtonGroup
 from qtpy.QtCore import Qt
 
+
+def default_grid_shape(n):
+    """(rows, columns) offered first for *n* images: 3-5 images a row, few empty slots, and
+    never a last row holding one image among empty slots (it always offered 2 rows: 13 images
+    were 2 rows of 7, user 2026-11-23). Up to 5 images: one row. The user can change it."""
+    n = max(int(n or 0), 1)
+    if n <= 5:
+        return 1, n
+    best = None
+    for cols in (3, 4, 5, 6):                       # 3-5 a row (user, 2026-11-23); 6 if no other fits
+        rows = -(-n // cols)
+        empty = rows * cols - n
+        last = n - (rows - 1) * cols
+        cost = 0.5 * empty + (10 if rows > 1 and last == 1 else 0) + (1 if cols == 6 else 0)
+        key = (cost, -cols)                                   # a tie: fewer rows
+        if best is None or key < best[0]:
+            best = (key, rows)
+    rows = best[1]
+    return rows, -(-n // rows)
+
+
 class PanelCreator(QWidget):
     def __init__(self, parent, num_widgets):
         super().__init__(parent)
@@ -31,7 +52,7 @@ class PanelCreator(QWidget):
 
         self.num_rows = QSpinBox(self)
         self.num_rows.setRange(1, 1000) # this is probably crazy oto have so many but...
-        self.num_rows.setValue(2)
+        self.num_rows.setValue(default_grid_shape(self.num_widgets)[0])
         self.num_rows.valueChanged.connect(self.update_other_value)
 
         self.num_cols = QSpinBox(self)
