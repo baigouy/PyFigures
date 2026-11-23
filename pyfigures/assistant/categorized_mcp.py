@@ -169,7 +169,9 @@ TOPIC_RULES = (
     ({'scale', 'scalebar', 'scalebars', 'bar', 'bars'},
      'SCALE BARS: all of them = set_scale_bar_all / remove_scale_bar_all once ("add scale bars to all" with no '
      'length = no bar_width_in_units: each image gets a round one). Single-panel tools only for named panels; a '
-     'named panel, even mistyped, never authorizes the _all tools: resolve it or ask.'),
+     'named panel, even mistyped, never authorizes the _all tools: resolve it or ask. "Does not read well" with '
+     'no colour named: choose it yourself, never ask (the opposite of its colour: black <-> white; preview_panel '
+     'checks it); several colours given for several panels: the one reading best on each.'),
     ({'channel', 'channels', 'colour', 'colours', 'color', 'colors', 'lut', 'luts', 'magenta', 'green', 'red',
       'blue', 'cyan', 'yellow', 'unnatural', 'weird', 'original', 'normal', 'default'},
      'COLOURS: channels cannot be reordered, but each channel colour can be set (set_lut; null keeps a channel): '

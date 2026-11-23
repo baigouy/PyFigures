@@ -99,8 +99,10 @@ def test_fiji_samples_load_as_fiji_shows_them(name, shape, dims):
 def test_every_fiji_sample_but_text_is_accepted():
     # tables put in the folder to try dropping images with a plot (aaa_measurements.xlsx)
     # are no images either, and become plots instead
+    # files only: the user's own exports land in sub-folders there (out/, 2026-11-23)
     refused = sorted(os.path.basename(p) for p in glob.glob(os.path.join(FIJI, "*"))
-                     if not is_image_file(p) and not p.lower().endswith((".xlsx", ".xls", ".csv", ".tsv")))
+                     if os.path.isfile(p) and not is_image_file(p)
+                     and not p.lower().endswith((".xlsx", ".xls", ".csv", ".tsv")))
     assert refused == ["MaMuT_TGMM_Parhyale_demo.xml", "MessedUpColoc.txt", "first-instar-brain.txt"]
 
 
