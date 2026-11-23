@@ -2182,6 +2182,58 @@ class MyWidget(QWidget):
         self.set_current_selection(new_grp)
         self.undo_redo_save_required.emit()
 
+    def _multi_drop_menu(self, event, point):
+        """Several panels (Ctrl+click) dragged onto empty space: offer a new row of them
+        (user 2026-11-23: dropping three selected images on empty space did nothing;
+        only single panels could be dragged). Dropped on a panel: nothing, as before."""
+        items = [s for s in self.selected_shape if self.is_image_type(s)]
+        self.reset_position()                   # back where they were, then look below the drop
+        if len(items) < 2 or self.get_all_shapes_below_point(point):
+            return None
+        self.contextMenu = QMenu(self)
+        act = self.contextMenu.addAction(f"New row of the {len(items)} selected panels")
+        act.setToolTip("They leave their rows and form a row of their own, below the figure, "
+                       "in the order they were selected.")
+        act.triggered.connect(partial(self.row_from_panels, items))
+        self.contextMenu.addSeparator()
+        self.contextMenu.addAction("Ignore")
+        return self._run_context_menu_at_click(event)
+
+    def row_from_panels(self, items):
+        """A new top-level row of *items* (panels from anywhere in the figure), appended
+        below the figure; each leaves the group that held it (an emptied group goes too)."""
+        items = [s for i, s in enumerate(items) if not any(s is o for o in items[:i])]
+        if len(items) < 2:
+            return None
+        sources = [self.get_top_parent_of_shape(it) for it in items]
+        self.set_current_selection(None)
+        self.initial_position = None            # the drag is over: nothing to put back
+        holders = [self._group_of(it) for it in items]
+        outers = [self._container_of(h) if h is not None else None for h in holders]
+        self.shapes_to_draw[:] = [s for s in self.shapes_to_draw if not any(s is it for it in items)]
+        for it, holder, outer in zip(items, holders, outers):
+            if holder is None:
+                continue
+            holder.content[:] = [s for s in holder.content if s is not it]
+            if not holder.content:
+                if outer is not None:
+                    outer[:] = [s for s in outer if s is not holder]
+            else:
+                holder.update()
+        new_grp = Group(*items, orientation='X')
+        self.shapes_to_draw.append(new_grp)
+        self.update()
+        self.update_size()
+        self.force_update_size_of_parent.emit(new_grp)
+        for source_top, moved in zip(sources, items):
+            self._refit_row_left(source_top, moved, new_grp)
+        self.update_letters_required.emit()
+        self.set_current_selection(new_grp)
+        self.focus_required.emit()
+        self.undo_redo_save_required.emit()
+        self.update_text_rows.emit()
+        return new_grp
+
     def _drag_entry(self, kind, method, *args, moved=None, target=None):
         """A drag-and-drop menu entry: its label and tooltip say what it does
         with which panels; drag_sketch later drops the entries giving the same
@@ -6278,6 +6330,8 @@ class MyWidget(QWidget):
             if self.dragging and not isinstance(self.selected_shape, list) and dist>20:
                 # print('neo stuff 5 bis')
                 self.update_context_menu_according_to_selection(event,point)
+            elif self.dragging and isinstance(self.selected_shape, list) and dist > 20:
+                self._multi_drop_menu(event, point)
             else:
 
 
