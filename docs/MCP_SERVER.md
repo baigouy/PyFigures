@@ -27,7 +27,7 @@ read and edit `.pyf` figure files through natural language — no GUI required.
 
 You do not start the server yourself for most clients: once **registered**, the
 client (Claude Code, Claude Desktop, LM Studio, Codex, AnythingLLM, Cursor,
-Gemini CLI…) starts `python -m pyfigures.mcp_server` when it needs the tools and
+Gemini CLI, Hermes Agent…) starts `python -m pyfigures.mcp_server` when it needs the tools and
 stops it when it quits. Nothing runs in between and nothing needs to start at
 login. The processes the server starts (renderers, LaTeX, ffmpeg) end with it —
 on Windows, macOS and Linux; all of this works the same on the three systems
@@ -37,20 +37,23 @@ Register or remove it in one click: **GUI → Tools → MCP server…**, or
 
 ```bash
 python -m pyfigures.mcp_control status
-python -m pyfigures.mcp_control register lm_studio   # claude_code, claude_desktop, codex, anythingllm, cursor, gemini_cli
+python -m pyfigures.mcp_control register lm_studio   # claude_code, claude_desktop, codex, anythingllm, cursor, gemini_cli, hermes
 python -m pyfigures.mcp_control unregister lm_studio
 ```
 
 The client's configuration file is edited in place (every other entry, and in
-Codex's TOML the comments, are kept; the previous file goes to
+Codex's TOML and Hermes' YAML the comments, are kept; Hermes Agent's
+`config.yaml` is in `HERMES_HOME`, else `%LOCALAPPDATA%\hermes` for its Windows app and
+`~/.hermes` on macOS and Linux, and its entry starts the server with `--tools categories`,
+the three entry tools that suit local models; the previous file goes to
 `~/.pyfigures/backups`); restart the client afterwards. Claude Code and the Code
 side of Claude Desktop share `~/.claude.json`. A server switched off in the
 client or with MCP Commander shows as "switched off".
 
 Other clients: the dialog's buttons (or `snippet --format json|codex|hermes|url`)
-copy the `mcpServers` JSON most clients read, the YAML of Hermes Agent
-(`~/.hermes/config.yaml`; in WSL the Windows Python is started through
-`/mnt/c/…`).
+copy the `mcpServers` JSON most clients read, the YAML of Hermes Agent for
+Hermes running in WSL (its `~/.hermes/config.yaml` there; the Windows Python is
+started through `/mnt/c/…`).
 
 **HTTP server** — for clients that connect to a URL instead of starting a
 program: **Start the HTTP server** in the same dialog. While it runs, the dialog

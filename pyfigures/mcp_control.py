@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import os
 import shutil
 import socket
@@ -60,9 +61,10 @@ CLIENTS = {
     "anythingllm": "AnythingLLM Desktop",
     "cursor": "Cursor",
     "gemini_cli": "Gemini CLI",
+    "hermes": "Hermes Agent",                                 # HERMES_HOME/config.yaml
 }
-# Clients configured by hand (config_snippet): Hermes Agent (YAML, often in
-# WSL, where the Windows Python is started through /mnt/c/…), and clients that
+# Clients configured by hand (config_snippet): Hermes Agent running in WSL
+# (the Windows Python is started through /mnt/c/…), and clients that
 # connect to a URL (the HTTP server). ChatGPT on the web or in its desktop app
 # only reaches servers on the public internet, not one on this computer.
 
@@ -106,7 +108,110 @@ def client_config_path(client: str) -> str:
         return os.path.join(_home(), ".cursor", "mcp.json")
     if client == "gemini_cli":
         return os.path.join(_home(), ".gemini", "settings.json")
+    if client == "hermes":
+        return os.path.join(hermes_home(), "config.yaml")
     raise ValueError(f"unknown client {client!r}; one of {', '.join(CLIENTS)}")
+
+
+def hermes_home() -> str:
+    """Hermes Agent's folder, as Hermes resolves it: HERMES_HOME, else %LOCALAPPDATA%\\hermes on
+    Windows (its native app) and ~/.hermes on macOS and Linux (user 2026-11-23: nothing was
+    offered for the Windows app, only a YAML to paste for Hermes in WSL)."""
+    if os.environ.get("HERMES_HOME", "").strip():
+        return os.path.expanduser(os.path.expandvars(os.environ["HERMES_HOME"].strip()))
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA", "").strip() or os.path.join(_home(), "AppData", "Local")
+        return os.path.join(base, "hermes")
+    return os.path.join(_home(), ".hermes")
+
+
+# Hermes lists its servers under the top-level "mcp_servers:" of config.yaml. The file is
+# edited as text, so its comments and layout stay: only the "  pyfigures:" block is added,
+# replaced or removed, and the result must still read as YAML.
+def _hermes_block(python: str | None) -> list[str]:
+    entry = server_entry(python)
+    # the three entry tools, not all 210 (a local model's context: ~100k tokens otherwise)
+    args = entry["args"] + ["--tools", "categories"]
+    return [f"  {SERVER_NAME}:",
+            f"    command: {json.dumps(entry['command'])}",
+            f"    args: [{', '.join(json.dumps(a) for a in args)}]",
+            "    enabled: true"]
+
+
+def _hermes_find(lines: list[str]):
+    """(index of the top-level 'mcp_servers:' line or None, (start, end) of our block or None)."""
+    top = next((i for i, l in enumerate(lines) if re.match(r"mcp_servers\s*:", l)), None)
+    if top is None:
+        return None, None
+    end_of_section = next((i for i in range(top + 1, len(lines))
+                           if lines[i].strip() and not lines[i].startswith((" ", "\t", "#"))), len(lines))
+    start = next((i for i in range(top + 1, end_of_section)
+                  if re.match(rf"\s{{1,4}}{re.escape(SERVER_NAME)}\s*:", lines[i])), None)
+    if start is None:
+        return top, None
+    indent = len(lines[start]) - len(lines[start].lstrip())
+    end = next((i for i in range(start + 1, end_of_section)
+                if lines[i].strip() and len(lines[i]) - len(lines[i].lstrip()) <= indent), end_of_section)
+    return top, (start, end)
+
+
+def _yaml_check(text: str):
+    import yaml
+    data = yaml.safe_load(text) if text.strip() else {}
+    if data is not None and not isinstance(data, dict):
+        raise ValueError("config.yaml does not hold a mapping")
+    return data or {}
+
+
+def _register_hermes(path: str, python: str | None) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        text = ""
+    except OSError as e:
+        return f"ERROR: cannot read {path} ({e}); nothing was changed."
+    try:
+        _yaml_check(text)
+    except Exception as e:
+        return f"ERROR: {path} is not valid YAML ({e}); nothing was changed."
+    lines = text.splitlines()
+    block = _hermes_block(python)
+    top, ours = _hermes_find(lines)
+    if ours is not None:
+        if lines[ours[0]:ours[1]] == block:
+            return f"{CLIENTS['hermes']} already starts the PyFigures MCP server ({path})."
+        lines[ours[0]:ours[1]] = block
+    elif top is not None:
+        if re.match(r"mcp_servers\s*:\s*(\{\s*\}|null|~)?\s*(#.*)?$", lines[top]):
+            lines[top] = "mcp_servers:"
+        lines[top + 1:top + 1] = block
+    else:
+        lines += ([""] if lines and lines[-1].strip() else []) + ["mcp_servers:"] + block
+    try:
+        backup = _write_text(path, "\n".join(lines) + "\n", _yaml_check)
+    except Exception as e:
+        return f"ERROR: the edited {path} would not read as YAML ({e}); nothing was changed."
+    return (f"Registered with {CLIENTS['hermes']} ({path}): it starts the server when it needs the "
+            "tools (the three entry tools, which suit local models). Restart Hermes, or type "
+            "/reload-mcp in it." + (f" Previous file kept as {backup}." if backup else ""))
+
+
+def _unregister_hermes(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        lines = []
+    except OSError as e:
+        return f"ERROR: cannot read {path} ({e}); nothing was changed."
+    _top, ours = _hermes_find(lines)
+    if ours is None:
+        return f"{CLIENTS['hermes']} does not list the PyFigures MCP server ({path})."
+    del lines[ours[0]:ours[1]]
+    backup = _write_text(path, "\n".join(lines) + "\n", _yaml_check)
+    return (f"Removed from {CLIENTS['hermes']} ({path}). Restart Hermes to apply."
+            + (f" Previous file kept as {backup}." if backup else ""))
 
 
 def _wsl_path(path: str) -> str:
@@ -299,6 +404,21 @@ def registration(client: str) -> dict:
     info = {"client": client, "name": CLIENTS[client], "path": path,
             "exists": os.path.isfile(path), "registered": False, "disabled": False,
             "entry": None, "error": None}
+    if client == "hermes":
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = _yaml_check(f.read())
+        except FileNotFoundError:
+            data = {}
+        except Exception as e:
+            info["error"] = f"{type(e).__name__}: {e}"
+            return info
+        entry = (data.get("mcp_servers") or {}).get(SERVER_NAME) if isinstance(data.get("mcp_servers"), dict) else None
+        if isinstance(entry, dict):
+            info["entry"] = entry
+            info["disabled" if entry.get("enabled") is False or entry.get("disabled") is True
+                 else "registered"] = True
+        return info
     try:
         if client == "codex":
             data = _read_toml(path)[1]
@@ -337,6 +457,8 @@ def register(client: str, python: str | None = None) -> str:
     path = client_config_path(client)
     if client == "codex":
         return _register_codex(path, python)
+    if client == "hermes":
+        return _register_hermes(path, python)
     try:
         data = _read_json(path)
     except (ValueError, OSError) as e:
@@ -379,6 +501,8 @@ def _register_codex(path: str, python: str | None) -> str:
 
 def unregister(client: str) -> str:
     path = client_config_path(client)
+    if client == "hermes":
+        return _unregister_hermes(path)
     if client == "codex":
         try:
             text, data = _read_toml(path)

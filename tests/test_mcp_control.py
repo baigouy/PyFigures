@@ -26,7 +26,64 @@ def home(tmp_path, monkeypatch):
     h.mkdir()
     monkeypatch.setattr(C, "_home", lambda: str(h))
     monkeypatch.setenv("APPDATA", str(h / "AppData" / "Roaming"))
+    # Hermes Agent's folder (Windows: LOCALAPPDATA; HERMES_HOME wins): never the user's own
+    monkeypatch.setenv("LOCALAPPDATA", str(h / "AppData" / "Local"))
+    monkeypatch.delenv("HERMES_HOME", raising=False)
     return h
+
+
+def test_hermes_folder_on_each_system(home, monkeypatch):
+    monkeypatch.setattr(C.sys, "platform", "win32")
+    assert C.client_config_path("hermes") == str(home / "AppData" / "Local" / "hermes" / "config.yaml")
+    for system in ("darwin", "linux"):
+        monkeypatch.setattr(C.sys, "platform", system)
+        assert C.client_config_path("hermes") == os.path.join(str(home), ".hermes", "config.yaml")
+    monkeypatch.setenv("HERMES_HOME", str(home / "custom"))
+    assert C.client_config_path("hermes") == os.path.join(str(home / "custom"), "config.yaml")
+
+
+def test_hermes_register_keeps_its_comments_and_other_servers(home):
+    """User 2026-11-23: Hermes Agent (native Windows app) got nothing but a YAML to paste."""
+    import yaml
+    path = C.client_config_path("hermes")
+    os.makedirs(os.path.dirname(path))
+    original = ("# my settings\nmodel:\n  default: qwen3.8-27b  # local\n"
+                "mcp_servers:\n  github:\n    command: npx\n    args: [\"@x/server-github\"]\n"
+                "display:\n  theme: dark\n")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(original)
+    assert C.registration("hermes")["registered"] is False
+    msg = C.register("hermes", python="/usr/bin/python3")
+    assert msg.startswith("Registered with Hermes Agent"), msg
+    text = open(path, encoding="utf-8").read()
+    data = yaml.safe_load(text)
+    assert "# my settings" in text and "# local" in text and data["display"] == {"theme": "dark"}
+    assert set(data["mcp_servers"]) == {"github", "pyfigures"}
+    assert data["mcp_servers"]["pyfigures"]["args"] == ["-m", "pyfigures.mcp_server", "--tools", "categories"]
+    assert C.registration("hermes")["registered"] is True
+    assert "already starts" in C.register("hermes", python="/usr/bin/python3")
+    C.register("hermes", python="/opt/py/bin/python")          # another Python: replaced, not doubled
+    data = yaml.safe_load(open(path, encoding="utf-8").read())
+    assert data["mcp_servers"]["pyfigures"]["command"] == "/opt/py/bin/python"
+    assert C.unregister("hermes").startswith("Removed from Hermes Agent")
+    data = yaml.safe_load(open(path, encoding="utf-8").read())
+    assert set(data["mcp_servers"]) == {"github"} and data["model"] == {"default": "qwen3.8-27b"}
+
+
+def test_hermes_with_no_config_or_an_empty_server_list(home):
+    import yaml
+    path = C.client_config_path("hermes")
+    C.register("hermes", python="python")                     # no file yet
+    assert set(yaml.safe_load(open(path, encoding="utf-8").read())["mcp_servers"]) == {"pyfigures"}
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("model: x\nmcp_servers: {}\n")
+    C.register("hermes", python="python")
+    data = yaml.safe_load(open(path, encoding="utf-8").read())
+    assert data["model"] == "x" and set(data["mcp_servers"]) == {"pyfigures"}
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("model: [unclosed\n")
+    assert C.register("hermes", python="python").startswith("ERROR")
+    assert open(path, encoding="utf-8").read() == "model: [unclosed\n"
 
 
 def _free_port():

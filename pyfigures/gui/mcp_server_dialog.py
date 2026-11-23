@@ -64,9 +64,9 @@ class McpServerDialog(QDialog):
                                                      "(Windsurf, Cline…). Add its 'pyfigures' entry "
                                                      "INSIDE the file's existing \"mcpServers\" "
                                                      "object: do not replace the other servers."),
-                                ("Copy Hermes YAML", "hermes", "For Hermes Agent: paste into "
-                                                               "~/.hermes/config.yaml (in WSL "
-                                                               "if Hermes runs there).")):
+                                ("Copy Hermes YAML (WSL)", "hermes", "For Hermes Agent running in WSL: paste into "
+                                                               "~/.hermes/config.yaml there (Hermes on "
+                                                               "Windows, macOS or Linux: Register above).")):
             b = QPushButton(label)
             b.setToolTip(tip)
             b.clicked.connect(lambda _=False, f=fmt: self.copy_snippet(f))
