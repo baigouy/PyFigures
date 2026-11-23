@@ -82,9 +82,13 @@ def parse_row_counts(value):
     raise ValueError('images per row must be a number such as 3 or one number per row such as 3-2-2-2')
 
 
-def arrange_rows(path, columns, width, spacing, row_counts=None):
+def arrange_rows(path, columns, width, spacing, row_counts=None, group_path=None):
     """Regroup every image panel into rows, in reading order: `columns` per row
-    (the last row may be shorter) or exactly `row_counts` (e.g. [3, 2, 2, 2])."""
+    (the last row may be shorter) or exactly `row_counts` (e.g. [3, 2, 2, 2]).
+    `group_path`: only the images of that block (e.g. a time-series montage), which
+    becomes a column of such rows; the rest of the figure is left as it is."""
+    if group_path:
+        return _arrange_block(path, columns, spacing, row_counts, group_path)
     if row_counts is not None:
         if (not isinstance(row_counts, (list, tuple)) or not row_counts or len(row_counts) > 100
                 or not all(type(n) is int and 1 <= n <= 100 for n in row_counts)):
@@ -142,6 +146,69 @@ def arrange_rows(path, columns, width, spacing, row_counts=None):
     return {'image_count': len(images), 'rows': len(counts), 'images_per_row': counts,
             'columns': columns, 'preserved_labels': len(labels),
             'note': 'Existing group structure replaced; image traversal order and panel annotations retained. Standalone labels placed after image rows.'}
+
+
+def _arrange_block(path, columns, spacing, row_counts, group_path):
+    """One block re-wrapped into rows (chat 2026-11-23: "starting from f, make each row contain at
+    most 3 images" on a 51-frame montage; arrange_live_images could only re-lay the whole figure,
+    group_path was refused and the model gave up)."""
+    from pyfigures.mcp_tools.core import _navigate_group, _encode_str, _next_group_id
+    if row_counts is not None:
+        if (not isinstance(row_counts, (list, tuple)) or not row_counts or len(row_counts) > 100
+                or not all(type(n) is int and 1 <= n <= 100 for n in row_counts)):
+            raise ValueError('row_counts must list 1 to 100 rows of 1 to 100 images each, e.g. [3, 2, 2, 2]')
+        columns = max(row_counts)
+    if type(columns) is not int or not 1 <= columns <= 100:
+        raise ValueError('columns must be an integer from 1 to 100')
+    if not isinstance(group_path, (list, tuple)) or not all(type(i) is int for i in group_path):
+        raise ValueError('group_path must be a list of whole numbers, e.g. [3]')
+    root = ET.fromstring(tools.get_xml(path))
+    block, error = _navigate_group(root, list(group_path))
+    if block is None:
+        raise ValueError(f'{error}. Nothing was changed.')
+    images = []
+
+    def collect(node):
+        if _decode(node.findtext('isText')):
+            raise ValueError('This block holds a text row; arrange it by hand. Nothing was changed.')
+        if node.tag == 'Image2D':
+            images.append(node)
+        elif node.tag == 'Group':
+            for child in node.find('content') or []:
+                collect(child)
+        else:
+            raise ValueError('Unsupported content in this block. Nothing was changed.')
+    for child in list(block.find('content')):
+        collect(child)
+    if not images:
+        raise ValueError(f'No image panels in group {list(group_path)}. Nothing was changed.')
+    if row_counts is not None and sum(row_counts) != len(images):
+        raise ValueError(f'row_counts {"-".join(map(str, row_counts))} places {sum(row_counts)} images but group '
+                         f'{list(group_path)} has {len(images)}. Nothing was changed.')
+    counts = list(row_counts) if row_counts is not None else [
+        min(columns, len(images) - start) for start in range(0, len(images), columns)]
+    content = block.find('content')
+    first_id = _next_group_id(root)
+    for child in list(content):
+        content.remove(child)
+    orientation = block.find('orientation')
+    if orientation is not None:
+        orientation.text = _encode_str('Y')            # a column of rows
+    start = 0
+    for row, count in enumerate(counts):
+        group = _new_group_elem('X', spacing, first_id + row)
+        group.find('content').extend(images[start:start + count])
+        content.append(group)
+        start += count
+    checked(tools.write_xml(path, ET.tostring(root, encoding='unicode')))
+    from pathlib import Path
+    before_layout = Path(path).read_bytes()
+    checked(tools.recompute_layout(path))
+    from .partner_gui import carry_policies
+    Path(path).write_bytes(carry_policies(before_layout, Path(path).read_bytes()))
+    return {'group_path': list(group_path), 'image_count': len(images), 'rows': len(counts),
+            'images_per_row': counts, 'columns': columns,
+            'note': 'Only this block was re-arranged; the rest of the figure is unchanged.'}
 
 
 def set_letter_position(path, placement):

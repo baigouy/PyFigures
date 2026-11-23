@@ -157,7 +157,7 @@ TOPIC_RULES = (
       'invert', 'heading', 'headers', 'header', 'layout'},
      'ROWS: rearranging EXISTING images into rows / columns: arrange_live_images once (columns, or row_counts '
      'when equal rows are impossible: ask which split, e.g. 9 images in 4 rows = [3, 2, 2, 2]); order and letters '
-     'kept; never per-image move loops. Panels (e.g. a channel split) onto their own row: the same call, row_counts '
+     'kept; never per-image move loops. One block only (a time-series montage, "from f on"): group_path=[its index]. Panels (e.g. a channel split) onto their own row: the same call, row_counts '
      'ending the row before them; a missing merge then: add_channel_merge(group_path=that row, '
      'stack_path=the source stack) appends it last. NEW rows: add_group, then use its returned path; requested row numbers are '
      'not group paths; on a missing-container error inspect / create it, never fall back into another row. '
