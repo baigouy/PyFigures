@@ -24,7 +24,16 @@ def test_rows_are_three_to_five_wide_and_no_lonely_last_image(n):
     assert rows * cols >= n and (rows - 1) * cols < n          # every row holds an image
     last = n - (rows - 1) * cols
     assert rows == 1 or last >= 2
-    assert 3 <= cols <= 5 or n <= 5
+    assert 3 <= cols <= 6 or n <= 5
+
+
+@pytest.mark.parametrize("n", range(6, 60))
+def test_at_most_one_empty_slot_when_a_width_allows_it(n):
+    """"ideally there is no more than one empty image per row" (user, 2026-11-23): the empty
+    slots all fall in the last row, so at most one in the grid when 3-6 a row allows it."""
+    rows, cols = default_grid_shape(n)
+    possible = any((-(-n // c)) * c - n <= 1 and n % c != 1 for c in (3, 4, 5, 6))
+    assert not possible or rows * cols - n <= 1, (n, rows, cols)
 
 
 def test_the_dialog_starts_on_it_and_the_user_can_change_it(qapp):

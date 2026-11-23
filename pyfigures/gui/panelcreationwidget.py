@@ -17,7 +17,10 @@ def default_grid_shape(n):
         rows = -(-n // cols)
         empty = rows * cols - n
         last = n - (rows - 1) * cols
-        cost = 0.5 * empty + (10 if rows > 1 and last == 1 else 0) + (1 if cols == 6 else 0)
+        # the empty slots are all in the last row: more than one there does not look good
+        # (user, 2026-11-23); only when no width avoids it (13 images: 3 x 5, two empty)
+        cost = (0.5 * empty + 5 * max(0, empty - 1) + (10 if rows > 1 and last == 1 else 0)
+                + (1 if cols == 6 else 0))
         key = (cost, -cols)                                   # a tie: fewer rows
         if best is None or key < best[0]:
             best = (key, rows)
