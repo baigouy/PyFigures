@@ -233,6 +233,9 @@ TOPIC_RULES = (
      'FOLDERS: "the (first N) files of a folder" are all its files, tables too: add_folder_files(folder, '
      'first=N) once, never add_image batches (it adds tables as data plots, in the folder\'s order); '
      '"images" of a folder = add_image. Say once that a table panel is possible.'),
+    ({'random', 'randomly'},
+     'RANDOM: "N random images (from a folder)" go in the open figure: add_folder_files(folder, first=N, '
+     'pick="random", images_only=True); draft_figure writes a separate new file.'),
 )
 
 
@@ -255,6 +258,7 @@ TOPIC_TOOLS = {
     'DRAWINGS': {'add_scripted_image'},
     'INTEGRITY': {'check_image_integrity'},
     'FOLDERS': {'scan_folder', 'add_folder_files'},
+    'RANDOM': {'draft_figure'},
 }
 
 
@@ -350,6 +354,7 @@ REQUEST_KEYS = {
     'DRAWINGS': {'illustrate', 'illustration', 'diagram', 'schematic', 'scheme', 'sketch', 'cartoon'},
     'INTEGRITY': {'duplicate', 'identical', 'reused', 'integrity', 'inverted', 'investigate', 'similar'},
     'FOLDERS': {'files', 'folder', 'directory'},
+    'RANDOM': {'random', 'randomly'},
 }
 
 

@@ -349,11 +349,13 @@ def scan_folder(folder: str, pattern: str = "*", sample: int = 0, seed: int | No
 
 
 @mcp.tool()
-def add_folder_files(pyf_path: str, folder: str, first: int = 0, names: list[str] | None = None) -> str:
+def add_folder_files(pyf_path: str, folder: str, first: int = 0, names: list[str] | None = None,
+                     pick: str = "first", images_only: bool = False) -> str:
     """Add a folder's FILES to the figure in one call: images as image panels, tables
     (CSV, TSV, Excel, also with no extension) as data plots, in the file browser's order.
 
     "the first 20 files of this folder" = first=20 (every file counts, a table too);
+    "5 random images from this folder" = first=5, pick="random", images_only=True;
     *names*: only these files (their names, in the order given); neither = every file.
     Files that cannot be placed (notes, XML...) are named in the reply, not added.
     Then add_table_panel / edit_data_plot change a table's panel if asked.
@@ -362,7 +364,14 @@ def add_folder_files(pyf_path: str, folder: str, first: int = 0, names: list[str
     # added 20 images; one operation that takes the files in their order cannot skip them
     if not os.path.isdir(folder):
         return f"ERROR: Folder not found: {folder}"
-    everything = _browser_order(_collect_image_files(folder) + _other_files(folder))
+    if pick not in ("first", "random"):
+        return f"ERROR: pick must be 'first' or 'random' (got {pick!r}). Nothing was changed."
+    everything = _browser_order(_collect_image_files(folder) + ([] if images_only else _other_files(folder)))
+    if pick == "random" and not names:
+        # chat 2026-11-23: "5 random images from <folder>" had only draft_figure (a new file)
+        import random
+        n = int(first) if first and int(first) > 0 else len(everything)
+        everything = _browser_order(random.sample(everything, min(n, len(everything))))
     if names:
         by_name = {os.path.basename(p).lower(): p for p in everything}
         missing = [n for n in names if os.path.basename(str(n)).lower() not in by_name]
@@ -767,8 +776,8 @@ def draft_figure(
     count: int = 0,
     pick: str = "first",
 ) -> str:
-    """**Draft a complete multi-panel figure from a folder of results, in one
-    call** — the fastest path from data to a first-pass figure.
+    """**Draft a complete multi-panel figure from a folder of results into a NEW
+    .pyf file** (not the open figure: add_folder_files fills that one).
 
     *count*: how many images ("a figure with 5 images": count=5; 0 = all);
     *pick*: "first" (the folder's order) or "random" ("5 random images").
@@ -924,6 +933,12 @@ def draft_figure(
         "journal": f"{journal} ({column})" if journal else None,
         "steps": steps,
         "warnings": warnings,
+        # chat 2026-11-23 (local Qwen): it drafted into a new file, found the open figure still
+        # empty and drafted again into "live.pyf"; say where the figure went and how to fill
+        # the open one instead
+        "note": (f"A NEW file was written ({out_pyf}); the figure open in PyFigures is unchanged. "
+                 "To put the images in the open figure, use add_folder_files(folder, first=N, "
+                 "pick='random' for random ones) instead."),
         "next_steps": [
             "Open in PyFigures and drag panels to fine-tune the layout.",
             "Refine the caption stub (File -> Figure caption / legend).",
