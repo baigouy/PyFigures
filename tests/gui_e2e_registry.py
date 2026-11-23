@@ -35,6 +35,8 @@ LINKED = {
                                   "test_mcp_control.py::test_gui_dialog_registers_and_starts_the_http_server"],
     "toolbar: Chat": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
     "menu: View > Open the chat at start-up": ["test_mcp_control.py::test_gui_menu_opens_the_dialog"],
+    "menu: View > Share the open figure with AI apps at start-up": [
+        "test_mcp_control.py::test_gui_menu_opens_the_dialog"],
     "menu: Annotations > Text style (letters, labels, scale bars…)…": [
         "test_restyle_texts.py::test_gui_text_style_dialog", "test_restyle_texts.py::test_restyle_labels_only"],
     # A | (B / C): a panel stacked with the one it is dropped on, inside its row

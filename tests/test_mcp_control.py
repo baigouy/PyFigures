@@ -400,6 +400,16 @@ def test_gui_menu_opens_the_dialog(home, qapp, monkeypatch):
         assert load_chat_at_start() is False
     finally:
         g.chat_at_start_action.setChecked(was)
+    # View → Share the open figure with AI apps at start-up: remembered, and __main__ adds --share
+    from pyfigures.gui.user_prefs import load_share_at_start
+    was = load_share_at_start()
+    try:
+        g.share_at_start_action.setChecked(True)
+        assert load_share_at_start() is True
+        g.share_at_start_action.setChecked(False)
+        assert load_share_at_start() is False
+    finally:
+        g.share_at_start_action.setChecked(was)
     # the dialog says how to use it (LM Studio's plug icon, saved files)
     dlg = D.McpServerDialog(g)
     from qtpy.QtWidgets import QLabel

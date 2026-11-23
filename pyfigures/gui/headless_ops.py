@@ -56,7 +56,15 @@ def _build_gui(pyf_path: str):
     except BaseException:
         _restore_warning(real_warning)
         raise
+    if _KEEP_ALIVE is not None:
+        _KEEP_ALIVE.append((app, gui))
     return app, gui
+
+
+# Run as a script: every window stays referenced until os._exit. Freeing it when
+# the op returned crashed the process about once in four LaTeX exports under
+# pytest (access violation, files written, but the call reported a failure).
+_KEEP_ALIVE = None
 
 
 def _restore_warning(real_warning):
@@ -303,6 +311,7 @@ def _main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    _KEEP_ALIVE = []
     _code = _main()
     # the work is done and reported: skip the interpreter/Qt teardown, which can
     # crash (no message, non-zero exit) after a successful export
