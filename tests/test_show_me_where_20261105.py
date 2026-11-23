@@ -148,6 +148,32 @@ def test_editor_tab_and_buttons_are_outlined(qapp, gui):
     guide.stop()
 
 
+def test_icon_buttons_named_by_their_tooltip_are_outlined(qapp, gui):
+    """User 2026-11-23: "show me where to click" for the Polygon tool of the panel editor's
+    Annotations tab answered highlighted=0: the drawing tools are icon buttons named only by
+    their tooltip (annotation_editor.py: polygon.setToolTip("Polygon")), matched by text."""
+    from pyfigures.gui.show_me_where import ClickGuide
+    g = gui()
+    guide = ClickGuide(g)
+    guide.start([], where="editor", editor_tab="Annotations", controls=["Polygon"])
+    dialog = QDialog(g)
+    tabs = QTabWidget(dialog)
+    page = QWidget()
+    lay = QVBoxLayout(page)
+    for tip in ("Ellipse", "Polygon", "polyline"):
+        b = QPushButton()                    # as the editor builds them: an icon, no text
+        b.setToolTip(tip)
+        lay.addWidget(b)
+    tabs.addTab(page, "Annotations")
+    QVBoxLayout(dialog).addWidget(tabs)
+    dialog.show()
+    _spin(qapp, 10)
+    assert len(_highlights(tabs.tabBar())) == 1 and len(_highlights(page)) == 1   # Polygon only
+    assert guide.status()["highlighted"] == 2
+    dialog.close()
+    guide.stop()
+
+
 def test_the_chat_tool_selects_the_row_and_guides(qapp, gui, runtime, tmp_path):
     from pyfigures.assistant import launch
     g = gui(shareable=True)

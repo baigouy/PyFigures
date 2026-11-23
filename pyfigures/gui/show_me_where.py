@@ -314,8 +314,12 @@ class ClickGuide(QObject):
                         self._frame(bar, bar.tabRect(i), key=("tab", i))
         wanted = {clean(c) for c in self.controls}
         for button in window.findChildren(QAbstractButton):
-            if clean(action_title(button.text())) in wanted:
-                self._frame(button.parentWidget(), button.geometry(), key=("button", button.text()))
+            # the editor's drawing tools are icon buttons named only by their tooltip ("Polygon"):
+            # matched by text alone, the Polygon tool was never outlined (user, 2026-11-23)
+            names = (button.text(), button.toolTip())
+            if any(n and clean(action_title(n)) in wanted for n in names):
+                self._frame(button.parentWidget(), button.geometry(),
+                            key=("button", button.text() or button.toolTip()))
 
     def _default_note(self):
         if self.where == "context":
