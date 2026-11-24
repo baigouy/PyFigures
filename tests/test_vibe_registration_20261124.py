@@ -6,12 +6,16 @@ from __future__ import annotations
 
 import os
 import sys
-import tomllib
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "pyqt6")
 
 import pytest
+
+try:
+    import tomllib
+except ImportError:                     # Python 3.10: Vibe registration needs tomli there
+    tomllib = pytest.importorskip("tomli")
 
 from pyfigures import mcp_control as C
 
