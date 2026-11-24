@@ -26,18 +26,25 @@ read and edit `.pyf` figure files through natural language — no GUI required.
 ## Starting, stopping and registering the server
 
 You do not start the server yourself for most clients: once **registered**, the
-client (Claude Code, Claude Desktop, LM Studio, Codex, AnythingLLM, Cursor,
+client (Mistral Vibe, Claude Code, Claude Desktop, LM Studio, Codex, AnythingLLM, Cursor,
 Gemini CLI, Hermes Agent…) starts `python -m pyfigures.mcp_server` when it needs the tools and
-stops it when it quits. Nothing runs in between and nothing needs to start at
+stops it when it quits (the standalone apps register themselves instead:
+`PyFigures --mcp-server`, through `PyFigures MCP.exe` on Windows). Nothing runs in between and nothing needs to start at
 login. The processes the server starts (renderers, LaTeX, ffmpeg) end with it —
 on Windows, macOS and Linux; all of this works the same on the three systems
 (client configuration files are looked for in each system's own places).
+
+**PyFigures MCP Edition** (the standalone app `PyFigures-MCP-Edition-*` on the releases page) is
+made for this: it opens without the chat sidebar, shares the open figure with AI apps at
+start-up (View menu, can be unticked), and at its first launch opens Tools → MCP server…
+when no AI app lists PyFigures yet. Every Copy button there says **✓ Copied** and makes
+the copied text blink.
 
 Register or remove it in one click: **GUI → Tools → MCP server…**, or
 
 ```bash
 python -m pyfigures.mcp_control status
-python -m pyfigures.mcp_control register lm_studio   # claude_code, claude_desktop, codex, anythingllm, cursor, gemini_cli, hermes
+python -m pyfigures.mcp_control register lm_studio   # vibe, claude_code, claude_desktop, codex, anythingllm, cursor, gemini_cli, hermes
 python -m pyfigures.mcp_control unregister lm_studio
 ```
 

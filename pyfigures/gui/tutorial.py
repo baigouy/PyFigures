@@ -3337,7 +3337,7 @@ def chat_steps() -> list[TutorialStep]:
         TutorialStep(
             title='Step 6 — Use another MCP client',
             message=(
-                'To work from Hermes Agent, Claude Desktop, LM Studio\'s own chat or Codex instead, '
+                'To work from Mistral Vibe, Hermes Agent, Claude Desktop, LM Studio\'s own chat or Codex instead, '
                 'open <b>Tools → MCP server…</b> (or the chat\'s <b>Model → Another AI app</b>) and '
                 'click <b>Register</b> beside the app, then restart it. It gets '
                 '<code>pyfigures-live</code>, which edits <i>this</i> window\'s figure live, as the '

@@ -587,7 +587,7 @@
         <tr><th>Entry</th><th>Description</th></tr>
         <tr><td><strong>Poster / collage designer… / Photo album designer…</strong></td><td>Separate tools for posters, photo-collage pages and photo albums, where images can be freely placed and rotated. Guide: <code>docs/poster.md</code>.</td></tr>
         <tr><td><strong>Send this figure to the poster designer</strong></td><td>Saves the figure, then places it on the poster as one block, as dropping its <code>.pyf</code> there would: shown from a 300 DPI render, drawn as vectors in the poster's PDF / SVG exports.</td></tr>
-        <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register PyFigures with an AI app (Claude Code, Claude Desktop, LM Studio, Codex, Hermes Agent, Cursor, Gemini CLI, AnythingLLM): it gets two servers, <code>pyfigures-live</code> for the figure open in this window (recommended) and <code>pyfigures</code> for saved <code>.pyf</code> files; <strong>Share this window's figure</strong> shares it now; or start the HTTP server. The call history lists every call made on this figure and undoes its last changes.</td></tr>
+        <tr><td><strong>MCP server… / MCP call history / undo…</strong></td><td>Register PyFigures with an AI app (Mistral Vibe, Claude Code, Claude Desktop, LM Studio, Codex, Hermes Agent, Cursor, Gemini CLI, AnythingLLM): it gets two servers, <code>pyfigures-live</code> for the figure open in this window (recommended) and <code>pyfigures</code> for saved <code>.pyf</code> files; <strong>Share this window's figure</strong> shares it now; or start the HTTP server. The call history lists every call made on this figure and undoes its last changes.</td></tr>
         <tr><td><strong>Share the open figure with the MCP server</strong></td><td>Lets an MCP client (Claude Desktop, LM Studio…) edit the figure open in this window live, unsaved changes included, one undo step per edit; shows the configuration to paste into the client. Untick to stop. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Chat sidebar (local model)…</strong></td><td>Docks a chat on the right: ask for changes in plain words and a language model makes them on this figure. See <a href="#chat">Chat sidebar &amp; live sharing</a>.</td></tr>
         <tr><td><strong>Replay a chat…</strong></td><td>Runs the operations of a recorded chat again on the open figure, without the model: pick a chat (the recent ones are listed; also a <em>sidecar-debug</em> zip or a saved procedure), then <em>Run this step</em> one at a time, <em>Run up to here</em> or <em>Run all</em>, watching the figure change. Each row shows the request it answered, the operation and its arguments, its result in the chat (<em>Then</em>) and now (<em>Now</em>); edit the arguments before running a step to try other values. <em>Reset the figure</em> puts it back as it was before the first step run. By default only the steps that changed the figure are listed (not the reads, the failed calls or the replies undone afterwards); tick <em>Show reads and failed calls</em> for all. <em>Save as procedure…</em> keeps those steps in a file. Edits you made by hand during the chat were not recorded and are not replayed. MCP <code>list_chat_steps</code>, <code>save_chat_procedure</code>.</td></tr>
@@ -1121,11 +1121,16 @@
         Mistral Large 4 (<code>mistral-large-4</code>, sees the previews), with a paid Mistral key; the same
         key reaches the Z.ai GLM models Mistral serves (<strong>List models…</strong> marks the ones
         that read images).</li>
-      <li><strong>Another AI app</strong> (Hermes Agent, Claude Desktop, LM Studio's own chat, Codex…):
+      <li><strong>Another AI app</strong> (Mistral Vibe, Hermes Agent, Claude Desktop, LM Studio's own chat, Codex…):
         opens <em>Tools → MCP server…</em> to register PyFigures with it, then posts a prompt to paste
-        into that app (also copied, with a <strong>Copy the prompt</strong> button). While the app works
+        into that app (also copied, with a <strong>Copy the prompt</strong> button) and a <strong>Close the chat</strong> button: the other app does not need the panel, and the window stays shared. While the app works
         on the figure, the model line says so ("🔌 another AI app is using this figure through MCP").</li>
     </ul>
+    <p>
+      Every message has a small copy icon at its top right. Copying (that icon, <strong>Copy the
+      prompt</strong>, or any Copy button in <em>Tools → MCP server…</em>) shows a check mark or
+      "✓ Copied" for a moment and makes the copied text blink.
+    </p>
     <p>
       A local model has a limited context: when a conversation fills 60% of it, older dialogue is
       summarised by itself. Online models use the provider's own limits.
@@ -1188,7 +1193,7 @@
     <p>
       The page is shown inside PyFigures when Qt WebEngine is installed (<code>pip install
       "PyQt6-WebEngine==6.4.*"</code>, matching your PyQt6 version; the panel gives the exact command and a
-      button that copies it), and in the <strong>PyFigures Web Chat</strong> app.
+      button that copies it). (The PyFigures Web Chat app is no longer released; to work from an AI app you already use, the <strong>PyFigures MCP Edition</strong> app is the recommended way.)
       Without it, and in the other standalone apps, the panel works through the clipboard: choosing a
       page in the address list opens the chat in your browser, Start and the results are copied for you to
       paste (Ctrl+V), and
@@ -1242,7 +1247,7 @@
     </p>
     <p>
       <strong>Other AI apps on the open figure.</strong> <em>Tools → MCP server…</em> →
-      <strong>Register</strong> adds PyFigures to an AI app (Hermes Agent, Claude Desktop, LM Studio,
+      <strong>Register</strong> adds PyFigures to an AI app (Mistral Vibe, Hermes Agent, Claude Desktop, LM Studio,
       Codex…) as two servers: <code>pyfigures-live</code> edits the figure open in this window,
       one undo step per edit, and <code>pyfigures</code> edits saved <code>.pyf</code> files. Register also
       shares the window at every start-up (<em>View → Share the open figure with AI apps at

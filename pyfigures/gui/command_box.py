@@ -21,8 +21,8 @@ def command_box(parent, title, text, command, warning=False):
     copy.clicked.disconnect()
 
     def copied(_checked=False):
-        QApplication.clipboard().setText(command)
-        copy.setText('Copied')
+        from pyfigures.gui.copy_feedback import copy_with_feedback
+        copy_with_feedback(command, button=copy, flash=box)
     copy.clicked.connect(copied)
     box.addButton(QMessageBox.StandardButton.Ok)
     box.setDefaultButton(QMessageBox.StandardButton.Ok)

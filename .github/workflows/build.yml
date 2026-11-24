@@ -13,6 +13,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # "PyFigures MCP Edition": the same app whose AI is an outside app (Mistral Vibe,
+          # Claude, Hermes...) reaching the open figure through MCP: no chat at start-up,
+          # the figure shared at start-up, registration offered at first launch
+          # (replaces the web chat app, user 2026-11-24)
+          - os: windows-latest
+            mcp_app: '1'
+            app_name: PyFigures MCP Edition
+            artifact_name: PyFigures-MCP-Edition-Windows
+            artifact_path: PyFigures-MCP-Edition-Windows.zip
+          - os: macos-15-intel
+            mcp_app: '1'
+            app_name: PyFigures MCP Edition
+            artifact_name: PyFigures-MCP-Edition-macOS-Intel
+            artifact_path: PyFigures-MCP-Edition-macOS-Intel.dmg
+          - os: macos-latest
+            mcp_app: '1'
+            app_name: PyFigures MCP Edition
+            artifact_name: PyFigures-MCP-Edition-macOS-AppleSilicon
+            artifact_path: PyFigures-MCP-Edition-macOS-AppleSilicon.dmg
+          - os: ubuntu-22.04
+            mcp_app: '1'
+            app_name: PyFigures MCP Edition
+            artifact_name: PyFigures-MCP-Edition-Linux
+            artifact_path: PyFigures-MCP-Edition-Linux-x86_64.*
           - os: windows-latest
             app_name: PyFigures
             artifact_name: PyFigures-Windows
@@ -31,23 +55,6 @@ jobs:
             app_name: PyFigures
             artifact_name: PyFigures-Linux
             artifact_path: PyFigures-Linux-x86_64.*
-          # "PyFigures Web Chat": the same app with Qt WebEngine bundled, opening
-          # with Tools > Chat in a web page (experimental, a last resort)
-          - os: windows-latest
-            web_chat: '1'
-            app_name: PyFigures Web Chat
-            artifact_name: PyFigures-WebChat-Windows
-            artifact_path: PyFigures-WebChat-Windows.zip
-          - os: macos-15-intel
-            web_chat: '1'
-            app_name: PyFigures Web Chat
-            artifact_name: PyFigures-WebChat-macOS-Intel
-            artifact_path: PyFigures-WebChat-macOS-Intel.dmg
-          - os: macos-latest
-            web_chat: '1'
-            app_name: PyFigures Web Chat
-            artifact_name: PyFigures-WebChat-macOS-AppleSilicon
-            artifact_path: PyFigures-WebChat-macOS-AppleSilicon.dmg
           # "PyFigures NoAI": no chat sidebar, no chat or MCP entries (PYFIGURES_NO_AI
           # also makes pip install the pyfigures-noai distribution, without qtpy-ai-sidecar)
           - os: windows-latest
@@ -72,7 +79,7 @@ jobs:
             artifact_path: PyFigures-NoAI-Linux-x86_64.*
 
     env:
-      PYFIGURES_WEB_CHAT: ${{ matrix.web_chat || '0' }}
+      PYFIGURES_MCP_APP: ${{ matrix.mcp_app || '0' }}
       PYFIGURES_NO_AI: ${{ matrix.no_ai || '0' }}
       APP_NAME: ${{ matrix.app_name }}
 
@@ -109,28 +116,6 @@ jobs:
         shell: bash
         run: bash .github/scripts/pip_install_retry.sh ".[video,zarr]"
 
-      # the web chat app: Qt WebEngine of the same Qt version as PyQt6. A new
-      # PyQt6 often comes out before its WebEngine (PyQt6 6.12 had none yet):
-      # then PyQt6 goes back to the newest version that has one.
-      - name: Qt WebEngine (web chat app)
-        if: matrix.web_chat == '1'
-        shell: bash
-        run: |
-          MINOR=$(python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; print(v.split('.')[1])")
-          for m in $(seq "$MINOR" -1 4); do
-            if pip install "PyQt6==6.$m.*" "PyQt6-WebEngine==6.$m.*"; then break; fi
-            echo "no PyQt6-WebEngine 6.$m, trying 6.$((m-1))"
-          done
-          # Qt and Qt WebEngine themselves must be the very same version (6.11.2 and 6.11.2):
-          # pip only keeps them within the same 6.x
-          QT=$(python -c "from importlib.metadata import version as v; print(v('PyQt6-Qt6'))")
-          WE=$(python -c "from importlib.metadata import version as v; print(v('PyQt6-WebEngine-Qt6'))")
-          if [ "$QT" != "$WE" ]; then
-            echo "Qt $QT but Qt WebEngine $WE: installing Qt $WE"
-            pip install "PyQt6-Qt6==$WE"
-          fi
-          python -c "from PyQt6.QtCore import PYQT_VERSION_STR as v; import PyQt6.QtWebEngineWidgets; print('PyQt6', v, 'with WebEngine')"
-
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the
       # corresponding source is attached to the release (see the release job).
@@ -155,6 +140,18 @@ jobs:
           esac
           QT_QPA_PLATFORM=offscreen "$APP" --self-test self_test.json || { cat self_test.json; exit 1; }
           cat self_test.json
+
+      # what an AI app registered in Tools > MCP server… starts: the app's own MCP server
+      - name: MCP server of the built app
+        if: matrix.no_ai != '1'
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) APP="dist/$APP_NAME/PyFigures MCP.exe" ;;
+            macOS) APP="dist/$APP_NAME.app/Contents/MacOS/$APP_NAME" ;;
+            *) APP="dist/$APP_NAME/$APP_NAME" ;;
+          esac
+          python .github/scripts/check_mcp_server.py "$APP"
 
       - name: Licence files next to the executable too (Windows, Linux)
         if: runner.os != 'macOS'
@@ -204,15 +201,15 @@ jobs:
       # The photo album and poster designers: small launcher apps running
       # PyFigures.app --album / --poster (on Windows they are "PyFigures Album.exe"
       # and "PyFigures Poster.exe", built by pyfigures.spec)
-      # (the no-AI app has them too, opening "PyFigures NoAI.app"; the web chat app
+      # (the no-AI app has them too, opening "PyFigures NoAI.app"; the MCP Edition
       # is the figure editor only)
       - name: Album and poster launchers (macOS)
-        if: runner.os == 'macOS' && matrix.web_chat != '1'
+        if: runner.os == 'macOS' && matrix.mcp_app != '1'
         run: |
           bash packaging/make_macos_launcher_apps.sh dist "$(python -c 'from pyfigures.version import __VERSION__; print(__VERSION__)')" "$APP_NAME"
 
-      - name: Package (macOS — dmg, web chat app)
-        if: runner.os == 'macOS' && matrix.web_chat == '1'
+      - name: Package (macOS — dmg, MCP Edition)
+        if: runner.os == 'macOS' && matrix.mcp_app == '1'
         run: |
           mkdir dmg_src
           cp -R "dist/$APP_NAME.app" dmg_src/
@@ -226,7 +223,7 @@ jobs:
             dmg_src
 
       - name: Package (macOS — dmg)
-        if: runner.os == 'macOS' && matrix.web_chat != '1'
+        if: runner.os == 'macOS' && matrix.mcp_app != '1'
         run: |
           mkdir dmg_src
           cp -R "dist/$APP_NAME.app" "dist/PyFigures Album.app" "dist/PyFigures Poster.app" dmg_src/
@@ -291,11 +288,23 @@ jobs:
             artifacts/**/*
             corresponding-source/*.tar
           generate_release_notes: true
+          # downloads in this order (user 2026-11-24): the MCP Edition first, then the app with the
+          # chat sidebar, then the one without AI (the asset list below is alphabetical)
           body: |
-            **PyFigures** opens with the chat sidebar (AI, optional: untick View → Open the chat at start-up). **PyFigures NoAI** (`PyFigures-NoAI-*`): the same app without any AI (no chat sidebar, no chat or MCP entries).
+            ## Downloads
 
-            **Mac, first launch:** the apps are not signed by Apple. Use *System Settings → Privacy & Security → Open Anyway* (or right-click → Open). If macOS says the app "is damaged and can't be opened", run `xattr -cr "/Applications/<the app>.app"` in Terminal (e.g. `xattr -cr "/Applications/PyFigures Web Chat.app"`) and open it again.
+            | | Windows | macOS (Apple Silicon) | macOS (Intel) | Linux |
+            |---|---|---|---|---|
+            | **1. PyFigures MCP Edition** (recommended with an AI app) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-MCP-Edition-Windows.zip) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-MCP-Edition-macOS-AppleSilicon.dmg) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-MCP-Edition-macOS-Intel.dmg) | [AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-MCP-Edition-Linux-x86_64.AppImage) · [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-MCP-Edition-Linux-x86_64.tar.gz) |
+            | **2. PyFigures** (with the AI chat sidebar) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-Windows.zip) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-macOS-AppleSilicon.dmg) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-macOS-Intel.dmg) | [AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-Linux-x86_64.AppImage) · [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-Linux-x86_64.tar.gz) |
+            | **3. PyFigures NoAI** (no AI at all) | [zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-NoAI-Windows.zip) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-NoAI-macOS-AppleSilicon.dmg) | [dmg](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-NoAI-macOS-Intel.dmg) | [AppImage](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-NoAI-Linux-x86_64.AppImage) · [tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/PyFigures-NoAI-Linux-x86_64.tar.gz) |
 
-            **PyFigures Web Chat** (`PyFigures-WebChat-*`): the same app with Qt WebEngine bundled, opening with the chat web page docked beside the figure (Tools → Chat in a web page). Experimental and not recommended: a last resort when the chat sidebar (API key or local model) cannot be used. Check the chat site's terms of service and your institution's rules first. See docs/WEB_CHAT_TUTORIAL.md.
+            **1. PyFigures MCP Edition**: for working from an AI app you already use (Mistral Vibe, Claude, Codex, LM Studio, Hermes Agent…) through MCP. It opens without the chat sidebar, shares the open figure with those apps, and at first launch opens Tools → MCP server… to register PyFigures with them (one click each). The AI app then edits the figure in the window, live, one undo step per change. See docs/MCP_SERVER.md.
+
+            **2. PyFigures** opens with the AI chat sidebar (a local model or an online service; untick View → Open the chat at start-up to stop that). It can also be used from another AI app (Model → Another AI app).
+
+            **3. PyFigures NoAI**: the same app without any AI (no chat sidebar, no chat or MCP entries).
+
+            **Mac, first launch:** the apps are not signed by Apple. Use *System Settings → Privacy & Security → Open Anyway* (or right-click → Open). If macOS says the app "is damaged and can't be opened", run `xattr -cr "/Applications/<the app>.app"` in Terminal (e.g. `xattr -cr "/Applications/PyFigures MCP Edition.app"`) and open it again.
 
             The executables are distributed under the GNU GPL v3 (they include PyQt6, Qt and FFmpeg with x264/x265); PyFigures' own source code is BSD-2-Clause. Licence texts are inside each app (Help → About → Third-party licences). The complete corresponding source of everything bundled is attached below (`corresponding-source-*.tar`), together with this repository's source code.

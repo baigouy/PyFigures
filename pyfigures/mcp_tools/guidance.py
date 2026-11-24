@@ -79,7 +79,7 @@ def live_window_setup() -> str:
         "steps": [
             f"Add the '{LIVE_NAME}' entry to this client's MCP servers (JSON, or the YAML for Hermes "
             "Agent), then reload its MCP servers. Or: in PyFigures, Tools > MCP server... > Register "
-            "adds it for Claude, LM Studio, Codex, Cursor, Gemini CLI, AnythingLLM and Hermes.",
+            "adds it for Mistral Vibe, Claude, LM Studio, Codex, Cursor, Gemini CLI, AnythingLLM and Hermes.",
             "The window must share its figure: it does while its chat panel is open, or after "
             "Tools > Share the open figure with the MCP server." + ("" if not sharing else
                                                                   " (It shares it now.)"),

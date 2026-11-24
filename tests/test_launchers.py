@@ -45,7 +45,7 @@ def test_spec_builds_the_album_and_poster_executables_on_windows():
     block = spec[spec.index("extra_exes = []"):spec.index("coll = COLLECT(")]
     assert "for _launcher in ('PyFigures Album', 'PyFigures Poster'):" in block
     # Windows only, and not in the web chat app (the figure editor only)
-    assert "if sys.platform != 'win32' or WEB_CHAT:" in block and "name=_launcher" in block
+    assert "if sys.platform != 'win32' or WEB_CHAT or MCP_APP:" in block and "name=_launcher" in block
     assert "console=False" in block and "exclude_binaries=True" in block
     assert "*extra_exes," in spec[spec.index("coll = COLLECT("):]
     compile(spec, "pyfigures.spec", "exec")
@@ -115,8 +115,8 @@ def test_workflow_ships_the_launchers_on_macos():
 
 def test_the_no_ai_app_has_the_launchers_too_and_a_linux_build():
     wf = _read(".github", "workflows", "build.yml")
-    step = wf[wf.index("Album and poster launchers (macOS)"):wf.index("Package (macOS — dmg, web chat app)")]
-    assert "matrix.web_chat != '1'" in step and "no_ai" not in step       # PyFigures and PyFigures NoAI
+    step = wf[wf.index("Album and poster launchers (macOS)"):wf.index("Package (macOS — dmg, MCP Edition)")]
+    assert "matrix.mcp_app != '1'" in step and "no_ai" not in step       # PyFigures and PyFigures NoAI (the MCP Edition: the editor only)
     assert 'print(__VERSION__)\')" "$APP_NAME"' in step                  # they open that app
     dmg = wf[wf.index("Package (macOS — dmg)"):]
     assert 'cp -R "dist/$APP_NAME.app" "dist/PyFigures Album.app"' in dmg and "matrix.no_ai != '1'" not in dmg
@@ -124,8 +124,8 @@ def test_the_no_ai_app_has_the_launchers_too_and_a_linux_build():
     assert 'make_linux_packages.sh dist ./appimagetool "$APP_NAME"' in wf
     script = _read("packaging", "make_linux_packages.sh")
     assert 'APP="${3:-PyFigures}"' in script and 'ln -s "$APP" "$APPDIR/usr/lib/PyFigures/PyFigures"' in script
-    # Qt and Qt WebEngine of the very same version in the web chat app
-    assert "PyQt6-WebEngine-Qt6" in wf and 'pip install "PyQt6-Qt6==$WE"' in wf
+    # the web chat app is no longer built (2026-11-24): no Qt WebEngine step; the MCP Edition is
+    assert "PyQt6-WebEngine" not in wf and "matrix.mcp_app == '1'" in wf
 
 
 _LAUNCHER_SCRIPT = os.path.join(ROOT, "packaging", "make_macos_launcher_apps.sh")

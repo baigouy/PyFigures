@@ -122,7 +122,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pyfigures-noai
     ```
 
-    The standalone apps on the [releases page](https://github.com/baigouy/PyFigures/releases) come in the same two kinds: **PyFigures** (with the chat sidebar) and **PyFigures NoAI**.
+    The standalone apps on the [releases page](https://github.com/baigouy/PyFigures/releases) come in the same two kinds: **PyFigures** (with the chat sidebar) and **PyFigures NoAI**, plus **PyFigures MCP Edition** (the AI is an outside app reaching the figure through MCP).
 
 5. **Optional: Install openjdk8 if you plan to use bioformats**
     
@@ -252,7 +252,7 @@ Download them from the [latest release](https://github.com/baigouy/PyFigures/rel
 
 **Supported Macs:** the macOS executables include video support, which needs **macOS 14 (Sonoma) or newer on Apple Silicon** Macs and macOS 11 or newer on Intel Macs. On older Apple Silicon systems the app still opens, but movies cannot be read or exported; older systems are not supported (install with Conda/pip instead, see above).
 
-**Three kinds of app**, each for Windows and macOS (Linux: PyFigures and PyFigures NoAI): **PyFigures** (opens with the AI chat sidebar; untick *View → Open the chat at start-up* to stop that), **PyFigures NoAI** (`PyFigures-NoAI-*`: no AI at all; with the album and poster designers too) and **PyFigures Web Chat** (`PyFigures-WebChat-*`: opens with a chat web page docked; experimental, a last resort, see [the web chat tutorial](docs/WEB_CHAT_TUTORIAL.md)). From a pip install, `python -m pyfigures --chat` opens with the chat sidebar, `--share` shares the figure with the MCP server and `--web-chat` docks the chat web page.
+**Three kinds of app**, each for Windows, macOS and Linux: **PyFigures MCP Edition** (`PyFigures-MCP-Edition-*`: for working from an AI app you already use, such as Mistral Vibe, Claude, Codex, LM Studio or Hermes Agent; it opens without the chat sidebar, shares the open figure with those apps, and at first launch opens *Tools → MCP server…* to register PyFigures with them in one click each, see [MCP_SERVER.md](docs/MCP_SERVER.md)), **PyFigures** (opens with the AI chat sidebar; untick *View → Open the chat at start-up* to stop that), **PyFigures NoAI** (`PyFigures-NoAI-*`: no AI at all; with the album and poster designers too). From a pip install, `python -m pyfigures --chat` opens with the chat sidebar, `--share` shares the figure with the MCP server and `--web-chat` docks the chat web page.
 
 **First launch on a Mac:** the apps are not signed by Apple, so macOS refuses to open them the first time. Go to *System Settings → Privacy & Security* and click **Open Anyway** (needed only once). On macOS 14 or older, right-click the app → **Open** → **Open** also works.
 
@@ -261,7 +261,7 @@ Download them from the [latest release](https://github.com/baigouy/PyFigures/rel
 ```sh
 xattr -cr /Applications/PyFigures.app
 xattr -cr "/Applications/PyFigures NoAI.app"
-xattr -cr "/Applications/PyFigures Web Chat.app"
+xattr -cr "/Applications/PyFigures MCP Edition.app"
 ```
 
 (Only the line for the app you installed is needed. If you put it in the *Applications* folder of your home folder, write `~/Applications/…` instead.)

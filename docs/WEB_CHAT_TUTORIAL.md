@@ -20,23 +20,7 @@ PyFigures runs them on the open figure.
 
 ## 1. Install (once)
 
-**Without Python:** download the **PyFigures Web Chat** app from the
-[releases page](https://github.com/baigouy/PyFigures/releases)
-(`PyFigures-WebChat-Windows.zip`, `PyFigures-WebChat-macOS-*.dmg`). It opens
-with the web chat already docked; skip to step 3. (The plain PyFigures apps
-leave the web page out: there the web chat only works through the clipboard.)
-
-On a Mac, the app is not signed by Apple, so the first launch is blocked:
-open *System Settings → Privacy & Security* and click **Open Anyway** (or
-right-click the app → **Open**). If macOS says the app **"is damaged and
-can't be opened"**, it is not damaged: remove the download mark in Terminal,
-then open it again:
-
-```bash
-xattr -cr "/Applications/PyFigures Web Chat.app"
-```
-
-(Use the folder you put the app in, e.g. `~/Applications/…`.)
+**No separate app any more:** the PyFigures Web Chat app is no longer released (since 0.2.26). The plain PyFigures apps leave the web page out, so there the web chat only works through the clipboard. To work from an AI app you already use instead, the **PyFigures MCP Edition** app is the recommended way (see MCP_SERVER.md). The docked web page needs Python:
 
 **With Python** (3.10 or newer), in a new environment:
 

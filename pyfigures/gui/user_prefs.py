@@ -47,7 +47,7 @@ def load_chat_at_start():
     """Open the chat sidebar every time PyFigures starts. Until the user
     chooses (View → Open the chat at start-up): on (pip installs and the
     standalone apps, which bundle the sidebar), except in the web chat app,
-    which opens with the web page."""
+    which opens with the web page, and the MCP Edition, whose AI is an outside app."""
     return _s().value('ui/chat_at_start', chat_at_start_default(), type=bool)
 
 
@@ -56,8 +56,10 @@ def chat_at_start_default(frozen=None, executable=None):
     frozen = getattr(sys, 'frozen', False) if frozen is None else frozen
     if not frozen:
         return True
+    from pyfigures.assistant import is_mcp_app
     from pyfigures.assistant.web_chat import is_web_chat_app
-    return not is_web_chat_app(sys.executable if executable is None else executable)
+    executable = sys.executable if executable is None else executable
+    return not is_web_chat_app(executable) and not is_mcp_app(executable)
 
 def save_chat_at_start(value):
     _s().setValue('ui/chat_at_start', bool(value))
@@ -66,8 +68,18 @@ def save_chat_at_start(value):
 def load_share_at_start():
     """Share the open figure with AI apps (pyfigures-live) every time PyFigures starts (user
     2026-11-23: Hermes used pyfigures-live but the window was not shared, so it built a file
-    instead). Off until chosen; Register in Tools > MCP server… turns it on."""
-    return _s().value('ui/share_at_start', False, type=bool)
+    instead). Off until chosen (on in the MCP Edition app); Register in Tools > MCP server…
+    turns it on."""
+    from pyfigures.assistant import is_mcp_app
+    return _s().value('ui/share_at_start', is_mcp_app(), type=bool)
+
+
+def take_mcp_app_welcome():
+    """True once: the MCP Edition's first launch, which offers Tools > MCP server…"""
+    if _s().value('ui/mcp_app_welcomed', False, type=bool):
+        return False
+    _s().setValue('ui/mcp_app_welcomed', True)
+    return True
 
 
 def save_share_at_start(value):

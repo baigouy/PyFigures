@@ -83,7 +83,7 @@ class McpServerDialog(QDialog):
                                                                "Windows, macOS or Linux: Register above).")):
             b = QPushButton(label)
             b.setToolTip(tip)
-            b.clicked.connect(lambda _=False, f=fmt: self.copy_snippet(f))
+            b.clicked.connect(lambda _=False, f=fmt, w=b: self.copy_snippet(f, w))
             cl.addWidget(b)
         grid.addWidget(copies, len(C.CLIENTS), 0, 1, 3)
         lay.addWidget(reg_box)
@@ -126,7 +126,7 @@ class McpServerDialog(QDialog):
             sg.addWidget(text, row, 1)
             b = QPushButton("Copy")
             b.setToolTip(s["where"])
-            b.clicked.connect(lambda _=False, i=row: self.copy_http_snippet(i))
+            b.clicked.connect(lambda _=False, i=row, w=b: self.copy_http_snippet(i, w))
             sg.addWidget(b, row, 2, Qt.AlignmentFlag.AlignTop)
             self._snippet_texts.append(text)
         sg.setColumnStretch(1, 1)
@@ -245,14 +245,17 @@ class McpServerDialog(QDialog):
         self.refresh()
         return res
 
-    def copy_snippet(self, fmt="json"):
-        QGuiApplication.clipboard().setText(C.config_snippet(fmt=fmt))
+    # the button says "✓ Copied" and the copied text (or the message under it) blinks
+    def copy_snippet(self, fmt="json", button=None):
+        from pyfigures.gui.copy_feedback import copy_with_feedback
         self._say("Copied. Paste it into the MCP client's configuration.")
+        copy_with_feedback(C.config_snippet(fmt=fmt), button=button, flash=self.message)
 
-    def copy_http_snippet(self, index):
+    def copy_http_snippet(self, index, button=None):
+        from pyfigures.gui.copy_feedback import copy_with_feedback
         s = C.http_snippets()[index]
-        QGuiApplication.clipboard().setText(s["text"])
         self._say(f"Copied ({s['title']}). {s['where']}")
+        copy_with_feedback(s["text"], button=button, flash=self._snippet_texts[index])
 
     def toggle_http(self, wait=False):
         if self._busy:

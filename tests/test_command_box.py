@@ -18,5 +18,5 @@ def test_copy_button_copies_and_keeps_the_box_open(qapp):
         box.button(QMessageBox.StandardButton.Ok).click()
     QTimer.singleShot(100, click)
     box.exec()
-    assert seen == [(True, 'pip install -U x', 'Copied')]
+    assert seen == [(True, 'pip install -U x', '✓ Copied')]
     assert not box.isVisible()

@@ -89,6 +89,8 @@ def test_register_shares_the_window_at_every_start(home, qapp, monkeypatch):
 def test_an_unshared_window_makes_the_app_ask_not_build_a_file(tmp_path, monkeypatch):
     from pyfigures.assistant import live_mcp
     monkeypatch.setattr(live_mcp, "runtime_dir", lambda: tmp_path)          # no connection.json
+    # never the real window's (a PyFigures sharing its figure answered: 2026-11-24)
+    monkeypatch.setenv("PYFIGURES_LIVE_RUNTIME", str(tmp_path))
     with pytest.raises(live_mcp.LiveBridgeError) as err:
         live_mcp.request("inspect")
     text = str(err.value)

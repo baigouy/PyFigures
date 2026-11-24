@@ -305,6 +305,9 @@ def run_pyfigures():
             apply_launch_flags(w, sys.argv[1:])
         except Exception as e:
             QMessageBox.warning(w, 'Share the figure', str(e))
+    from pyfigures.assistant import is_mcp_app
+    if getattr(sys, 'frozen', False) and is_mcp_app():
+        offer_mcp_registration(w)
 
     # Run the event loop; it returns once the last window is closed.
     exit_code = app.exec_() if hasattr(app, 'exec_') else app.exec()
@@ -312,6 +315,23 @@ def run_pyfigures():
     # otherwise keep the interpreter alive after the window closes. closeEvent has
     # already run its cleanup by this point.
     os._exit(exit_code)
+
+
+def offer_mcp_registration(window):
+    """The MCP Edition app, first launch: when no AI app lists PyFigures yet, open
+    Tools > MCP server… to register it (Mistral Vibe, Claude, Hermes...)."""
+    from pyfigures.gui.user_prefs import take_mcp_app_welcome
+    if not take_mcp_app_welcome():
+        return False
+    from pyfigures import mcp_control
+    try:
+        if any(r["registered"] for r in mcp_control.registrations()):
+            return False
+    except Exception:
+        pass
+    from qtpy.QtCore import QTimer
+    QTimer.singleShot(500, window.open_mcp_server_dialog)
+    return True
 
 
 def requested_tool(argv, executable):
@@ -337,6 +357,13 @@ if __name__ == '__main__':
         # `python -m pyfigures.assistant.live_mcp` has no python to run
         from pyfigures.assistant.live_mcp import main as run_live_mcp
         run_live_mcp()
+        sys.stdout.flush()
+        os._exit(0)
+    if '--mcp-server' in sys.argv:
+        # the saved-file MCP server in the standalone apps (what clients registered in
+        # Tools > MCP server… start); `-m pyfigures.mcp_server` would open a window there
+        from pyfigures.mcp_server import main as run_mcp_server
+        run_mcp_server(sys.argv[sys.argv.index('--mcp-server') + 1:])
         sys.stdout.flush()
         os._exit(0)
     if '--chat-video' in sys.argv:

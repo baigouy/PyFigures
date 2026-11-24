@@ -25,8 +25,9 @@ command line::
     python -m pyfigures.mcp_control unregister lm_studio
     python -m pyfigures.mcp_control snippet --format json|codex|hermes|url|http
 
-Registered directly: Claude Code / Claude Desktop, LM Studio, Codex (OpenAI's
-app and CLI, ~/.codex/config.toml), AnythingLLM Desktop, Cursor, Gemini CLI.
+Registered directly: Mistral Vibe (~/.vibe/config.toml), Claude Code / Claude
+Desktop, LM Studio, Codex (OpenAI's app and CLI, ~/.codex/config.toml),
+AnythingLLM Desktop, Cursor, Gemini CLI, Hermes Agent.
 Any other client: paste a snippet (the ``mcpServers`` JSON most of them read,
 Hermes Agent's YAML) or give it the HTTP server's URL.
 """
@@ -59,7 +60,9 @@ MODEL_WARNING = ("Language models make mistakes. Check every panel, crop, colour
                  "pixel size and scale bar before you use the figure.")
 DEFAULT_PORT = 8765
 CLIENTS = {
-    "claude_code": "Claude Code / Claude Desktop (Code)",     # both read ~/.claude.json
+    # first (user 2026-11-24: Mistral Vibe, the employer's coding agent, is installed locally)
+    "vibe": "Mistral Vibe",                                   # VIBE_HOME/config.toml
+    "claude_code":"Claude Code / Claude Desktop (Code)",     # both read ~/.claude.json
     "claude_desktop": "Claude Desktop (Chat)",
     "lm_studio": "LM Studio",
     "codex": "Codex (OpenAI app / CLI)",                      # ~/.codex/config.toml
@@ -115,6 +118,10 @@ def client_config_path(client: str) -> str:
         return os.path.join(_home(), ".gemini", "settings.json")
     if client == "hermes":
         return os.path.join(hermes_home(), "config.yaml")
+    if client == "vibe":
+        home = os.environ.get("VIBE_HOME", "").strip()
+        return os.path.join(os.path.expanduser(home) if home else os.path.join(_home(), ".vibe"),
+                            "config.toml")
     raise ValueError(f"unknown client {client!r}; one of {', '.join(CLIENTS)}")
 
 
@@ -235,13 +242,138 @@ def _unregister_hermes(path: str) -> str:
             + (f" Previous file kept as {backup}." if backup else ""))
 
 
+# Mistral Vibe lists its servers as an array of tables in VIBE_HOME/config.toml (~/.vibe):
+# [[mcp_servers]] with name, transport, command, args, env. Vibe writes that file itself
+# (tomli_w, no comments), so the mcp_servers list is rewritten as tables at the end of the
+# file, the other servers' entries kept; every other key must read back unchanged.
+def _vibe_entries(python: str | None) -> list[dict]:
+    entry, live = server_entry(python), live_entry(python)
+    common = {"transport": "stdio",
+              # Vibe gives a server 10 s to start; PyFigures imports Qt and its tools first
+              "startup_timeout_sec": 60.0, "tool_timeout_sec": 600.0}
+    # command as a list: Vibe splits a string with shlex, which eats Windows backslashes
+    return [{"name": SERVER_NAME, **common, "command": [entry["command"]],
+             # the three entry tools, not all 210 (~85k tokens of descriptions)
+             "args": entry["args"] + ["--tools", "categories"]},
+            {"name": LIVE_NAME, **common, "command": [live["command"]], "args": live["args"],
+             "env": dict(live.get("env", {}))}]
+
+
+def _toml_value(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return repr(v)
+    if isinstance(v, str):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f"{json.dumps(str(k))} = {_toml_value(x)}" for k, x in v.items()) + " }"
+    raise ValueError(f"cannot write {type(v).__name__} as TOML")
+
+
+def _vibe_text(text: str, servers: list[dict]) -> str:
+    """*text* with its mcp_servers (a top-level 'mcp_servers = [...]' or [[mcp_servers]]
+    tables) replaced by *servers*, written as tables at the end."""
+    lines = text.splitlines(keepends=True)
+    out, i, in_tables, seen_header = [], 0, False, False
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith("["):
+            seen_header = True
+            name = s.strip("[]").strip()
+            in_tables = name == "mcp_servers" or name.startswith("mcp_servers.")
+        elif not seen_header and re.match(r"mcp_servers\s*=", s):
+            j = i + 1                          # the assignment may span lines
+            while j <= len(lines):
+                try:
+                    _toml_load("".join(lines[i:j]))
+                    break
+                except ValueError:
+                    j += 1
+            i = j
+            continue
+        if not in_tables:
+            out.append(lines[i])
+        i += 1
+    body = "".join(out).rstrip()
+    tables = ["[[mcp_servers]]\n" + "".join(f"{k} = {_toml_value(v)}\n" for k, v in srv.items())
+              for srv in servers]
+    return (body + "\n\n" if body else "") + "\n".join(tables)
+
+
+def _vibe_write(path: str, text: str, data: dict, servers: list[dict]) -> str | None:
+    new = _vibe_text(text, servers)
+    def check(t):
+        d = _toml_load(t)
+        if {k: v for k, v in d.items() if k != "mcp_servers"} != \
+                {k: v for k, v in data.items() if k != "mcp_servers"} \
+                or len(d.get("mcp_servers", [])) != len(servers):
+            raise ValueError("the rest of the file would change")
+    return _write_text(path, new, check)
+
+
+def _vibe_servers(path: str):
+    text, data = _read_toml(path)
+    servers = data.get("mcp_servers", [])
+    if not isinstance(servers, list) or not all(isinstance(s, dict) for s in servers):
+        raise ValueError("'mcp_servers' is not a list of tables")
+    return text, data, servers
+
+
+def _vibe_name(server: dict) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", str(server.get("name", ""))).strip("_-")
+
+
+def _register_vibe(path: str, python: str | None) -> str:
+    try:
+        text, data, servers = _vibe_servers(path)
+    except (ValueError, OSError) as e:
+        return f"ERROR: cannot read {path} ({e}); nothing was changed."
+    ours = _vibe_entries(python)
+    current = {_vibe_name(s): s for s in servers}
+    if all(n["name"] in current and not current[n["name"]].get("disabled")
+           and {k: current[n["name"]].get(k) for k in n} == n for n in ours):
+        return f"{CLIENTS['vibe']} already starts the PyFigures MCP server ({path})."
+    names = {n["name"] for n in ours}
+    try:
+        backup = _vibe_write(path, text, data, [s for s in servers if _vibe_name(s) not in names] + ours)
+    except ValueError as e:
+        return f"ERROR: could not edit {path} safely ({e}); nothing was changed."
+    return (f"Registered with {CLIENTS['vibe']} ({path}): {LIVE_HELP} It starts them when it needs "
+            "the tools. Restart Vibe to load them (/mcp in Vibe lists them)."
+            + (f" Previous file kept as {backup}." if backup else ""))
+
+
+def _unregister_vibe(path: str) -> str:
+    try:
+        text, data, servers = _vibe_servers(path)
+    except (ValueError, OSError) as e:
+        return f"ERROR: cannot read {path} ({e}); nothing was changed."
+    keep = [s for s in servers if _vibe_name(s) not in (SERVER_NAME, LIVE_NAME)]
+    if len(keep) == len(servers):
+        return f"{CLIENTS['vibe']} does not list the PyFigures MCP server ({path})."
+    try:
+        backup = _vibe_write(path, text, data, keep)
+    except ValueError as e:
+        return f"ERROR: could not edit {path} safely ({e}); nothing was changed."
+    return (f"Removed from {CLIENTS['vibe']} ({path}). Restart Vibe to apply."
+            + (f" Previous file kept as {backup}." if backup else ""))
+
+
 def _wsl_path(path: str) -> str:
     """C:\\a\\b.exe -> /mnt/c/a/b.exe"""
     return "/mnt/" + path[0].lower() + path[2:].replace("\\", "/")
 
 
 def server_entry(python: str | None = None) -> dict:
-    """The stdio entry a client needs to start the server."""
+    """The stdio entry a client needs to start the server. In a standalone app
+    sys.executable is PyFigures itself: it runs with --mcp-server (on Windows through
+    the console twin "PyFigures MCP.exe", a windowed exe having no usable stdio)."""
+    if python is None and getattr(sys, "frozen", False):
+        from pyfigures.assistant import launch
+        return {"command": launch.mcp_server_command()[0], "args": ["--mcp-server"]}
     return {"command": python or sys.executable, "args": ["-m", "pyfigures.mcp_server"]}
 
 
@@ -449,6 +581,17 @@ def registration(client: str) -> dict:
             info["disabled" if entry.get("enabled") is False or entry.get("disabled") is True
                  else "registered"] = True
         return info
+    if client == "vibe":
+        try:
+            servers = _vibe_servers(path)[2]
+        except (ValueError, OSError) as e:
+            info["error"] = f"{type(e).__name__}: {e}"
+            return info
+        entry = next((s for s in servers if _vibe_name(s) == SERVER_NAME), None)
+        if entry is not None:
+            info["entry"] = entry
+            info["disabled" if entry.get("disabled") is True else "registered"] = True
+        return info
     try:
         if client == "codex":
             data = _read_toml(path)[1]
@@ -489,6 +632,8 @@ def register(client: str, python: str | None = None) -> str:
         return _register_codex(path, python)
     if client == "hermes":
         return _register_hermes(path, python)
+    if client == "vibe":
+        return _register_vibe(path, python)
     try:
         data = _read_json(path)
     except (ValueError, OSError) as e:
@@ -545,6 +690,8 @@ def unregister(client: str) -> str:
     path = client_config_path(client)
     if client == "hermes":
         return _unregister_hermes(path)
+    if client == "vibe":
+        return _unregister_vibe(path)
     if client == "codex":
         try:
             text, data = _read_toml(path)

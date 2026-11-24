@@ -71,7 +71,7 @@ def sidecar_available() -> bool:
 
 
 def bundled_app_kind():
-    """'standard', 'no_ai' or 'web_chat': what pyfigures.spec wrote into this
+    """'standard', 'no_ai', 'mcp' or 'web_chat': what pyfigures.spec wrote into this
     standalone app (pyfigures/app_kind.txt). None when not an app, or one
     built before 0.2.8: the executable's name then tells."""
     if not getattr(sys, "frozen", False):
@@ -91,6 +91,21 @@ def is_no_ai_app(executable) -> bool:
             return kind == "no_ai"
     name = os.path.basename(executable).lower().replace(" ", "").replace("-", "").replace("_", "")
     return "noai" in name
+
+
+def is_mcp_app(executable=None) -> bool:
+    """The 'PyFigures MCP Edition' standalone app (pyfigures.spec with PYFIGURES_MCP_APP=1,
+    user 2026-11-24): the AI is an outside app (Mistral Vibe, Claude, Hermes...) reaching the
+    open figure through MCP. No chat at start-up; the figure is shared at start-up and the
+    first launch offers to register PyFigures with those apps. Not the console twin
+    'PyFigures MCP.exe' by name alone: by what the build wrote, else 'MCP Edition'."""
+    executable = sys.executable if executable is None else executable
+    if executable == sys.executable and getattr(sys, "frozen", False):
+        kind = bundled_app_kind()
+        if kind:
+            return kind == "mcp"
+    name = os.path.basename(executable).lower().replace(" ", "").replace("-", "").replace("_", "")
+    return "mcpedition" in name
 
 
 def ai_features_enabled() -> bool:

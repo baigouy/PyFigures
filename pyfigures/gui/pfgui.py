@@ -6577,7 +6577,8 @@ class EZFIG_GUI(QMainWindow):
         copy_btn = buttons.addButton('Copy', QDialogButtonBox.ActionRole)
         save_btn = buttons.addButton('Save as .py…', QDialogButtonBox.ActionRole)
         buttons.addButton(QDialogButtonBox.Close)
-        copy_btn.clicked.connect(lambda *_: QApplication.clipboard().setText(code))
+        from pyfigures.gui.copy_feedback import copy_with_feedback
+        copy_btn.clicked.connect(lambda *_: copy_with_feedback(code, button=copy_btn, flash=view))
 
         def _save(*_):
             out = saveFileDialog(parent_window=self, extensions="Python (*.py)", default_ext='.py')

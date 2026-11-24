@@ -85,13 +85,20 @@ binaries = collect_dynamic_libs('pypdfium2_raw')
 # PYFIGURES_WEB_CHAT=1: the "PyFigures Web Chat" app, the same program with Qt
 # WebEngine bundled (the web chat page docked in the window; about 150-200 MB
 # more). Its name makes it open with the web chat (pyfigures/__main__.py).
+# (no longer released, user 2026-11-24: the MCP Edition replaces it)
 WEB_CHAT = os.environ.get('PYFIGURES_WEB_CHAT') == '1'
-APP_NAME = 'PyFigures Web Chat' if WEB_CHAT else 'PyFigures NoAI' if NO_AI else 'PyFigures'
-# which of the three apps this is, written into it (pyfigures.assistant.bundled_app_kind):
+# PYFIGURES_MCP_APP=1: "PyFigures MCP Edition", the standard program whose AI is an outside
+# app (Mistral Vibe, Claude, Hermes...) reaching the open figure through MCP: no chat at
+# start-up, the figure shared at start-up, registration offered at first launch
+# (pyfigures.assistant.is_mcp_app)
+MCP_APP = os.environ.get('PYFIGURES_MCP_APP') == '1' and not NO_AI
+APP_NAME = ('PyFigures Web Chat' if WEB_CHAT else 'PyFigures MCP Edition' if MCP_APP
+            else 'PyFigures NoAI' if NO_AI else 'PyFigures')
+# which of the apps this is, written into it (pyfigures.assistant.bundled_app_kind):
 # a renamed executable, and the Album / Poster launchers beside it, stay what they are
 os.makedirs(os.path.join(SPECPATH, 'build'), exist_ok=True)
 with open(os.path.join(SPECPATH, 'build', 'app_kind.txt'), 'w', encoding='utf-8') as _f:
-    _f.write('web_chat' if WEB_CHAT else 'no_ai' if NO_AI else 'standard')
+    _f.write('web_chat' if WEB_CHAT else 'mcp' if MCP_APP else 'no_ai' if NO_AI else 'standard')
 datas += [(os.path.join(SPECPATH, 'build', 'app_kind.txt'), 'pyfigures')]
 if WEB_CHAT:
     hiddenimports += ['PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebEngineCore', 'PyQt6.QtWebChannel',
@@ -202,7 +209,7 @@ exe = EXE(
 # --poster, so the whole app isn't shipped three times.
 extra_exes = []
 for _launcher in ('PyFigures Album', 'PyFigures Poster'):
-    if sys.platform != 'win32' or WEB_CHAT:     # the web chat app is the figure editor only
+    if sys.platform != 'win32' or WEB_CHAT or MCP_APP:     # these two: the figure editor only
         break
     extra_exes.append(EXE(
         pyz,
@@ -267,6 +274,7 @@ if sys.platform == 'darwin':
         name=APP_NAME + '.app',
         icon=_icon('pyfigures'),
         bundle_identifier=('com.aigouy.pyfigures.webchat' if WEB_CHAT else
+                           'com.aigouy.pyfigures.mcp' if MCP_APP else
                            'com.aigouy.pyfigures.noai' if NO_AI else 'com.aigouy.pyfigures'),
         info_plist={
             'NSHighResolutionCapable': True,
