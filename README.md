@@ -1,6 +1,6 @@
 # PyFigures
 
-Effortless creation of high-quality scientific figures in Python. 
+Effortless, AI-assisted creation of high-quality scientific figures.
 
 ![PyFigures main window with the chat sidebar](https://raw.githubusercontent.com/baigouy/PyFigures/main/images/PyFigures.png)
 
@@ -8,13 +8,33 @@ Effortless creation of high-quality scientific figures in Python.
 
 A [demo video](https://youtu.be/sq7d1Aon4cQ) and the complete [demo playlist](https://www.youtube.com/playlist?list=PLCtF2DKlhKYd6oz6qZPgA_WrD025q5Bl7) show the interface at work (recorded with an earlier version; most images in them are public domain, from the [Cell Image Library](http://www.cellimagelibrary.org/)).
 
-# AI / MCP Integration
+# Build your figure by talking to it
 
-PyFigures ships an **MCP server** that lets AI assistants (Claude Code, Claude Desktop,
-LM Studio with local models, and any other MCP-compatible client) read and edit `.pyf`
-figure files through natural language.
+This is the heart of PyFigures: say what you want in plain words, and an AI model builds the
+figure with you. It works with PyFigures' own tools on your own images; it never generates or
+redraws your data. For example:
 
-➜ See **[docs/MCP_SERVER.md](docs/MCP_SERVER.md)** for setup instructions and a full tool reference.
+- *"Put these four images in a row, add a 10 µm scale bar and letter the panels A to D."*
+- *"Split the channels of panel B and show them in magenta and green."*
+- *"Add a box plot of the area per genotype from cells.csv, with the right statistical test."*
+- *"Check this figure against Nature's guidelines and fix what does not fit."*
+
+Each request is one undo step, and the figure stays an ordinary file that you can keep editing
+by hand, with a recipe, or by talking again.
+
+There are two ways to talk to it:
+
+- **The chat sidebar**, in *PyFigures* (standalone app or `pip install pyfigures`): it opens
+  beside the figure. Pick a model with its **Model** button: one that runs on your own computer
+  (set up automatically; nothing leaves the computer) or an online service with your own key
+  (Mistral, OpenAI, Claude, OpenRouter, Groq or any OpenAI-compatible API).
+- **The AI app you already use** (Mistral Vibe, Claude, Codex, LM Studio, Hermes Agent or any
+  other MCP client), with **PyFigures MCP Edition**: at first launch it offers to register
+  PyFigures with your app in one click (also *Tools → MCP server…*), then your app works on the
+  figure open in PyFigures. ➜ **[docs/MCP_SERVER.md](docs/MCP_SERVER.md)** has the details and
+  the full list of tools.
+
+Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at all.
 
 # Main features
 
@@ -228,9 +248,12 @@ Perform the following steps **only once** to set up your environment:
 
 ## Demo videos from past chats
 
-**Tools → Make a demo video from a chat…** (also in the chat sidebar's *Procedures* menu)
-films part of a chat that already happened, without asking the model again. You choose the
-chat, its first and last request, the pacing (about 1 s per step, 3 s on the result, at most
+Turn a chat you already had into a short film of your figure being built, to show in a talk or
+a tutorial. The model is not asked again. In the chat sidebar, open the *Procedures* menu →
+**Make a demo video from a chat…** (also *Tools → Make a demo video from a chat…*), or just ask
+the chat, e.g. *"make a demo video of my last three requests"*.
+
+You choose the chat, its first and last request, the pacing (about 1 s per step, 3 s on the result, at most
 60 s in all by default: a longer film has its steps and answers shortened alike), whether
 the model's intermediate messages show, and MP4 (H.264, 1280 px), GIF (8 frames/s, 960 px) or
 both. Off-screen, the figure is put back as it was before the first request (from the copy the
@@ -239,6 +262,8 @@ unseen), then each request is typed in the chat, the model's recorded edits are 
 by one on the figure and its recorded answers appear; a *Replayed from the chat* label is on
 every frame. The timing is not the real one, the images the chat used must still exist, edits
 made by hand between requests were not recorded, and exports or saves are not repeated.
+
+From a terminal, for scripts:
 
     python -m pyfigures.assistant.chat_video CHAT.jsonl --list
     python -m pyfigures.assistant.chat_video CHAT.jsonl --from 2 --to 4 -o demo.mp4 --format both
