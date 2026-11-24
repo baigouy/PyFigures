@@ -25,8 +25,8 @@ by hand, with a recipe, or by talking again.
 There are two ways to talk to it:
 
 - **The chat sidebar**, in *PyFigures* (standalone app or `pip install pyfigures`): it opens
-  beside the figure. Pick a model with its **Model** button: one that runs on your own computer
-  (set up automatically; nothing leaves the computer) or an online service with your own key
+  beside the figure. Pick a model with its **Model** button: one that **runs on your own computer,
+  so your unpublished data never leave it** (set up automatically), or an online service with your own key
   (Mistral, OpenAI, Claude, OpenRouter, Groq or any OpenAI-compatible API).
 - **The AI app you already use** (Mistral Vibe, Claude, Codex, LM Studio, Hermes Agent or any
   other MCP client), with **PyFigures MCP Edition**: at first launch it offers to register
@@ -43,10 +43,14 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
   and OMERO links, and movies; scale bars use the pixel size stored in the files.
 - **Build:** rows of panels that fit the width without cropping your images, channel split and
   merge (magenta/green), panel letters, text, arrows and insets.
+- **Stacks and time-lapses:** Z and time stacks shown as one plane or a projection, montages
+  with time stamps, and movies as panels, exported as videos.
 - **Check:** the journal's rules (sizes, fonts, resolution) checked and applied in one click,
   duplicated or cloned panels detected, a colour-blind preview, and alt text.
 - **Export:** PDF, SVG, TIFF or PNG at print resolution, editable PowerPoint or Illustrator
   files, and videos for figures with movies.
+- **Share:** the figure file is readable text, and *Save & Consolidate* gathers its images and
+  tables beside it, so a colleague can reopen and edit the figure on another computer.
 - **Recipes:** a whole figure described in a short text file and rebuilt in one command, e.g.
   to redo it with new data ([docs/RECIPES.md](docs/RECIPES.md)).
 - **Learn:** nine interactive tutorials (*Help* menu) guide you through the real interface;
@@ -313,6 +317,11 @@ incremental: re-indexing reads only new or changed images. Searching a subfolder
 parent's index. Changing the embedding model means indexing again (the descriptions are kept,
 only the texts are re-embedded). In the chat, one indexing call works for about 100 s and then
 continues on the next call; use the terminal command for folders of thousands of images.
+
+# Help and feedback
+
+Found a bug or missing a feature? Please open an issue on
+[GitHub Issues](https://github.com/baigouy/PyFigures/issues).
 
 # Third party libraries
 
