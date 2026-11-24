@@ -40,7 +40,7 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 
 **At a glance:**
 - **Open:** any image, microscopy files (Bio-Formats), OME-Zarr / OMERO links, movies.
-- **Build:** rows without cropping, channel split / merge, letters, text, arrows, zooms.
+- **Build:** rows without cropping, channel split / merge, letters, text, arrows, insets.
 - **Check:** journal rules, image integrity, colour-blind preview, alt text.
 - **Export:** PDF, SVG, TIFF, PNG, editable PowerPoint, Illustrator, video.
 - **Recipes:** a whole figure in a short text file, rebuilt in one command ([docs/RECIPES.md](docs/RECIPES.md)).
