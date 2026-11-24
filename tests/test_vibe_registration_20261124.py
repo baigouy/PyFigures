@@ -138,3 +138,10 @@ def test_main_dispatches_mcp_server_flag():
     src = open(os.path.join(os.path.dirname(C.__file__), "__main__.py"), encoding="utf-8").read()
     assert "'--mcp-server' in sys.argv" in src
     assert src.index("'--mcp-server' in sys.argv") < src.rindex("run_pyfigures()")
+
+
+def test_python_3_10_gets_tomli():
+    """Vibe and Codex registration read TOML: tomllib from 3.11, tomli before (user 2026-11-24)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "setup.py"), encoding="utf-8") as f:
+        assert "\"tomli>=1.1; python_version < '3.11'\"" in f.read()

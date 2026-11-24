@@ -66,6 +66,7 @@ setuptools.setup(
     install_requires=_requirements([
         "Markdown",
         "PyYAML",          # YAML recipes (on 3.11+ another package happened to bring it)
+        "tomli>=1.1; python_version < '3.11'",   # TOML (Mistral Vibe and Codex registration); tomllib on 3.11+
         "matplotlib>=3.5.2",
         "numpy>=1.24",
         "Pillow>=8.1.2",
