@@ -324,6 +324,7 @@ Optional (installed only if you ask for them):
 | **PyMuPDF** (`pyfigures[pdf]`) | PDF files as vector panels (not bundled; the GUI offers to install it) | https://pypi.org/project/PyMuPDF/           | **AGPL v3**        |
 | **omero-py** + **zeroc-ice** (`pyfigures[omero]`) | Raw pixels from OMERO servers (not in the standalone apps) | https://pypi.org/project/omero-py/ | GPL v2+ (omero-py) / GPL v2 or commercial (Ice) |
 | **PyYAML**              | YAML recipes (JSON recipes need nothing)                    | https://pypi.org/project/PyYAML/              | MIT                |
+| **tomli**               | Reads TOML (Mistral Vibe and Codex settings), Python 3.10 only | https://pypi.org/project/tomli/            | MIT                |
 | **opencv-python(-headless)** (`pyfigures[video]`) | Video files as image stacks, alternative video reader | https://pypi.org/project/opencv-python-headless/ | Apache 2.0 |
 | **pyimagej / scyjava / JPype** (`pyfigures[fiji]`) | Fiji / Bio-Formats image reading                     | https://pypi.org/project/pyimagej/            | Apache 2.0 / Unlicense / Apache 2.0 |
 
