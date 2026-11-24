@@ -19,9 +19,6 @@ redraws your data. For example:
 - *"Add a box plot of the area per genotype from cells.csv, with the right statistical test."*
 - *"Check this figure against Nature's guidelines and fix what does not fit."*
 
-The same works for **posters**: *"make an A0 poster with my title, the figure from fig1.pyf and
-three text boxes"* (see [Posters](#posters-and-collages) below).
-
 Each request is one undo step, and the figure stays an ordinary file that you can keep editing
 by hand, with a recipe, or by talking again.
 
@@ -80,25 +77,6 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 - **Equation panels**: *Insert → Add equation (LaTeX)…* (or `add_equation`, or an `equation:` recipe panel), or drop a `.tex` file. Typeset by Matplotlib with no TeX installation, or, if TeX Live, MiKTeX or MacTeX is installed, with **full LaTeX** ("Full LaTeX" in the dialog, `engine="latex"`): any environment (`align*`, `cases`, `pmatrix`…) and any package (`siunitx`, `physics`, `bm`…), in Latin Modern or in any installed font to match the figure (`font="Arial"`, XeLaTeX). The result is saved as an SVG, so the figure opens anywhere; right-click → *Edit equation…* to change it.
 - **No LaTeX on the computer?** *Help → Install LaTeX for PyFigures…* (also offered when a LaTeX feature needs it; MCP `install_latex`; `python -m pyfigures.gui.headless_ops install-latex`) downloads [TinyTeX](https://yihui.org/tinytex/), a small TeX Live (about 75 MB to download, 400 MB on disk), into your user folder, with no administrator rights and without changing the PATH, plus every package PyFigures uses. Packages a `.tex` document needs later are installed automatically. It works in the standalone apps too: TeX is not bundled inside them, it is downloaded only by those who want it.
 - **PDF + LaTeX export**: labels are typeset by LaTeX itself, in your document's font.
-
-# Posters (and collages)
-
-PyFigures also builds **conference posters**, by hand or by talking to it, e.g. *"make an A0
-poster with my title, the figure from fig1.pyf and three text boxes for the introduction,
-results and conclusion"*. Pick the page size (A0 to A4), a ready-made layout, add your figures
-(a `.pyf` figure dropped on the poster stays vector, with its images at full resolution), text
-boxes, a background, and export the poster.
-
-The **Poster / collage designer** (`Tools > Poster / collage designer…`) is also used for
-decorative photo-album pages: images can be freely rotated without being
-cropped, dragged anywhere with smart alignment guides, and placed over a
-full-page background image. It's a distinct tool with its own `.pyfposter`
-file format: a figure added to a poster is read, never changed, by the poster
-editor. Photo albums (front cover, two-page spreads, back cover) have their own
-**Photo album designer** (`Tools > Photo album designer…`, or
-`python -m pyfigures.album`).
-
-➜ See **[docs/poster.md](docs/poster.md)** for the full guide.
 
 # Installation
 
@@ -251,6 +229,25 @@ Perform the following steps **only once** to set up your environment:
    ```sh
    conda deactivate
    ```
+
+# Posters (and collages)
+
+PyFigures also builds **conference posters**, by hand or by talking to it, e.g. *"make an A0
+poster with my title, the figure from fig1.pyf and three text boxes for the introduction,
+results and conclusion"*. Pick the page size (A0 to A4), a ready-made layout, add your figures
+(a `.pyf` figure dropped on the poster stays vector, with its images at full resolution), text
+boxes, a background, and export the poster.
+
+The **Poster / collage designer** (`Tools > Poster / collage designer…`) is also used for
+decorative photo-album pages: images can be freely rotated without being
+cropped, dragged anywhere with smart alignment guides, and placed over a
+full-page background image. It's a distinct tool with its own `.pyfposter`
+file format: a figure added to a poster is read, never changed, by the poster
+editor. Photo albums (front cover, two-page spreads, back cover) have their own
+**Photo album designer** (`Tools > Photo album designer…`, or
+`python -m pyfigures.album`).
+
+➜ See **[docs/poster.md](docs/poster.md)** for the full guide.
 
 # More AI tools (optional)
 
