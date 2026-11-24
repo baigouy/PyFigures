@@ -200,7 +200,7 @@ def test_readme_lists_every_dependency_with_its_licence():
     deps += ["av", "mcp", "FFmpeg"]
     with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
         readme = f.read()
-    table = readme[readme.index("# Third party libraries"):readme.index("# Other Figure-Making")]
+    table = readme[readme.index("# Third party libraries"):readme.index("# Other figure and poster tools")]
     rows = [r for r in table.splitlines() if r.startswith("| **")]
     missing = [d for d in deps
                if not any(re.search(r"\b" + re.escape(d.lower()) + r"\b", r.lower()) for r in rows)]
