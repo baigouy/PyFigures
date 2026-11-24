@@ -38,6 +38,14 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 
 # Main features
 
+**At a glance:**
+- **Opening your images:** common formats and TIFF directly, microscopy files (.czi, .nd2, .lif…) through Bio-Formats, OME-Zarr and OMERO images from a web link, and movies. The pixel size and channel colours in the files are used for scale bars and display.
+- **Building the figure:** rows of panels that fit the figure width without cropping your images, channel split and merge (with colour-blind-safe magenta/green), panel letters (A, B, C…), text labels, arrows pointing at a feature and zoom callouts.
+- **Checking it before submission:** the journal's rules (sizes, fonts, resolution) checked and applied in one click, an image-integrity check for duplicated, flipped or cloned panels, a preview as seen by colour-blind readers, and alt text for accessibility.
+- **Exporting it:** PDF, SVG, TIFF, PNG or JPEG at print resolution, editable PowerPoint, an Adobe Illustrator script, and a video for figures with movies.
+- **Recipes:** a whole figure described in a short YAML or JSON file and rebuilt from it in one command, to redo it with new data ([docs/RECIPES.md](docs/RECIPES.md)).
+- **Learning it:** nine interactive tutorials in the *Help* menu walk you through each feature in the real interface; the full documentation is at https://pyfigures.readthedocs.io.
+
 **Plots from tables:**
 - **Plots and tables: the full guide is [docs/PLOTS.md](docs/PLOTS.md)** (and Help → ▶ Plots & Tables Tutorial).
 - **Data plots with statistics** (bar, box, violin, half violin, split violin, paired before / after with a line per subject, time course lines, scatter, grouped) from a table (CSV, Excel or SQLite), with the test chosen from the data and significance brackets. Change one later without redoing it: another kind, error bars, only the significant brackets, another test (`edit_data_plot`; `list_data_plot_kinds` lists the kinds). Missing or non-numeric cells (empty, NA, a typo) are left out group by group, never filled in, and the chat says what was left out.
