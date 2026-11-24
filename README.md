@@ -19,6 +19,9 @@ redraws your data. For example:
 - *"Add a box plot of the area per genotype from cells.csv, with the right statistical test."*
 - *"Check this figure against Nature's guidelines and fix what does not fit."*
 
+The same works for **posters**: *"make an A0 poster with my title, the figure from fig1.pyf and
+three text boxes"* (see [Posters](#posters-and-collages) below).
+
 Each request is one undo step, and the figure stays an ordinary file that you can keep editing
 by hand, with a recipe, or by talking again.
 
@@ -78,14 +81,19 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 - **No LaTeX on the computer?** *Help → Install LaTeX for PyFigures…* (also offered when a LaTeX feature needs it; MCP `install_latex`; `python -m pyfigures.gui.headless_ops install-latex`) downloads [TinyTeX](https://yihui.org/tinytex/), a small TeX Live (about 75 MB to download, 400 MB on disk), into your user folder, with no administrator rights and without changing the PATH, plus every package PyFigures uses. Packages a `.tex` document needs later are installed automatically. It works in the standalone apps too: TeX is not bundled inside them, it is downloaded only by those who want it.
 - **PDF + LaTeX export**: labels are typeset by LaTeX itself, in your document's font.
 
-# Poster / collage designer
+# Posters (and collages)
 
-Alongside the main figure editor, PyFigures includes a separate **Poster /
-collage designer** (`Tools > Poster / collage designer…`) for posters and
+PyFigures also builds **conference posters**, by hand or by talking to it, e.g. *"make an A0
+poster with my title, the figure from fig1.pyf and three text boxes for the introduction,
+results and conclusion"*. Pick the page size (A0 to A4), a ready-made layout, add your figures
+(a `.pyf` figure dropped on the poster stays vector, with its images at full resolution), text
+boxes, a background, and export the poster.
+
+The **Poster / collage designer** (`Tools > Poster / collage designer…`) is also used for
 decorative photo-album pages: images can be freely rotated without being
 cropped, dragged anywhere with smart alignment guides, and placed over a
 full-page background image. It's a distinct tool with its own `.pyfposter`
-file format — it doesn't touch or share files with the scientific figure
+file format: a figure added to a poster is read, never changed, by the poster
 editor. Photo albums (front cover, two-page spreads, back cover) have their own
 **Photo album designer** (`Tools > Photo album designer…`, or
 `python -m pyfigures.album`).
@@ -362,14 +370,24 @@ Optional (installed only if you ask for them):
 - **PyFigures' own source code is BSD 2-Clause** (see [LICENSE](LICENSE)). Installed with pip, it uses the libraries above under their own licences; note that PyQt6 and read-lif are GPL v3, so if you redistribute PyFigures together with them, that combination falls under the GPL v3.
 - **The standalone executables (Windows / macOS / Linux) are distributed under the GNU GPL v3** as a whole, because they include PyQt6 and FFmpeg built with x264/x265. Qt is used under the LGPL v3 and is dynamically linked, so it can be replaced. They read PDFs with pypdfium2 (Apache/BSD); PyMuPDF (AGPL) is not included. Each executable contains the licence texts of everything inside it (*Help → About → Third-party licences*, or `THIRD_PARTY_LICENSES.txt` next to the Windows and Linux executables), and the **complete corresponding source code** of every bundled component is attached to the same GitHub release as the executables (`corresponding-source-*.tar`). This is generated automatically by [`packaging/collect_licenses.py`](packaging/collect_licenses.py) when the executables are built. [docs/LICENSING.md](docs/LICENSING.md) explains the reasoning.
 
-# Other Figure-Making Software
+# Other figure and poster tools
 
-[FigureJ](https://imagej.net/plugins/figurej)
+**Figure tools for microscopy images:**
+- [FigureJ](https://imagej.net/plugins/figurej) (Fiji plugin; [paper](https://doi.org/10.1111/jmi.12069))
+- [ScientiFig](https://imagej.github.io/list-of-update-sites/) (Fiji plugin; [paper](https://doi.org/10.1038/nmeth.2692))
+- [EZFig](https://github.com/baigouy/EZFig) (Fiji plugin)
+- [QuickFigures](https://github.com/grishkam/QuickFigures) (Fiji plugin; [paper](https://doi.org/10.1371/journal.pone.0240280))
+- [OMERO.figure](https://github.com/ome/omero-figure) (web app for images on OMERO servers)
+- [Figure Panel Builder](https://imagej.net/plugins/figure-panel-builder) (Fiji plugin, 2026)
 
-[ScientiFig](https://imagej.github.io/list-of-update-sites/)
+**Other figure tools:**
+- [EasyFigAssembler](https://doi.org/10.1021/acs.jproteome.5c01022) (omics figures from existing panels)
+- [MakeMyFigure](https://doi.org/10.64898/2026.09.15.751916) (plots and statistics from tables; preprint)
+- [Griphus](https://doi.org/10.64898/2026.07.07.736512) (taxonomic plates; preprint)
+- [BioRender](https://www.biorender.com) (schematic illustrations, commercial; it can also be used from AI assistants)
 
-[omero.figure](https://www.openmicroscopy.org/omero/figure/)
+**AI systems that generate figures or posters** (they draw new graphics, whereas PyFigures arranges your own images unaltered):
+- [MatPlotAgent](https://doi.org/10.18653/v1/2024.findings-acl.701), [SciFig](https://arxiv.org/abs/2601.04390) and [LiveFigure](https://icml.cc/virtual/2026/poster/62974) (plots and schematic illustrations)
+- [Paper2Poster](https://mlanthology.org/neurips/2025/pang2025neurips-paper2poster/), [P2P](https://mlanthology.org/iclr/2026/sun2026iclr-p2p/) and [PosterGen](https://arxiv.org/abs/2508.17188) (posters generated from papers)
 
-[EzFig](https://imagej.github.io/list-of-update-sites/)
-
-[QuickFigures](https://github.com/grishkam/QuickFigures)
+**MCP servers for image tools** (image viewing and analysis, not figure assembly): [napari-mcp](https://github.com/royerlab/napari-mcp), [fiji-mcp](https://github.com/SteffenPL/fiji-mcp).
