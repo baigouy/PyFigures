@@ -97,7 +97,7 @@ mcp = FastMCP(
         "export_review writes an HTML review page, list_review_comments / "
         "import_review_comments manage reviewer comments. Accessibility: "
         "simulate_color_blindness renders the figure as a colour-blind reader "
-        "would see it (deuteranopia/protanopia/tritanopia); generate_alt_text / "
+        "would see it (deuteranopia/protanopia/tritanopia/achromatopsia); generate_alt_text / "
         "set_alt_text draft and store the figure's alt text. "
         "Arrows: add_arrow points an arrow AT a pixel (tip exact at any size). "
         "Stacks: a stack is one image by default; opt-in views are "

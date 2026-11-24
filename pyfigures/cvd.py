@@ -2,9 +2,10 @@
 reader would.
 
 Uses the widely-cited Machado, Oliveira & Fernandes (2009) severity-1.0 sRGB
-matrices for the three dichromacies. Applied directly to 8-bit sRGB — an
-approximation, but the standard quick check for whether a figure's colours stay
-distinguishable. Pure numpy, no Qt / matplotlib.
+matrices for the three dichromacies, and for achromatopsia (no colour vision at
+all) the Rec. 709 luminance, so every pixel becomes its grey. Applied directly to
+8-bit sRGB — an approximation, but the standard quick check for whether a figure's
+colours stay distinguishable. Pure numpy, no Qt / matplotlib.
 """
 from __future__ import annotations
 
@@ -24,12 +25,17 @@ CVD_MATRICES = {
         [1.255528, -0.076749, -0.178779],
         [-0.078411, 0.930809, 0.147602],
         [0.004733, 0.691367, 0.303900]]),
+    # every output channel = the luminance: the figure in grey levels
+    "achromatopsia": np.array([[0.2126, 0.7152, 0.0722]] * 3),
 }
 # Friendly aliases.
 _ALIASES = {
     "protan": "protanopia", "protanope": "protanopia", "red": "protanopia",
     "deuteran": "deuteranopia", "deuteranope": "deuteranopia", "green": "deuteranopia",
     "tritan": "tritanopia", "tritanope": "tritanopia", "blue": "tritanopia",
+    "achromat": "achromatopsia", "monochromacy": "achromatopsia",
+    "grey": "achromatopsia", "gray": "achromatopsia", "grayscale": "achromatopsia",
+    "greyscale": "achromatopsia",
 }
 
 TYPES = tuple(CVD_MATRICES)

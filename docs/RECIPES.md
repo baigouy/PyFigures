@@ -1095,7 +1095,7 @@ journal already accepted). `copy_style_aspects` picks among `fonts`, `letters`,
 | `review` | `fig_review.html` | Click-to-comment page for co-authors. |
 | `caption` | `fig_caption.txt` | The caption as text. |
 | `ledger` | `fig_ledger.json` | Every pixel-affecting adjustment per panel (crop, rotation, display range, LUT, projection, scripts) + a Methods paragraph — the disclosure journals ask for. |
-| `colorblind` | `fig_colorblind.png` | The figure as a colour-blind reader sees it; `cvd_type: deuteranopia` (default), `protanopia` or `tritanopia`. |
+| `colorblind` | `fig_colorblind.png` | The figure as a colour-blind reader sees it; `cvd_type: deuteranopia` (default), `protanopia`, `tritanopia` or `achromatopsia` (grey levels). |
 | `pptx` | `fig.pptx` | Editable PowerPoint slide: one group per panel, pictures + native text boxes and shapes (letters, labels, scale bars, ROIs, arrows). |
 | `illustrator` (`jsx`) | `fig.jsx` + `fig_assets/` | Adobe Illustrator script that rebuilds the figure with live text and vector paths (File → Scripts → Other Script…). Keep the assets folder next to it. |
 | `vectorcraft` | `fig.vectorcraft` | Native document for [VectorCraft](https://github.com/storytold/vectorcraft), the open-source Illustrator replacement (File → Open): one clip group per panel, live text, vector paths, images embedded — one file, nothing beside it. VectorCraft also opens the `svg` and `pdf` exports. |

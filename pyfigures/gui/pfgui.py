@@ -1807,7 +1807,7 @@ class EZFIG_GUI(QMainWindow):
         cvd_preview_action = QAction('Preview figure under colour-blindness…', self)
         cvd_preview_action.setToolTip('See the whole figure as a colour-blind '
                                       'reader would (deuteranopia / protanopia / '
-                                      'tritanopia)')
+                                      'tritanopia / achromatopsia)')
         cvd_preview_action.triggered.connect(self.preview_color_blindness)
         qc_menu.addAction(cvd_preview_action)
         show_color_blind_assistant = QAction('Show color-blind assistant', self)

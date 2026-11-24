@@ -697,7 +697,7 @@ def figure_review_brief(pyf_path: str, journal: str | None = None,
         "caption": ({"title": title, "text": caption} if (caption or title) else None),
         "mechanical_checks": checks,
         "visual_rubric": _REVIEW_RUBRIC,
-        "cvd_checks_recommended": ["deuteranopia", "protanopia", "tritanopia"],
+        "cvd_checks_recommended": ["deuteranopia", "protanopia", "tritanopia", "achromatopsia"],
         "how_to_complete": (
             "This brief covers the mechanical checks only. To finish the review, "
             "render the figure (render_preview) and the colour-blind simulations "
@@ -2541,7 +2541,8 @@ def simulate_color_blindness(pyf_path: str, cvd_type: str = "deuteranopia",
 
     Use this to check whether your colour choices stay distinguishable. *cvd_type*
     is "deuteranopia" (green-weak, most common), "protanopia" (red-weak) or
-    "tritanopia" (blue-weak) — aliases like "red"/"green"/"blue" also work.
+    "tritanopia" (blue-weak) or "achromatopsia" (no colour vision: the figure in grey)
+    — aliases like "red"/"green"/"blue"/"grey" also work.
     Optionally pass *out_path* (.png) to also save the full-resolution simulated
     image. The returned preview is downscaled to *max_dimension* px.
     """
