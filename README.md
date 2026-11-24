@@ -19,6 +19,15 @@ redraws your data. For example:
 - *"Add a box plot of the area per genotype from cells.csv, with the right statistical test."*
 - *"Check this figure against Nature's guidelines and fix what does not fit."*
 
+![Asked in plain words, the model arranges four images in two rows, adds scale bars and sizes the figure for Nature](https://raw.githubusercontent.com/baigouy/PyFigures/main/images/ai_layout.gif)
+
+![Asked in plain words, the model adds a box plot from a CSV file with the right statistical test](https://raw.githubusercontent.com/baigouy/PyFigures/main/images/ai_boxplot_stats.gif)
+
+*Two real requests to Mistral Large 4 in the chat sidebar: "put these images in two rows of
+two, add a scale bar to every panel and size the figure for a Nature double column", then
+"add a box plot of nuclei_per_field.csv with the appropriate statistical test" (the model's
+thinking time is sped up; the figure changes are shown at real speed).*
+
 Each request is one undo step, and the figure stays an ordinary file that you can keep editing
 by hand, with a recipe, or by talking again.
 
