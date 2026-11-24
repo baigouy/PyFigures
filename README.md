@@ -39,12 +39,18 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 # Main features
 
 **At a glance:**
-- **Open:** any image, microscopy files (Bio-Formats), OME-Zarr / OMERO links, movies.
-- **Build:** rows without cropping, channel split / merge, letters, text, arrows, insets.
-- **Check:** journal rules, image integrity, colour-blind preview, alt text.
-- **Export:** PDF, SVG, TIFF, PNG, editable PowerPoint, Illustrator, video.
-- **Recipes:** a whole figure in a short text file, rebuilt in one command ([docs/RECIPES.md](docs/RECIPES.md)).
-- **Learn:** nine interactive tutorials (*Help* menu) and the [documentation](https://pyfigures.readthedocs.io).
+- **Open:** any common image, microscopy files (.czi, .nd2, .lif… through Bio-Formats), OME-Zarr
+  and OMERO links, and movies; scale bars use the pixel size stored in the files.
+- **Build:** rows of panels that fit the width without cropping your images, channel split and
+  merge (magenta/green), panel letters, text, arrows and insets.
+- **Check:** the journal's rules (sizes, fonts, resolution) checked and applied in one click,
+  duplicated or cloned panels detected, a colour-blind preview, and alt text.
+- **Export:** PDF, SVG, TIFF or PNG at print resolution, editable PowerPoint or Illustrator
+  files, and videos for figures with movies.
+- **Recipes:** a whole figure described in a short text file and rebuilt in one command, e.g.
+  to redo it with new data ([docs/RECIPES.md](docs/RECIPES.md)).
+- **Learn:** nine interactive tutorials (*Help* menu) guide you through the real interface;
+  everything else is in the [documentation](https://pyfigures.readthedocs.io).
 
 **Plots from tables:**
 - **Plots and tables: the full guide is [docs/PLOTS.md](docs/PLOTS.md)** (and Help → ▶ Plots & Tables Tutorial).
