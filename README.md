@@ -39,12 +39,12 @@ Prefer to work without AI? **PyFigures NoAI** is the same program with no AI at 
 # Main features
 
 **At a glance:**
-- **Opening your images:** common formats and TIFF directly, microscopy files (.czi, .nd2, .lif…) through Bio-Formats, OME-Zarr and OMERO images from a web link, and movies. The pixel size and channel colours in the files are used for scale bars and display.
-- **Building the figure:** rows of panels that fit the figure width without cropping your images, channel split and merge (with colour-blind-safe magenta/green), panel letters (A, B, C…), text labels, arrows pointing at a feature and zoom callouts.
-- **Checking it before submission:** the journal's rules (sizes, fonts, resolution) checked and applied in one click, an image-integrity check for duplicated, flipped or cloned panels, a preview as seen by colour-blind readers, and alt text for accessibility.
-- **Exporting it:** PDF, SVG, TIFF, PNG or JPEG at print resolution, editable PowerPoint, an Adobe Illustrator script, and a video for figures with movies.
-- **Recipes:** a whole figure described in a short YAML or JSON file and rebuilt from it in one command, to redo it with new data ([docs/RECIPES.md](docs/RECIPES.md)).
-- **Learning it:** nine interactive tutorials in the *Help* menu walk you through each feature in the real interface; the full documentation is at https://pyfigures.readthedocs.io.
+- **Open:** any image, microscopy files (Bio-Formats), OME-Zarr / OMERO links, movies.
+- **Build:** rows without cropping, channel split / merge, letters, text, arrows, zooms.
+- **Check:** journal rules, image integrity, colour-blind preview, alt text.
+- **Export:** PDF, SVG, TIFF, PNG, editable PowerPoint, Illustrator, video.
+- **Recipes:** a whole figure in a short text file, rebuilt in one command ([docs/RECIPES.md](docs/RECIPES.md)).
+- **Learn:** nine interactive tutorials (*Help* menu) and the [documentation](https://pyfigures.readthedocs.io).
 
 **Plots from tables:**
 - **Plots and tables: the full guide is [docs/PLOTS.md](docs/PLOTS.md)** (and Help → ▶ Plots & Tables Tutorial).
