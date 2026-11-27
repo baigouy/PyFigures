@@ -115,8 +115,8 @@ def run_pyfigures():
 
                     msg = QLabel(
                         'Fiji is being downloaded and initialised for the first time.<br>'
-                        'This requires a one-time download of approximately <b>200MB</b>.<br><br>'
-                        '<b style="color:red;">⚠ This can take up to 10 minutes</b> depending on your '
+                        'This requires a one-time download of about <b>650 MB</b> (Java and Fiji).<br><br>'
+                        '<b style="color:red;">⚠ This can take 5 to 20 minutes</b> depending on your '
                         'internet speed — hundreds of dependencies must be resolved.<br>'
                         'Subsequent launches will be <b>instant</b> — this only happens once.'
                     )
@@ -171,23 +171,31 @@ def run_pyfigures():
 
                     self._spinner_states = ['Please wait .  ', 'Please wait .. ', 'Please wait ...']
                     self._spinner_idx = 0
+                    self._status = ''
                     self._timer = QTimer()
                     self._timer.timeout.connect(self._tick)
                     self._timer.start(400)
 
                 def _tick(self):
-                    self._spinner_label.setText(
-                        self._spinner_states[self._spinner_idx % len(self._spinner_states)])
                     self._spinner_idx += 1
-                    # drain the log queue and append to the log view
+                    # drain the log queue: progress tuples from ij_reader (a running file
+                    # count goes on the status line, milestones in the log), printed text
                     try:
                         while True:
                             line = self._log_queue.get_nowait()
+                            if isinstance(line, tuple):
+                                text, transient = line
+                                if transient:
+                                    self._status = text
+                                    continue
+                                line = text
                             self._log_view.append(line)
                             self._log_view.verticalScrollBar().setValue(
                                 self._log_view.verticalScrollBar().maximum())
                     except _queue.Empty:
                         pass
+                    dots = self._spinner_states[self._spinner_idx % len(self._spinner_states)]
+                    self._spinner_label.setText(f'{dots}   {self._status}' if self._status else dots)
 
                 def _on_skip(self):
                     self.user_skipped = True
@@ -224,28 +232,20 @@ def run_pyfigures():
                         _sys.stdout = _QueueWriter(_orig_out, log_queue)
                         _sys.stderr = _QueueWriter(_orig_err, log_queue)
 
-                        # Forward jgo/imagej/scyjava log records to the dialog queue
-                        class _QHandler(_logging.Handler):
-                            def emit(self, record):
-                                print(f'[{record.name.split(".")[-1]}] {record.getMessage()}')
-
-                        _qh = _QHandler(_logging.DEBUG)
-                        _patched_loggers = []
-                        for _name in ('jgo', 'imagej', 'scyjava', 'cjdk'):
-                            _lg = _logging.getLogger(_name)
-                            _prev_level = _lg.level
-                            _lg.setLevel(_logging.DEBUG)
-                            _lg.addHandler(_qh)
-                            _patched_loggers.append((_lg, _qh, _prev_level))
-
+                        # ij_reader turns the jgo/scyjava/cjdk debug flood (thousands of
+                        # lines) into a few milestones and a running file count for the
+                        # dialog (user 2026-11-27); an older batoolset has no sink: the
+                        # dialog then shows what ij_reader prints
+                        _set_sink = getattr(ij_reader, 'set_fiji_progress_sink', None)
+                        if _set_sink:
+                            _set_sink(lambda text, transient: log_queue.put((text, transient)))
                         try:
                             ij_reader.init_ij()
                         except Exception as e:
                             error[0] = str(e)
                         finally:
-                            for _lg, _qh, _prev in _patched_loggers:
-                                _lg.removeHandler(_qh)
-                                _lg.setLevel(_prev)
+                            if _set_sink:
+                                _set_sink(None)
                     finally:
                         _sys.stdout = _orig_out
                         _sys.stderr = _orig_err
@@ -265,8 +265,14 @@ def run_pyfigures():
                     sys.exit(0)
 
                 if error[0]:
-                    QMessageBox.critical(None, 'Fiji init failed',
-                                         f'Could not initialise Fiji:\n\n{error[0]}')
+                    QMessageBox.warning(
+                        None, 'Fiji download not finished',
+                        'Fiji (used to open microscopy formats such as .czi, .nd2, .lif) '
+                        'could not be downloaded this time.\n\n'
+                        'PyFigures works normally for common image formats (TIFF, PNG, '
+                        'JPG...). Check your internet connection and restart PyFigures: '
+                        'the download resumes where it stopped.\n\n'
+                        f'Details: {error[0][:500]}')
                 elif not dialog.user_skipped:
                     print('Fiji loaded successfully.')
 

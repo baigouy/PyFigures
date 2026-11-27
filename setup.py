@@ -89,7 +89,7 @@ setuptools.setup(
         "QtPy>=2.1.0",
         "Deprecated",
         "Requests",
-        "batoolset>=0.2.7",          # 0.2.7: a cached Fiji starts quietly; 0.2.6: font check as Agg draws, missing font kept; 0.2.5: a font matplotlib cannot draw is never the plot font; 0.2.4: figure_renderer
+        "batoolset>=0.2.8",          # 0.2.8: a first Fiji download that always finishes (retries, unfinished env dropped, Java 21, Fiji 2.18.0 pinned, readable progress); 0.2.7: a cached Fiji starts quietly; 0.2.6: font check as Agg draws, missing font kept; 0.2.5: a font matplotlib cannot draw is never the plot font; 0.2.4: figure_renderer
         "batoolset-gui>=0.2.11",     # 0.2.11: plots redrawn once their layout settles, page_size_changed hook; 0.2.10: text size / font per part of a plot; 0.2.9: a font failing while fitted is dropped; Qt layer; 0.2.8: plot font falls back when it cannot draw; 0.2.7: plots fitted on every canvas
         "staplot>=0.1.3",            # data-plot panels and stats brackets (staplot.api); 0.1.3: a broken axis refuses y2 / inversion, its label clear of the ticks; 0.1.2: layers, y2, inverted / broken axes, ticks, more kinds, subjects, image_plot, plot editor; 0.1.1: stats_text, pairs, normalize
         "seaborn>=0.13",             # seaborn plot panels, faceted like ggplot2 (BSD-3)

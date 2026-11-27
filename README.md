@@ -167,14 +167,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pip
     ```
 
-4. **Install Java (needed by Fiji / Bio-Formats, recommended):**
-    
-    ```sh
-    pip install install-jdk
-    python -c "import os; import jdk; jdk_path = os.path.join(os.path.expanduser('~'), '.jdk/jdk8'); jre_path = os.path.join(os.path.expanduser('~'), '.jre/jdk8'); os.makedirs(jdk_path, exist_ok=True); os.makedirs(jre_path, exist_ok=True); jdk.install('8', path=jdk_path); jdk.install('8', path=jre_path, jre=True)"
-    ```
-    
-   **Note:** this step needs to be done **only once**, if you already did it you can skip this step.
+4. **Java: nothing to install.** Fiji / Bio-Formats needs Java 21. The first time PyFigures starts Fiji, it downloads Java 21 (if your computer has no Java 21 or newer) and Fiji by itself, into your user folder: about 650 MB, 5 to 20 minutes depending on your connection, **only once**; a window shows the progress. If the download is interrupted, the next start resumes it. Later starts take a few seconds.
 
 5. **Install PyFigures with Fiji support (recommended):**
     
