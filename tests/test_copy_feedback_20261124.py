@@ -85,7 +85,11 @@ def test_first_launch_opens_the_registration_dialog_only_when_nothing_is_registe
     monkeypatch.setattr(mcp_control, "registrations", lambda: [{"registered": False}])
     window = Window()                   # kept: Qt holds the bound method weakly
     assert M.offer_mcp_registration(window) is True
-    _wait(700)
+    # the dialog opens on a 500 ms timer: a busy CI runner fired it after the old fixed
+    # 700 ms wait (Ubuntu 3.12, v0.2.29 tag run) -> wait for it, up to 15 s
+    end = time.monotonic() + 15
+    while not opened and time.monotonic() < end:
+        _wait(50)
     assert opened == [True]
     monkeypatch.setattr(mcp_control, "registrations", lambda: [{"registered": True}])
     assert M.offer_mcp_registration(Window()) is False                 # already registered
