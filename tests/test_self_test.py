@@ -33,7 +33,7 @@ def test_self_test_passes_without_pymupdf(qapp, tmp_path, monkeypatch):
     status = self_test.run(str(out))
     report = json.loads(out.read_text(encoding="utf-8"))
     assert status == 0, report
-    assert report["ok"] and set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine"}
+    assert report["ok"] and set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine", "fiji"}
     assert "pypdfium2" in report["checks"]["pdf_panels"]
 
 
@@ -126,7 +126,7 @@ def test_command_line_flag(tmp_path):
                        env=_child_env(), cwd=ROOT, capture_output=True, text=True, timeout=300)
     report = json.loads(out.read_text(encoding="utf-8"))
     assert p.returncode == (0 if report["ok"] else 1), (p.returncode, report, p.stderr[-3000:])
-    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine"}, report
+    assert set(report["checks"]) == {"qt_svg", "pdf_panels", "video", "zarr", "chat", "web_engine", "fiji"}, report
 
 
 def test_live_mcp_flag_serves_the_tools(tmp_path):
@@ -184,3 +184,19 @@ def test_the_spec_bundles_the_chat_sidebar():
         setup = f.read()
     core = setup[setup.index("install_requires"):setup.index("extras_require")]
     assert '"qtpy-ai-sidecar' in core and '"mcp' in core            # installed by default
+
+
+def test_every_app_has_fiji():
+    # Bio-Formats (.czi, .nd2...) in every app by default (user 2026-11-27); Java and
+    # Fiji are downloaded at the first Fiji start, the self-test starts the JVM frozen
+    with open(os.path.join(ROOT, "pyfigures.spec"), encoding="utf-8") as f:
+        spec = f.read()
+    for needed in ("collect_submodules('imagej')", "collect_submodules('scyjava')",
+                   "collect_submodules('jpype')", "collect_submodules('cjdk')",
+                   "collect_submodules('jgo', filter=", "copy_metadata(_dist)", "'pyimagej'"):
+        assert needed in spec, needed
+    with open(os.path.join(ROOT, ".github", "workflows", "build.yml"), encoding="utf-8") as f:
+        build = f.read()
+    assert 'pip_install_retry.sh ".[video,zarr,fiji]"' in build
+    from pyfigures import self_test
+    assert "fiji" in self_test.CHECKS

@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import (
     collect_data_files,
     collect_dynamic_libs,
     collect_submodules,
+    copy_metadata,
 )
 
 # ---------------------------------------------------------------------------
@@ -82,6 +83,23 @@ hiddenimports += collect_submodules('httpx')
 hiddenimports += collect_submodules('platformdirs')
 datas += collect_data_files('pypdfium2_raw')         # version.json
 binaries = collect_dynamic_libs('pypdfium2_raw')
+# Fiji / Bio-Formats (pyfigures[fiji], in every app by default, user 2026-11-27): .czi,
+# .nd2, .oib, .vsi... Only the Python side is bundled; Java 21 and Fiji are downloaded
+# into the user's folder at the first Fiji start (batoolset.IJ.ij_reader), as with pip.
+# JPype brings its own hook (org.jpype.jar); the others read their version from their
+# package metadata at import; jgo.cli is the command line tool (rich/typer), unused.
+hiddenimports += collect_submodules('imagej')
+hiddenimports += collect_submodules('scyjava')
+hiddenimports += collect_submodules('jpype')
+hiddenimports += collect_submodules('jgo', filter=lambda name: not name.startswith('jgo.cli'))
+hiddenimports += collect_submodules('cjdk')
+hiddenimports += collect_submodules('imglyb')
+hiddenimports += collect_submodules('batoolset.IJ')
+for _dist in ('pyimagej', 'scyjava', 'jpype1', 'jgo', 'cjdk', 'imglyb'):
+    datas += copy_metadata(_dist)
+datas += collect_data_files('imagej')
+datas += collect_data_files('jgo')
+datas += collect_data_files('cjdk')
 # PYFIGURES_WEB_CHAT=1: the "PyFigures Web Chat" app, the same program with Qt
 # WebEngine bundled (the web chat page docked in the window; about 150-200 MB
 # more). Its name makes it open with the web chat (pyfigures/__main__.py).

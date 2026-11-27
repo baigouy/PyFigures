@@ -114,7 +114,7 @@ jobs:
         # AGPL, the apps read PDFs with pypdfium2. Retried while a just-released
         # dependency is not yet on the runners' PyPI mirror.
         shell: bash
-        run: bash .github/scripts/pip_install_retry.sh ".[video,zarr]"
+        run: bash .github/scripts/pip_install_retry.sh ".[video,zarr,fiji]"
 
       # The app bundles GPL/LGPL code (PyQt6, Qt, FFmpeg + x264/x265), so it is
       # distributed under the GPLv3: licence texts go inside the bundle and the
@@ -304,6 +304,8 @@ jobs:
             **2. PyFigures** opens with the AI chat sidebar (a local model or an online service; untick View → Open the chat at start-up to stop that). It can also be used from another AI app (Model → Another AI app).
 
             **3. PyFigures NoAI**: the same app without any AI (no chat sidebar, no chat or MCP entries).
+
+            **Microscopy formats:** every app opens Bio-Formats files (.czi, .nd2, .oib, .vsi…) through Fiji. The first time Fiji starts, the app downloads Java 21 and Fiji into your user folder (about 650 MB, 5 to 20 minutes, only once; a window shows the progress).
 
             **Mac, first launch:** the apps are not signed by Apple. Use *System Settings → Privacy & Security → Open Anyway* (or right-click → Open). If macOS says the app "is damaged and can't be opened", run `xattr -cr "/Applications/<the app>.app"` in Terminal (e.g. `xattr -cr "/Applications/PyFigures MCP Edition.app"`) and open it again.
 

@@ -178,9 +178,60 @@ def _check_web_engine():
     return "ok (Qt WebEngine loads a page)"
 
 
+def _check_fiji():
+    """Fiji / Bio-Formats is in every app (user 2026-11-27): its Python side is bundled
+    and the Java bridge starts frozen. Java 21 is fetched (about 50 MB, or a Java 21 found
+    on the machine); Fiji itself (650 MB) is not downloaded here: jgo is pure Python and
+    the same as in the pip install, checked on a fresh install.
+
+    Only the built apps are held to it: a pip install may have no [fiji] extra, and the
+    test suite never starts a JVM in its own process."""
+    frozen = bool(getattr(sys, "frozen", False))
+    if not frozen and os.environ.get("PYFIGURES_SELF_TEST_FIJI_OPEN") != "1":
+        try:
+            import imagej
+        except ImportError:
+            return "ok (pip install without the [fiji] extra)"
+        return f"ok (pyimagej {imagej.__version__}; the JVM start is checked in the built apps)"
+    import cjdk  # noqa: F401
+    import imagej
+    import jgo  # noqa: F401
+    import jpype
+    import scyjava
+    from batoolset.IJ import ij_reader
+    jar = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(jpype.__file__))),
+                       "org.jpype.jar")
+    if not os.path.isfile(jar):
+        return f"FAILED: JPype support library missing ({jar})"
+    if ij_reader._FIJI_ENDPOINT != "sc.fiji:fiji:" + ij_reader._FIJI_VERSION:
+        return "FAILED: Fiji not pinned"
+    if os.environ.get("PYFIGURES_SELF_TEST_FIJI_OPEN") == "1":
+        # the whole first run, for a release check by hand (not in CI: ~650 MB): start
+        # Fiji, downloading it if needed, and open a Bio-Formats-only file with it
+        import tempfile
+        import time
+        from batoolset.img import Img
+        fake = os.path.join(tempfile.mkdtemp(),
+                            "t&sizeX=64&sizeY=32&sizeZ=2&sizeC=3&pixelType=uint16.fake")
+        open(fake, "w").close()
+        t0 = time.time()
+        img = Img(fake)
+        if tuple(img.shape) != (2, 32, 64, 3):
+            return f"FAILED: the Bio-Formats test file opened as {img.shape}"
+        return (f"ok: pyimagej {imagej.__version__}, Fiji {ij_reader._FIJI_VERSION} started and "
+                f"a Bio-Formats file opened in {time.time() - t0:.0f} s")
+    ij_reader._use_conda_java()          # Java 21: a system one, else fetched by cjdk
+    scyjava.start_jvm()
+    version = str(scyjava.jimport("java.lang.System").getProperty("java.version"))
+    if int(version.split(".")[0]) < ij_reader._FIJI_JAVA:
+        return f"FAILED: Java {version} started, Fiji needs {ij_reader._FIJI_JAVA}"
+    return f"ok: pyimagej {imagej.__version__}, Java {version} started"
+
+
 CHECKS = {"qt_svg": _check_qt_svg, "pdf_panels": _check_pdf_panels,
           "video": _check_video, "zarr": _check_zarr, "chat": _check_chat,
-          "web_engine": _check_web_engine}
+          "web_engine": _check_web_engine,
+          "fiji": _check_fiji}     # last: it starts a JVM
 
 
 def run(report_path):
