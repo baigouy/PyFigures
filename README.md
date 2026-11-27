@@ -167,21 +167,7 @@ Perform the following steps **only once** to set up your environment:
     pip install -U pip
     ```
 
-4. **Install the `pyfigures` package:**
-    
-    ```sh
-    pip install -U pyfigures
-    ```
-
-    This includes the chat sidebar, which opens beside the figure at start-up (untick **View → Open the chat at start-up** to stop that). **Without any AI:** install `pyfigures-noai` instead (not both): the same program without the chat sidebar package and with no chat or MCP entries.
-
-    ```sh
-    pip install -U pyfigures-noai
-    ```
-
-    The standalone apps on the [releases page](https://github.com/baigouy/PyFigures/releases) come in the same two kinds: **PyFigures** (with the chat sidebar) and **PyFigures NoAI**, plus **PyFigures MCP Edition** (the AI is an outside app reaching the figure through MCP).
-
-5. **Optional: Install openjdk8 if you plan to use bioformats**
+4. **Install Java (needed by Fiji / Bio-Formats, recommended):**
     
     ```sh
     pip install install-jdk
@@ -190,17 +176,23 @@ Perform the following steps **only once** to set up your environment:
     
    **Note:** this step needs to be done **only once**, if you already did it you can skip this step.
 
-   
-6. **Optional: Install Fiji support (Bio-Formats microscopy formats):**
+5. **Install PyFigures with Fiji support (recommended):**
     
     ```sh
-    pip install -U pyfigures[fiji]
+    pip install -U "pyfigures[fiji]"
     ```
-    
-    This installs [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. To get every optional feature at once (Bio-Formats, video, OME-Zarr and vector PDF panels), use `pip install -U pyfigures[all]` instead. The chat sidebar ([qtpy-ai-sidecar](https://pypi.org/project/qtpy-ai-sidecar/)) and the MCP server are installed by default.
-    
 
-7. **Optional: Install video support (reading movies, exporting H.264 videos):**
+    This is the version most users want: it adds [pyimagej](https://pypi.org/project/pyimagej/), which opens microscopy formats (.czi, .nd2, .lif, ...) through Fiji / Bio-Formats. Without Fiji support (common image formats, TIFF, LSM and LIF only, no Java needed): `pip install -U pyfigures`. To get every optional feature at once (Bio-Formats, video, OME-Zarr and vector PDF panels): `pip install -U "pyfigures[all]"`.
+
+    This includes the chat sidebar ([qtpy-ai-sidecar](https://pypi.org/project/qtpy-ai-sidecar/)), which opens beside the figure at start-up (untick **View → Open the chat at start-up** to stop that), and the MCP server. **Without any AI:** install `pyfigures-noai` instead (not both): the same program without the chat sidebar package and with no chat or MCP entries.
+
+    ```sh
+    pip install -U "pyfigures-noai[fiji]"
+    ```
+
+    The standalone apps on the [releases page](https://github.com/baigouy/PyFigures/releases) come in the same two kinds: **PyFigures** (with the chat sidebar) and **PyFigures NoAI**, plus **PyFigures MCP Edition** (the AI is an outside app reaching the figure through MCP).
+
+6. **Optional: Install video support (reading movies, exporting H.264 videos):**
     
     ```sh
     pip install -U pyfigures[video]
@@ -214,7 +206,7 @@ Perform the following steps **only once** to set up your environment:
     - The GUI offers to run `pip install av` for you (once per session) the first time you add a movie or export a video without it. The standalone executables already include it.
     - A movie too long to fit in memory (more than a quarter of the free RAM, at most 4 GB) is loaded keeping every k-th frame; its frame rate is divided by k so time stamps stay right.
 
-8. **Optional: Install OME-Zarr support (images from OME-Zarr servers or local `.zarr` folders; needs Python 3.11 or newer):**
+7. **Optional: Install OME-Zarr support (images from OME-Zarr servers or local `.zarr` folders; needs Python 3.11 or newer):**
 
     ```sh
     pip install -U pyfigures[zarr]
@@ -232,7 +224,7 @@ Perform the following steps **only once** to set up your environment:
 
     (Linux and macOS: Glencoe also publishes zeroc-ice wheels; otherwise pip compiles it.) Not included in the standalone apps.
 
-9. **Optional: vector PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
+8. **Optional: vector PDF panels (plots made with Matplotlib, pgfplots, gnuplot, R…):**
 
     ```sh
     pip install -U pyfigures[pdf]
