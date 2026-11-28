@@ -28,6 +28,33 @@ def _isolate_user_prefs():
 _isolate_user_prefs()
 
 
+# A test that hangs inside native code (a Qt modal loop, a JVM call) holding the GIL
+# stops pytest-timeout too: twice a CI job then sat silent until GitHub cancelled it
+# (Ubuntu 3.12 at the menu tests; macOS 3.13 at the GUI e2e tests, 2026-11-28, after
+# 90 min). faulthandler's watchdog is a C thread that needs no GIL: past this limit
+# (beyond pytest-timeout's 300 s in CI, 600 s here) it prints every thread's stack,
+# naming the stuck test, and ends the run, which then fails at once.
+import faulthandler as _faulthandler
+import sys as _sys
+
+_HANG_LIMIT_S = 900
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    try:
+        _sys.__stderr__.write("")
+        _faulthandler.dump_traceback_later(_HANG_LIMIT_S, exit=True, file=_sys.__stderr__)
+        armed = True
+    except Exception:              # no real stderr (a windowed run): no watchdog
+        armed = False
+    try:
+        yield
+    finally:
+        if armed:
+            _faulthandler.cancel_dump_traceback_later()
+
+
 # The colour-blind assistant samples the REAL screen around the mouse every
 # 100 ms (pyautogui + PIL.ImageGrab). Tests open it, so screen access is
 # replaced suite-wide by a fixed synthetic patch: no capture of the user's
