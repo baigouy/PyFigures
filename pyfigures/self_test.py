@@ -225,8 +225,9 @@ def _check_fiji():
         # set sys.frozen once had jgo resolve all of Fiji there (Maven Central 429)
         return f"ok: pyimagej {imagej.__version__} (JVM start skipped under the tests)"
     ij_reader._use_conda_java()          # Java 21: a system one, else fetched by cjdk
-    # only the Java bridge: no Maven endpoint may make start_jvm resolve Fiji here
-    del scyjava.config.endpoints[:]
+    # (scyjava's endpoints are left as they are: imglyb, imported with imagej, adds its
+    # small Java library there and checks for it as the JVM starts; clearing them
+    # failed every app build with "Class net.imglib2.python.Helpers is not found")
     if not jpype.isJVMStarted():
         scyjava.start_jvm()
     version = str(scyjava.jimport("java.lang.System").getProperty("java.version"))
