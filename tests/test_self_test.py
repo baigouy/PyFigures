@@ -186,6 +186,18 @@ def test_the_spec_bundles_the_chat_sidebar():
     assert '"qtpy-ai-sidecar' in core and '"mcp' in core            # installed by default
 
 
+def test_a_simulated_app_starts_no_jvm_in_the_tests(monkeypatch):
+    # sys.frozen set by a test made the Fiji check start a JVM in the test process, and
+    # jgo resolve all of Fiji from Maven Central (Ubuntu 3.12 timeout, 2026-11-28)
+    imagej = pytest.importorskip("imagej")
+    jpype = pytest.importorskip("jpype")
+    from pyfigures import self_test
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert os.environ.get("PYFIGURES_SELF_TEST_NO_JVM") == "1"      # set by conftest
+    assert self_test._check_fiji().startswith(f"ok: pyimagej {imagej.__version__} (JVM start skipped")
+    assert not jpype.isJVMStarted()
+
+
 def test_every_app_has_fiji():
     # Bio-Formats (.czi, .nd2...) in every app by default (user 2026-11-27); Java and
     # Fiji are downloaded at the first Fiji start, the self-test starts the JVM frozen

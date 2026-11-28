@@ -27,6 +27,10 @@ def _isolate_user_prefs():
 
 _isolate_user_prefs()
 
+# pyfigures.self_test's Fiji check starts a JVM in a built app; never in the test
+# process (tests that set sys.frozen once made it resolve all of Fiji from Maven)
+os.environ["PYFIGURES_SELF_TEST_NO_JVM"] = "1"
+
 
 # A test that hangs inside native code (a Qt modal loop, a JVM call) holding the GIL
 # stops pytest-timeout too: twice a CI job then sat silent until GitHub cancelled it

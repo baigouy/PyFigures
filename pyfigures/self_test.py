@@ -220,8 +220,15 @@ def _check_fiji():
             return f"FAILED: the Bio-Formats test file opened as {img.shape}"
         return (f"ok: pyimagej {imagej.__version__}, Fiji {ij_reader._FIJI_VERSION} started and "
                 f"a Bio-Formats file opened in {time.time() - t0:.0f} s")
+    if os.environ.get("PYFIGURES_SELF_TEST_NO_JVM") == "1":
+        # the test suite (tests/conftest.py): never a JVM in its process; a test that
+        # set sys.frozen once had jgo resolve all of Fiji there (Maven Central 429)
+        return f"ok: pyimagej {imagej.__version__} (JVM start skipped under the tests)"
     ij_reader._use_conda_java()          # Java 21: a system one, else fetched by cjdk
-    scyjava.start_jvm()
+    # only the Java bridge: no Maven endpoint may make start_jvm resolve Fiji here
+    del scyjava.config.endpoints[:]
+    if not jpype.isJVMStarted():
+        scyjava.start_jvm()
     version = str(scyjava.jimport("java.lang.System").getProperty("java.version"))
     if int(version.split(".")[0]) < ij_reader._FIJI_JAVA:
         return f"FAILED: Java {version} started, Fiji needs {ij_reader._FIJI_JAVA}"
