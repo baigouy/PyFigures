@@ -228,8 +228,18 @@ def _check_fiji():
     # (scyjava's endpoints are left as they are: imglyb, imported with imagej, adds its
     # small Java library there and checks for it as the JVM starts; clearing them
     # failed every app build with "Class net.imglib2.python.Helpers is not found")
-    if not jpype.isJVMStarted():
-        scyjava.start_jvm()
+    # start_jvm fetches imglyb's small library from Maven: a dropped connection failed
+    # a macOS Intel build once (2026-11-28) -> retried like the app's own Fiji start
+    import time
+    for attempt in range(1, 6):
+        if jpype.isJVMStarted():
+            break
+        try:
+            scyjava.start_jvm()
+        except Exception as e:
+            if attempt == 5 or not ij_reader._is_network_error(e) or jpype.isJVMStarted():
+                raise
+            time.sleep(10 * attempt)
     version = str(scyjava.jimport("java.lang.System").getProperty("java.version"))
     if int(version.split(".")[0]) < ij_reader._FIJI_JAVA:
         return f"FAILED: Java {version} started, Fiji needs {ij_reader._FIJI_JAVA}"

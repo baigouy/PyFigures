@@ -144,6 +144,15 @@ def _pump(qapp, ms=100):
     qapp.processEvents()
 
 
+def _pump_until(qapp, condition, timeout_s=15):
+    # the guides poll on timers: a busy CI runner fired them after the old fixed waits
+    # (Windows 3.11 and Ubuntu, "guide-poll" flakes) -> wait for the result, up to 15 s
+    import time
+    end = time.monotonic() + timeout_s
+    while not condition() and time.monotonic() < end:
+        _pump(qapp, 50)
+
+
 def test_every_guide_route_exists_in_the_real_gui(win):
     from pyfigures.gui.show_me_how import resolve_menu_path
     for gid, g in G.GUIDES.items():
@@ -190,7 +199,7 @@ def test_split_guide_follows_the_user_through_the_real_menu(win, qapp):
     _pump(qapp)
     assert win._tutorial._index == 0                     # nothing selected yet
     win.paint.EZFIG_panel.selected_shape = _images(win)[0]
-    _pump(qapp, 1700)                                     # poll + auto-advance
+    _pump_until(qapp, lambda: win._tutorial._index == 1)  # poll + auto-advance
     assert win._tutorial._index == 1                     # now: open Insert
     menu_step = win._tutorial._steps[1]
     anchor = menu_step.get_target(win)
@@ -210,7 +219,7 @@ def test_split_guide_follows_the_user_through_the_real_menu(win, qapp):
     QTimer.singleShot(50, accept_dialog)
     leaf = resolve_menu_path(win, G.GUIDES["split_channels"]["steps"][1]["menu"])[-1][1]
     leaf.trigger()                                        # the user picks the real action
-    _pump(qapp, 1800)
+    _pump_until(qapp, lambda: accepted and runner.status()["status"] == "completed")
     assert accepted, "the real channel-split dialog did not open"
     assert len(_images(win)) == 5                         # original + 3 channels + merge
     st = runner.status()
@@ -232,10 +241,10 @@ def test_lut_guide_detects_the_colour_change_on_the_selected_image(win, qapp):
     img = _images(win)[0]
     win.paint.EZFIG_panel.selected_shape = img
     win.show_me_how("set_lut")
-    _pump(qapp, 600)
+    _pump_until(qapp, lambda: win._guides._target_image is img)
     assert win._guides._target_image is img
     img.LUTs = ["MAGENTA", "GREEN", "GRAY"]
-    _pump(qapp, 900)
+    _pump_until(qapp, lambda: win._guides.status()["user_result_detected"] is True)
     assert win._guides.status()["user_result_detected"] is True
 
 
@@ -252,7 +261,7 @@ def test_replace_guide_follows_convert_to_template_then_assign(win, qapp, tmp_pa
     assert win._guides.status()["status"] == "guidance_shown"     # a grey slot is not done yet
     slot = next(i for i in _images(win) if i.is_template())
     win.assign_to_template(slot, [_rgb(tmp_path / "other.png")])
-    _pump(qapp, 900)
+    _pump_until(qapp, lambda: win._guides.status()["status"] == "completed")
     assert len(_images(win)) == 1 and not _figure_is_template(win)
     st = win._guides.status()
     assert st["status"] == "completed" and st["operation_executed"] is False
