@@ -1,0 +1,63 @@
+name: Release check - Fiji first run (macOS)
+
+# The PUBLISHED macOS apps of a release, on a Mac with no Java: download the .dmg,
+# mount it, hide the runner's installed Java, and run the app's self-test with the
+# whole first Fiji start (PYFIGURES_SELF_TEST_FIJI_OPEN=1: Java 21 and Fiji 2.18.0
+# downloaded into an empty home, then a Bio-Formats file opened). ~650 MB and ~15 min
+# per job, so only by hand from the Actions tab (Windows and Linux were checked the
+# same way on a PC and in WSL, 2026-11-28).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to check
+        default: v0.2.30
+
+jobs:
+  fiji-first-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest                 # Apple Silicon
+            dmg: PyFigures-macOS-AppleSilicon.dmg
+            app: PyFigures
+          - os: macos-15-intel               # Intel
+            dmg: PyFigures-macOS-Intel.dmg
+            app: PyFigures
+          - os: macos-latest
+            dmg: PyFigures-MCP-Edition-macOS-AppleSilicon.dmg
+            app: PyFigures MCP Edition
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Download the released dmg
+        run: |
+          curl -sSL --fail -o app.dmg \
+            "https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/${{ matrix.dmg }}"
+          ls -la app.dmg
+
+      - name: Mount it
+        run: |
+          hdiutil attach -nobrowse -readonly -mountpoint /Volumes/pyf app.dmg
+          ls /Volumes/pyf
+
+      - name: Hide the runner's Java (a Mac with no Java)
+        run: |
+          /usr/libexec/java_home -V 2>&1 || true
+          sudo mv /Library/Java/JavaVirtualMachines /Library/Java/JavaVirtualMachines.hidden || true
+          if /usr/libexec/java_home >/dev/null 2>&1; then echo "a Java is still visible"; exit 1; fi
+          echo "no Java left: /usr/bin/java is only the stub"
+
+      - name: Self-test with the whole first Fiji start
+        run: |
+          APP="/Volumes/pyf/${{ matrix.app }}.app/Contents/MacOS/${{ matrix.app }}"
+          mkdir -p "$RUNNER_TEMP/home"
+          env -u JAVA_HOME $(env | grep -o '^JAVA_HOME_[^=]*' | sed 's/^/-u /') \
+              HOME="$RUNNER_TEMP/home" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+              PYFIGURES_SELF_TEST_FIJI_OPEN=1 QT_QPA_PLATFORM=offscreen \
+              "$APP" --self-test "$RUNNER_TEMP/self_test.json" \
+            || { cat "$RUNNER_TEMP/self_test.json"; exit 1; }
+          cat "$RUNNER_TEMP/self_test.json"
+          grep -q '"fiji": "ok: .*Bio-Formats file opened' "$RUNNER_TEMP/self_test.json"
+          ls "$RUNNER_TEMP/home/Library/Caches/cjdk/v0/jdks/"*/ 2>/dev/null || true
